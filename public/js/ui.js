@@ -16,6 +16,14 @@ export function h(tag, props, ...children) {
   return el;
 }
 
+// Like el.replaceChildren(), but skips null/false and flattens arrays
+// (replaceChildren would print "null" or "[object HTMLDivElement]").
+export function setContent(el, ...children) {
+  el.replaceChildren();
+  append(el, children);
+  return el;
+}
+
 function append(el, children) {
   for (const child of children.flat(Infinity)) {
     if (child === null || child === undefined || child === false) continue;
@@ -45,7 +53,9 @@ export const fmt = {
 };
 
 // Server timestamps are UTC "YYYY-MM-DD HH:MM:SS".
+// Date-only values ("YYYY-MM-DD") are local calendar days.
 export function parseServerDate(s) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(`${s}T12:00:00`);
   return new Date(s.includes('T') ? s : `${s.replace(' ', 'T')}Z`);
 }
 

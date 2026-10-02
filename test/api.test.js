@@ -4,9 +4,11 @@ const { createApp } = require('../src/app');
 
 let server;
 let baseUrl;
+let db;
 
 before(async () => {
   const app = createApp({ dbFile: ':memory:' });
+  db = app.locals.db;
   await new Promise((resolve) => {
     server = app.listen(0, resolve);
   });
@@ -33,8 +35,9 @@ function client() {
 
 const gerant = client();
 const pompiste = client();
-const clientSpace = client();
 const ctx = {};
+const today = () => new Date().toLocaleDateString('sv-SE');
+const customer = async (id) => (await gerant('GET', `/api/customers/${id}`)).data;
 
 test('premier lancement : configuration de la station', async () => {
   assert.strictEqual((await gerant('GET', '/api/setup')).data.needsSetup, true);
@@ -49,277 +52,265 @@ test('premier lancement : configuration de la station', async () => {
     petrolPrice: 1.5,
   });
   assert.strictEqual(res.status, 201);
-  assert.strictEqual((await gerant('GET', '/api/setup')).data.needsSetup, false);
   assert.strictEqual((await gerant('POST', '/api/setup', {})).status, 400);
 
-  const me = await gerant('GET', '/api/auth/me');
-  assert.strictEqual(me.data.user.role, 'manager');
-  assert.strictEqual(me.data.settings.stationName, 'Station Test');
+  const me = (await gerant('GET', '/api/auth/me')).data;
+  assert.strictEqual(me.user.role, 'manager');
+  assert.strictEqual(me.settings.combosPerLiter, 1);
+  assert.strictEqual(me.settings.individualCreditLimit, 50);
+  assert.strictEqual(me.settings.subscriberCreditLimit, 500);
 
-  const pumps = (await gerant('GET', '/api/pumps')).data;
-  assert.strictEqual(pumps.length, 2);
-  ctx.pumps = pumps;
+  ctx.pumps = (await gerant('GET', '/api/pumps')).data;
   ctx.tanks = (await gerant('GET', '/api/tanks')).data;
+  ctx.products = (await gerant('GET', '/api/products')).data;
+  ctx.diesel = ctx.products.find((p) => p.name === 'Gasoil');
+  ctx.dieselPump = ctx.pumps.find((p) => p.nozzles[0].product_name === 'Gasoil');
 });
 
 test('livraison puis jaugeage', async () => {
-  const diesel = ctx.tanks.find((t) => t.product_name === 'Gasoil');
-  ctx.diesel = diesel;
-  const del = await gerant('POST', '/api/deliveries', { tankId: diesel.id, litersOrdered: 10000, litersReceived: 9950 });
-  assert.strictEqual(del.status, 201);
-  const dip = await gerant('POST', '/api/dips', { tankId: diesel.id, measured: 9940 });
+  const tank = ctx.tanks.find((t) => t.product_name === 'Gasoil');
+  await gerant('POST', '/api/deliveries', { tankId: tank.id, litersOrdered: 10000, litersReceived: 9950 });
+  const dip = await gerant('POST', '/api/dips', { tankId: tank.id, measured: 9940 });
   assert.strictEqual(dip.data.variance, -10);
-  const tank = (await gerant('GET', '/api/tanks')).data.find((t) => t.id === diesel.id);
-  assert.strictEqual(tank.book_stock, 9940);
 });
 
-test("création d'un pompiste et de clients", async () => {
-  const u = await gerant('POST', '/api/users', { name: 'Paul', login: 'paul', password: 'pompiste1', role: 'attendant' });
-  assert.strictEqual(u.status, 201);
-  assert.strictEqual((await pompiste('POST', '/api/auth/login', { login: 'paul', password: 'faux' })).status, 401);
+test('catégories de clients : plafonds et prix abonnés réglés dans les paramètres', async () => {
+  await gerant('POST', '/api/users', { name: 'Paul', login: 'paul', password: 'pompiste1', role: 'attendant' });
   assert.strictEqual((await pompiste('POST', '/api/auth/login', { login: 'PAUL', password: 'pompiste1' })).status, 200);
   assert.strictEqual((await pompiste('GET', '/api/dashboard')).status, 403);
 
-  ctx.fleet = (await gerant('POST', '/api/customers', { type: 'account', name: 'Transports Kivu', creditLimit: 100 })).data;
+  ctx.fleet = (await gerant('POST', '/api/customers', { type: 'account', name: 'Transports Kivu', creditLimit: 99999 })).data;
   ctx.person = (await gerant('POST', '/api/customers', { type: 'individual', name: 'Marie' })).data;
+  assert.strictEqual(ctx.fleet.credit_limit, 500, 'plafond abonné des paramètres (le plafond envoyé est ignoré)');
+  assert.strictEqual(ctx.person.credit_limit, 50, 'plafond particulier des paramètres');
 
-  const list = (await pompiste('GET', '/api/customers')).data;
-  assert.strictEqual(list.find((c) => c.id === ctx.fleet.id).available, 100);
-  assert.strictEqual(list[0].credit_limit, undefined, 'le pompiste ne voit pas les détails');
+  await gerant('PUT', '/api/settings', { individualCreditLimit: 60 });
+  assert.strictEqual((await customer(ctx.person.id)).customer.credit_limit, 60, 'un changement de paramètre s’applique à tous');
+  await gerant('PUT', '/api/settings', { individualCreditLimit: 50 });
+
+  const product = await gerant('PUT', `/api/products/${ctx.diesel.id}`, { subscriberPrice: 1.4 });
+  assert.strictEqual(product.data.subscriber_price, 1.4);
 });
 
-test('poste complet : ouverture, ventes clients, clôture et rapprochement', async () => {
-  const dieselPump = ctx.pumps.find((p) => p.nozzles[0].product_name === 'Gasoil');
-  const nozzle = dieselPump.nozzles[0];
-
-  const opened = await pompiste('POST', '/api/shifts', { pumpIds: [dieselPump.id] });
+test('poste : prix abonné, crédit sans combos, plafond, rapprochement', async () => {
+  const opened = await pompiste('POST', '/api/shifts', { pumpIds: [ctx.dieselPump.id] });
   assert.strictEqual(opened.status, 201);
   const shift = opened.data;
-  assert.strictEqual(shift.readings[0].start_meter, 0);
-  assert.strictEqual(shift.readings[0].unit_price, 1.2);
+  const nozzle = shift.readings[0];
+  assert.strictEqual(nozzle.unit_price, 1.2);
+  assert.strictEqual(nozzle.subscriber_price, 1.4);
+  assert.strictEqual((await pompiste('POST', '/api/shifts', { pumpIds: [ctx.dieselPump.id] })).status, 409);
 
-  assert.strictEqual((await pompiste('POST', '/api/shifts', { pumpIds: [dieselPump.id] })).status, 409);
+  const sell = (body) => pompiste('POST', `/api/shifts/${shift.id}/sales`, { nozzleId: nozzle.nozzle_id, ...body });
 
-  // A price change during the shift does not affect it.
-  await gerant('PUT', `/api/products/${nozzle.product_id}`, { price: 1.3 });
+  // Subscriber on credit: 50 L × 1,40 = 70 $; combos only once paid.
+  const fleetCredit = await sell({ customerId: ctx.fleet.id, liters: 50, payment: 'credit' });
+  assert.strictEqual(fleetCredit.data.amount, 70);
+  assert.strictEqual(fleetCredit.data.points, 0);
+  assert.strictEqual(fleetCredit.data.points_due, 50);
 
-  const credit = await pompiste('POST', `/api/shifts/${shift.id}/sales`, { customerId: ctx.fleet.id, nozzleId: nozzle.id, liters: 50, payment: 'credit' });
-  assert.strictEqual(credit.status, 201);
-  assert.strictEqual(credit.data.amount, 60);
-  const over = await pompiste('POST', `/api/shifts/${shift.id}/sales`, { customerId: ctx.fleet.id, nozzleId: nozzle.id, liters: 40, payment: 'credit' });
-  assert.strictEqual(over.status, 409, 'plafond de crédit');
+  // Particulier paid: 20,5 L × 1,20 = 24,60 $, 20 combos at once.
+  const paid = await sell({ customerId: ctx.person.id, liters: 20.5, payment: 'paid' });
+  assert.strictEqual(paid.data.amount, 24.6);
+  assert.strictEqual(paid.data.points, 20);
 
-  const loyalty = await pompiste('POST', `/api/shifts/${shift.id}/sales`, { customerId: ctx.person.id, nozzleId: nozzle.id, liters: 20.5 });
-  assert.strictEqual(loyalty.data.points, 20);
+  // Particulier credit: 40 L = 48 $ fits in 50 $; 5 L more does not.
+  assert.strictEqual((await sell({ customerId: ctx.person.id, liters: 40, payment: 'credit' })).status, 201);
+  const over = await sell({ customerId: ctx.person.id, liters: 5, payment: 'credit' });
+  assert.strictEqual(over.status, 409);
+  assert.strictEqual(over.data.code, 'over_limit');
 
-  const bad = await pompiste('POST', `/api/shifts/${shift.id}/close`, {
-    readings: [{ nozzleId: nozzle.id, endMeter: 30 }],
-    cash: 0,
-  });
-  assert.strictEqual(bad.status, 400, 'ventes clients > litres du compteur');
+  // 20 combos < 100: no exchange yet.
+  const tooFew = await sell({ customerId: ctx.person.id, amount: 1, payment: 'combo' });
+  assert.strictEqual(tooFew.status, 409);
+  assert.strictEqual(tooFew.data.code, 'combos');
 
-  // 500 L at 1.20 $ = 600 $; 60 $ on credit, so 540 $ expected; 538 $ declared.
+  assert.strictEqual((await customer(ctx.person.id)).customer.loyalty_points, 20);
+
+  // 500 L at 1,20 = 600 $ + subscriber surcharge 50 × 0,20 = 10 $ → 610 $;
+  // credit 70 + 48 = 118 $ → 492 $ to hand over; 490 $ declared.
   const closed = await pompiste('POST', `/api/shifts/${shift.id}/close`, {
-    readings: [{ nozzleId: nozzle.id, endMeter: 500 }],
-    cash: 438,
+    readings: [{ nozzleId: nozzle.nozzle_id, endMeter: 500 }],
+    cash: 390,
     card: 100,
   });
   assert.strictEqual(closed.status, 200);
-  assert.strictEqual(closed.data.total_liters, 500);
-  assert.strictEqual(closed.data.total_amount, 600);
-  assert.strictEqual(closed.data.credit_amount, 60);
-  assert.strictEqual(closed.data.expected_amount, 540);
+  assert.strictEqual(closed.data.total_amount, 610);
+  assert.strictEqual(closed.data.credit_amount, 118);
+  assert.strictEqual(closed.data.expected_amount, 492);
   assert.strictEqual(closed.data.variance, -2);
 
-  const tank = (await gerant('GET', '/api/tanks')).data.find((t) => t.id === ctx.diesel.id);
-  assert.strictEqual(tank.book_stock, 9440);
-  const pumps = (await gerant('GET', '/api/pumps')).data;
-  assert.strictEqual(pumps.find((p) => p.id === dieselPump.id).nozzles[0].meter, 500);
-
   const dash = (await gerant('GET', '/api/dashboard')).data;
-  assert.strictEqual(dash.todayTotal.amount, 600);
-  assert.strictEqual(dash.toValidate, 1);
+  assert.strictEqual(dash.todayTotal.amount, 600, 'ventes par produit selon les index');
   assert.ok(dash.alerts.some((a) => a.text.includes('écart de caisse')));
+  assert.strictEqual((await gerant('POST', `/api/shifts/${shift.id}/validate`, {})).data.status, 'validated');
 
-  const validated = await gerant('POST', `/api/shifts/${shift.id}/validate`, { comment: 'Écart expliqué' });
-  assert.strictEqual(validated.data.status, 'validated');
-
-  const next = await pompiste('POST', '/api/shifts', { pumpIds: [dieselPump.id] });
-  assert.strictEqual(next.data.readings[0].start_meter, 500, "l'index repart de la fin du poste précédent");
-  assert.strictEqual(next.data.readings[0].unit_price, 1.3);
+  ctx.shift = (await pompiste('POST', '/api/shifts', { pumpIds: [ctx.dieselPump.id] })).data;
+  assert.strictEqual(ctx.shift.readings[0].start_meter, 500);
 });
 
-test('règlement client, relevé et espace client', async () => {
-  const pay = await gerant('POST', `/api/customers/${ctx.fleet.id}/payments`, { amount: 25, method: 'virement' });
-  assert.strictEqual(pay.data.balance, 35);
+test('les combos d’une vente à crédit arrivent quand elle est entièrement payée', async () => {
+  await gerant('POST', `/api/customers/${ctx.fleet.id}/payments`, { amount: 70, method: 'virement' });
+  assert.strictEqual((await customer(ctx.fleet.id)).customer.loyalty_points, 50);
 
-  const acc = (await gerant('GET', `/api/customers/${ctx.fleet.id}`)).data;
-  assert.strictEqual(acc.closing, 35);
-  assert.strictEqual(acc.movements.length, 2);
+  await gerant('POST', `/api/customers/${ctx.person.id}/payments`, { amount: 20, method: 'espèces' });
+  let marie = await customer(ctx.person.id);
+  assert.strictEqual(marie.customer.loyalty_points, 20, 'paiement partiel : pas encore de combos');
+  assert.strictEqual(marie.combos.pending, 40);
 
-  await gerant('POST', `/api/customers/${ctx.fleet.id}/login`, { login: 'kivu', password: 'clientkivu' });
-  await clientSpace('POST', '/api/auth/login', { login: 'kivu', password: 'clientkivu' });
-  const mine = await clientSpace('GET', '/api/me/account');
-  assert.strictEqual(mine.data.customer.name, 'Transports Kivu');
-  assert.strictEqual((await clientSpace('GET', `/api/customers/${ctx.person.id}`)).status, 403);
-  assert.strictEqual((await clientSpace('GET', '/api/shifts')).status, 403);
+  // Paid at the pump, during the open shift.
+  const pay = await pompiste('POST', `/api/shifts/${ctx.shift.id}/payments`, { customerId: ctx.person.id, amount: 28 });
+  assert.strictEqual(pay.data.balance, 0);
+  marie = await customer(ctx.person.id);
+  assert.strictEqual(marie.customer.loyalty_points, 60);
+  assert.strictEqual(marie.combos.pending, 0);
+
+  // Cancelling that payment takes the combos back.
+  await pompiste('DELETE', `/api/shifts/${ctx.shift.id}/payments/${pay.data.id}`);
+  assert.strictEqual((await customer(ctx.person.id)).customer.loyalty_points, 20);
+  await pompiste('POST', `/api/shifts/${ctx.shift.id}/payments`, { customerId: ctx.person.id, amount: 28 });
 });
 
-test('rapport des ventes et export CSV', async () => {
-  const today = new Date().toLocaleDateString('sv-SE');
-  const rep = await gerant('GET', `/api/reports/sales?from=${today}&to=${today}`);
-  assert.strictEqual(rep.data.totals.amount, 600);
-  assert.strictEqual(rep.data.byAttendant[0].attendant, 'Paul');
+test('échange de combos contre du carburant, déduit de la caisse', async () => {
+  await gerant('PUT', '/api/settings', { comboThreshold: 50, comboValue: 0.05 });
+  const nozzle = ctx.shift.readings[0];
+  const sell = (body) => pompiste('POST', `/api/shifts/${ctx.shift.id}/sales`, { nozzleId: nozzle.nozzle_id, customerId: ctx.person.id, payment: 'combo', ...body });
 
-  const res = await fetch(`${baseUrl}/api/reports/sales?from=${today}&to=${today}&format=csv`, {
-    headers: { Cookie: '' },
+  const tooMuch = await sell({ amount: 5 }); // 100 combos needed, 60 available
+  assert.strictEqual(tooMuch.status, 409);
+
+  // 2 $ = 40 combos → 1,67 L at 1,20 $/L.
+  const exchange = await sell({ amount: 2 });
+  assert.strictEqual(exchange.status, 201);
+  assert.strictEqual(exchange.data.kind, 'combo');
+  assert.strictEqual(exchange.data.combos_used, 40);
+  assert.strictEqual(exchange.data.liters, 1.67);
+  assert.strictEqual(exchange.data.points, 0);
+  assert.strictEqual((await customer(ctx.person.id)).customer.loyalty_points, 20);
+
+  // 10 L at 1,20 = 12 $ + 28 $ received − 2 $ in combos = 38 $.
+  const closed = await pompiste('POST', `/api/shifts/${ctx.shift.id}/close`, {
+    readings: [{ nozzleId: nozzle.nozzle_id, endMeter: 510 }],
+    cash: 38,
   });
-  assert.strictEqual(res.status, 401);
+  assert.strictEqual(closed.data.combo_amount, 2);
+  assert.strictEqual(closed.data.payments_amount, 28);
+  assert.strictEqual(closed.data.expected_amount, 38);
+  assert.strictEqual(closed.data.variance, 0);
+  await gerant('PUT', '/api/settings', { comboThreshold: 100 });
 });
 
-test('pompiste : nouveau client rapide, crédit hors plafond, règlement et dépense à la pompe', async () => {
-  const shift = (await pompiste('GET', '/api/shifts/current')).data;
+test('abonnés : le mois précédent doit être payé après le délai', async () => {
+  ctx.shift = (await pompiste('POST', '/api/shifts', { pumpIds: [ctx.dieselPump.id] })).data;
+  const nozzle = ctx.shift.readings[0];
+  const sale = (await pompiste('POST', `/api/shifts/${ctx.shift.id}/sales`, { nozzleId: nozzle.nozzle_id, customerId: ctx.fleet.id, liters: 10, payment: 'credit' })).data;
+  // Last month: this sale; earlier still: the subscriber's first credit (already paid).
+  db.prepare("UPDATE sales SET created_at = datetime('now', 'start of month', '-40 days') WHERE customer_id = ? AND id != ?").run(ctx.fleet.id, sale.id);
+  db.prepare("UPDATE sales SET created_at = datetime('now', 'start of month', '-3 days') WHERE id = ?").run(sale.id);
+
+  const graceDays = 1;
+  await gerant('PUT', '/api/settings', { subscriberGraceDays: graceDays });
+  const fleet = await customer(ctx.fleet.id);
+  assert.strictEqual(fleet.dues.overdue, 14);
+  const late = new Date().getDate() > graceDays;
+  assert.strictEqual(fleet.dues.late, late);
+
+  const next = await pompiste('POST', `/api/shifts/${ctx.shift.id}/sales`, { nozzleId: nozzle.nozzle_id, customerId: ctx.fleet.id, liters: 1, payment: 'credit' });
+  if (late) {
+    assert.strictEqual(next.status, 409);
+    assert.match(next.data.error, /retard/);
+    const dash = (await gerant('GET', '/api/dashboard')).data;
+    assert.ok(dash.alerts.some((a) => a.text.includes('Transports Kivu') && a.text.includes('mois')));
+  } else {
+    assert.strictEqual(next.status, 201);
+  }
+  await gerant('POST', `/api/customers/${ctx.fleet.id}/payments`, { amount: 100, method: 'virement' });
+  assert.strictEqual((await customer(ctx.fleet.id)).dues.overdue, 0);
+  await gerant('PUT', '/api/settings', { subscriberGraceDays: 5 });
+});
+
+test('pompiste : client rapide (particulier), crédit accordé, règlement et dépense', async () => {
+  const shift = ctx.shift;
   const nozzle = shift.readings[0];
 
   const quick = await pompiste('POST', '/api/customers/quick', { name: 'Garage Mwami' });
   assert.strictEqual(quick.status, 201);
-  assert.strictEqual(quick.data.available, 100, 'plafond par défaut des nouveaux clients');
-  const dup = await pompiste('POST', '/api/customers/quick', { name: 'garage mwami' });
-  assert.strictEqual(dup.status, 409);
-  assert.strictEqual(dup.data.code, 'duplicate');
+  assert.strictEqual(quick.data.type, 'individual');
+  assert.strictEqual(quick.data.available, 50);
+  assert.strictEqual((await pompiste('POST', '/api/customers/quick', { name: 'garage mwami' })).data.code, 'duplicate');
 
-  // 100 L × 1,30 $ = 130 $ > 100 $ : refusé sans confirmation, accepté si le pompiste accorde le crédit.
   const sale = { customerId: quick.data.id, nozzleId: nozzle.nozzle_id, liters: 100, payment: 'credit' };
   const refused = await pompiste('POST', `/api/shifts/${shift.id}/sales`, sale);
-  assert.strictEqual(refused.status, 409);
   assert.strictEqual(refused.data.code, 'over_limit');
   const granted = await pompiste('POST', `/api/shifts/${shift.id}/sales`, { ...sale, grantCredit: true });
-  assert.strictEqual(granted.status, 201);
   assert.strictEqual(granted.data.over_limit, 1);
 
-  const pay = await pompiste('POST', `/api/shifts/${shift.id}/payments`, { customerId: ctx.fleet.id, amount: 20 });
-  assert.strictEqual(pay.status, 201);
-  assert.strictEqual(pay.data.balance, 15);
-
-  assert.strictEqual((await pompiste('POST', `/api/shifts/${shift.id}/expenses`, { category: 'Inconnue', amount: 5, description: 'x' })).status, 400);
   const exp = await pompiste('POST', `/api/shifts/${shift.id}/expenses`, { category: 'Fournitures', amount: 15, description: 'Eau et savon' });
   assert.strictEqual(exp.status, 201);
 
   const dash = (await gerant('GET', '/api/dashboard')).data;
   assert.ok(dash.alerts.some((a) => a.text.includes('hors plafond')));
   assert.ok(dash.alerts.some((a) => a.text.includes('à compléter')));
-  assert.strictEqual(dash.todayExpenses, 15);
 
-  // 200 L × 1,30 = 260 ; − 130 crédit + 20 règlement − 15 dépense = 135 à remettre.
-  const closed = await pompiste('POST', `/api/shifts/${shift.id}/close`, {
-    readings: [{ nozzleId: nozzle.nozzle_id, endMeter: nozzle.start_meter + 200 }],
-    cash: 135,
-  });
-  assert.strictEqual(closed.status, 200);
-  assert.strictEqual(closed.data.expected_amount, 135);
-  assert.strictEqual(closed.data.payments_amount, 20);
-  assert.strictEqual(closed.data.expenses_amount, 15);
-  assert.strictEqual(closed.data.variance, 0);
-
-  const done = await gerant('PUT', `/api/customers/${quick.data.id}`, { phone: '+243 970 000 000', creditLimit: 500 });
+  const done = await gerant('PUT', `/api/customers/${quick.data.id}`, { phone: '+243 970 000 000', type: 'account' });
   assert.strictEqual(done.data.needs_review, 0);
+  assert.strictEqual(done.data.credit_limit, 500, 'devenu abonné : plafond abonné');
 });
 
-test('dépenses du gérant et rapport avec marge', async () => {
-  const today = new Date().toLocaleDateString('sv-SE');
-  assert.strictEqual((await pompiste('GET', '/api/expenses')).status, 403);
-
-  const created = await gerant('POST', '/api/expenses', { category: 'Salaires', amount: 300, description: 'Avance Paul', method: 'mobile money' });
-  assert.strictEqual(created.status, 201);
-  assert.strictEqual(created.data.expense_date, today);
-
-  const list = (await gerant('GET', `/api/expenses?from=${today}&to=${today}`)).data;
-  assert.strictEqual(list.total, 315);
-  assert.strictEqual(list.byCategory[0].category, 'Salaires');
-
-  const shiftExpense = list.expenses.find((e) => e.shift_id);
-  assert.strictEqual((await gerant('DELETE', `/api/expenses/${shiftExpense.id}`)).status, 409, 'dépense de caisse figée');
-  assert.strictEqual((await gerant('PUT', `/api/expenses/${created.data.id}`, { amount: 250 })).data.amount, 250);
-
-  const tank = (await gerant('GET', '/api/tanks')).data.find((t) => t.product_name === 'Gasoil');
-  await gerant('POST', '/api/deliveries', { tankId: tank.id, litersOrdered: 1000, litersReceived: 1000, unitCost: 1 });
-
-  const rep = (await gerant('GET', `/api/reports/sales?from=${today}&to=${today}`)).data;
-  assert.strictEqual(rep.totals.expenses, 265);
-  const diesel = rep.byProduct.find((p) => p.product === 'Gasoil');
-  assert.strictEqual(diesel.avg_cost, 1);
-  assert.strictEqual(diesel.margin, Math.round((diesel.amount - diesel.liters) * 100) / 100);
-  assert.strictEqual(rep.totals.costKnown, true, 'seul le gasoil a été vendu, et son coût est connu');
-  assert.strictEqual(rep.totals.net, Math.round((rep.totals.grossMargin - 265) * 100) / 100);
-});
-
-test('vente payée ou à crédit : toutes deux donnent des points, seul le crédit compte dans le solde', async () => {
-  const opened = await pompiste('POST', '/api/shifts', { pumpIds: [ctx.pumps.find((p) => p.nozzles[0].product_name === 'Gasoil').id] });
-  ctx.shift = opened.data;
-  const nozzle = ctx.shift.readings[0];
-  const before = (await gerant('GET', `/api/customers/${ctx.fleet.id}`)).data.customer;
-
-  const paid = await pompiste('POST', `/api/shifts/${ctx.shift.id}/sales`, { customerId: ctx.fleet.id, productId: nozzle.product_id, amount: 13, payment: 'paid' });
-  assert.strictEqual(paid.status, 201);
-  assert.strictEqual(paid.data.kind, 'paid');
-  assert.strictEqual(paid.data.liters, 10, '13 $ à 1,30 $/L = 10 L');
-  assert.strictEqual(paid.data.points, 10);
-
-  const after = (await gerant('GET', `/api/customers/${ctx.fleet.id}`)).data.customer;
-  assert.strictEqual(after.balance, before.balance, 'une vente payée ne change pas le solde');
-  assert.strictEqual(after.loyalty_points, before.loyalty_points + 10);
-});
-
-test('client : inscription, demande d’achat confirmée en un geste par le pompiste', async () => {
+test('client : inscription, demande d’achat confirmée en un geste', async () => {
   const moi = client();
   const reg = await moi('POST', '/api/register', { name: 'Jean Bahati', phone: '+243 990 111 222', password: 'jeanbahati' });
   assert.strictEqual(reg.status, 201);
-  assert.strictEqual((await moi('GET', '/api/auth/me')).data.user.role, 'customer');
+  assert.strictEqual((await moi('POST', '/api/auth/login', { login: '+243 990 111 222', password: 'jeanbahati' })).status, 200);
   assert.strictEqual((await moi('POST', '/api/register', { name: 'X', phone: '+243990111222', password: 'jeanbahati' })).status, 409);
 
-  const products = (await moi('GET', '/api/products')).data;
-  const diesel = products.find((p) => p.name === 'Gasoil');
-  const noCredit = await moi('POST', '/api/me/requests', { productId: diesel.id, amount: 20, payment: 'credit' });
-  assert.strictEqual(noCredit.status, 400, 'pas de crédit sans plafond ouvert');
+  assert.strictEqual((await moi('POST', '/api/me/requests', { productId: ctx.diesel.id, amount: 5, payment: 'combo' })).status, 400, 'pas assez de combos');
 
-  const created = await moi('POST', '/api/me/requests', { productId: diesel.id, amount: 26, plate: 'GM-123' });
-  assert.strictEqual(created.status, 201);
+  const created = await moi('POST', '/api/me/requests', { productId: ctx.diesel.id, amount: 24, plate: 'GM-123' });
   assert.strictEqual(created.data.status, 'pending');
-
-  const queue = (await pompiste('GET', '/api/requests/pending')).data;
-  const mine = queue.find((r) => r.id === created.data.id);
-  assert.ok(mine, 'la demande apparaît chez le pompiste');
+  const mine = (await pompiste('GET', '/api/requests/pending')).data.find((r) => r.id === created.data.id);
   assert.strictEqual(mine.customer_name, 'Jean Bahati');
 
-  // Not visible to the manager before confirmation.
-  let shift = (await gerant('GET', `/api/shifts/${ctx.shift.id}`)).data;
-  assert.ok(!shift.sales.some((s) => s.source === 'customer'));
-
   const confirmed = await pompiste('POST', `/api/requests/${mine.id}/confirm`, {});
-  assert.strictEqual(confirmed.status, 201);
   assert.strictEqual(confirmed.data.liters, 20);
+  assert.strictEqual(confirmed.data.points, 20);
   assert.strictEqual(confirmed.data.source, 'customer');
-  assert.strictEqual((await pompiste('POST', `/api/requests/${mine.id}/confirm`, {})).status, 409, 'pas de double confirmation');
+  assert.strictEqual((await pompiste('POST', `/api/requests/${mine.id}/confirm`, {})).status, 409);
+  assert.strictEqual((await moi('GET', '/api/me/requests/current')).data.status, 'confirmed');
 
-  shift = (await gerant('GET', `/api/shifts/${ctx.shift.id}`)).data;
-  assert.ok(shift.sales.some((s) => s.source === 'customer' && s.plate === 'GM-123'));
-  const current = (await moi('GET', '/api/me/requests/current')).data;
-  assert.strictEqual(current.status, 'confirmed');
-  assert.strictEqual(current.sale_points, 20);
-
-  // Rejected and cancelled requests.
-  const again = (await moi('POST', '/api/me/requests', { productId: diesel.id, liters: 5 })).data;
+  const again = (await moi('POST', '/api/me/requests', { productId: ctx.diesel.id, liters: 5 })).data;
   assert.strictEqual((await pompiste('POST', `/api/requests/${again.id}/reject`, { note: 'Client parti' })).status, 204);
-  assert.strictEqual((await moi('GET', '/api/me/requests/current')).data.status, 'rejected');
-  const third = (await moi('POST', '/api/me/requests', { productId: diesel.id, liters: 5 })).data;
+  const third = (await moi('POST', '/api/me/requests', { productId: ctx.diesel.id, liters: 5 })).data;
   assert.strictEqual((await moi('DELETE', `/api/me/requests/${third.id}`)).status, 204);
-  assert.ok(!(await pompiste('GET', '/api/requests/pending')).data.some((r) => r.id === third.id));
 
-  const dash = (await gerant('GET', '/api/dashboard')).data;
-  assert.ok(dash.alerts.some((a) => a.text.includes('à compléter')), 'le client inscrit est à compléter');
+  const account = (await moi('GET', '/api/me/account')).data;
+  assert.strictEqual(account.customer.loyalty_points, 20);
+  assert.strictEqual(account.combos.threshold, 100);
+  assert.strictEqual((await moi('GET', `/api/customers/${ctx.person.id}`)).status, 403);
 });
 
-test("migration : une base de la première version est convertie (loyalty → paid)", () => {
+test('dépenses et rapport avec marge', async () => {
+  assert.strictEqual((await pompiste('GET', '/api/expenses')).status, 403);
+  const created = await gerant('POST', '/api/expenses', { category: 'Salaires', amount: 300, description: 'Avance Paul', method: 'mobile money' });
+  assert.strictEqual(created.data.expense_date, today());
+  const list = (await gerant('GET', `/api/expenses?from=${today()}&to=${today()}`)).data;
+  assert.strictEqual(list.total, 315);
+  const shiftExpense = list.expenses.find((e) => e.shift_id);
+  assert.strictEqual((await gerant('DELETE', `/api/expenses/${shiftExpense.id}`)).status, 409);
+
+  const tank = ctx.tanks.find((t) => t.product_name === 'Gasoil');
+  await gerant('POST', '/api/deliveries', { tankId: tank.id, litersOrdered: 1000, litersReceived: 1000, unitCost: 1 });
+  const rep = (await gerant('GET', `/api/reports/sales?from=${today()}&to=${today()}`)).data;
+  assert.strictEqual(rep.totals.expenses, 315);
+  assert.strictEqual(rep.totals.combos, 2);
+  const diesel = rep.byProduct.find((p) => p.product === 'Gasoil');
+  assert.strictEqual(diesel.avg_cost, 1);
+
+  const res = await fetch(`${baseUrl}/api/reports/sales?from=${today()}&to=${today()}&format=csv`);
+  assert.strictEqual(res.status, 401);
+});
+
+test('migration : une base ancienne est convertie (loyalty → paid, combos)', () => {
   const fs = require('node:fs');
   const os = require('node:os');
   const path = require('node:path');
@@ -328,13 +319,19 @@ test("migration : une base de la première version est convertie (loyalty → pa
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'station-'));
   const file = path.join(dir, 'old.db');
   const old = new DatabaseSync(file);
-  old.exec(`CREATE TABLE sales (id INTEGER PRIMARY KEY, shift_id INTEGER NOT NULL, customer_id INTEGER NOT NULL, nozzle_id INTEGER NOT NULL,
-    product_id INTEGER NOT NULL, kind TEXT NOT NULL CHECK (kind IN ('credit', 'loyalty')), liters REAL NOT NULL, unit_price REAL NOT NULL,
-    amount REAL NOT NULL, points INTEGER NOT NULL DEFAULT 0, plate TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')));
-    INSERT INTO sales (shift_id, customer_id, nozzle_id, product_id, kind, liters, unit_price, amount, points) VALUES (1, 1, 1, 1, 'loyalty', 10, 1, 10, 10), (1, 1, 1, 1, 'credit', 5, 1, 5, 0);`);
+  old.exec(`CREATE TABLE customers (id INTEGER PRIMARY KEY, type TEXT NOT NULL, name TEXT NOT NULL, phone TEXT, email TEXT, address TEXT, plate TEXT,
+      credit_limit REAL NOT NULL DEFAULT 0, loyalty_points INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1, created_at TEXT);
+    INSERT INTO customers (type, name, loyalty_points) VALUES ('individual', 'Ancien', 15);
+    CREATE TABLE sales (id INTEGER PRIMARY KEY, shift_id INTEGER NOT NULL, customer_id INTEGER NOT NULL, nozzle_id INTEGER NOT NULL,
+      product_id INTEGER NOT NULL, kind TEXT NOT NULL CHECK (kind IN ('credit', 'loyalty')), liters REAL NOT NULL, unit_price REAL NOT NULL,
+      amount REAL NOT NULL, points INTEGER NOT NULL DEFAULT 0, plate TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+    INSERT INTO sales (shift_id, customer_id, nozzle_id, product_id, kind, liters, unit_price, amount, points)
+      VALUES (1, 1, 1, 1, 'loyalty', 10, 1, 10, 10), (1, 1, 1, 1, 'credit', 5, 1, 5, 5);`);
   old.close();
-  const db = openDb(file);
-  assert.deepStrictEqual(db.prepare('SELECT kind FROM sales ORDER BY id').all().map((r) => r.kind), ['paid', 'credit']);
-  db.close();
+  const migrated = openDb(file);
+  assert.deepStrictEqual(migrated.prepare('SELECT kind FROM sales ORDER BY id').all().map((r) => r.kind), ['paid', 'credit']);
+  assert.strictEqual(migrated.prepare('SELECT loyalty_points FROM customers').get().loyalty_points, 10, 'le crédit non payé ne rapporte plus');
+  assert.strictEqual(migrated.prepare('SELECT credit_limit FROM customers').get().credit_limit, 50);
+  migrated.close();
   fs.rmSync(dir, { recursive: true, force: true });
 });

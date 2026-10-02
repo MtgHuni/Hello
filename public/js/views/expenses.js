@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { h, fmt, pageHeader, table, segmented, kpi, field, button, formDialog, confirmDialog, actionSheet, toast, todayISO } from '../ui.js';
+import { h, fmt, pageHeader, table, segmented, kpi, field, button, formDialog, confirmDialog, actionSheet, toast, todayISO, setContent } from '../ui.js';
 import { PRESETS, presetRange } from './reports.js';
 
 const METHODS = [
@@ -31,7 +31,7 @@ export async function renderExpenses(page, ctx) {
   const tillTotal = fromTill.reduce((t, e) => t + e.amount, 0);
   const top = data.byCategory[0];
 
-  page.replaceChildren(
+  setContent(page, 
     pageHeader(
       'Dépenses',
       range.from === range.to ? fmt.longDay(range.from) : `Du ${fmt.date(range.from)} au ${fmt.date(range.to)}`,

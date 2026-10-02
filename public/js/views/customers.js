@@ -1,11 +1,11 @@
 import { api } from '../api.js';
-import { h, fmt, pageHeader, card, cardHeader, table, segmented, kpi, badge, button, formDialog, toast, field, todayISO, isoDate } from '../ui.js';
+import { h, fmt, pageHeader, card, cardHeader, table, segmented, kpi, badge, button, formDialog, toast, field, todayISO, isoDate, setContent } from '../ui.js';
 import { icon } from '../icons.js';
 
 let typeFilter = 'all';
 let search = '';
 
-const TYPE_LABEL = { account: 'En compte', individual: 'Particulier' };
+const TYPE_LABEL = { account: 'Abonné', individual: 'Particulier' };
 
 export async function renderCustomers(page, ctx) {
   const customers = await api.get('/customers');
@@ -18,7 +18,7 @@ export async function renderCustomers(page, ctx) {
         (typeFilter === 'all' || (typeFilter === 'review' ? c.needs_review && c.active : c.type === typeFilter)) &&
         (!q || [c.name, c.phone, c.plate, c.email].some((v) => v?.toLowerCase().includes(q))),
     );
-    listHost.replaceChildren(
+    setContent(listHost, 
       table(
         [
           { label: 'Client', render: (c) => h('div', {}, h('div', { style: 'font-weight:600' }, c.name), h('div', { class: 'muted small' }, [c.phone, c.plate].filter(Boolean).join(' · ') || '—')) },
@@ -26,9 +26,9 @@ export async function renderCustomers(page, ctx) {
             label: 'Type',
             render: (c) => (!c.active ? badge('Désactivé') : c.needs_review ? badge('À compléter', 'warning') : TYPE_LABEL[c.type]),
           },
-          { label: 'Solde dû', align: 'right', render: (c) => (c.type === 'account' ? h('span', { class: c.balance > c.credit_limit ? 'variance-neg' : '' }, fmt.money(c.balance)) : '—') },
-          { label: 'Plafond', align: 'right', render: (c) => (c.type === 'account' ? fmt.money(c.credit_limit) : '—') },
-          { label: 'Points', align: 'right', render: (c) => fmt.number(c.loyalty_points) },
+          { label: 'Solde dû', align: 'right', render: (c) => (c.balance ? h('span', { class: c.balance > c.credit_limit ? 'variance-neg' : '' }, fmt.money(c.balance)) : '—') },
+          { label: 'Plafond', align: 'right', render: (c) => fmt.money(c.credit_limit) },
+          { label: 'Combos', align: 'right', render: (c) => fmt.number(c.loyalty_points) },
           { label: 'Dernier achat', render: (c) => fmt.date(c.last_purchase_at) },
         ],
         rows,
@@ -46,7 +46,7 @@ export async function renderCustomers(page, ctx) {
   const receivables = customers.filter((c) => c.type === 'account').reduce((t, c) => t + Math.max(0, c.balance), 0);
   const toReview = customers.filter((c) => c.needs_review && c.active).length;
   if (typeFilter === 'review' && !toReview) typeFilter = 'all';
-  page.replaceChildren(
+  setContent(page, 
     pageHeader('Clients', `${customers.length} client${customers.length > 1 ? 's' : ''} · encours total ${fmt.money(receivables)}`, button('Nouveau client', () => customerDialog(null, ctx), { iconName: 'plus' })),
     h(
       'section',
@@ -57,7 +57,7 @@ export async function renderCustomers(page, ctx) {
         segmented(
           [
             ['all', 'Tous'],
-            ['account', 'En compte'],
+            ['account', 'Abonnés'],
             ['individual', 'Particuliers'],
             ...(toReview ? [['review', `À compléter (${toReview})`]] : []),
           ],
@@ -79,12 +79,21 @@ async function customerDialog(customer, ctx, onDone) {
   const ok = await formDialog({
     title: customer ? `Modifier ${customer.name}` : 'Nouveau client',
     fields: [
-      { name: 'type', label: 'Type', type: 'select', value: customer?.type || 'account', options: [['account', 'En compte (société, flotte — paie à crédit)'], ['individual', 'Particulier (fidélité)']], full: true },
+      {
+        name: 'type',
+        label: 'Catégorie',
+        type: 'segment',
+        value: customer?.type || 'individual',
+        options: [
+          ['individual', 'Particulier'],
+          ['account', 'Abonné'],
+        ],
+        full: true,
+      },
       { name: 'name', label: 'Nom ou raison sociale', value: customer?.name, required: true, full: true },
       { name: 'phone', label: 'Téléphone', value: customer?.phone, type: 'tel' },
       { name: 'email', label: 'E-mail', value: customer?.email, type: 'email' },
       { name: 'plate', label: 'Immatriculation principale', value: customer?.plate },
-      { name: 'creditLimit', label: 'Plafond de crédit ($)', type: 'number', step: '0.01', min: '0', value: customer?.credit_limit ?? 0, hint: 'Clients en compte uniquement' },
       { name: 'address', label: 'Adresse', value: customer?.address, full: true },
       ...(customer ? [{ name: 'active', label: 'Client actif', type: 'checkbox', value: !!customer.active, full: true }] : []),
     ],
@@ -102,7 +111,7 @@ export async function renderCustomerDetail(page, ctx) {
     const acc = await api.get(`/customers/${ctx.id}?from=${period.from}&to=${period.to}`);
     const c = acc.customer;
     const reload = () => load();
-    page.replaceChildren(
+    setContent(page, 
       h('a', { class: 'back no-print', href: '#/clients' }, icon('back'), 'Clients'),
       pageHeader(
         c.name,
@@ -147,27 +156,41 @@ export function statement(acc, period, onPeriod) {
   from.querySelector('input').addEventListener('change', apply);
   to.querySelector('input').addEventListener('change', apply);
 
-  // Show the debit/credit statement as soon as the customer can owe money.
-  const isAccount = c.type === 'account' || c.credit_limit > 0 || c.balance !== 0;
+  const combos = acc.combos;
+  const dues = acc.dues;
   return h(
     'div',
     { class: 'stack' },
+    dues && (dues.overdue > 0 || dues.currentMonth > 0)
+      ? h(
+          'section',
+          { class: 'card', style: dues.late ? 'box-shadow:inset 0 0 0 2px var(--red)' : '' },
+          cardHeader('Paiement mensuel (abonné)', 'Le total du mois se paie en fin de mois'),
+          dues.overdue > 0
+            ? h(
+                'div',
+                { class: 'summary-line' },
+                h('span', {}, dues.late ? badge('En retard', 'critical') : badge('À payer', 'warning'), ' Mois précédent', h('span', { class: 'muted small' }, ` — avant le ${fmt.date(dues.overdueDeadline)}`)),
+                h('strong', { class: dues.late ? 'variance-neg' : '' }, fmt.money(dues.overdue)),
+              )
+            : null,
+          h('div', { class: 'summary-line' }, h('span', {}, 'Mois en cours', h('span', { class: 'muted small' }, ` — à payer avant le ${fmt.date(dues.nextDeadline)}`)), h('strong', {}, fmt.money(dues.currentMonth))),
+          dues.late ? h('p', { class: 'muted small', style: 'margin-top:8px' }, 'Le crédit est suspendu jusqu’au paiement du mois précédent.') : null,
+        )
+      : null,
     h(
       'div',
       { class: 'grid grid-4' },
-      isAccount
-        ? [
-            kpi('Solde dû', h('span', { class: c.balance > c.credit_limit ? 'variance-neg' : '' }, fmt.money(c.balance)), c.balance > c.credit_limit ? 'Plafond dépassé' : `Plafond ${fmt.money(c.credit_limit)}`),
-            kpi('Crédit disponible', fmt.money(Math.max(0, c.credit_limit - c.balance))),
-            kpi('Points fidélité', fmt.number(c.loyalty_points), `+${fmt.number(acc.totals.points)} sur la période`),
-            kpi('Achats sur la période', fmt.money(acc.totals.purchases), fmt.liters(acc.totals.liters)),
-          ]
-        : [
-            kpi('Points fidélité', fmt.number(c.loyalty_points), 'Cumulés'),
-            kpi('Achats sur la période', fmt.money(acc.totals.purchases)),
-            kpi('Litres sur la période', fmt.liters(acc.totals.liters)),
-            kpi('Points sur la période', `+${fmt.number(acc.totals.points)}`),
-          ],
+      kpi('Solde dû', h('span', { class: c.balance > c.credit_limit ? 'variance-neg' : '' }, fmt.money(c.balance)), c.balance > c.credit_limit ? 'Plafond dépassé' : `Plafond ${fmt.money(c.credit_limit)}`),
+      kpi('Crédit disponible', fmt.money(Math.max(0, c.credit_limit - c.balance)), TYPE_LABEL[c.type]),
+      kpi(
+        'Combos',
+        fmt.number(combos.balance),
+        combos.balance >= combos.threshold
+          ? `= ${fmt.money(combos.value)} · échangeables`
+          : `${fmt.number(combos.threshold - combos.balance)} avant l’échange${combos.pending ? ` · +${fmt.number(combos.pending)} au paiement du crédit` : ''}`,
+      ),
+      kpi('Achats sur la période', fmt.money(acc.totals.purchases), fmt.liters(acc.totals.liters)),
     ),
     h(
       'section',
@@ -176,28 +199,23 @@ export function statement(acc, period, onPeriod) {
       h(
         'div',
         { class: 'card-header' },
-        h('div', {}, h('h2', {}, isAccount ? 'Relevé de compte' : 'Historique des achats'), isAccount ? h('p', {}, `Solde au début de la période : ${fmt.money(acc.opening)}`) : null),
+        h('div', {}, h('h2', {}, 'Relevé de compte'), h('p', {}, `Solde au début de la période : ${fmt.money(acc.opening)}`)),
         h('div', { class: 'row no-print', style: 'align-items:flex-end' }, from, to, button('Imprimer', () => window.print(), { variant: 'secondary', iconName: 'print' })),
       ),
       table(
         [
           { label: 'Date', render: (m) => fmt.dateTime(m.date) },
           { label: 'Libellé', wrap: true, key: 'label' },
-          ...(isAccount
-            ? [
-                { label: 'Débit', align: 'right', render: (m) => (m.debit ? fmt.money(m.debit) : '') },
-                { label: 'Crédit', align: 'right', render: (m) => (m.credit ? fmt.money(m.credit) : '') },
-                { label: 'Solde', align: 'right', render: (m) => fmt.money(m.balance) },
-              ]
-            : [
-                { label: 'Montant', align: 'right', render: (m) => fmt.money(m.amount) },
-                { label: 'Points', align: 'right', render: (m) => (m.points ? `+${m.points}` : '') },
-              ]),
+          { label: 'Montant', align: 'right', render: (m) => (m.type === 'sale' ? fmt.money(m.amount) : '') },
+          { label: 'Dû', align: 'right', render: (m) => (m.debit ? fmt.money(m.debit) : '') },
+          { label: 'Payé', align: 'right', render: (m) => (m.credit ? fmt.money(m.credit) : '') },
+          { label: 'Solde', align: 'right', render: (m) => fmt.money(m.balance) },
+          { label: 'Combos', align: 'right', render: (m) => (m.points ? `+${m.points}` : m.combosUsed ? `−${m.combosUsed}` : '') },
         ],
         acc.movements,
         { empty: 'Aucune opération sur cette période.' },
       ),
-      isAccount && acc.movements.length
+      acc.movements.length
         ? h('div', { class: 'summary-line total', style: 'padding:14px 22px' }, h('span', {}, 'Solde en fin de période'), h('span', {}, fmt.money(acc.closing)))
         : null,
     ),

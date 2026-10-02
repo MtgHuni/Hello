@@ -1,7 +1,8 @@
 const express = require('express');
-const { fail, num, str, oneOf, bool, round, dateParam } = require('../util');
+const { fail, num, str, oneOf, bool, round, dateParam, transaction } = require('../util');
 const { requireRole, hashPassword, checkPasswordStrength } = require('../auth');
-const { getSettings } = require('../db');
+const { getSettings, syncCreditLimits } = require('../db');
+const { refreshCustomer, subscriberDues } = require('../loyalty');
 
 const manager = requireRole('manager');
 const frNum = (n, digits = 2) => n.toLocaleString('fr-FR', { maximumFractionDigits: digits });
@@ -40,7 +41,7 @@ function customerRoutes(db) {
 
     const sales = db
       .prepare(
-        `SELECT s.id, s.created_at, s.kind, s.liters, s.unit_price, s.amount, s.points, s.plate, s.over_limit, p.name AS product_name
+        `SELECT s.id, s.created_at, s.kind, s.liters, s.unit_price, s.amount, s.points, s.points_due, s.combos_used, s.plate, s.over_limit, p.name AS product_name
          FROM (SELECT * FROM sales WHERE customer_id = ? AND ${inRange}) s JOIN products p ON p.id = s.product_id
          ORDER BY s.created_at, s.id`,
       )
@@ -67,9 +68,15 @@ function customerRoutes(db) {
       ...sales.map((s) => ({
         date: s.created_at,
         type: 'sale',
-        label: `${s.product_name} — ${frNum(s.liters)} L à ${frNum(s.unit_price, 3)} $/L${s.plate ? ` (${s.plate})` : ''} — ${s.kind === 'credit' ? `à crédit${s.over_limit ? ' (hors plafond)' : ''}` : 'payé'}`,
+        label:
+          s.kind === 'combo'
+            ? `${s.product_name} — ${frNum(s.liters)} L échangés contre ${s.combos_used} combos`
+            : `${s.product_name} — ${frNum(s.liters)} L à ${frNum(s.unit_price, 3)} $/L${s.plate ? ` (${s.plate})` : ''} — ${
+                s.kind === 'credit' ? `à crédit${s.over_limit ? ' (hors plafond)' : ''}${s.points_due && !s.points ? ', combos à l’encaissement' : ''}` : 'payé'
+              }`,
         liters: s.liters,
         points: s.points,
+        combosUsed: s.combos_used,
         debit: s.kind === 'credit' ? s.amount : 0,
         amount: s.amount,
         credit: 0,
@@ -90,8 +97,16 @@ function customerRoutes(db) {
       m.balance = running;
     }
 
+    const settings = getSettings(db);
     return {
       customer,
+      dues: customer.type === 'account' ? subscriberDues(db, customer.id, settings.subscriberGraceDays) : null,
+      combos: {
+        balance: customer.loyalty_points,
+        value: round(customer.loyalty_points * settings.comboValue),
+        threshold: settings.comboThreshold,
+        pending: db.prepare("SELECT COALESCE(SUM(points_due), 0) AS v FROM sales WHERE customer_id = ? AND kind = 'credit' AND points = 0").get(customer.id).v,
+      },
       period: { from, to },
       opening: round(opening),
       closing: round(running),
@@ -108,6 +123,7 @@ function customerRoutes(db) {
   router.get('/customers', requireRole('manager', 'attendant'), (req, res) => {
     const rows = db.prepare(`${listSql} ORDER BY c.name COLLATE NOCASE`).all();
     if (req.user.role === 'attendant') {
+      const graceDays = getSettings(db).subscriberGraceDays;
       // Attendants only need what the sale form shows.
       return res.json(
         rows
@@ -121,6 +137,7 @@ function customerRoutes(db) {
             points: c.loyalty_points,
             balance: c.balance,
             available: round(c.credit_limit - c.balance),
+            late: c.type === 'account' && c.balance > 0 ? subscriberDues(db, c.id, graceDays).late : false,
           })),
       );
     }
@@ -136,28 +153,28 @@ function customerRoutes(db) {
       email: str(b.email ?? current.email, "L'e-mail", { required: false, max: 120 }),
       address: str(b.address ?? current.address, "L'adresse", { required: false, max: 300 }),
       plate: str(b.plate ?? current.plate, "L'immatriculation", { required: false, max: 20 }),
-      creditLimit: type === 'account' ? num(b.creditLimit ?? current.credit_limit ?? 0, 'Le plafond de crédit', { max: 1e8 }) : 0,
     };
   }
 
-  // Quick creation at the pump: name only. The customer gets the default credit
-  // limit and is flagged for the manager to complete the record.
+  // Quick creation at the pump: name only. The customer is a particulier (with the
+  // particulier credit limit) flagged for the manager to complete the record.
   router.post('/customers/quick', requireRole('manager', 'attendant'), (req, res) => {
     const name = str(req.body?.name, 'Le nom du client', { max: 120 });
     const existing = db.prepare('SELECT id FROM customers WHERE name = ? COLLATE NOCASE AND active = 1').get(name);
     if (existing) fail(409, 'Un client porte déjà ce nom : choisissez-le dans la liste.', 'duplicate');
-    const limit = getSettings(db).newCustomerCreditLimit;
+    const limit = getSettings(db).individualCreditLimit;
     const id = db
-      .prepare("INSERT INTO customers (type, name, credit_limit, needs_review, created_by) VALUES ('account', ?, ?, 1, ?)")
+      .prepare("INSERT INTO customers (type, name, credit_limit, needs_review, created_by) VALUES ('individual', ?, ?, 1, ?)")
       .run(name, limit, req.user.id).lastInsertRowid;
-    res.status(201).json({ id: Number(id), name, type: 'account', plate: null, balance: 0, available: limit });
+    res.status(201).json({ id: Number(id), name, type: 'individual', plate: null, points: 0, balance: 0, available: limit, late: false });
   });
 
   router.post('/customers', manager, (req, res) => {
     const f = customerFields(req.body || {});
     const id = db
-      .prepare('INSERT INTO customers (type, name, phone, email, address, plate, credit_limit) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .run(f.type, f.name, f.phone, f.email, f.address, f.plate, f.creditLimit).lastInsertRowid;
+      .prepare('INSERT INTO customers (type, name, phone, email, address, plate) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(f.type, f.name, f.phone, f.email, f.address, f.plate).lastInsertRowid;
+    syncCreditLimits(db);
     res.status(201).json(db.prepare(`${listSql} WHERE c.id = ?`).get(id));
   });
 
@@ -167,8 +184,9 @@ function customerRoutes(db) {
     const f = customerFields(req.body || {}, current);
     const active = bool(req.body?.active, !!current.active) ? 1 : 0;
     db.prepare(
-      'UPDATE customers SET type = ?, name = ?, phone = ?, email = ?, address = ?, plate = ?, credit_limit = ?, active = ?, needs_review = 0 WHERE id = ?',
-    ).run(f.type, f.name, f.phone, f.email, f.address, f.plate, f.creditLimit, active, current.id);
+      'UPDATE customers SET type = ?, name = ?, phone = ?, email = ?, address = ?, plate = ?, active = ?, needs_review = 0 WHERE id = ?',
+    ).run(f.type, f.name, f.phone, f.email, f.address, f.plate, active, current.id);
+    syncCreditLimits(db);
     db.prepare('UPDATE users SET active = ? WHERE customer_id = ?').run(active, current.id);
     res.json(db.prepare(`${listSql} WHERE c.id = ?`).get(current.id));
   });
@@ -183,13 +201,10 @@ function customerRoutes(db) {
     const amount = round(num(req.body?.amount, 'Le montant', { min: 0.01, max: 1e8 }));
     const method = oneOf(req.body?.method, 'Le mode de règlement', ['espèces', 'virement', 'chèque', 'carte', 'mobile money']);
     const reference = str(req.body?.reference, 'La référence', { required: false, max: 100 });
-    db.prepare('INSERT INTO payments (customer_id, amount, method, reference, user_id) VALUES (?, ?, ?, ?, ?)').run(
-      customer.id,
-      amount,
-      method,
-      reference,
-      req.user.id,
-    );
+    transaction(db, () => {
+      db.prepare('INSERT INTO payments (customer_id, amount, method, reference, user_id) VALUES (?, ?, ?, ?, ?)').run(customer.id, amount, method, reference, req.user.id);
+      refreshCustomer(db, customer.id); // paid-off credit sales now earn their combos
+    });
     res.status(201).json({ balance: customerBalance(db, customer.id) });
   });
 

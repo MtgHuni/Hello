@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { h, fmt, pageHeader, table, segmented, kpi, field, button, todayISO, isoDate, varianceCell } from '../ui.js';
+import { h, fmt, pageHeader, table, segmented, kpi, field, button, todayISO, isoDate, varianceCell, setContent } from '../ui.js';
 
 export const PRESETS = [
   ['today', "Aujourd'hui"],
@@ -43,7 +43,7 @@ export async function renderReports(page, ctx) {
   to.querySelector('input').addEventListener('change', onDate);
 
   const t = r.totals;
-  page.replaceChildren(
+  setContent(page, 
     pageHeader(
       'Rapports',
       range.from === range.to ? fmt.longDay(range.from) : `Du ${fmt.date(range.from)} au ${fmt.date(range.to)}`,
@@ -67,7 +67,7 @@ export async function renderReports(page, ctx) {
       { class: 'grid grid-4' },
       kpi("Chiffre d'affaires", fmt.money(t.amount), fmt.liters(t.liters)),
       kpi('Encaissé', fmt.money(t.cash + t.card), `Espèces ${fmt.money(t.cash)} · Cartes ${fmt.money(t.card)}`),
-      kpi('Vendu à crédit', fmt.money(t.credit), `Règlements reçus : ${fmt.money(t.payments)}`),
+      kpi('Vendu à crédit', fmt.money(t.credit), `Règlements reçus : ${fmt.money(t.payments)}${t.combos ? ` · combos échangés : ${fmt.money(t.combos)}` : ''}`),
       kpi('Écarts de caisse', varianceCell(t.variance, tol), 'Cumul de la période'),
     ),
     h(

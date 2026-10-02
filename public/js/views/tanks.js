@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { h, fmt, pageHeader, cardHeader, table, segmented, tankGauge, button, formDialog, toast, badge } from '../ui.js';
+import { h, fmt, pageHeader, cardHeader, table, segmented, tankGauge, button, formDialog, toast, badge, setContent } from '../ui.js';
 
 let tab = 'deliveries';
 
@@ -9,7 +9,7 @@ export async function renderTanks(page, ctx) {
   const active = tanks.filter((t) => t.active);
   const reload = () => renderTanks(page, ctx);
 
-  page.replaceChildren(
+  setContent(page, 
     pageHeader(
       'Cuves',
       'Livraisons, jaugeages et stock théorique.',

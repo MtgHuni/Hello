@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { h, fmt, kpi, card, cardHeader, tankGauge, productColor, pageHeader, button } from '../ui.js';
+import { h, fmt, kpi, card, cardHeader, tankGauge, productColor, pageHeader, button, setContent } from '../ui.js';
 import { icon } from '../icons.js';
 
 const ALERT_ICON = { critical: 'alert', serious: 'alert', warning: 'info' };
@@ -9,7 +9,7 @@ export async function renderDashboard(page, { state, navigate }) {
   const hour = new Date().getHours();
   const hello = hour < 18 ? 'Bonjour' : 'Bonsoir';
 
-  page.replaceChildren(
+  setContent(page, 
     pageHeader(
       `${hello}, ${state.user.name.split(' ')[0]}`,
       fmt.longDay(d.today),
@@ -80,7 +80,7 @@ function barChart(days) {
       days.map((d, i) => {
         const col = h('div', { class: 'bar-col' }, h('div', { class: 'bar', style: `height:${(d.amount / max) * 100}%;--i:${i}` }));
         col.addEventListener('mouseenter', () => {
-          tip.replaceChildren(h('div', { style: 'font-weight:600' }, fmt.money(d.amount)), h('div', { class: 'muted' }, `${fmt.day(d.date)} · ${fmt.liters(d.liters)}`));
+          setContent(tip, h('div', { style: 'font-weight:600' }, fmt.money(d.amount)), h('div', { class: 'muted' }, `${fmt.day(d.date)} · ${fmt.liters(d.liters)}`));
           tip.hidden = false;
           tip.style.left = `${col.offsetLeft + col.offsetWidth / 2}px`;
           tip.style.top = `${col.offsetTop + col.offsetHeight * (1 - d.amount / max) - 6}px`;

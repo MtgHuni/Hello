@@ -79,7 +79,7 @@ module.exports = function authRoutes(db) {
   });
 
   // Self sign-up for customers: name, phone (used as login) and password.
-  // The record is flagged for the manager; no credit until the manager opens it.
+  // The customer is a particulier (particulier credit limit), flagged for the manager.
   router.post('/register', (req, res) => {
     const key = `${req.ip}|register`;
     limiter.check(key);
@@ -93,8 +93,8 @@ module.exports = function authRoutes(db) {
     }
     const userId = transaction(db, () => {
       const customerId = db
-        .prepare("INSERT INTO customers (type, name, phone, credit_limit, needs_review) VALUES ('individual', ?, ?, 0, 1)")
-        .run(name, phone).lastInsertRowid;
+        .prepare("INSERT INTO customers (type, name, phone, credit_limit, needs_review) VALUES ('individual', ?, ?, ?, 1)")
+        .run(name, phone, getSettings(db).individualCreditLimit).lastInsertRowid;
       return Number(
         db.prepare("INSERT INTO users (name, login, password_hash, role, customer_id) VALUES (?, ?, ?, 'customer', ?)").run(name, phone, hashPassword(password), customerId)
           .lastInsertRowid,

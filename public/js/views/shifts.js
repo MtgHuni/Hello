@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { h, fmt, pageHeader, card, cardHeader, table, segmented, shiftBadge, varianceCell, kpi, formDialog, toast, button, badge } from '../ui.js';
+import { h, fmt, pageHeader, card, cardHeader, table, segmented, shiftBadge, varianceCell, kpi, formDialog, toast, button, badge, setContent } from '../ui.js';
 import { icon } from '../icons.js';
 
 let filter = 'closed';
@@ -8,7 +8,7 @@ export async function renderShifts(page, ctx) {
   const shifts = await api.get(`/shifts${filter === 'all' ? '' : `?status=${filter}`}`);
   const tol = ctx.state.settings.cashTolerance;
 
-  page.replaceChildren(
+  setContent(page, 
     pageHeader('Postes', 'Rapprochement des index et de la caisse, pompiste par pompiste.'),
     h(
       'section',
@@ -56,7 +56,7 @@ export async function renderShiftDetail(page, ctx) {
   const shift = await api.get(`/shifts/${ctx.id}`);
   const isManager = ctx.state.user.role === 'manager';
   const backPath = isManager ? 'postes' : 'historique';
-  page.replaceChildren(
+  setContent(page, 
     h('a', { class: 'back no-print', href: `#/${backPath}` }, icon('back'), isManager ? 'Postes' : 'Historique'),
     pageHeader(
       `Poste n°${shift.id}`,
@@ -95,7 +95,7 @@ export function shiftSummary(shift, tolerance) {
           'div',
           { class: 'grid grid-4' },
           kpi('Ventes totales', fmt.money(shift.total_amount), fmt.liters(shift.total_liters)),
-          kpi('Crédit clients', fmt.money(shift.credit_amount), 'Non encaissé'),
+          kpi('Crédit clients', fmt.money(shift.credit_amount), shift.combo_amount ? `+ ${fmt.money(shift.combo_amount)} échangés en combos` : 'Non encaissé'),
           kpi('À remettre', fmt.money(shift.expected_amount), [shift.payments_amount ? `+ ${fmt.money(shift.payments_amount)} règlements` : null, shift.expenses_amount ? `− ${fmt.money(shift.expenses_amount)} dépenses` : null].filter(Boolean).join(' · ') || `Déclaré : ${fmt.money(shift.cash + shift.card)}`),
           kpi('Écart de caisse', varianceCell(shift.variance, tolerance), Math.abs(shift.variance) <= tolerance ? 'Dans la tolérance' : `Tolérance : ± ${fmt.money(tolerance)}`),
         )
@@ -131,11 +131,11 @@ export function shiftSummary(shift, tolerance) {
               h(
                 'span',
                 { class: 'row', style: 'gap:6px;flex-wrap:nowrap' },
-                s.kind === 'credit' ? (s.over_limit ? badge('Crédit hors plafond', 'serious') : badge('Crédit', 'info')) : badge('Payé', 'good'),
+                s.kind === 'credit' ? (s.over_limit ? badge('Crédit hors plafond', 'serious') : badge('Crédit', 'info')) : s.kind === 'combo' ? badge('Combos', 'warning') : badge('Payé', 'good'),
                 s.source === 'customer' ? badge('Demande client') : null,
               ),
           },
-          { label: 'Points', align: 'right', render: (s) => (s.points ? `+${s.points}` : '—') },
+          { label: 'Combos', align: 'right', render: (s) => (s.points ? `+${s.points}` : s.combos_used ? `−${s.combos_used}` : s.points_due ? `+${s.points_due} au paiement` : '—') },
           { label: 'Véhicule', render: (s) => s.plate || '—' },
           { label: 'Produit', key: 'product_name' },
           { label: 'Litres', align: 'right', render: (s) => fmt.liters(s.liters) },

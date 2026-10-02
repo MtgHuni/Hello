@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { h, field, readForm } from '../ui.js';
+import { h, field, readForm, setContent } from '../ui.js';
 import { icon } from '../icons.js';
 
 function authForm({ title, lead, fields, submitLabel, onSubmit, wide, footer }) {
@@ -33,7 +33,7 @@ function authForm({ title, lead, fields, submitLabel, onSubmit, wide, footer }) 
 
 export function renderLogin(root, stationName, onDone) {
   document.title = stationName;
-  root.replaceChildren(
+  setContent(root, 
     authForm({
       title: stationName,
       lead: 'Connectez-vous pour continuer.',
@@ -54,10 +54,10 @@ export function renderLogin(root, stationName, onDone) {
 
 // Customers sign up themselves (phone number = login), then start fill-ups from their phone.
 export function renderRegister(root, stationName, onDone) {
-  root.replaceChildren(
+  setContent(root, 
     authForm({
       title: 'Créer mon compte',
-      lead: `Client de ${stationName} : préparez vos pleins depuis votre téléphone et cumulez des points.`,
+      lead: `Client de ${stationName} : préparez vos pleins depuis votre téléphone et cumulez des combos.`,
       submitLabel: 'Créer mon compte',
       fields: [
         { name: 'name', label: 'Nom complet', required: true, autocomplete: 'name' },
@@ -75,7 +75,7 @@ export function renderRegister(root, stationName, onDone) {
 }
 
 export function renderSetup(root, onDone) {
-  root.replaceChildren(
+  setContent(root, 
     authForm({
       title: 'Bienvenue',
       lead: 'Configurons votre station. Vous pourrez tout modifier ensuite dans les réglages.',

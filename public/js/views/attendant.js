@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { h, fmt, pageHeader, card, cardHeader, table, shiftBadge, varianceCell, button, formDialog, confirmDialog, toast, field, productColor, badge, kpi, parseServerDate } from '../ui.js';
+import { h, fmt, pageHeader, card, cardHeader, table, shiftBadge, varianceCell, button, formDialog, confirmDialog, toast, field, productColor, badge, kpi, parseServerDate, setContent } from '../ui.js';
 import { icon } from '../icons.js';
 import { shiftSummary } from './shifts.js';
 
@@ -56,7 +56,7 @@ async function renderStart(page, ctx) {
     }
   });
 
-  page.replaceChildren(
+  setContent(page, 
     pageHeader('Ouvrir mon poste', 'Choisissez la ou les pompes dont vous êtes responsable. Les index de départ sont relevés automatiquement.'),
     card(form),
   );
@@ -76,8 +76,8 @@ function renderOpenShift(page, ctx, shift) {
       tag: h(
         'span',
         { class: 'row', style: 'gap:6px' },
-        s.kind === 'credit' ? (s.over_limit ? badge('Crédit hors plafond', 'serious') : badge('Crédit', 'info')) : badge('Payé', 'good'),
-        s.points ? badge(`+${s.points} pts`) : null,
+        s.kind === 'credit' ? (s.over_limit ? badge('Crédit hors plafond', 'serious') : badge('Crédit', 'info')) : s.kind === 'combo' ? badge(`Combos −${s.combos_used}`, 'warning') : badge('Payé', 'good'),
+        s.points ? badge(`+${s.points} combos`) : null,
         s.source === 'customer' ? badge('Demande client') : null,
       ),
       amount: fmt.money(s.amount),
@@ -104,7 +104,7 @@ function renderOpenShift(page, ctx, shift) {
   const quick = (label, iconName, color, onClick, primary) =>
     h('button', { type: 'button', class: `quick-action ${primary ? 'primary' : ''}`, onClick }, h('span', { class: 'qa-icon', style: primary ? '' : `background:${color}` }, icon(iconName)), label);
 
-  page.replaceChildren(
+  setContent(page, 
     pageHeader('Poste en cours', `Ouvert à ${fmt.time(shift.opened_at)} · ${pumps}`, shiftBadge('open')),
     h(
       'div',
@@ -182,7 +182,10 @@ function renderOpenShift(page, ctx, shift) {
 // Polled every few seconds; the attendant confirms with one tap.
 function requestQueue(shift, reload) {
   const host = h('div', { class: 'stack', style: 'gap:10px' });
-  const priceOf = (productId) => shift.readings.find((r) => r.product_id === productId)?.unit_price;
+  const priceOf = (productId, type) => {
+    const r = shift.readings.find((x) => x.product_id === productId);
+    return type === 'account' ? r?.subscriber_price ?? r?.unit_price : r?.unit_price;
+  };
   let known = null;
   let seenConnected = false;
 
@@ -197,7 +200,7 @@ function requestQueue(shift, reload) {
   async function confirmRequest(r, adjust = {}) {
     try {
       const sale = await api.post(`/requests/${r.id}/confirm`, adjust);
-      toast(`${r.customer_name} : ${fmt.liters(sale.liters)} · ${fmt.money(sale.amount)}${sale.points ? ` · +${sale.points} pts` : ''}`);
+      toast(`${r.customer_name} : ${fmt.liters(sale.liters)} · ${fmt.money(sale.amount)}${sale.points ? ` · +${sale.points} combos` : sale.combos_used ? ` · −${sale.combos_used} combos` : ''}`);
     } catch (err) {
       if (err.code !== 'over_limit') throw err;
       if (!(await confirmDialog('Accorder le crédit ?', `${err.message} Si vous accordez ce crédit, il sera signalé au gérant avec votre nom.`, { confirmLabel: 'Accorder' }))) return;
@@ -213,17 +216,17 @@ function requestQueue(shift, reload) {
       submitLabel: 'Confirmer la vente',
       intro: 'Saisissez la quantité réellement servie.',
       grid: false,
-      fields: [{ name: 'liters', label: 'Litres servis', type: 'number', step: '0.01', min: '0.01', required: true, value: r.liters ?? (r.amount && priceOf(r.product_id) ? Math.round((r.amount / priceOf(r.product_id)) * 100) / 100 : '') }],
+      fields: [{ name: 'liters', label: 'Litres servis', type: 'number', step: '0.01', min: '0.01', required: true, value: r.liters ?? (r.amount && priceOf(r.product_id, r.customer_type) ? Math.round((r.amount / priceOf(r.product_id, r.customer_type)) * 100) / 100 : '') }],
       onSubmit: (d) => confirmRequest(r, { liters: d.liters }),
     });
   }
 
   function draw(rows) {
     if (!rows.length) return host.replaceChildren();
-    host.replaceChildren(
+    setContent(host, 
       h('div', { class: 'queue-title' }, h('span', { class: 'pulse' }), `Demandes des clients (${rows.length})`),
       ...rows.map((r) => {
-        const price = priceOf(r.product_id) ?? r.current_price;
+        const price = priceOf(r.product_id, r.customer_type) ?? r.current_price;
         const liters = r.liters ?? r.amount / price;
         const amount = r.amount ?? r.liters * price;
         const overLimit = r.payment === 'credit' && amount > r.available + 0.001;
@@ -235,7 +238,12 @@ function requestQueue(shift, reload) {
           h(
             'div',
             { class: 'row', style: 'gap:6px' },
-            r.payment === 'credit' ? badge(overLimit ? 'Crédit · dépasse le plafond' : 'Crédit', overLimit ? 'serious' : 'info') : badge('Payé', 'good'),
+            r.payment === 'credit'
+              ? badge(overLimit ? 'Crédit · dépasse le plafond' : 'Crédit', overLimit ? 'serious' : 'info')
+              : r.payment === 'combo'
+                ? badge(`Avec ses combos (${r.loyalty_points})`, 'warning')
+                : badge('Payé', 'good'),
+            r.customer_type === 'account' ? badge('Abonné') : null,
             r.plate ? badge(r.plate) : null,
           ),
           h(
@@ -292,8 +300,12 @@ async function addSale(ctx, shift, reload) {
   const byName = new Map(customers.map((c) => [c.name.toLowerCase(), c]));
   const find = (text) => byLabel.get(text.trim().toLowerCase()) || byName.get(text.trim().toLowerCase());
   const products = [...new Map(shift.readings.map((r) => [r.product_id, r])).values()];
-  const priceOf = (productId) => products.find((r) => r.product_id === Number(productId))?.unit_price || 0;
-  const ppl = ctx.state.settings.pointsPerLiter;
+  // Subscribers pay the subscriber price fixed at shift opening.
+  const priceOf = (productId, c) => {
+    const r = products.find((x) => x.product_id === Number(productId));
+    return (c?.type === 'account' ? r?.subscriber_price ?? r?.unit_price : r?.unit_price) || 0;
+  };
+  const { combosPerLiter, comboValue, comboThreshold } = ctx.state.settings;
 
   const who = h('p', { class: 'hint-line' });
   const summary = h('div', { class: 'summary-line total' }, h('span', {}, 'Total'), h('span', {}, '—'));
@@ -305,25 +317,34 @@ async function addSale(ctx, shift, reload) {
       who.textContent = '';
       who.className = 'hint-line';
     } else if (c) {
-      who.textContent = `${c.points ?? 0} pts · crédit disponible ${fmt.money(Math.max(0, c.available ?? 0))}`;
-      who.className = 'hint-line';
+      const parts = [c.type === 'account' ? 'Abonné' : 'Particulier', `${c.points ?? 0} combos${c.points >= comboThreshold ? ` (= ${fmt.money(c.points * comboValue)})` : ''}`];
+      parts.push(c.late ? 'mois précédent impayé' : `crédit disponible ${fmt.money(Math.max(0, c.available ?? 0))}`);
+      who.textContent = parts.join(' · ');
+      who.className = c.late ? 'hint-line variance-neg' : 'hint-line';
       if (c.plate && !form.elements.plate.value) form.elements.plate.value = c.plate;
     } else {
       who.textContent = `Nouveau client « ${text} » : il sera créé à l’enregistrement.`;
       who.className = 'hint-line new';
     }
-    const price = priceOf(form.elements.productId.value);
+    const price = priceOf(form.elements.productId.value, c);
     const qty = Number(form.elements.qty.value) || 0;
     const byAmount = form.elements.unit.value === 'amount';
     const liters = byAmount ? qty / price : qty;
     const amount = byAmount ? qty : qty * price;
-    summary.lastChild.textContent = qty ? `${fmt.liters(liters)} · ${fmt.money(amount)} · +${Math.floor(liters * ppl)} pts` : '—';
+    const payment = form.elements.payment.value;
+    const combos =
+      payment === 'combo'
+        ? `−${Math.ceil(amount / comboValue - 1e-9)} combos`
+        : payment === 'credit'
+          ? `+${Math.floor(liters * combosPerLiter)} combos au paiement`
+          : `+${Math.floor(liters * combosPerLiter)} combos`;
+    summary.lastChild.textContent = qty ? `${fmt.liters(liters)} · ${fmt.money(amount)} · ${combos}` : '—';
   };
 
   const fields = [
     { name: 'customer', label: 'Client (nom, plaque ou téléphone)', required: true, list: 'customer-list', placeholder: 'Tapez quelques lettres…', onInput: update, enterkeyhint: 'next' },
     { name: 'productId', label: 'Produit', type: 'segment', options: products.map((r) => [r.product_id, r.product_name]), onInput: update },
-    { name: 'payment', label: 'Paiement', type: 'segment', options: [['paid', 'Payé'], ['credit', 'Crédit']], onInput: update },
+    { name: 'payment', label: 'Paiement', type: 'segment', options: [['paid', 'Payé'], ['credit', 'Crédit'], ['combo', 'Combos']], onInput: update },
     { name: 'unit', label: 'Unité', type: 'segment', options: [['amount', '$'], ['liters', 'L']], onInput: update },
     { name: 'qty', label: 'Quantité', type: 'number', step: '0.01', min: '0.01', required: true, onInput: update, inputmode: 'decimal' },
     { name: 'plate', label: 'Plaque', placeholder: 'Facultatif' },
@@ -355,13 +376,19 @@ async function addSale(ctx, shift, reload) {
       } catch (err) {
         if (err.code !== 'over_limit') throw err;
         const grant = await confirmDialog('Accorder le crédit ?', `${err.message} Si vous accordez ce crédit, il sera signalé au gérant avec votre nom.`, { confirmLabel: 'Accorder' });
-        if (!grant) throw new Error('Vente non enregistrée : plafond de crédit dépassé.');
+        if (!grant) throw new Error('Vente non enregistrée : crédit refusé.');
         return api.post(`/shifts/${shift.id}/sales`, { ...body, grantCredit: true });
       }
     },
   });
   if (ok) {
-    toast(ok.over_limit ? 'Crédit accordé et signalé au gérant' : `Vente enregistrée${ok.points ? ` · +${ok.points} pts` : ''}`);
+    toast(
+      ok.over_limit
+        ? 'Crédit accordé et signalé au gérant'
+        : ok.kind === 'combo'
+          ? `Échange enregistré · −${ok.combos_used} combos`
+          : `Vente enregistrée${ok.points ? ` · +${ok.points} combos` : ''}`,
+    );
     reload();
   }
 }
@@ -414,6 +441,7 @@ function renderClosing(page, ctx, shift) {
   const credit = shift.credit_amount || 0;
   const payments = shift.payments_amount || 0;
   const expenses = shift.expenses_amount || 0;
+  const combos = shift.combo_amount || 0;
   const lines = {
     total: h('span', { class: 'num' }),
     credit: h('span', { class: 'num' }, fmt.money(credit)),
@@ -440,12 +468,15 @@ function renderClosing(page, ctx, shift) {
       out.textContent = liters < 0 ? 'Index inférieur au début !' : `${fmt.liters(liters)} · ${fmt.money(liters * r.unit_price)}`;
       out.className = liters < 0 ? 'small variance-neg' : 'small muted';
     }
-    const expected = total - credit + payments - expenses;
+    // Subscribers' higher price is cashed on top of the pump price.
+    const surcharge = shift.sales.reduce((t, x) => t + (x.amount - x.liters * (shift.readings.find((r) => r.nozzle_id === x.nozzle_id)?.unit_price ?? 0)), 0);
+    total += surcharge;
+    const expected = total - credit - combos + payments - expenses;
     const declared = (Number(form.elements.cash.value) || 0) + (Number(form.elements.card.value) || 0);
     lines.total.textContent = complete ? fmt.money(total) : '—';
     lines.expected.textContent = complete ? fmt.money(expected) : '—';
     lines.declared.textContent = fmt.money(declared);
-    lines.variance.replaceChildren(complete && form.elements.cash.value !== '' ? varianceCell(Math.round((declared - expected) * 100) / 100, tol) : '—');
+    setContent(lines.variance, complete && form.elements.cash.value !== '' ? varianceCell(Math.round((declared - expected) * 100) / 100, tol) : '—');
   };
 
   form.append(
@@ -480,6 +511,7 @@ function renderClosing(page, ctx, shift) {
       cardHeader('3. Rapprochement'),
       h('div', { class: 'summary-line' }, h('span', {}, 'Ventes selon les index'), lines.total),
       h('div', { class: 'summary-line' }, h('span', {}, 'Vendu à crédit'), h('span', {}, '− ', lines.credit)),
+      combos ? h('div', { class: 'summary-line' }, h('span', {}, 'Échangé contre des combos'), h('span', { class: 'num' }, `− ${fmt.money(combos)}`)) : null,
       payments ? h('div', { class: 'summary-line' }, h('span', {}, 'Règlements reçus'), h('span', { class: 'num' }, `+ ${fmt.money(payments)}`)) : null,
       expenses ? h('div', { class: 'summary-line' }, h('span', {}, 'Dépenses payées'), h('span', { class: 'num' }, `− ${fmt.money(expenses)}`)) : null,
       h('div', { class: 'summary-line' }, h('span', {}, 'À remettre'), lines.expected),
@@ -505,14 +537,14 @@ function renderClosing(page, ctx, shift) {
     }
   });
 
-  page.replaceChildren(pageHeader('Clôturer mon poste', `Poste ouvert à ${fmt.time(shift.opened_at)}`), form);
+  setContent(page, pageHeader('Clôturer mon poste', `Poste ouvert à ${fmt.time(shift.opened_at)}`), form);
   recompute();
 }
 
 function renderClosed(page, ctx, shift) {
   const tol = ctx.state.settings.cashTolerance;
   const ok = Math.abs(shift.variance) <= tol;
-  page.replaceChildren(
+  setContent(page, 
     pageHeader('Poste clôturé', `Merci ${ctx.state.user.name.split(' ')[0]} !`),
     h(
       'div',
@@ -536,7 +568,7 @@ function renderClosed(page, ctx, shift) {
 export async function renderMyShifts(page, ctx) {
   const shifts = await api.get('/shifts');
   const tol = ctx.state.settings.cashTolerance;
-  page.replaceChildren(
+  setContent(page, 
     pageHeader('Historique', 'Vos derniers postes'),
     h(
       'section',

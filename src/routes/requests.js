@@ -1,6 +1,7 @@
 const express = require('express');
 const { fail, num, str, oneOf, round } = require('../util');
 const { requireRole } = require('../auth');
+const { getSettings } = require('../db');
 const { createSale } = require('../sales');
 const { customerBalance } = require('./customers');
 
@@ -14,9 +15,9 @@ module.exports = function requestRoutes(db) {
   const router = express.Router();
 
   const select = `
-    SELECT r.*, c.name AS customer_name, c.phone AS customer_phone, c.credit_limit, c.loyalty_points,
-      p.name AS product_name, p.price AS current_price, u.name AS handled_by_name, s.points AS sale_points,
-      s.liters AS sale_liters, s.amount AS sale_amount
+    SELECT r.*, c.name AS customer_name, c.phone AS customer_phone, c.type AS customer_type, c.credit_limit, c.loyalty_points,
+      p.name AS product_name, CASE c.type WHEN 'account' THEN COALESCE(p.subscriber_price, p.price) ELSE p.price END AS current_price, u.name AS handled_by_name, s.points AS sale_points,
+      s.liters AS sale_liters, s.amount AS sale_amount, s.combos_used AS sale_combos
     FROM purchase_requests r JOIN customers c ON c.id = r.customer_id JOIN products p ON p.id = r.product_id
     LEFT JOIN users u ON u.id = r.handled_by LEFT JOIN sales s ON s.id = r.sale_id`;
 
@@ -36,9 +37,13 @@ module.exports = function requestRoutes(db) {
     if (!customer) fail(403, 'Compte client désactivé.');
     const product = db.prepare('SELECT * FROM products WHERE id = ? AND active = 1').get(Number(b.productId));
     if (!product) fail(400, 'Choisissez un produit.');
-    const payment = oneOf(b.payment ?? 'paid', 'Le mode de paiement', ['paid', 'credit']);
+    const payment = oneOf(b.payment ?? 'paid', 'Le mode de paiement', ['paid', 'credit', 'combo']);
     if (payment === 'credit' && customer.credit_limit <= 0) {
       fail(400, "Le crédit n'est pas ouvert sur votre compte. Adressez-vous au gérant.");
+    }
+    const { comboThreshold } = getSettings(db);
+    if (payment === 'combo' && customer.loyalty_points < comboThreshold) {
+      fail(400, `Il faut au moins ${comboThreshold} combos pour les échanger (vous en avez ${customer.loyalty_points}).`);
     }
     const byLiters = b.liters !== undefined && b.liters !== null && b.liters !== '';
     const liters = byLiters ? round(num(b.liters, 'Le nombre de litres', { min: 0.5, max: 2000 })) : null;

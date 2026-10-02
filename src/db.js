@@ -10,13 +10,13 @@ CREATE TABLE IF NOT EXISTS settings (
 
 CREATE TABLE IF NOT EXISTS customers (
   id             INTEGER PRIMARY KEY,
-  type           TEXT NOT NULL CHECK (type IN ('account', 'individual')),
+  type           TEXT NOT NULL CHECK (type IN ('account', 'individual')), -- account = abonné, individual = particulier
   name           TEXT NOT NULL,
   phone          TEXT,
   email          TEXT,
   address        TEXT,
   plate          TEXT,
-  credit_limit   REAL NOT NULL DEFAULT 0,
+  credit_limit   REAL NOT NULL DEFAULT 0, -- copied from the settings of the customer's category
   loyalty_points INTEGER NOT NULL DEFAULT 0,
   active         INTEGER NOT NULL DEFAULT 1,
   created_at     TEXT NOT NULL DEFAULT (datetime('now'))
@@ -43,7 +43,8 @@ CREATE TABLE IF NOT EXISTS products (
   id     INTEGER PRIMARY KEY,
   name   TEXT NOT NULL UNIQUE COLLATE NOCASE,
   price  REAL NOT NULL,
-  active INTEGER NOT NULL DEFAULT 1
+  active INTEGER NOT NULL DEFAULT 1,
+  subscriber_price REAL
 );
 
 CREATE TABLE IF NOT EXISTS price_history (
@@ -91,6 +92,7 @@ CREATE TABLE IF NOT EXISTS shifts (
   total_amount    REAL,
   credit_amount   REAL,
   expected_amount REAL,
+  combo_amount    REAL,
   variance        REAL,
   notes           TEXT,
   validated_by    INTEGER REFERENCES users(id),
@@ -105,6 +107,7 @@ CREATE TABLE IF NOT EXISTS shift_readings (
   product_id  INTEGER NOT NULL REFERENCES products(id),
   tank_id     INTEGER NOT NULL REFERENCES tanks(id),
   unit_price  REAL NOT NULL,
+  subscriber_price REAL,
   start_meter REAL NOT NULL,
   end_meter   REAL,
   liters      REAL,
@@ -118,15 +121,17 @@ CREATE TABLE IF NOT EXISTS sales (
   customer_id INTEGER NOT NULL REFERENCES customers(id),
   nozzle_id   INTEGER NOT NULL REFERENCES nozzles(id),
   product_id  INTEGER NOT NULL REFERENCES products(id),
-  kind        TEXT NOT NULL CHECK (kind IN ('paid', 'credit')),
+  kind        TEXT NOT NULL CHECK (kind IN ('paid', 'credit', 'combo')),
   liters      REAL NOT NULL,
   unit_price  REAL NOT NULL,
   amount      REAL NOT NULL,
-  points      INTEGER NOT NULL DEFAULT 0,
+  points      INTEGER NOT NULL DEFAULT 0, -- combos awarded (a credit sale's only once fully paid)
   plate       TEXT,
   created_at  TEXT NOT NULL DEFAULT (datetime('now')),
   over_limit  INTEGER NOT NULL DEFAULT 0,
-  source      TEXT NOT NULL DEFAULT 'attendant'
+  source      TEXT NOT NULL DEFAULT 'attendant',
+  points_due  INTEGER NOT NULL DEFAULT 0, -- combos earned by the litres bought
+  combos_used INTEGER NOT NULL DEFAULT 0  -- combos spent (kind = 'combo')
 );
 
 -- Purchase started by a customer from their phone; becomes a sale once
@@ -137,7 +142,7 @@ CREATE TABLE IF NOT EXISTS purchase_requests (
   product_id  INTEGER NOT NULL REFERENCES products(id),
   liters      REAL,
   amount      REAL,
-  payment     TEXT NOT NULL CHECK (payment IN ('paid', 'credit')),
+  payment     TEXT NOT NULL CHECK (payment IN ('paid', 'credit', 'combo')),
   plate       TEXT,
   status      TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'rejected', 'cancelled')),
   sale_id     INTEGER REFERENCES sales(id),
@@ -209,6 +214,11 @@ const MIGRATIONS = [
   ['customers', 'created_by', 'INTEGER REFERENCES users(id)'],
   ['sales', 'over_limit', 'INTEGER NOT NULL DEFAULT 0'],
   ['sales', 'source', "TEXT NOT NULL DEFAULT 'attendant'"],
+  ['sales', 'points_due', 'INTEGER NOT NULL DEFAULT 0'],
+  ['sales', 'combos_used', 'INTEGER NOT NULL DEFAULT 0'],
+  ['products', 'subscriber_price', 'REAL'],
+  ['shift_readings', 'subscriber_price', 'REAL'],
+  ['shifts', 'combo_amount', 'REAL'],
   ['payments', 'shift_id', 'INTEGER REFERENCES shifts(id)'],
   ['shifts', 'payments_amount', 'REAL'],
   ['shifts', 'expenses_amount', 'REAL'],
@@ -232,16 +242,20 @@ const DEFAULT_SETTINGS = {
   station_name: 'Ma station',
   cash_tolerance: '1',
   stock_tolerance: '20',
-  points_per_liter: '1',
-  new_customer_credit_limit: '100',
+  points_per_liter: '1', // combos per litre
+  combo_value: '0.05', // value of one combo, in dollars
+  combo_threshold: '100', // combos needed before they can be exchanged
+  individual_credit_limit: '50',
+  subscriber_credit_limit: '500',
+  subscriber_grace_days: '5', // days after month end for subscribers to pay
 };
 
-// First release stored sales as 'credit' or 'loyalty' (loyalty = paid, with points).
-// Every sale now earns points and the payment mode is 'paid' or 'credit':
-// rebuild the table once with the new constraint.
+// Rebuilds the sales table when its kind constraint is from an older release
+// ('credit'/'loyalty', then 'paid'/'credit'): kinds are now paid, credit or combo
+// (fuel exchanged for combos). Returns true when the table was rebuilt.
 function migrateSalesKind(db) {
   const { sql } = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'sales'").get();
-  if (!sql.includes("'loyalty'")) return;
+  if (sql.includes("'combo'")) return false;
   db.exec('PRAGMA foreign_keys = OFF');
   db.exec('BEGIN');
   try {
@@ -252,7 +266,7 @@ function migrateSalesKind(db) {
         customer_id INTEGER NOT NULL REFERENCES customers(id),
         nozzle_id   INTEGER NOT NULL REFERENCES nozzles(id),
         product_id  INTEGER NOT NULL REFERENCES products(id),
-        kind        TEXT NOT NULL CHECK (kind IN ('paid', 'credit')),
+        kind        TEXT NOT NULL CHECK (kind IN ('paid', 'credit', 'combo')),
         liters      REAL NOT NULL,
         unit_price  REAL NOT NULL,
         amount      REAL NOT NULL,
@@ -260,11 +274,16 @@ function migrateSalesKind(db) {
         plate       TEXT,
         created_at  TEXT NOT NULL DEFAULT (datetime('now')),
         over_limit  INTEGER NOT NULL DEFAULT 0,
-        source      TEXT NOT NULL DEFAULT 'attendant'
+        source      TEXT NOT NULL DEFAULT 'attendant',
+        points_due  INTEGER NOT NULL DEFAULT 0,
+        combos_used INTEGER NOT NULL DEFAULT 0
       );
-      INSERT INTO sales_new (id, shift_id, customer_id, nozzle_id, product_id, kind, liters, unit_price, amount, points, plate, created_at, over_limit, source)
+      INSERT INTO sales_new (id, shift_id, customer_id, nozzle_id, product_id, kind, liters, unit_price, amount, points, plate,
+                             created_at, over_limit, source, points_due, combos_used)
         SELECT id, shift_id, customer_id, nozzle_id, product_id, CASE kind WHEN 'loyalty' THEN 'paid' ELSE kind END,
-               liters, unit_price, amount, points, plate, created_at, over_limit, source FROM sales;
+               liters, unit_price, amount, points, plate, created_at, over_limit, source,
+               CASE WHEN points_due = 0 THEN points ELSE points_due END, combos_used
+        FROM sales;
       DROP TABLE sales;
       ALTER TABLE sales_new RENAME TO sales;
       CREATE INDEX IF NOT EXISTS idx_sales_customer ON sales(customer_id);
@@ -277,6 +296,22 @@ function migrateSalesKind(db) {
   } finally {
     db.exec('PRAGMA foreign_keys = ON');
   }
+  return true;
+}
+
+// Purchase requests are short-lived (30 minutes): an outdated table is simply recreated.
+function migrateRequests(db) {
+  const row = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'purchase_requests'").get();
+  if (row && !row.sql.includes("'combo'")) {
+    db.exec('DROP TABLE purchase_requests');
+    db.exec(SCHEMA);
+  }
+}
+
+// Credit limits come from the settings of each category (particulier / abonné).
+function syncCreditLimits(db) {
+  const s = getSettings(db);
+  db.prepare("UPDATE customers SET credit_limit = CASE type WHEN 'account' THEN ? ELSE ? END").run(s.subscriberCreditLimit, s.individualCreditLimit);
 }
 
 function openDb(file) {
@@ -288,12 +323,19 @@ function openDb(file) {
     const columns = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
     if (!columns.includes(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
   }
-  migrateSalesKind(db);
+  const salesRebuilt = migrateSalesKind(db);
+  migrateRequests(db);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_payments_shift ON payments(shift_id);
     CREATE INDEX IF NOT EXISTS idx_expenses_shift ON expenses(shift_id);
     CREATE INDEX IF NOT EXISTS idx_requests_status ON purchase_requests(status);`);
   const insert = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
   for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) insert.run(key, value);
+  syncCreditLimits(db);
+  if (salesRebuilt) {
+    // Credit sales only earn their combos once paid: recompute every balance.
+    const { refreshCustomer } = require('./loyalty');
+    for (const { id } of db.prepare('SELECT id FROM customers').all()) refreshCustomer(db, id);
+  }
   return db;
 }
 
@@ -304,10 +346,14 @@ function getSettings(db) {
     stationName: s.station_name,
     cashTolerance: Number(s.cash_tolerance),
     stockTolerance: Number(s.stock_tolerance),
-    pointsPerLiter: Number(s.points_per_liter),
-    newCustomerCreditLimit: Number(s.new_customer_credit_limit),
+    combosPerLiter: Number(s.points_per_liter),
+    comboValue: Number(s.combo_value),
+    comboThreshold: Number(s.combo_threshold),
+    individualCreditLimit: Number(s.individual_credit_limit),
+    subscriberCreditLimit: Number(s.subscriber_credit_limit),
+    subscriberGraceDays: Number(s.subscriber_grace_days),
     expenseCategories: EXPENSE_CATEGORIES,
   };
 }
 
-module.exports = { openDb, getSettings, EXPENSE_CATEGORIES };
+module.exports = { openDb, getSettings, syncCreditLimits, EXPENSE_CATEGORIES };

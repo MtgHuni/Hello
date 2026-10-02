@@ -4,6 +4,7 @@ const { fail, num, str, oneOf, round, dateParam, transaction } = require('../uti
 const { requireRole } = require('../auth');
 const { customerBalance } = require('./customers');
 const { createSale } = require('../sales');
+const { refreshCustomer } = require('../loyalty');
 
 const staff = requireRole('manager', 'attendant');
 
@@ -43,6 +44,7 @@ module.exports = function shiftRoutes(db) {
     shift.expenses = db.prepare('SELECT * FROM expenses WHERE shift_id = ? ORDER BY id').all(id);
     if (shift.status === 'open') {
       shift.credit_amount = round(shift.sales.filter((s) => s.kind === 'credit').reduce((t, s) => t + s.amount, 0));
+      shift.combo_amount = round(shift.sales.filter((s) => s.kind === 'combo').reduce((t, s) => t + s.amount, 0));
       shift.payments_amount = round(shift.payments.reduce((t, p) => t + p.amount, 0));
       shift.expenses_amount = round(shift.expenses.reduce((t, e) => t + e.amount, 0));
     }
@@ -107,7 +109,7 @@ module.exports = function shiftRoutes(db) {
         if (!pump) fail(400, 'Pompe inconnue ou désactivée.');
         const own = db
           .prepare(
-            `SELECT n.id, n.meter, n.tank_id, t.product_id, p.price
+            `SELECT n.id, n.meter, n.tank_id, t.product_id, p.price, COALESCE(p.subscriber_price, p.price) AS subscriber_price
              FROM nozzles n JOIN tanks t ON t.id = n.tank_id JOIN products p ON p.id = t.product_id
              WHERE n.pump_id = ? AND n.active = 1`,
           )
@@ -128,9 +130,9 @@ module.exports = function shiftRoutes(db) {
         db.prepare("INSERT INTO shifts (attendant_id, status) VALUES (?, 'open')").run(req.user.id).lastInsertRowid,
       );
       const insert = db.prepare(
-        'INSERT INTO shift_readings (shift_id, nozzle_id, product_id, tank_id, unit_price, start_meter) VALUES (?, ?, ?, ?, ?, ?)',
+        'INSERT INTO shift_readings (shift_id, nozzle_id, product_id, tank_id, unit_price, subscriber_price, start_meter) VALUES (?, ?, ?, ?, ?, ?, ?)',
       );
-      for (const n of nozzles) insert.run(shiftId, n.id, n.product_id, n.tank_id, n.price, n.meter);
+      for (const n of nozzles) insert.run(shiftId, n.id, n.product_id, n.tank_id, n.price, n.subscriber_price, n.meter);
       return shiftId;
     });
     res.status(201).json(shiftDetail(id));
@@ -148,9 +150,7 @@ module.exports = function shiftRoutes(db) {
     if (!sale) fail(404, 'Vente introuvable.');
     transaction(db, () => {
       db.prepare('DELETE FROM sales WHERE id = ?').run(sale.id);
-      if (sale.points) {
-        db.prepare('UPDATE customers SET loyalty_points = MAX(0, loyalty_points - ?) WHERE id = ?').run(sale.points, sale.customer_id);
-      }
+      refreshCustomer(db, sale.customer_id);
     });
     res.status(204).end();
   });
@@ -163,16 +163,24 @@ module.exports = function shiftRoutes(db) {
     const amount = round(num(req.body?.amount, 'Le montant', { min: 0.01, max: 1e8 }));
     const method = oneOf(req.body?.method ?? 'espèces', 'Le mode de règlement', ['espèces', 'mobile money', 'carte']);
     const reference = str(req.body?.reference, 'La référence', { required: false, max: 100 });
-    const id = db
-      .prepare('INSERT INTO payments (customer_id, amount, method, reference, user_id, shift_id) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(customer.id, amount, method, reference, req.user.id, shift.id).lastInsertRowid;
+    const id = transaction(db, () => {
+      const r = db
+        .prepare('INSERT INTO payments (customer_id, amount, method, reference, user_id, shift_id) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(customer.id, amount, method, reference, req.user.id, shift.id);
+      refreshCustomer(db, customer.id); // paid-off credit sales now earn their combos
+      return r.lastInsertRowid;
+    });
     res.status(201).json({ id: Number(id), balance: customerBalance(db, customer.id) });
   });
 
   router.delete('/shifts/:id/payments/:paymentId', staff, (req, res) => {
     const shift = getOwnShift(req);
-    const r = db.prepare('DELETE FROM payments WHERE id = ? AND shift_id = ?').run(req.params.paymentId, shift.id);
-    if (!r.changes) fail(404, 'Règlement introuvable.');
+    const payment = db.prepare('SELECT * FROM payments WHERE id = ? AND shift_id = ?').get(req.params.paymentId, shift.id);
+    if (!payment) fail(404, 'Règlement introuvable.');
+    transaction(db, () => {
+      db.prepare('DELETE FROM payments WHERE id = ?').run(payment.id);
+      refreshCustomer(db, payment.customer_id);
+    });
     res.status(204).end();
   });
 
@@ -237,16 +245,22 @@ module.exports = function shiftRoutes(db) {
         db.prepare('UPDATE nozzles SET meter = ? WHERE id = ?').run(end, r.nozzle_id);
         db.prepare('UPDATE tanks SET book_stock = ROUND(book_stock - ?, 2) WHERE id = ?').run(liters, r.tank_id);
       }
+      // Subscribers pay a higher price than the pump price used for the meters.
+      const unitPrices = new Map(readings.map((r) => [r.nozzle_id, r.unit_price]));
+      const surcharge = round(sales.reduce((t, s) => t + (s.amount - s.liters * unitPrices.get(s.nozzle_id)), 0));
+      totalAmount += surcharge;
       const creditAmount = round(sales.filter((s) => s.kind === 'credit').reduce((t, s) => t + s.amount, 0));
+      const comboAmount = round(sales.filter((s) => s.kind === 'combo').reduce((t, s) => t + s.amount, 0));
       const paymentsAmount = round(db.prepare('SELECT COALESCE(SUM(amount), 0) AS v FROM payments WHERE shift_id = ?').get(shift.id).v);
       const expensesAmount = round(db.prepare('SELECT COALESCE(SUM(amount), 0) AS v FROM expenses WHERE shift_id = ?').get(shift.id).v);
-      // To hand over = fuel sold − sold on credit + account payments received − expenses paid from the till.
-      const expected = round(totalAmount - creditAmount + paymentsAmount - expensesAmount);
+      // To hand over = fuel sold − sold on credit − exchanged for combos
+      //               + account payments received − expenses paid from the till.
+      const expected = round(totalAmount - creditAmount - comboAmount + paymentsAmount - expensesAmount);
       db.prepare(
         `UPDATE shifts SET status = 'closed', closed_at = datetime('now'), cash = ?, card = ?, total_liters = ?,
-           total_amount = ?, credit_amount = ?, payments_amount = ?, expenses_amount = ?, expected_amount = ?, variance = ?, notes = ?
+           total_amount = ?, credit_amount = ?, combo_amount = ?, payments_amount = ?, expenses_amount = ?, expected_amount = ?, variance = ?, notes = ?
          WHERE id = ?`,
-      ).run(cash, card, round(totalLiters), round(totalAmount), creditAmount, paymentsAmount, expensesAmount, expected, round(cash + card - expected), notes, shift.id);
+      ).run(cash, card, round(totalLiters), round(totalAmount), creditAmount, comboAmount, paymentsAmount, expensesAmount, expected, round(cash + card - expected), notes, shift.id);
     });
     res.json(shiftDetail(shift.id));
   });

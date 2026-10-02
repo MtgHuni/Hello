@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { h, fmt, pageHeader, card, cardHeader, table, badge, button, formDialog, openDialog, toast, productColor } from '../ui.js';
+import { h, fmt, pageHeader, card, cardHeader, table, badge, button, formDialog, openDialog, toast, productColor, setContent } from '../ui.js';
 
 export async function renderSettings(page, ctx) {
   const [settings, products, pumps, tanks, users] = await Promise.all([
@@ -12,7 +12,7 @@ export async function renderSettings(page, ctx) {
   const reload = () => renderSettings(page, ctx);
   const tankOptions = tanks.filter((t) => t.active).map((t) => [t.id, `${t.name} (${t.product_name})`]);
 
-  page.replaceChildren(
+  setContent(page, 
     pageHeader('Réglages', 'Station, prix, équipements et équipe.'),
     h(
       'div',
@@ -31,7 +31,8 @@ export async function renderSettings(page, ctx) {
         table(
           [
             { label: 'Produit', render: (p) => h('span', {}, h('span', { class: 'swatch', style: `background:${productColor(p.id)}` }), p.name) },
-            { label: 'Prix de vente', align: 'right', render: (p) => h('strong', {}, fmt.price(p.price)) },
+            { label: 'Prix public', align: 'right', render: (p) => h('strong', {}, fmt.price(p.price)) },
+            { label: 'Prix abonnés', align: 'right', render: (p) => fmt.price(p.subscriber_price) },
             { label: 'Statut', render: (p) => (p.active ? badge('Actif', 'good') : badge('Inactif')) },
             {
               label: '',
@@ -104,8 +105,22 @@ export async function renderSettings(page, ctx) {
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Nom'), h('span', {}, settings.stationName)),
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Tolérance d’écart de caisse'), h('span', {}, `± ${fmt.money(settings.cashTolerance)}`)),
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Tolérance d’écart de jaugeage'), h('span', {}, `± ${fmt.liters(settings.stockTolerance)}`)),
-        h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Points fidélité par litre'), h('span', {}, fmt.number(settings.pointsPerLiter))),
-        h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Plafond de crédit des clients créés à la pompe'), h('span', {}, fmt.money(settings.newCustomerCreditLimit))),
+      ),
+
+      // ---- Customers & combos ----
+      card(
+        cardHeader('Clients et combos', 'Plafonds de crédit par catégorie et programme de fidélité', button('Modifier', () => customersDialog(settings, reload), { variant: 'ghost' })),
+        h('h3', { style: 'margin:4px 0 2px' }, 'Particuliers'),
+        line('Plafond de crédit', fmt.money(settings.individualCreditLimit)),
+        h('h3', { style: 'margin:14px 0 2px' }, 'Abonnés'),
+        line('Prix au litre', 'Colonne « Prix abonnés » des produits'),
+        line('Plafond de crédit', fmt.money(settings.subscriberCreditLimit)),
+        line('Paiement du mois', `avant le ${settings.subscriberGraceDays} du mois suivant`),
+        h('h3', { style: 'margin:14px 0 2px' }, 'Combos'),
+        line('Combos gagnés par litre', fmt.number(settings.combosPerLiter)),
+        line('Valeur d’un combo', fmt.money(settings.comboValue)),
+        line('Seuil d’échange', `${fmt.number(settings.comboThreshold)} combos (= ${fmt.money(settings.comboThreshold * settings.comboValue)})`),
+        h('p', { class: 'muted small', style: 'margin-top:8px' }, 'Une vente à crédit ne rapporte ses combos qu’une fois entièrement payée.'),
       ),
     ),
   );
@@ -118,8 +133,6 @@ async function stationDialog(s) {
       { name: 'stationName', label: 'Nom de la station', value: s.stationName, required: true, full: true },
       { name: 'cashTolerance', label: 'Tolérance de caisse ($)', type: 'number', step: '0.01', min: '0', value: s.cashTolerance, hint: 'Écart toléré à la clôture d’un poste' },
       { name: 'stockTolerance', label: 'Tolérance de jaugeage (L)', type: 'number', step: '0.01', min: '0', value: s.stockTolerance, hint: 'Écart toléré entre stock théorique et mesuré' },
-      { name: 'pointsPerLiter', label: 'Points fidélité par litre', type: 'number', step: '0.01', min: '0', value: s.pointsPerLiter },
-      { name: 'newCustomerCreditLimit', label: 'Plafond des nouveaux clients ($)', type: 'number', step: '0.01', min: '0', value: s.newCustomerCreditLimit, hint: 'Pour les clients créés par un pompiste' },
     ],
     onSubmit: (d) => api.put('/settings', d),
   });
@@ -127,14 +140,36 @@ async function stationDialog(s) {
   if (ok) location.reload();
 }
 
+const line = (label, value) => h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, label), h('span', { style: 'text-align:right' }, value));
+
+async function customersDialog(s, reload) {
+  const ok = await formDialog({
+    title: 'Clients et combos',
+    fields: [
+      { name: 'individualCreditLimit', label: 'Plafond particuliers ($)', type: 'number', step: '0.01', min: '0', value: s.individualCreditLimit, required: true },
+      { name: 'subscriberCreditLimit', label: 'Plafond abonnés ($)', type: 'number', step: '0.01', min: '0', value: s.subscriberCreditLimit, required: true },
+      { name: 'subscriberGraceDays', label: 'Abonnés : payer avant le (jour du mois)', type: 'number', step: '1', min: '1', value: s.subscriberGraceDays, required: true, hint: 'Après ce jour, un abonné qui doit le mois précédent ne peut plus prendre à crédit' },
+      { name: 'combosPerLiter', label: 'Combos par litre', type: 'number', step: '0.01', min: '0', value: s.combosPerLiter, required: true },
+      { name: 'comboValue', label: 'Valeur d’un combo ($)', type: 'number', step: '0.0001', min: '0.0001', value: s.comboValue, required: true },
+      { name: 'comboThreshold', label: 'Seuil d’échange (combos)', type: 'number', step: '1', min: '1', value: s.comboThreshold, required: true, hint: 'Minimum pour échanger des combos contre du carburant' },
+    ],
+    onSubmit: (d) => api.put('/settings', d),
+  });
+  if (ok) {
+    toast('Réglages enregistrés');
+    reload();
+  }
+}
+
 async function productDialog(p, reload) {
   const ok = await formDialog({
     title: p ? `Prix — ${p.name}` : 'Nouveau produit',
-    intro: p ? `Prix actuel : ${fmt.price(p.price)}` : 'Ajoutez ensuite une cuve et un pistolet pour ce produit.',
+    intro: p ? `Actuellement : ${fmt.price(p.price)} public, ${fmt.price(p.subscriber_price)} abonnés. Un changement s’applique aux postes ouverts ensuite.` : 'Ajoutez ensuite une cuve et un pistolet pour ce produit.',
     grid: false,
     fields: [
       { name: 'name', label: 'Nom', value: p?.name, required: true },
-      { name: 'price', label: 'Prix de vente ($/L)', type: 'number', step: '0.001', min: '0.001', value: p?.price, required: true },
+      { name: 'price', label: 'Prix public ($/L)', type: 'number', step: '0.001', min: '0.001', value: p?.price, required: true },
+      { name: 'subscriberPrice', label: 'Prix abonnés ($/L)', type: 'number', step: '0.001', min: '0.001', value: p?.subscriber_price, hint: 'Un peu plus élevé, en échange du crédit au mois' },
       ...(p ? [{ name: 'active', label: 'Produit actif', type: 'checkbox', value: !!p.active }] : []),
     ],
     onSubmit: (d) => (p ? api.put(`/products/${p.id}`, d) : api.post('/products', d)),

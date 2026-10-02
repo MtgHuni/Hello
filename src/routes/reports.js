@@ -2,6 +2,7 @@ const express = require('express');
 const { getSettings } = require('../db');
 const { round, dateParam, fail } = require('../util');
 const { requireRole } = require('../auth');
+const { subscriberDues } = require('../loyalty');
 
 const manager = requireRole('manager');
 
@@ -107,6 +108,17 @@ module.exports = function reportRoutes(db) {
         link: `#/postes/${o.shift_id}`,
       });
     }
+    // Subscribers who have not paid last month within the grace days.
+    for (const c of db.prepare("SELECT id, name FROM customers WHERE type = 'account' AND active = 1").all()) {
+      const dues = subscriberDues(db, c.id, settings.subscriberGraceDays);
+      if (dues.late) {
+        alerts.push({
+          level: 'critical',
+          text: `${c.name} (abonné) n'a pas payé le mois précédent : ${dues.overdue.toFixed(2).replace('.', ',')} $`,
+          link: `#/clients/${c.id}`,
+        });
+      }
+    }
     for (const c of customers) {
       if (c.balance > c.credit_limit) {
         alerts.push({ level: 'warning', text: `${c.name} dépasse son plafond de crédit`, link: `#/clients/${c.id}` });
@@ -179,6 +191,7 @@ module.exports = function reportRoutes(db) {
       .prepare(
         `SELECT ROUND(COALESCE(SUM(cash), 0), 2) AS cash, ROUND(COALESCE(SUM(card), 0), 2) AS card,
            ROUND(COALESCE(SUM(credit_amount), 0), 2) AS credit, ROUND(COALESCE(SUM(variance), 0), 2) AS variance,
+           ROUND(COALESCE(SUM(combo_amount), 0), 2) AS combos,
            ROUND(COALESCE(SUM(total_amount), 0), 2) AS amount, ROUND(COALESCE(SUM(total_liters), 0), 2) AS liters
          FROM shifts s WHERE s.status != 'open' AND ${DAY} BETWEEN ? AND ?`,
       )
