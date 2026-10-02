@@ -176,3 +176,79 @@ test('rapport des ventes et export CSV', async () => {
   });
   assert.strictEqual(res.status, 401);
 });
+
+test('pompiste : nouveau client rapide, crédit hors plafond, règlement et dépense à la pompe', async () => {
+  const shift = (await pompiste('GET', '/api/shifts/current')).data;
+  const nozzle = shift.readings[0];
+
+  const quick = await pompiste('POST', '/api/customers/quick', { name: 'Garage Mwami' });
+  assert.strictEqual(quick.status, 201);
+  assert.strictEqual(quick.data.available, 100, 'plafond par défaut des nouveaux clients');
+  const dup = await pompiste('POST', '/api/customers/quick', { name: 'garage mwami' });
+  assert.strictEqual(dup.status, 409);
+  assert.strictEqual(dup.data.code, 'duplicate');
+
+  // 100 L × 1,30 $ = 130 $ > 100 $ : refusé sans confirmation, accepté si le pompiste accorde le crédit.
+  const sale = { customerId: quick.data.id, nozzleId: nozzle.nozzle_id, liters: 100 };
+  const refused = await pompiste('POST', `/api/shifts/${shift.id}/sales`, sale);
+  assert.strictEqual(refused.status, 409);
+  assert.strictEqual(refused.data.code, 'over_limit');
+  const granted = await pompiste('POST', `/api/shifts/${shift.id}/sales`, { ...sale, grantCredit: true });
+  assert.strictEqual(granted.status, 201);
+  assert.strictEqual(granted.data.over_limit, 1);
+
+  const pay = await pompiste('POST', `/api/shifts/${shift.id}/payments`, { customerId: ctx.fleet.id, amount: 20 });
+  assert.strictEqual(pay.status, 201);
+  assert.strictEqual(pay.data.balance, 15);
+
+  assert.strictEqual((await pompiste('POST', `/api/shifts/${shift.id}/expenses`, { category: 'Inconnue', amount: 5, description: 'x' })).status, 400);
+  const exp = await pompiste('POST', `/api/shifts/${shift.id}/expenses`, { category: 'Fournitures', amount: 15, description: 'Eau et savon' });
+  assert.strictEqual(exp.status, 201);
+
+  const dash = (await gerant('GET', '/api/dashboard')).data;
+  assert.ok(dash.alerts.some((a) => a.text.includes('hors plafond')));
+  assert.ok(dash.alerts.some((a) => a.text.includes('à compléter')));
+  assert.strictEqual(dash.todayExpenses, 15);
+
+  // 200 L × 1,30 = 260 ; − 130 crédit + 20 règlement − 15 dépense = 135 à remettre.
+  const closed = await pompiste('POST', `/api/shifts/${shift.id}/close`, {
+    readings: [{ nozzleId: nozzle.nozzle_id, endMeter: nozzle.start_meter + 200 }],
+    cash: 135,
+  });
+  assert.strictEqual(closed.status, 200);
+  assert.strictEqual(closed.data.expected_amount, 135);
+  assert.strictEqual(closed.data.payments_amount, 20);
+  assert.strictEqual(closed.data.expenses_amount, 15);
+  assert.strictEqual(closed.data.variance, 0);
+
+  const done = await gerant('PUT', `/api/customers/${quick.data.id}`, { phone: '+243 970 000 000', creditLimit: 500 });
+  assert.strictEqual(done.data.needs_review, 0);
+});
+
+test('dépenses du gérant et rapport avec marge', async () => {
+  const today = new Date().toLocaleDateString('sv-SE');
+  assert.strictEqual((await pompiste('GET', '/api/expenses')).status, 403);
+
+  const created = await gerant('POST', '/api/expenses', { category: 'Salaires', amount: 300, description: 'Avance Paul', method: 'mobile money' });
+  assert.strictEqual(created.status, 201);
+  assert.strictEqual(created.data.expense_date, today);
+
+  const list = (await gerant('GET', `/api/expenses?from=${today}&to=${today}`)).data;
+  assert.strictEqual(list.total, 315);
+  assert.strictEqual(list.byCategory[0].category, 'Salaires');
+
+  const shiftExpense = list.expenses.find((e) => e.shift_id);
+  assert.strictEqual((await gerant('DELETE', `/api/expenses/${shiftExpense.id}`)).status, 409, 'dépense de caisse figée');
+  assert.strictEqual((await gerant('PUT', `/api/expenses/${created.data.id}`, { amount: 250 })).data.amount, 250);
+
+  const tank = (await gerant('GET', '/api/tanks')).data.find((t) => t.product_name === 'Gasoil');
+  await gerant('POST', '/api/deliveries', { tankId: tank.id, litersOrdered: 1000, litersReceived: 1000, unitCost: 1 });
+
+  const rep = (await gerant('GET', `/api/reports/sales?from=${today}&to=${today}`)).data;
+  assert.strictEqual(rep.totals.expenses, 265);
+  const diesel = rep.byProduct.find((p) => p.product === 'Gasoil');
+  assert.strictEqual(diesel.avg_cost, 1);
+  assert.strictEqual(diesel.margin, Math.round((diesel.amount - diesel.liters) * 100) / 100);
+  assert.strictEqual(rep.totals.costKnown, true, 'seul le gasoil a été vendu, et son coût est connu');
+  assert.strictEqual(rep.totals.net, Math.round((rep.totals.grossMargin - 265) * 100) / 100);
+});

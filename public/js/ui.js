@@ -340,7 +340,7 @@ export function field(f) {
     });
   }
   if (f.onInput) input.addEventListener('input', f.onInput);
-  return h('label', { class: `field ${f.full ? 'full' : ''}`, for: id }, h('span', {}, f.label), input, f.hint ? h('span', { class: 'hint' }, f.hint) : null);
+  return h('label', { class: `field ${f.full ? 'full' : ''}`, for: id, hidden: f.hidden }, h('span', {}, f.label), input, f.hint ? h('span', { class: 'hint' }, f.hint) : null);
 }
 
 export function readForm(form, fields) {

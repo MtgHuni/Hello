@@ -19,7 +19,7 @@ export async function renderDashboard(page, { state, navigate }) {
     h(
       'div',
       { class: 'grid grid-4' },
-      kpi("Ventes aujourd'hui", fmt.money(d.todayTotal.amount), 'Postes clôturés'),
+      kpi("Ventes aujourd'hui", fmt.money(d.todayTotal.amount), `Dépenses : ${fmt.money(d.todayExpenses)}`),
       kpi('Litres vendus', fmt.liters(d.todayTotal.liters), d.todayByProduct.map((p) => `${p.name} ${fmt.number(p.liters)}`).join(' · ')),
       kpi('Postes ouverts', String(d.openShifts.length), d.openShifts.length ? d.openShifts.map((s) => s.attendant_name).join(', ') : 'Aucun pompiste en service'),
       kpi('Encours clients', fmt.money(d.receivables), `${d.toValidate} poste${d.toValidate > 1 ? 's' : ''} à valider`),

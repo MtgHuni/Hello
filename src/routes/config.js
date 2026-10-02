@@ -27,6 +27,7 @@ module.exports = function configRoutes(db) {
       cash_tolerance: num(b.cashTolerance, 'La tolérance de caisse', { max: 10000 }),
       stock_tolerance: num(b.stockTolerance, 'La tolérance de stock', { max: 100000 }),
       points_per_liter: num(b.pointsPerLiter, 'Les points par litre', { max: 1000 }),
+      new_customer_credit_limit: num(b.newCustomerCreditLimit, 'Le plafond des nouveaux clients', { max: 1e8 }),
     };
     const stmt = db.prepare('UPDATE settings SET value = ? WHERE key = ?');
     for (const [key, value] of Object.entries(values)) stmt.run(String(value), key);

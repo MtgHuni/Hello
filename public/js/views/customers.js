@@ -14,13 +14,18 @@ export async function renderCustomers(page, ctx) {
   const draw = () => {
     const q = search.trim().toLowerCase();
     const rows = customers.filter(
-      (c) => (typeFilter === 'all' || c.type === typeFilter) && (!q || [c.name, c.phone, c.plate, c.email].some((v) => v?.toLowerCase().includes(q))),
+      (c) =>
+        (typeFilter === 'all' || (typeFilter === 'review' ? c.needs_review && c.active : c.type === typeFilter)) &&
+        (!q || [c.name, c.phone, c.plate, c.email].some((v) => v?.toLowerCase().includes(q))),
     );
     listHost.replaceChildren(
       table(
         [
           { label: 'Client', render: (c) => h('div', {}, h('div', { style: 'font-weight:600' }, c.name), h('div', { class: 'muted small' }, [c.phone, c.plate].filter(Boolean).join(' · ') || '—')) },
-          { label: 'Type', render: (c) => (c.active ? TYPE_LABEL[c.type] : badge('Désactivé')) },
+          {
+            label: 'Type',
+            render: (c) => (!c.active ? badge('Désactivé') : c.needs_review ? badge('À compléter', 'warning') : TYPE_LABEL[c.type]),
+          },
           { label: 'Solde dû', align: 'right', render: (c) => (c.type === 'account' ? h('span', { class: c.balance > c.credit_limit ? 'variance-neg' : '' }, fmt.money(c.balance)) : '—') },
           { label: 'Plafond', align: 'right', render: (c) => (c.type === 'account' ? fmt.money(c.credit_limit) : '—') },
           { label: 'Points', align: 'right', render: (c) => (c.type === 'individual' ? fmt.number(c.loyalty_points) : '—') },
@@ -39,6 +44,8 @@ export async function renderCustomers(page, ctx) {
   });
 
   const receivables = customers.filter((c) => c.type === 'account').reduce((t, c) => t + Math.max(0, c.balance), 0);
+  const toReview = customers.filter((c) => c.needs_review && c.active).length;
+  if (typeFilter === 'review' && !toReview) typeFilter = 'all';
   page.replaceChildren(
     pageHeader('Clients', `${customers.length} client${customers.length > 1 ? 's' : ''} · encours total ${fmt.money(receivables)}`, button('Nouveau client', () => customerDialog(null, ctx), { iconName: 'plus' })),
     h(
@@ -52,6 +59,7 @@ export async function renderCustomers(page, ctx) {
             ['all', 'Tous'],
             ['account', 'En compte'],
             ['individual', 'Particuliers'],
+            ...(toReview ? [['review', `À compléter (${toReview})`]] : []),
           ],
           typeFilter,
           (v) => {
@@ -103,6 +111,19 @@ export async function renderCustomerDetail(page, ctx) {
         button('Modifier', () => customerDialog(c, ctx, reload), { variant: 'secondary', iconName: 'edit' }),
         button(c.login ? 'Accès client' : 'Créer un accès', () => loginDialog(c, reload), { variant: 'secondary', iconName: 'user' }),
       ),
+      c.needs_review
+        ? h(
+            'section',
+            { class: 'card row between', style: 'margin-bottom:20px;box-shadow:inset 0 0 0 2px color-mix(in srgb, var(--orange) 55%, transparent)' },
+            h(
+              'div',
+              { style: 'flex:1;min-width:220px' },
+              h('h3', {}, 'Fiche à compléter'),
+              h('p', { class: 'muted', style: 'font-size:15px;margin-top:2px' }, `Créé à la pompe${c.created_by_name ? ` par ${c.created_by_name}` : ''} avec le nom seulement. Ajoutez le téléphone, l’immatriculation et le plafond de crédit.`),
+            ),
+            button('Compléter la fiche', () => customerDialog(c, ctx, reload), { iconName: 'edit' }),
+          )
+        : null,
       statement(acc, period, (p) => {
         Object.assign(period, p);
         load();

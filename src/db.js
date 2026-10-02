@@ -161,18 +161,58 @@ CREATE TABLE IF NOT EXISTS dips (
   user_id    INTEGER REFERENCES users(id)
 );
 
+CREATE TABLE IF NOT EXISTS expenses (
+  id           INTEGER PRIMARY KEY,
+  expense_date TEXT NOT NULL,
+  category     TEXT NOT NULL,
+  amount       REAL NOT NULL,
+  description  TEXT NOT NULL,
+  beneficiary  TEXT,
+  method       TEXT NOT NULL,
+  reference    TEXT,
+  shift_id     INTEGER REFERENCES shifts(id),
+  user_id      INTEGER REFERENCES users(id),
+  created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS idx_shifts_status ON shifts(status);
 CREATE INDEX IF NOT EXISTS idx_shifts_closed ON shifts(closed_at);
 CREATE INDEX IF NOT EXISTS idx_sales_customer ON sales(customer_id);
 CREATE INDEX IF NOT EXISTS idx_sales_shift ON sales(shift_id);
 CREATE INDEX IF NOT EXISTS idx_payments_customer ON payments(customer_id);
+CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(expense_date);
 `;
+
+// Columns added after the first release: applied to existing databases on start.
+const MIGRATIONS = [
+  ['customers', 'needs_review', 'INTEGER NOT NULL DEFAULT 0'],
+  ['customers', 'created_by', 'INTEGER REFERENCES users(id)'],
+  ['sales', 'over_limit', 'INTEGER NOT NULL DEFAULT 0'],
+  ['payments', 'shift_id', 'INTEGER REFERENCES shifts(id)'],
+  ['shifts', 'payments_amount', 'REAL'],
+  ['shifts', 'expenses_amount', 'REAL'],
+];
+
+const EXPENSE_CATEGORIES = [
+  'Salaires',
+  'Électricité',
+  'Générateur',
+  'Entretien et réparations',
+  'Transport',
+  'Taxes et impôts',
+  'Loyer',
+  'Fournitures',
+  'Sécurité',
+  'Communication',
+  'Autre',
+];
 
 const DEFAULT_SETTINGS = {
   station_name: 'Ma station',
   cash_tolerance: '1',
   stock_tolerance: '20',
   points_per_liter: '1',
+  new_customer_credit_limit: '100',
 };
 
 function openDb(file) {
@@ -180,6 +220,11 @@ function openDb(file) {
   const db = new DatabaseSync(file);
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
   db.exec(SCHEMA);
+  for (const [table, column, definition] of MIGRATIONS) {
+    const columns = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+    if (!columns.includes(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+  db.exec('CREATE INDEX IF NOT EXISTS idx_payments_shift ON payments(shift_id); CREATE INDEX IF NOT EXISTS idx_expenses_shift ON expenses(shift_id);');
   const insert = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
   for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) insert.run(key, value);
   return db;
@@ -193,7 +238,9 @@ function getSettings(db) {
     cashTolerance: Number(s.cash_tolerance),
     stockTolerance: Number(s.stock_tolerance),
     pointsPerLiter: Number(s.points_per_liter),
+    newCustomerCreditLimit: Number(s.new_customer_credit_limit),
+    expenseCategories: EXPENSE_CATEGORIES,
   };
 }
 
-module.exports = { openDb, getSettings };
+module.exports = { openDb, getSettings, EXPENSE_CATEGORIES };

@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { h, fmt, pageHeader, card, cardHeader, table, segmented, shiftBadge, varianceCell, kpi, formDialog, toast, button } from '../ui.js';
+import { h, fmt, pageHeader, card, cardHeader, table, segmented, shiftBadge, varianceCell, kpi, formDialog, toast, button, badge } from '../ui.js';
 import { icon } from '../icons.js';
 
 let filter = 'closed';
@@ -40,7 +40,7 @@ export async function renderShifts(page, ctx) {
           { label: 'Litres', align: 'right', render: (s) => (s.total_liters == null ? '—' : fmt.liters(s.total_liters)) },
           { label: 'Ventes', align: 'right', render: (s) => (s.total_amount == null ? '—' : fmt.money(s.total_amount)) },
           { label: 'Écart caisse', align: 'right', render: (s) => varianceCell(s.variance, tol) },
-          { label: 'Statut', render: (s) => shiftBadge(s.status) },
+          { label: 'Statut', render: (s) => h('span', { class: 'row', style: 'gap:6px;flex-wrap:nowrap' }, shiftBadge(s.status), s.over_limit_count ? badge('Crédit hors plafond', 'serious') : null) },
         ],
         shifts,
         {
@@ -96,7 +96,7 @@ export function shiftSummary(shift, tolerance) {
           { class: 'grid grid-4' },
           kpi('Ventes totales', fmt.money(shift.total_amount), fmt.liters(shift.total_liters)),
           kpi('Crédit clients', fmt.money(shift.credit_amount), 'Non encaissé'),
-          kpi('À remettre', fmt.money(shift.expected_amount), `Déclaré : ${fmt.money(shift.cash + shift.card)}`),
+          kpi('À remettre', fmt.money(shift.expected_amount), [shift.payments_amount ? `+ ${fmt.money(shift.payments_amount)} règlements` : null, shift.expenses_amount ? `− ${fmt.money(shift.expenses_amount)} dépenses` : null].filter(Boolean).join(' · ') || `Déclaré : ${fmt.money(shift.cash + shift.card)}`),
           kpi('Écart de caisse', varianceCell(shift.variance, tolerance), Math.abs(shift.variance) <= tolerance ? 'Dans la tolérance' : `Tolérance : ± ${fmt.money(tolerance)}`),
         )
       : null,
@@ -125,7 +125,7 @@ export function shiftSummary(shift, tolerance) {
         [
           { label: 'Heure', render: (s) => fmt.time(s.created_at) },
           { label: 'Client', key: 'customer_name' },
-          { label: 'Type', render: (s) => (s.kind === 'credit' ? 'Crédit' : `Fidélité (+${s.points} pts)`) },
+          { label: 'Type', render: (s) => (s.kind === 'credit' ? (s.over_limit ? badge('Crédit hors plafond', 'serious') : 'Crédit') : `Fidélité (+${s.points} pts)`) },
           { label: 'Véhicule', render: (s) => s.plate || '—' },
           { label: 'Produit', key: 'product_name' },
           { label: 'Litres', align: 'right', render: (s) => fmt.liters(s.liters) },
@@ -135,6 +135,39 @@ export function shiftSummary(shift, tolerance) {
         { empty: 'Aucune vente client sur ce poste.' },
       ),
     ),
+    shift.payments.length
+      ? h(
+          'section',
+          { class: 'card flush' },
+          h('div', { class: 'card-header' }, h('h2', {}, 'Règlements encaissés'), h('p', {}, 'Ajoutés au montant à remettre')),
+          table(
+            [
+              { label: 'Heure', render: (p) => fmt.time(p.created_at) },
+              { label: 'Client', key: 'customer_name' },
+              { label: 'Mode', key: 'method' },
+              { label: 'Référence', render: (p) => p.reference || '—' },
+              { label: 'Montant', align: 'right', render: (p) => fmt.money(p.amount) },
+            ],
+            shift.payments,
+          ),
+        )
+      : null,
+    shift.expenses.length
+      ? h(
+          'section',
+          { class: 'card flush' },
+          h('div', { class: 'card-header' }, h('h2', {}, 'Dépenses payées en caisse'), h('p', {}, 'Déduites du montant à remettre')),
+          table(
+            [
+              { label: 'Heure', render: (e) => fmt.time(e.created_at) },
+              { label: 'Catégorie', key: 'category' },
+              { label: 'Description', wrap: true, render: (e) => e.description + (e.beneficiary ? ` · ${e.beneficiary}` : '') },
+              { label: 'Montant', align: 'right', render: (e) => fmt.money(e.amount) },
+            ],
+            shift.expenses,
+          ),
+        )
+      : null,
     closed
       ? card(
           cardHeader('Caisse'),

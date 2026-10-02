@@ -1,14 +1,14 @@
 import { api } from '../api.js';
 import { h, fmt, pageHeader, table, segmented, kpi, field, button, todayISO, isoDate, varianceCell } from '../ui.js';
 
-const PRESETS = [
+export const PRESETS = [
   ['today', "Aujourd'hui"],
   ['7d', '7 jours'],
   ['month', 'Ce mois'],
   ['lastMonth', 'Mois dernier'],
 ];
 
-function presetRange(key) {
+export function presetRange(key) {
   const now = new Date();
   const y = now.getFullYear();
   const m = now.getMonth();
@@ -72,6 +72,13 @@ export async function renderReports(page, ctx) {
     ),
     h(
       'div',
+      { class: 'grid grid-3 section' },
+      kpi('Marge brute estimée', fmt.money(t.grossMargin), t.costKnown ? 'Ventes − coût d’achat du carburant' : 'Prix d’achat manquant pour un produit : saisissez-le dans les livraisons'),
+      kpi('Dépenses', fmt.money(t.expenses), r.expensesByCategory[0] ? `Surtout : ${r.expensesByCategory[0].category}` : 'Aucune dépense'),
+      kpi('Résultat net estimé', h('span', { class: t.net < 0 ? 'variance-neg' : '' }, fmt.money(t.net)), 'Marge brute − dépenses'),
+    ),
+    h(
+      'div',
       { class: 'grid grid-2 section' },
       h(
         'section',
@@ -82,7 +89,8 @@ export async function renderReports(page, ctx) {
             { label: 'Produit', key: 'product' },
             { label: 'Litres', align: 'right', render: (x) => fmt.liters(x.liters) },
             { label: 'Montant', align: 'right', render: (x) => fmt.money(x.amount) },
-            { label: 'Part', align: 'right', render: (x) => (t.amount ? `${Math.round((x.amount / t.amount) * 100)} %` : '—') },
+            { label: 'Coût moyen', align: 'right', render: (x) => (x.avg_cost == null ? '—' : fmt.price(x.avg_cost)) },
+            { label: 'Marge', align: 'right', render: (x) => (x.margin == null ? '—' : fmt.money(x.margin)) },
           ],
           r.byProduct,
           { empty: 'Aucune vente sur la période.' },
@@ -117,6 +125,21 @@ export async function renderReports(page, ctx) {
         ],
         r.byDay,
         { empty: 'Aucune vente sur la période.', footer: r.byDay.length ? { date: 'Total', liters: fmt.liters(t.liters), amount: fmt.money(t.amount) } : null },
+      ),
+    ),
+    h(
+      'section',
+      { class: 'card flush section' },
+      h('div', { class: 'card-header' }, h('h2', {}, 'Dépenses par catégorie'), h('a', { class: 'btn ghost sm no-print', href: '#/depenses' }, 'Voir le détail')),
+      table(
+        [
+          { label: 'Catégorie', key: 'category' },
+          { label: 'Nombre', align: 'right', key: 'count' },
+          { label: 'Montant', align: 'right', key: 'amount', render: (x) => fmt.money(x.amount) },
+          { label: 'Part', align: 'right', render: (x) => (t.expenses ? `${Math.round((x.amount / t.expenses) * 100)} %` : '—') },
+        ],
+        r.expensesByCategory,
+        { empty: 'Aucune dépense sur la période.', footer: r.expensesByCategory.length ? { category: 'Total', amount: fmt.money(t.expenses) } : null },
       ),
     ),
     h(

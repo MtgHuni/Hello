@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { h, fmt, pageHeader, card, cardHeader, table, shiftBadge, varianceCell, button, formDialog, confirmDialog, toast, field, productColor } from '../ui.js';
+import { h, fmt, pageHeader, card, cardHeader, table, shiftBadge, varianceCell, button, formDialog, confirmDialog, toast, field, productColor, badge, kpi } from '../ui.js';
 import { icon } from '../icons.js';
 import { shiftSummary } from './shifts.js';
 
@@ -65,37 +65,84 @@ async function renderStart(page, ctx) {
 // ---------- 2. During the shift ----------
 function renderOpenShift(page, ctx, shift) {
   const pumps = [...new Set(shift.readings.map((r) => r.pump_name))].join(', ');
+  const reload = () => renderAttendant(page, ctx);
+
+  // One list of everything recorded during the shift, newest first.
+  const entries = [
+    ...shift.sales.map((s) => ({
+      at: s.created_at,
+      title: s.customer_name,
+      detail: `${s.product_name} · ${fmt.liters(s.liters)}${s.plate ? ` · ${s.plate}` : ''}`,
+      tag: s.kind === 'credit' ? (s.over_limit ? badge('Crédit hors plafond', 'serious') : badge('Crédit', 'info')) : badge(`+${s.points} pts`, 'good'),
+      amount: fmt.money(s.amount),
+      remove: { url: `/shifts/${shift.id}/sales/${s.id}`, label: 'Annuler cette vente' },
+    })),
+    ...shift.payments.map((p) => ({
+      at: p.created_at,
+      title: p.customer_name,
+      detail: `Règlement ${p.method}${p.reference ? ` · ${p.reference}` : ''}`,
+      tag: badge('Encaissé', 'good'),
+      amount: `+${fmt.money(p.amount)}`,
+      remove: { url: `/shifts/${shift.id}/payments/${p.id}`, label: 'Annuler ce règlement' },
+    })),
+    ...shift.expenses.map((e) => ({
+      at: e.created_at,
+      title: e.description,
+      detail: `${e.category}${e.beneficiary ? ` · ${e.beneficiary}` : ''}`,
+      tag: badge('Dépense', 'warning'),
+      amount: `−${fmt.money(e.amount)}`,
+      remove: { url: `/shifts/${shift.id}/expenses/${e.id}`, label: 'Annuler cette dépense' },
+    })),
+  ].sort((a, b) => b.at.localeCompare(a.at));
+
+  const quick = (label, iconName, color, onClick, primary) =>
+    h('button', { type: 'button', class: `quick-action ${primary ? 'primary' : ''}`, onClick }, h('span', { class: 'qa-icon', style: primary ? '' : `background:${color}` }, icon(iconName)), label);
+
   page.replaceChildren(
     pageHeader('Poste en cours', `Ouvert à ${fmt.time(shift.opened_at)} · ${pumps}`, shiftBadge('open')),
     h(
       'div',
       { class: 'stack' },
-      button('Nouvelle vente client', () => addSale(page, ctx, shift), { variant: 'large block', iconName: 'plus' }),
+      h(
+        'div',
+        { class: 'quick-actions' },
+        quick('Vente client', 'plus', '', () => addSale(ctx, shift, reload), true),
+        quick('Règlement', 'cash', 'var(--green)', () => addPayment(shift, reload)),
+        quick('Dépense', 'wallet', 'var(--orange)', () => addExpense(ctx, shift, reload)),
+      ),
+      h(
+        'div',
+        { class: 'grid kpi-row' },
+        kpi('Crédit accordé', fmt.money(shift.credit_amount)),
+        kpi('Règlements reçus', fmt.money(shift.payments_amount)),
+        kpi('Dépenses caisse', fmt.money(shift.expenses_amount)),
+      ),
       card(
-        cardHeader('Ventes clients', 'Clients en compte (crédit) et clients fidélité'),
-        shift.sales.length
-          ? shift.sales.map((s) =>
+        cardHeader('Opérations du poste', 'Les ventes payées normalement n’ont pas besoin d’être saisies : les index s’en chargent.'),
+        entries.length
+          ? entries.map((x) =>
               h(
                 'div',
                 { class: 'nozzle-row' },
                 h(
                   'div',
                   { class: 'grow' },
-                  h('div', { style: 'font-weight:600' }, s.customer_name),
-                  h('div', { class: 'muted small' }, `${fmt.time(s.created_at)} · ${s.product_name} · ${fmt.liters(s.liters)}${s.plate ? ` · ${s.plate}` : ''} · ${s.kind === 'credit' ? 'Crédit' : `+${s.points} pts`}`),
+                  h('div', { style: 'font-weight:600' }, x.title),
+                  h('div', { class: 'muted small' }, `${fmt.time(x.at)} · ${x.detail}`),
+                  h('div', { style: 'margin-top:4px' }, x.tag),
                 ),
-                h('div', { class: 'num', style: 'font-weight:600' }, fmt.money(s.amount)),
+                h('div', { class: 'num', style: 'font-weight:600' }, x.amount),
                 h(
                   'button',
                   {
                     class: 'btn danger sm',
-                    'aria-label': 'Annuler cette vente',
-                    title: 'Annuler cette vente',
+                    'aria-label': x.remove.label,
+                    title: x.remove.label,
                     onClick: async () => {
-                      if (!(await confirmDialog('Annuler cette vente ?', `${s.customer_name} · ${fmt.liters(s.liters)} · ${fmt.money(s.amount)}`, { confirmLabel: 'Annuler la vente', danger: true }))) return;
+                      if (!(await confirmDialog(`${x.remove.label} ?`, `${x.title} · ${x.amount}`, { confirmLabel: 'Annuler l’opération', danger: true }))) return;
                       try {
-                        await api.del(`/shifts/${shift.id}/sales/${s.id}`);
-                        renderAttendant(page, ctx);
+                        await api.del(x.remove.url);
+                        reload();
                       } catch (err) {
                         toast(err.message, 'error');
                       }
@@ -105,7 +152,7 @@ function renderOpenShift(page, ctx, shift) {
                 ),
               ),
             )
-          : h('p', { class: 'muted' }, 'Aucune vente client pour le moment. Les ventes payées normalement (espèces, carte) n’ont pas besoin d’être saisies : elles sont calculées grâce aux index.'),
+          : h('p', { class: 'muted' }, 'Aucune opération pour le moment.'),
       ),
       card(
         cardHeader('Mes pistolets', 'Index et prix relevés à l’ouverture'),
@@ -124,22 +171,32 @@ function renderOpenShift(page, ctx, shift) {
   );
 }
 
-async function addSale(page, ctx, shift) {
+// Sale to a customer. A new customer can be created on the spot with just a name;
+// a credit beyond the limit can be granted after an explicit confirmation.
+async function addSale(ctx, shift, reload) {
   const customers = await api.get('/customers');
-  if (!customers.length) return toast("Aucun client enregistré. Demandez au gérant d'en créer.", 'error');
+  const NEW = '__new';
   const priceOf = (nozzleId) => shift.readings.find((r) => r.nozzle_id === Number(nozzleId))?.unit_price || 0;
   const amount = h('div', { class: 'summary-line total' }, h('span', {}, 'Montant'), h('span', {}, fmt.money(0)));
   const info = h('p', { class: 'muted small' });
   const update = (e) => {
     const form = e.target.form;
+    const isNew = form.elements.customerId.value === NEW;
+    form.elements.newName.closest('.field').hidden = !isNew;
+    form.elements.newName.required = isNew;
     const c = customers.find((x) => x.id === Number(form.elements.customerId.value));
     const total = (Number(form.elements.liters.value) || 0) * priceOf(form.elements.nozzleId.value);
     amount.lastChild.textContent = fmt.money(total);
-    info.textContent = c?.type === 'account' ? `Crédit disponible : ${fmt.money(c.available)}` : c ? 'Client fidélité : paiement normal, points ajoutés.' : '';
+    if (isNew) info.textContent = `Nouveau client en compte, plafond de départ ${fmt.money(ctx.state.settings.newCustomerCreditLimit)}. Le gérant complétera sa fiche.`;
+    else if (c?.type === 'account') info.textContent = `Crédit disponible : ${fmt.money(c.available)}`;
+    else info.textContent = c ? 'Client fidélité : paiement normal, points ajoutés.' : '';
     if (e.target.name === 'customerId' && c?.plate && !form.elements.plate.value) form.elements.plate.value = c.plate;
+    if (isNew && e.target.name === 'customerId') form.elements.newName.focus();
   };
+
   const ok = await formDialog({
-    title: 'Nouvelle vente client',
+    title: 'Vente client',
+    submitLabel: 'Enregistrer la vente',
     grid: false,
     fields: [
       {
@@ -147,20 +204,87 @@ async function addSale(page, ctx, shift) {
         label: 'Client',
         type: 'select',
         required: true,
-        options: [['', 'Choisir un client…'], ...customers.map((c) => [c.id, `${c.name} — ${c.type === 'account' ? `en compte (dispo ${fmt.money(c.available)})` : 'fidélité'}`])],
+        options: [
+          ['', 'Choisir un client…'],
+          [NEW, '＋ Nouveau client'],
+          ...customers.map((c) => [c.id, `${c.name} — ${c.type === 'account' ? `dispo ${fmt.money(c.available)}` : 'fidélité'}`]),
+        ],
         onInput: update,
       },
+      { name: 'newName', label: 'Nom du nouveau client', placeholder: 'Nom ou société', hidden: true },
       { name: 'nozzleId', label: 'Pistolet', type: 'select', required: true, options: shift.readings.map((r) => [r.nozzle_id, `${r.pump_name} · ${r.product_name} (${fmt.price(r.unit_price)})`]), onInput: update },
       { name: 'liters', label: 'Litres servis', type: 'number', step: '0.01', min: '0.01', required: true, onInput: update },
       { name: 'plate', label: 'Immatriculation du véhicule', placeholder: 'Facultatif' },
     ],
     extra: () => h('div', {}, info, amount),
-    submitLabel: 'Enregistrer la vente',
-    onSubmit: (d) => api.post(`/shifts/${shift.id}/sales`, { ...d, customerId: Number(d.customerId), nozzleId: Number(d.nozzleId) }),
+    onSubmit: async (d, form) => {
+      let customerId = Number(d.customerId);
+      if (d.customerId === NEW) {
+        const created = await api.post('/customers/quick', { name: d.newName });
+        customers.push(created);
+        customerId = created.id;
+        // Keep the created customer selected if the sale itself fails afterwards.
+        form.elements.customerId.append(h('option', { value: String(created.id) }, created.name));
+        form.elements.customerId.value = String(created.id);
+        form.elements.newName.closest('.field').hidden = true;
+        form.elements.newName.required = false;
+      }
+      const body = { customerId, nozzleId: Number(d.nozzleId), liters: d.liters, plate: d.plate };
+      try {
+        return await api.post(`/shifts/${shift.id}/sales`, body);
+      } catch (err) {
+        if (err.code !== 'over_limit') throw err;
+        const grant = await confirmDialog('Accorder le crédit ?', `${err.message} Si vous accordez ce crédit, il sera signalé au gérant avec votre nom.`, { confirmLabel: 'Accorder' });
+        if (!grant) throw new Error('Vente non enregistrée : plafond de crédit dépassé.');
+        return api.post(`/shifts/${shift.id}/sales`, { ...body, grantCredit: true });
+      }
+    },
   });
   if (ok) {
-    toast('Vente enregistrée.');
-    renderAttendant(page, ctx);
+    toast(ok.over_limit ? 'Crédit accordé et signalé au gérant' : 'Vente enregistrée');
+    reload();
+  }
+}
+
+async function addPayment(shift, reload) {
+  const customers = (await api.get('/customers')).filter((c) => c.type === 'account');
+  if (!customers.length) return toast('Aucun client en compte.', 'error');
+  const ok = await formDialog({
+    title: 'Règlement client',
+    submitLabel: 'Encaisser',
+    intro: 'Un client vient payer sa dette : l’argent est ajouté à votre caisse.',
+    grid: false,
+    fields: [
+      { name: 'customerId', label: 'Client', type: 'select', required: true, options: [['', 'Choisir un client…'], ...customers.map((c) => [c.id, `${c.name} — doit ${fmt.money(Math.max(0, c.balance))}`])] },
+      { name: 'amount', label: 'Montant reçu ($)', type: 'number', step: '0.01', min: '0.01', required: true },
+      { name: 'method', label: 'Mode', type: 'select', options: [['espèces', 'Espèces'], ['mobile money', 'Mobile money'], ['carte', 'Carte']] },
+      { name: 'reference', label: 'Référence', placeholder: 'Facultatif (n° de transaction…)' },
+    ],
+    onSubmit: (d) => api.post(`/shifts/${shift.id}/payments`, { ...d, customerId: Number(d.customerId) }),
+  });
+  if (ok) {
+    toast(`Règlement encaissé · reste dû ${fmt.money(Math.max(0, ok.balance))}`);
+    reload();
+  }
+}
+
+async function addExpense(ctx, shift, reload) {
+  const ok = await formDialog({
+    title: 'Dépense payée en caisse',
+    submitLabel: 'Enregistrer la dépense',
+    intro: 'Elle sera déduite du montant à remettre à la clôture.',
+    grid: false,
+    fields: [
+      { name: 'amount', label: 'Montant ($)', type: 'number', step: '0.01', min: '0.01', required: true },
+      { name: 'category', label: 'Catégorie', type: 'select', options: ctx.state.settings.expenseCategories.map((c) => [c, c]), value: 'Fournitures' },
+      { name: 'description', label: 'Description', required: true, placeholder: 'Ex. : eau, ampoule, transport…' },
+      { name: 'beneficiary', label: 'Payé à', placeholder: 'Facultatif' },
+    ],
+    onSubmit: (d) => api.post(`/shifts/${shift.id}/expenses`, d),
+  });
+  if (ok) {
+    toast('Dépense enregistrée');
+    reload();
   }
 }
 
@@ -168,6 +292,8 @@ async function addSale(page, ctx, shift) {
 function renderClosing(page, ctx, shift) {
   const tol = ctx.state.settings.cashTolerance;
   const credit = shift.credit_amount || 0;
+  const payments = shift.payments_amount || 0;
+  const expenses = shift.expenses_amount || 0;
   const lines = {
     total: h('span', { class: 'num' }),
     credit: h('span', { class: 'num' }, fmt.money(credit)),
@@ -194,7 +320,7 @@ function renderClosing(page, ctx, shift) {
       out.textContent = liters < 0 ? 'Index inférieur au début !' : `${fmt.liters(liters)} · ${fmt.money(liters * r.unit_price)}`;
       out.className = liters < 0 ? 'small variance-neg' : 'small muted';
     }
-    const expected = total - credit;
+    const expected = total - credit + payments - expenses;
     const declared = (Number(form.elements.cash.value) || 0) + (Number(form.elements.card.value) || 0);
     lines.total.textContent = complete ? fmt.money(total) : '—';
     lines.expected.textContent = complete ? fmt.money(expected) : '—';
@@ -233,7 +359,9 @@ function renderClosing(page, ctx, shift) {
     card(
       cardHeader('3. Rapprochement'),
       h('div', { class: 'summary-line' }, h('span', {}, 'Ventes selon les index'), lines.total),
-      h('div', { class: 'summary-line' }, h('span', {}, 'Dont crédit clients'), h('span', {}, '− ', lines.credit)),
+      h('div', { class: 'summary-line' }, h('span', {}, 'Vendu à crédit'), h('span', {}, '− ', lines.credit)),
+      payments ? h('div', { class: 'summary-line' }, h('span', {}, 'Règlements reçus'), h('span', { class: 'num' }, `+ ${fmt.money(payments)}`)) : null,
+      expenses ? h('div', { class: 'summary-line' }, h('span', {}, 'Dépenses payées'), h('span', { class: 'num' }, `− ${fmt.money(expenses)}`)) : null,
       h('div', { class: 'summary-line' }, h('span', {}, 'À remettre'), lines.expected),
       h('div', { class: 'summary-line' }, h('span', {}, 'Déclaré'), lines.declared),
       h('div', { class: 'summary-line total' }, h('span', {}, 'Écart'), lines.variance),

@@ -1017,3 +1017,47 @@ html[data-nav='fade']::view-transition-new(page) { animation: rise 0.45s var(--s
   .print-only { display: block !important; }
 }
 .print-only { display: none; }
+
+/* ---------- Horizontal bars (expenses by category) ---------- */
+.hbars { display: flex; flex-direction: column; gap: 12px; }
+.hbar-row { display: grid; grid-template-columns: minmax(110px, 200px) 1fr auto; align-items: center; gap: 14px; font-size: 15px; }
+.hbar-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hbar-track { height: 12px; border-radius: 999px; background: var(--track); overflow: hidden; }
+.hbar-fill { display: block; height: 100%; border-radius: 999px; background: var(--series-1); transform-origin: left; animation: grow-x 0.9s var(--spring) both; animation-delay: calc(var(--i, 0) * 50ms + 0.1s); }
+.hbar-value { min-width: 90px; text-align: right; font-weight: 600; }
+@media (max-width: 760px) {
+  .hbar-row { grid-template-columns: 1fr auto; gap: 6px 12px; }
+  .hbar-track { grid-column: 1 / -1; grid-row: 2; }
+}
+
+/* ---------- Quick action grid (attendant) ---------- */
+.quick-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.quick-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 92px;
+  padding: 14px 8px;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+  transition: transform 0.45s var(--spring), background-color 0.2s;
+}
+.quick-action:active { transform: scale(0.95); }
+.quick-action .qa-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; color: #fff; }
+.quick-action .qa-icon svg { width: 22px; height: 22px; }
+.quick-action.primary { background: var(--accent); color: #fff; }
+.quick-action.primary .qa-icon { background: rgba(255, 255, 255, 0.22); }
+.badge.over { background: color-mix(in srgb, var(--orange) 18%, transparent); }
+.kpi-row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.kpi-row .card { padding: 14px; }
+.kpi-row .kpi .label { font-size: 12px; }
+.kpi-row .kpi .value { font-size: 20px; }

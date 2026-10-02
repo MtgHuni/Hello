@@ -6,13 +6,17 @@ Trois espaces, selon le rôle :
 
 | Rôle | Ce qu'il fait |
 |------|---------------|
-| **Gérant** | Tableau de bord et alertes, validation des postes, cuves (livraisons, jaugeages), clients (crédit, règlements, relevés), rapports et export Excel, réglages (prix, pompes, pistolets, équipe) |
-| **Pompiste** | Sur téléphone : ouvre son poste, saisit les ventes clients, clôture avec les index de fin et le comptage de caisse. L'écart s'affiche immédiatement |
+| **Gérant** | Tableau de bord et alertes, validation des postes, cuves (livraisons, jaugeages), clients (crédit, règlements, relevés, fiches à compléter), dépenses, rapports (marge, résultat) et export Excel, réglages (prix, pompes, pistolets, équipe) |
+| **Pompiste** | Sur téléphone : ouvre son poste, saisit les ventes clients (et crée un client avec son seul nom), accorde un crédit, encaisse un règlement, note une dépense payée en caisse, clôture avec les index de fin et le comptage. L'écart s'affiche immédiatement |
 | **Client** | Consulte ses achats, son solde ou ses points, imprime ses relevés |
 
 ## Principes de gestion
 
-- **Rapprochement de poste** : litres = index fin − index début (par pistolet). Montant attendu = litres × prix − ventes à crédit. Écart = espèces + cartes déclarées − montant attendu.
+- **Rapprochement de poste** : litres = index fin − index début (par pistolet). Montant à remettre = litres × prix − ventes à crédit + règlements encaissés − dépenses payées en caisse. Écart = espèces + cartes déclarées − montant à remettre.
+- **Nouveau client à la pompe** : le pompiste saisit seulement le nom ; le client reçoit le plafond de crédit par défaut (réglable) et apparaît « À compléter » chez le gérant jusqu'à ce que sa fiche soit remplie.
+- **Crédit accordé par le pompiste** : au-delà du plafond, le pompiste peut accorder le crédit après confirmation ; la vente est marquée « hors plafond » avec son nom et signalée au gérant.
+- **Dépenses** : par catégorie (salaires, électricité, générateur…). Celles payées avec la caisse d'un poste font partie de son rapprochement et ne sont plus modifiables après la clôture.
+- **Marge brute estimée** = litres vendus × (prix de vente − coût d'achat moyen pondéré des livraisons) ; **résultat net estimé** = marge brute − dépenses.
 - Les **index de début** sont repris automatiquement de la clôture précédente : le pompiste ne peut pas les modifier.
 - Le **prix** est figé à l'ouverture du poste : un changement de prix s'applique au poste suivant.
 - **Stock théorique** d'une cuve = dernier jaugeage + livraisons − litres vendus. Chaque jaugeage enregistre l'écart, puis devient la nouvelle référence.

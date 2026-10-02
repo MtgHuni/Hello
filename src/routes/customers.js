@@ -1,6 +1,7 @@
 const express = require('express');
 const { fail, num, str, oneOf, bool, round, dateParam } = require('../util');
 const { requireRole, hashPassword, checkPasswordStrength } = require('../auth');
+const { getSettings } = require('../db');
 
 const manager = requireRole('manager');
 const frNum = (n, digits = 2) => n.toLocaleString('fr-FR', { maximumFractionDigits: digits });
@@ -25,7 +26,9 @@ function customerRoutes(db) {
       ROUND((SELECT COALESCE(SUM(amount), 0) FROM sales WHERE customer_id = c.id AND kind = 'credit') -
             (SELECT COALESCE(SUM(amount), 0) FROM payments WHERE customer_id = c.id), 2) AS balance,
       (SELECT MAX(created_at) FROM sales WHERE customer_id = c.id) AS last_purchase_at,
-      (SELECT login FROM users WHERE customer_id = c.id) AS login
+      (SELECT login FROM users WHERE customer_id = c.id) AS login,
+      (SELECT name FROM users WHERE id = c.created_by) AS created_by_name,
+      (SELECT COUNT(*) FROM sales WHERE customer_id = c.id AND over_limit = 1) AS over_limit_count
     FROM customers c`;
 
   // Statement: opening balance, dated movements over the period, closing balance.
@@ -37,13 +40,16 @@ function customerRoutes(db) {
 
     const sales = db
       .prepare(
-        `SELECT s.id, s.created_at, s.kind, s.liters, s.unit_price, s.amount, s.points, s.plate, p.name AS product_name
+        `SELECT s.id, s.created_at, s.kind, s.liters, s.unit_price, s.amount, s.points, s.plate, s.over_limit, p.name AS product_name
          FROM (SELECT * FROM sales WHERE customer_id = ? AND ${inRange}) s JOIN products p ON p.id = s.product_id
          ORDER BY s.created_at, s.id`,
       )
       .all(id, ...range);
     const payments = db
-      .prepare(`SELECT id, created_at, amount, method, reference FROM payments WHERE customer_id = ? AND ${inRange} ORDER BY created_at, id`)
+      .prepare(
+        `SELECT p.id, p.created_at, p.amount, p.method, p.reference, p.shift_id
+         FROM (SELECT * FROM payments WHERE customer_id = ? AND ${inRange}) p ORDER BY p.created_at, p.id`,
+      )
       .all(id, ...range);
 
     let opening = 0;
@@ -61,7 +67,7 @@ function customerRoutes(db) {
       ...sales.map((s) => ({
         date: s.created_at,
         type: 'sale',
-        label: `${s.product_name} — ${frNum(s.liters)} L à ${frNum(s.unit_price, 3)} $/L${s.plate ? ` (${s.plate})` : ''}`,
+        label: `${s.product_name} — ${frNum(s.liters)} L à ${frNum(s.unit_price, 3)} $/L${s.plate ? ` (${s.plate})` : ''}${s.over_limit ? ' — crédit hors plafond' : ''}`,
         liters: s.liters,
         points: s.points,
         debit: s.kind === 'credit' ? s.amount : 0,
@@ -71,7 +77,7 @@ function customerRoutes(db) {
       ...payments.map((p) => ({
         date: p.created_at,
         type: 'payment',
-        label: `Règlement ${p.method}${p.reference ? ` — ${p.reference}` : ''}`,
+        label: `Règlement ${p.method}${p.reference ? ` — ${p.reference}` : ''}${p.shift_id ? ` (encaissé à la pompe, poste n°${p.shift_id})` : ''}`,
         debit: 0,
         credit: p.amount,
         amount: p.amount,
@@ -111,6 +117,7 @@ function customerRoutes(db) {
             name: c.name,
             type: c.type,
             plate: c.plate,
+            balance: c.type === 'account' ? c.balance : null,
             available: c.type === 'account' ? round(c.credit_limit - c.balance) : null,
           })),
       );
@@ -131,6 +138,19 @@ function customerRoutes(db) {
     };
   }
 
+  // Quick creation at the pump: name only. The customer gets the default credit
+  // limit and is flagged for the manager to complete the record.
+  router.post('/customers/quick', requireRole('manager', 'attendant'), (req, res) => {
+    const name = str(req.body?.name, 'Le nom du client', { max: 120 });
+    const existing = db.prepare('SELECT id FROM customers WHERE name = ? COLLATE NOCASE AND active = 1').get(name);
+    if (existing) fail(409, 'Un client porte déjà ce nom : choisissez-le dans la liste.', 'duplicate');
+    const limit = getSettings(db).newCustomerCreditLimit;
+    const id = db
+      .prepare("INSERT INTO customers (type, name, credit_limit, needs_review, created_by) VALUES ('account', ?, ?, 1, ?)")
+      .run(name, limit, req.user.id).lastInsertRowid;
+    res.status(201).json({ id: Number(id), name, type: 'account', plate: null, balance: 0, available: limit });
+  });
+
   router.post('/customers', manager, (req, res) => {
     const f = customerFields(req.body || {});
     const id = db
@@ -145,7 +165,7 @@ function customerRoutes(db) {
     const f = customerFields(req.body || {}, current);
     const active = bool(req.body?.active, !!current.active) ? 1 : 0;
     db.prepare(
-      'UPDATE customers SET type = ?, name = ?, phone = ?, email = ?, address = ?, plate = ?, credit_limit = ?, active = ? WHERE id = ?',
+      'UPDATE customers SET type = ?, name = ?, phone = ?, email = ?, address = ?, plate = ?, credit_limit = ?, active = ?, needs_review = 0 WHERE id = ?',
     ).run(f.type, f.name, f.phone, f.email, f.address, f.plate, f.creditLimit, active, current.id);
     db.prepare('UPDATE users SET active = ? WHERE customer_id = ?').run(active, current.id);
     res.json(db.prepare(`${listSql} WHERE c.id = ?`).get(current.id));

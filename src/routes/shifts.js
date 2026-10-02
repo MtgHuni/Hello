@@ -1,6 +1,6 @@
 const express = require('express');
-const { getSettings } = require('../db');
-const { fail, num, str, round, dateParam, transaction } = require('../util');
+const { getSettings, EXPENSE_CATEGORIES } = require('../db');
+const { fail, num, str, oneOf, round, dateParam, transaction } = require('../util');
 const { requireRole } = require('../auth');
 const { customerBalance } = require('./customers');
 
@@ -34,8 +34,17 @@ module.exports = function shiftRoutes(db) {
          WHERE sa.shift_id = ? ORDER BY sa.id`,
       )
       .all(id);
+    shift.payments = db
+      .prepare(
+        `SELECT pa.*, c.name AS customer_name FROM payments pa JOIN customers c ON c.id = pa.customer_id
+         WHERE pa.shift_id = ? ORDER BY pa.id`,
+      )
+      .all(id);
+    shift.expenses = db.prepare('SELECT * FROM expenses WHERE shift_id = ? ORDER BY id').all(id);
     if (shift.status === 'open') {
       shift.credit_amount = round(shift.sales.filter((s) => s.kind === 'credit').reduce((t, s) => t + s.amount, 0));
+      shift.payments_amount = round(shift.payments.reduce((t, p) => t + p.amount, 0));
+      shift.expenses_amount = round(shift.expenses.reduce((t, e) => t + e.amount, 0));
     }
     return shift;
   }
@@ -57,7 +66,8 @@ module.exports = function shiftRoutes(db) {
       db
         .prepare(
           `SELECT s.id, s.status, s.opened_at, s.closed_at, s.total_liters, s.total_amount, s.credit_amount,
-             s.expected_amount, s.cash, s.card, s.variance, u.name AS attendant_name,
+             s.expected_amount, s.payments_amount, s.expenses_amount, s.cash, s.card, s.variance, u.name AS attendant_name,
+             (SELECT COUNT(*) FROM sales sa WHERE sa.shift_id = s.id AND sa.over_limit = 1) AS over_limit_count,
              (SELECT group_concat(DISTINCT pu.name) FROM shift_readings r JOIN nozzles n ON n.id = r.nozzle_id
               JOIN pumps pu ON pu.id = n.pump_id WHERE r.shift_id = s.id) AS pumps
            FROM shifts s JOIN users u ON u.id = s.attendant_id
@@ -144,21 +154,28 @@ module.exports = function shiftRoutes(db) {
     const points = kind === 'loyalty' ? Math.floor(liters * getSettings(db).pointsPerLiter) : 0;
 
     const id = transaction(db, () => {
+      let overLimit = 0;
       if (kind === 'credit') {
         const balance = customerBalance(db, customer.id);
         if (balance + amount > customer.credit_limit + 0.001) {
-          fail(
-            409,
-            `Plafond de crédit dépassé : encours ${money(balance)}, plafond ${money(customer.credit_limit)}, disponible ${money(Math.max(0, customer.credit_limit - balance))}.`,
-          );
+          // The attendant may still grant the credit, but must confirm it explicitly:
+          // the sale is then flagged and reported to the manager.
+          if (b.grantCredit !== true) {
+            fail(
+              409,
+              `Plafond de crédit dépassé : encours ${money(balance)}, plafond ${money(customer.credit_limit)}, disponible ${money(Math.max(0, customer.credit_limit - balance))}.`,
+              'over_limit',
+            );
+          }
+          overLimit = 1;
         }
       }
       const r = db
         .prepare(
-          `INSERT INTO sales (shift_id, customer_id, nozzle_id, product_id, kind, liters, unit_price, amount, points, plate)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO sales (shift_id, customer_id, nozzle_id, product_id, kind, liters, unit_price, amount, points, plate, over_limit)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
-        .run(shift.id, customer.id, reading.nozzle_id, reading.product_id, kind, liters, reading.unit_price, amount, points, plate ?? customer.plate);
+        .run(shift.id, customer.id, reading.nozzle_id, reading.product_id, kind, liters, reading.unit_price, amount, points, plate ?? customer.plate, overLimit);
       if (points) db.prepare('UPDATE customers SET loyalty_points = loyalty_points + ? WHERE id = ?').run(points, customer.id);
       return r.lastInsertRowid;
     });
@@ -175,6 +192,50 @@ module.exports = function shiftRoutes(db) {
         db.prepare('UPDATE customers SET loyalty_points = MAX(0, loyalty_points - ?) WHERE id = ?').run(sale.points, sale.customer_id);
       }
     });
+    res.status(204).end();
+  });
+
+  // A customer settling their account at the pump: the money goes into the shift's cash.
+  router.post('/shifts/:id/payments', staff, (req, res) => {
+    const shift = getOwnShift(req);
+    const customer = db.prepare("SELECT * FROM customers WHERE id = ? AND type = 'account'").get(Number(req.body?.customerId));
+    if (!customer) fail(400, 'Choisissez un client en compte.');
+    const amount = round(num(req.body?.amount, 'Le montant', { min: 0.01, max: 1e8 }));
+    const method = oneOf(req.body?.method ?? 'espèces', 'Le mode de règlement', ['espèces', 'mobile money', 'carte']);
+    const reference = str(req.body?.reference, 'La référence', { required: false, max: 100 });
+    const id = db
+      .prepare('INSERT INTO payments (customer_id, amount, method, reference, user_id, shift_id) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(customer.id, amount, method, reference, req.user.id, shift.id).lastInsertRowid;
+    res.status(201).json({ id: Number(id), balance: customerBalance(db, customer.id) });
+  });
+
+  router.delete('/shifts/:id/payments/:paymentId', staff, (req, res) => {
+    const shift = getOwnShift(req);
+    const r = db.prepare('DELETE FROM payments WHERE id = ? AND shift_id = ?').run(req.params.paymentId, shift.id);
+    if (!r.changes) fail(404, 'Règlement introuvable.');
+    res.status(204).end();
+  });
+
+  // Small expense paid from the shift's cash (deducted from the amount to hand over).
+  router.post('/shifts/:id/expenses', staff, (req, res) => {
+    const shift = getOwnShift(req);
+    const category = oneOf(req.body?.category, 'La catégorie', EXPENSE_CATEGORIES);
+    const amount = round(num(req.body?.amount, 'Le montant', { min: 0.01, max: 1e7 }));
+    const description = str(req.body?.description, 'La description', { max: 300 });
+    const beneficiary = str(req.body?.beneficiary, 'Le bénéficiaire', { required: false, max: 120 });
+    const id = db
+      .prepare(
+        `INSERT INTO expenses (expense_date, category, amount, description, beneficiary, method, shift_id, user_id)
+         VALUES (date('now', 'localtime'), ?, ?, ?, ?, 'espèces', ?, ?)`,
+      )
+      .run(category, amount, description, beneficiary, shift.id, req.user.id).lastInsertRowid;
+    res.status(201).json(db.prepare('SELECT * FROM expenses WHERE id = ?').get(id));
+  });
+
+  router.delete('/shifts/:id/expenses/:expenseId', staff, (req, res) => {
+    const shift = getOwnShift(req);
+    const r = db.prepare('DELETE FROM expenses WHERE id = ? AND shift_id = ?').run(req.params.expenseId, shift.id);
+    if (!r.changes) fail(404, 'Dépense introuvable.');
     res.status(204).end();
   });
 
@@ -217,12 +278,15 @@ module.exports = function shiftRoutes(db) {
         db.prepare('UPDATE tanks SET book_stock = ROUND(book_stock - ?, 2) WHERE id = ?').run(liters, r.tank_id);
       }
       const creditAmount = round(sales.filter((s) => s.kind === 'credit').reduce((t, s) => t + s.amount, 0));
-      const expected = round(totalAmount - creditAmount);
+      const paymentsAmount = round(db.prepare('SELECT COALESCE(SUM(amount), 0) AS v FROM payments WHERE shift_id = ?').get(shift.id).v);
+      const expensesAmount = round(db.prepare('SELECT COALESCE(SUM(amount), 0) AS v FROM expenses WHERE shift_id = ?').get(shift.id).v);
+      // To hand over = fuel sold − sold on credit + account payments received − expenses paid from the till.
+      const expected = round(totalAmount - creditAmount + paymentsAmount - expensesAmount);
       db.prepare(
         `UPDATE shifts SET status = 'closed', closed_at = datetime('now'), cash = ?, card = ?, total_liters = ?,
-           total_amount = ?, credit_amount = ?, expected_amount = ?, variance = ?, notes = ?
+           total_amount = ?, credit_amount = ?, payments_amount = ?, expenses_amount = ?, expected_amount = ?, variance = ?, notes = ?
          WHERE id = ?`,
-      ).run(cash, card, round(totalLiters), round(totalAmount), creditAmount, expected, round(cash + card - expected), notes, shift.id);
+      ).run(cash, card, round(totalLiters), round(totalAmount), creditAmount, paymentsAmount, expensesAmount, expected, round(cash + card - expected), notes, shift.id);
     });
     res.json(shiftDetail(shift.id));
   });

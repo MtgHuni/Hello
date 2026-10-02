@@ -10,17 +10,20 @@ import { renderCustomers, renderCustomerDetail } from './views/customers.js';
 import { renderReports } from './views/reports.js';
 import { renderSettings } from './views/settings.js';
 import { renderAccount } from './views/account.js';
+import { renderExpenses } from './views/expenses.js';
 
 const root = document.getElementById('app');
 export const state = { user: null, settings: null };
 
-// [path, label, icon, view, short label for the tab bar]
+// [path, label, icon, view, short label for the tab bar, shown in the phone tab bar]
+// On phones the manager gets 4 tabs + "Plus" (iOS pattern for more than 5 sections).
 const NAV = {
   manager: [
-    ['', 'Tableau de bord', 'home', renderDashboard, 'Accueil'],
-    ['postes', 'Postes', 'shifts', renderShifts],
+    ['', 'Tableau de bord', 'home', renderDashboard, 'Accueil', true],
+    ['postes', 'Postes', 'shifts', renderShifts, null, true],
+    ['clients', 'Clients', 'users', renderCustomers, null, true],
+    ['depenses', 'Dépenses', 'wallet', renderExpenses, null, true],
     ['cuves', 'Cuves', 'tank', renderTanks],
-    ['clients', 'Clients', 'users', renderCustomers],
     ['rapports', 'Rapports', 'chart', renderReports],
     ['pompe', 'Mon poste', 'pump', renderAttendant],
     ['reglages', 'Réglages', 'settings', renderSettings],
@@ -112,11 +115,27 @@ function buildShell() {
     ),
   );
 
-  const tabItems = role === 'manager' ? nav.filter(([p]) => p !== 'pompe') : nav;
+  const tabItems = role === 'manager' ? nav.filter((e) => e[5]) : nav;
   const lens = h('span', { class: 'tab-lens', 'aria-hidden': 'true' });
+  const more =
+    role === 'manager'
+      ? h(
+          'a',
+          {
+            href: '#',
+            'data-path': '__more',
+            onClick: (e) => {
+              e.preventDefault();
+              actionSheet({ actions: nav.filter((x) => !x[5]).map(([path, label]) => ({ label, onClick: () => navigate(path) })) });
+            },
+          },
+          icon('more'),
+          h('span', {}, 'Plus'),
+        )
+      : null;
   const tabbar =
     tabItems.length > 1
-      ? h('nav', { class: 'tabbar glass', 'aria-label': 'Navigation' }, lens, tabItems.map(([path, label, iconName, , short]) => h('a', { href: `#/${path}`, 'data-path': path }, icon(iconName), h('span', {}, short || label))))
+      ? h('nav', { class: 'tabbar glass', 'aria-label': 'Navigation' }, lens, tabItems.map(([path, label, iconName, , short]) => h('a', { href: `#/${path}`, 'data-path': path }, icon(iconName), h('span', {}, short || label))), more)
       : null;
 
   const main = h('main', { class: 'main' }, toolbar, slot);
@@ -166,8 +185,9 @@ function moveLens(animate = true) {
 }
 
 function setActive(path) {
+  const inMore = state.user.role === 'manager' && !NAV.manager.find((e) => e[0] === path)?.[5];
   shell.el.querySelectorAll('a[data-path]').forEach((a) => {
-    const on = a.dataset.path === path;
+    const on = a.dataset.path === path || (a.dataset.path === '__more' && inMore);
     a.classList.toggle('active', on);
     if (on) a.setAttribute('aria-current', 'page');
     else a.removeAttribute('aria-current');

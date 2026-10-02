@@ -105,6 +105,7 @@ export async function renderSettings(page, ctx) {
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Tolérance d’écart de caisse'), h('span', {}, `± ${fmt.money(settings.cashTolerance)}`)),
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Tolérance d’écart de jaugeage'), h('span', {}, `± ${fmt.liters(settings.stockTolerance)}`)),
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Points fidélité par litre'), h('span', {}, fmt.number(settings.pointsPerLiter))),
+        h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Plafond de crédit des clients créés à la pompe'), h('span', {}, fmt.money(settings.newCustomerCreditLimit))),
       ),
     ),
   );
@@ -118,6 +119,7 @@ async function stationDialog(s) {
       { name: 'cashTolerance', label: 'Tolérance de caisse ($)', type: 'number', step: '0.01', min: '0', value: s.cashTolerance, hint: 'Écart toléré à la clôture d’un poste' },
       { name: 'stockTolerance', label: 'Tolérance de jaugeage (L)', type: 'number', step: '0.01', min: '0', value: s.stockTolerance, hint: 'Écart toléré entre stock théorique et mesuré' },
       { name: 'pointsPerLiter', label: 'Points fidélité par litre', type: 'number', step: '0.01', min: '0', value: s.pointsPerLiter },
+      { name: 'newCustomerCreditLimit', label: 'Plafond des nouveaux clients ($)', type: 'number', step: '0.01', min: '0', value: s.newCustomerCreditLimit, hint: 'Pour les clients créés par un pompiste' },
     ],
     onSubmit: (d) => api.put('/settings', d),
   });
