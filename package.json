@@ -1,0 +1,23 @@
+{
+  "name": "station-service",
+  "version": "1.0.0",
+  "description": "Application web de gestion de station-service (gasoil, essence) : postes, cuves, clients, rapports",
+  "main": "server.js",
+  "private": true,
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning server.js",
+    "dev": "node --disable-warning=ExperimentalWarning --watch server.js",
+    "test": "node --disable-warning=ExperimentalWarning --test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MtgHuni/Hello.git"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}
