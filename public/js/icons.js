@@ -45,3 +45,17 @@ export function icon(name) {
   svg.append(path);
   return svg;
 }
+
+// Station mark: a fuel drop, drawn filled so it holds at 16px.
+export function brandMark() {
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('class', 'brand-mark');
+  svg.setAttribute('aria-hidden', 'true');
+  const path = document.createElementNS(ns, 'path');
+  path.setAttribute('d', 'M12 2.5c.4 0 .7.2 1 .5 2.4 3 6 7.6 6 11.2A7 7 0 0 1 5 14.2C5 10.6 8.6 6 11 3c.3-.3.6-.5 1-.5zm-3.2 11.8a.9.9 0 0 0-1.8.1 5 5 0 0 0 4.2 4.9.9.9 0 1 0 .3-1.8 3.2 3.2 0 0 1-2.7-3.2z');
+  path.setAttribute('fill', 'currentColor');
+  svg.append(path);
+  return svg;
+}

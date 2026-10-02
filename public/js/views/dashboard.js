@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { h, fmt, kpi, card, cardHeader, tankGauge, productColor, pageHeader, button, setContent } from '../ui.js';
+import { h, fmt, kpi, card, cardHeader, tankGauge, pageHeader, button, setContent } from '../ui.js';
 import { icon } from '../icons.js';
 
 const ALERT_ICON = { critical: 'alert', serious: 'alert', warning: 'info' };
@@ -35,21 +35,15 @@ export async function renderDashboard(page, { state, navigate }) {
     h(
       'section',
       { class: 'card section' },
-      cardHeader('Niveau des cuves', 'Stock théorique : dernier jaugeage + livraisons − ventes', button('Voir les cuves', () => navigate('cuves'), { variant: 'ghost' })),
+      cardHeader('Niveau des cuves', 'Stock théorique : dernier jaugeage + livraisons − ventes', h('a', { class: 'more-link', href: '#/cuves' }, 'Voir les cuves', icon('chevron'))),
       d.tanks.length ? h('div', { class: 'grid grid-2', style: 'gap:28px' }, d.tanks.map(tankGauge)) : h('div', { class: 'empty' }, 'Aucune cuve configurée.'),
     ),
 
     h(
       'div',
       { class: 'grid grid-2 section' },
-      d.todayByProduct.map((p) =>
-        kpi(
-          h('span', {}, h('span', { class: 'swatch', style: `background:${productColor(p.id)}` }), p.name),
-          fmt.money(p.amount),
-          `${fmt.liters(p.liters)} vendus aujourd'hui`,
-          { small: true },
-        ),
-      ),
+      kpi('Combos des clients', fmt.number(d.combos.total), `Valeur ${fmt.money(d.combos.value)} en carburant · ${d.combos.redeemable} client${d.combos.redeemable > 1 ? 's peuvent' : ' peut'} échanger`),
+      kpi('Fiches clients à compléter', String(d.toReview), d.toReview ? 'Créées à la pompe avec le nom seulement' : 'Toutes les fiches sont complètes'),
     ),
   );
 }
@@ -69,8 +63,9 @@ function alertList(alerts) {
 
 // Single-series bar chart: one hue, no legend, hover tooltip per bar, table fallback via aria.
 function barChart(days) {
+  if (!days.some((d) => d.amount > 0)) return h('div', { class: 'empty' }, 'Aucune vente ces 7 derniers jours.');
   const max = Math.max(...days.map((d) => d.amount), 1);
-  const tip = h('div', { class: 'tooltip glass', hidden: true });
+  const tip = h('div', { class: 'tooltip', hidden: true });
   const chart = h(
     'div',
     { class: 'chart' },

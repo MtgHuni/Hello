@@ -63,7 +63,7 @@ module.exports = function reportRoutes(db) {
         `SELECT c.id, c.name, c.credit_limit,
            ROUND((SELECT COALESCE(SUM(amount), 0) FROM sales WHERE customer_id = c.id AND kind = 'credit') -
                  (SELECT COALESCE(SUM(amount), 0) FROM payments WHERE customer_id = c.id), 2) AS balance
-         FROM customers c WHERE c.type = 'account' AND c.active = 1`,
+         FROM customers c WHERE c.active = 1`,
       )
       .all();
 
@@ -124,6 +124,9 @@ module.exports = function reportRoutes(db) {
         alerts.push({ level: 'warning', text: `${c.name} dépasse son plafond de crédit`, link: `#/clients/${c.id}` });
       }
     }
+    const combos = db
+      .prepare('SELECT COALESCE(SUM(loyalty_points), 0) AS total, COALESCE(SUM(loyalty_points >= ?), 0) AS redeemable FROM customers WHERE active = 1')
+      .get(settings.comboThreshold);
     const toReview = db.prepare('SELECT COUNT(*) AS n FROM customers WHERE needs_review = 1 AND active = 1').get().n;
     if (toReview) {
       alerts.push({
@@ -149,6 +152,7 @@ module.exports = function reportRoutes(db) {
       receivables: round(customers.reduce((t, c) => t + Math.max(0, c.balance), 0)),
       todayExpenses,
       toReview,
+      combos: { total: combos.total, value: round(combos.total * settings.comboValue), redeemable: combos.redeemable },
       alerts,
     });
   });

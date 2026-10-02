@@ -1,11 +1,11 @@
 {
-  "name": "Station service",
-  "short_name": "Station",
+  "name": "MTG Station",
+  "short_name": "MTG Station",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#f2f2f7",
-  "theme_color": "#f2f2f7",
+  "background_color": "#f5f5f7",
+  "theme_color": "#fafafc",
   "lang": "fr",
   "icons": [
     { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },

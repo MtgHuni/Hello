@@ -185,7 +185,7 @@ async function priceHistory(p) {
   openDialog((close) =>
     h(
       'div',
-      { class: 'dialog-body' },
+      { class: 'sheet dialog-body' },
       h('h2', {}, `Historique des prix — ${p.name}`),
       table(
         [

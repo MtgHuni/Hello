@@ -36,7 +36,7 @@ export async function renderAccount(page) {
   }
 
   function drawRequest(r) {
-    const startButton = button('Faire le plein', () => startFill(), { variant: 'large block', iconName: 'pump' });
+    const startButton = button('Faire le plein', () => startFill(), { variant: 'large block', iconName: 'pump', 'data-lnav': 'Faire le plein' });
     if (!r) return setContent(fillHost, startButton);
 
     if (r.status === 'pending') {

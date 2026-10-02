@@ -101,8 +101,8 @@ function renderOpenShift(page, ctx, shift) {
     })),
   ].sort((a, b) => b.at.localeCompare(a.at));
 
-  const quick = (label, iconName, color, onClick, primary) =>
-    h('button', { type: 'button', class: `quick-action ${primary ? 'primary' : ''}`, onClick }, h('span', { class: 'qa-icon', style: primary ? '' : `background:${color}` }, icon(iconName)), label);
+  const quick = (label, iconName, onClick, primary) =>
+    h('button', { type: 'button', class: `quick-action ${primary ? 'primary' : ''}`, onClick, 'data-lnav': primary ? label : null }, h('span', { class: 'qa-icon' }, icon(iconName)), label);
 
   setContent(page, 
     pageHeader('Poste en cours', `Ouvert à ${fmt.time(shift.opened_at)} · ${pumps}`, shiftBadge('open')),
@@ -113,16 +113,16 @@ function renderOpenShift(page, ctx, shift) {
       h(
         'div',
         { class: 'quick-actions' },
-        quick('Vente client', 'plus', '', () => addSale(ctx, shift, reload), true),
-        quick('Règlement', 'cash', 'var(--green)', () => addPayment(shift, reload)),
-        quick('Dépense', 'wallet', 'var(--orange)', () => addExpense(ctx, shift, reload)),
+        quick('Vente client', 'plus', () => addSale(ctx, shift, reload), true),
+        quick('Règlement', 'cash', () => addPayment(shift, reload)),
+        quick('Dépense', 'wallet', () => addExpense(ctx, shift, reload)),
       ),
       h(
         'div',
         { class: 'grid kpi-row' },
-        kpi('Crédit accordé', fmt.money(shift.credit_amount)),
-        kpi('Règlements reçus', fmt.money(shift.payments_amount)),
-        kpi('Dépenses caisse', fmt.money(shift.expenses_amount)),
+        kpi('Crédit', fmt.money(shift.credit_amount)),
+        kpi('Règlements', fmt.money(shift.payments_amount)),
+        kpi('Dépenses', fmt.money(shift.expenses_amount)),
       ),
       card(
         cardHeader('Opérations du poste', 'Les ventes payées normalement n’ont pas besoin d’être saisies : les index s’en chargent.'),
@@ -224,7 +224,7 @@ function requestQueue(shift, reload) {
   function draw(rows) {
     if (!rows.length) return host.replaceChildren();
     setContent(host, 
-      h('div', { class: 'queue-title' }, h('span', { class: 'pulse' }), `Demandes des clients (${rows.length})`),
+      h('h2', { class: 'queue-title' }, h('span', { class: 'pulse', 'aria-hidden': 'true' }), `Demandes des clients (${rows.length})`),
       ...rows.map((r) => {
         const price = priceOf(r.product_id, r.customer_type) ?? r.current_price;
         const liters = r.liters ?? r.amount / price;

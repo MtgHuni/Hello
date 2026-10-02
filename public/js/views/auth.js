@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { h, field, readForm, setContent } from '../ui.js';
-import { icon } from '../icons.js';
+import { brandMark } from '../icons.js';
 
 function authForm({ title, lead, fields, submitLabel, onSubmit, wide, footer }) {
   const error = h('p', { class: 'form-error', hidden: true, role: 'alert' });
@@ -27,7 +27,7 @@ function authForm({ title, lead, fields, submitLabel, onSubmit, wide, footer }) 
   return h(
     'div',
     { class: 'auth' },
-    h('div', { class: `auth-card glass ${wide ? 'wide' : ''}` }, h('div', { class: 'app-icon lg' }, icon('pump')), h('h1', {}, title), h('p', { class: 'lead' }, lead), form, footer ? h('p', { class: 'muted', style: 'text-align:center;margin-top:20px;font-size:15px' }, footer) : null),
+    h('div', { class: `auth-card ${wide ? 'wide' : ''}` }, brandMark(), h('h1', {}, title), h('p', { class: 'lead' }, lead), form, footer ? h('p', { class: 'auth-footer' }, footer) : null),
   );
 }
 
