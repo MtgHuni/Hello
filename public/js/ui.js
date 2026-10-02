@@ -309,7 +309,7 @@ function enableSwipeToDismiss(sheet, handle, close) {
     if (startY === null) return;
     startY = null;
     sheet.classList.remove('dragging');
-    sheet.style.transition = 'transform 0.45s var(--spring)';
+    sheet.style.transition = 'transform 0.45s var(--ease)';
     if (dy > 110) {
       sheet.style.transform = 'translateY(110%)';
       setTimeout(close, 200);
