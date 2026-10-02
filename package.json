@@ -1,12 +1,16 @@
 {
-  "name": "hello",
+  "name": "station-service",
   "version": "1.0.0",
-  "description": "Application web de liste de tâches (Node.js + Express)",
+  "description": "Application web de gestion de station-service (gasoil, essence) : postes, cuves, clients, rapports",
   "main": "server.js",
+  "private": true,
+  "engines": {
+    "node": ">=22.13"
+  },
   "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js",
-    "test": "node --test"
+    "start": "node --disable-warning=ExperimentalWarning server.js",
+    "dev": "node --disable-warning=ExperimentalWarning --watch server.js",
+    "test": "node --disable-warning=ExperimentalWarning --test"
   },
   "repository": {
     "type": "git",

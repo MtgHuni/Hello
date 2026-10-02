@@ -1,9 +1,11 @@
 const path = require('node:path');
-const { createApp } = require('./app');
+const { createApp } = require('./src/app');
 
 const PORT = process.env.PORT || 3000;
-const app = createApp({ dataFile: path.join(__dirname, 'data', 'tasks.json') });
+const DB_FILE = process.env.DB_FILE || path.join(__dirname, 'data', 'station.db');
+
+const app = createApp({ dbFile: DB_FILE });
 
 app.listen(PORT, () => {
-  console.log(`Serveur démarré sur http://localhost:${PORT}`);
+  console.log(`Station service démarrée sur http://localhost:${PORT}`);
 });
