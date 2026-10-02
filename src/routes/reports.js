@@ -127,6 +127,23 @@ module.exports = function reportRoutes(db) {
     const combos = db
       .prepare('SELECT COALESCE(SUM(loyalty_points), 0) AS total, COALESCE(SUM(loyalty_points >= ?), 0) AS redeemable FROM customers WHERE active = 1')
       .get(settings.comboThreshold);
+    // Cancellations asked by attendants, waiting for the manager.
+    const cancellations = db
+      .prepare(
+        `SELECT shift_id, COUNT(*) AS n FROM (
+           SELECT shift_id FROM sales WHERE cancel_requested_at IS NOT NULL
+           UNION ALL SELECT shift_id FROM payments WHERE cancel_requested_at IS NOT NULL
+           UNION ALL SELECT shift_id FROM expenses WHERE cancel_requested_at IS NOT NULL)
+         GROUP BY shift_id ORDER BY shift_id`,
+      )
+      .all();
+    for (const c of cancellations) {
+      alerts.push({
+        level: 'serious',
+        text: `Poste n°${c.shift_id} : ${c.n > 1 ? `${c.n} annulations demandées` : '1 annulation demandée'} par le pompiste, à valider`,
+        link: `#/postes/${c.shift_id}`,
+      });
+    }
     const toReview = db.prepare('SELECT COUNT(*) AS n FROM customers WHERE needs_review = 1 AND active = 1').get().n;
     if (toReview) {
       alerts.push({

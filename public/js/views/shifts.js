@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { h, fmt, pageHeader, card, cardHeader, table, segmented, shiftBadge, varianceCell, kpi, formDialog, toast, button, badge, setContent } from '../ui.js';
+import { h, fmt, pageHeader, card, cardHeader, table, segmented, shiftBadge, varianceCell, kpi, formDialog, confirmDialog, toast, button, badge, setContent } from '../ui.js';
 import { icon } from '../icons.js';
 
 let filter = 'closed';
@@ -80,7 +80,53 @@ export async function renderShiftDetail(page, ctx) {
           }, { iconName: 'check' })
         : null,
     ),
+    isManager ? cancellationRequests(shift, () => renderShiftDetail(page, ctx)) : null,
     shiftSummary(shift, ctx.state.settings.cashTolerance),
+  );
+}
+
+// Operations the attendant asked to cancel: they stay counted until the manager decides.
+function cancellationRequests(shift, reload) {
+  const items = [
+    ...shift.sales.map((x) => ({ x, kind: 'sales', title: `Vente · ${x.customer_name}`, detail: `${x.product_name} · ${fmt.liters(x.liters)}`, amount: x.amount })),
+    ...shift.payments.map((x) => ({ x, kind: 'payments', title: `Règlement · ${x.customer_name}`, detail: x.method, amount: x.amount })),
+    ...shift.expenses.map((x) => ({ x, kind: 'expenses', title: `Dépense · ${x.category}`, detail: x.description, amount: x.amount })),
+  ].filter((i) => i.x.cancel_requested_at);
+  if (!items.length) return null;
+  const decide = async (i, cancel) => {
+    if (cancel && !(await confirmDialog('Annuler cette opération ?', `${i.title} · ${fmt.money(i.amount)}. Elle sera retirée du poste et du compte du client.`, { confirmLabel: 'Annuler l’opération', danger: true }))) return;
+    try {
+      const url = `/shifts/${shift.id}/${i.kind}/${i.x.id}`;
+      if (cancel) await api.del(url);
+      else await api.post(`${url}/keep`);
+      toast(cancel ? 'Opération annulée.' : 'Opération conservée.');
+      reload();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  };
+  return card(
+    cardHeader('Annulations à valider', `${items.length > 1 ? `${items.length} opérations comptent` : 'Cette opération compte'} encore dans le poste tant que vous n’avez pas décidé.`),
+    items.map((i) =>
+      h(
+        'div',
+        { class: 'nozzle-row' },
+        h(
+          'div',
+          { class: 'grow' },
+          h('div', { style: 'font-weight:600' }, i.title),
+          h('div', { class: 'muted small' }, `${fmt.time(i.x.created_at)} · ${i.detail} · demandé à ${fmt.time(i.x.cancel_requested_at)}`),
+          i.x.cancel_reason ? h('div', { class: 'small', style: 'margin-top:2px' }, `Raison : ${i.x.cancel_reason}`) : null,
+        ),
+        h('div', { class: 'num', style: 'font-weight:600' }, fmt.money(i.amount)),
+        h(
+          'div',
+          { class: 'row no-print', style: 'gap:6px' },
+          button('Garder', () => decide(i, false), { variant: 'secondary sm' }),
+          button('Annuler', () => decide(i, true), { variant: 'destructive sm' }),
+        ),
+      ),
+    ),
   );
 }
 

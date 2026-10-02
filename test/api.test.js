@@ -165,8 +165,22 @@ test('les combos d’une vente à crédit arrivent quand elle est entièrement p
   assert.strictEqual(marie.customer.loyalty_points, 60);
   assert.strictEqual(marie.combos.pending, 0);
 
-  // Cancelling that payment takes the combos back.
-  await pompiste('DELETE', `/api/shifts/${ctx.shift.id}/payments/${pay.data.id}`);
+  // Cancelling: the attendant only asks, the manager decides.
+  const url = `/api/shifts/${ctx.shift.id}/payments/${pay.data.id}`;
+  assert.strictEqual((await pompiste('DELETE', url)).status, 403);
+  assert.strictEqual((await pompiste('POST', `${url}/cancel`, { reason: 'Erreur de montant' })).status, 202);
+  assert.strictEqual((await pompiste('POST', `${url}/cancel`)).status, 409, 'déjà demandée');
+  assert.strictEqual((await customer(ctx.person.id)).customer.loyalty_points, 60, 'toujours compté en attendant le gérant');
+  let detail = (await gerant('GET', `/api/shifts/${ctx.shift.id}`)).data;
+  assert.strictEqual(detail.pending_cancellations, 1);
+  assert.strictEqual(detail.payments.find((p) => p.id === pay.data.id).cancel_reason, 'Erreur de montant');
+  assert.ok((await gerant('GET', '/api/dashboard')).data.alerts.some((a) => a.text.includes('annulation demandée')));
+
+  // Refused: the payment stays; asked again and accepted: it goes, with the combos.
+  assert.strictEqual((await gerant('POST', `${url}/keep`)).status, 204);
+  assert.strictEqual((await gerant('GET', `/api/shifts/${ctx.shift.id}`)).data.pending_cancellations, 0);
+  await pompiste('POST', `${url}/cancel`);
+  assert.strictEqual((await gerant('DELETE', url)).status, 204);
   assert.strictEqual((await customer(ctx.person.id)).customer.loyalty_points, 20);
   await pompiste('POST', `/api/shifts/${ctx.shift.id}/payments`, { customerId: ctx.person.id, amount: 28 });
 });
@@ -188,15 +202,27 @@ test('échange de combos contre du carburant, déduit de la caisse', async () =>
   assert.strictEqual(exchange.data.points, 0);
   assert.strictEqual((await customer(ctx.person.id)).customer.loyalty_points, 20);
 
-  // 10 L at 1,20 = 12 $ + 28 $ received − 2 $ in combos = 38 $.
+  // An expense entered by mistake: its cancellation is asked, still pending at closing time.
+  const expense = await pompiste('POST', `/api/shifts/${ctx.shift.id}/expenses`, { category: 'Autre', amount: 3, description: 'Erreur' });
+  await pompiste('POST', `/api/shifts/${ctx.shift.id}/expenses/${expense.data.id}/cancel`);
+
+  // 10 L at 1,20 = 12 $ + 28 $ received − 2 $ in combos − 3 $ expense = 35 $.
   const closed = await pompiste('POST', `/api/shifts/${ctx.shift.id}/close`, {
     readings: [{ nozzleId: nozzle.nozzle_id, endMeter: 510 }],
     cash: 38,
   });
   assert.strictEqual(closed.data.combo_amount, 2);
   assert.strictEqual(closed.data.payments_amount, 28);
-  assert.strictEqual(closed.data.expected_amount, 38);
-  assert.strictEqual(closed.data.variance, 0);
+  assert.strictEqual(closed.data.expected_amount, 35);
+  assert.strictEqual(closed.data.variance, 3);
+
+  // The manager decides before validating; accepting it redoes the reconciliation.
+  assert.strictEqual((await gerant('POST', `/api/shifts/${ctx.shift.id}/validate`, {})).status, 409);
+  assert.strictEqual((await gerant('DELETE', `/api/shifts/${ctx.shift.id}/expenses/${expense.data.id}`)).status, 204);
+  const after = (await gerant('GET', `/api/shifts/${ctx.shift.id}`)).data;
+  assert.strictEqual(after.expected_amount, 38);
+  assert.strictEqual(after.variance, 0);
+  assert.strictEqual(after.total_amount, 12);
   await gerant('PUT', '/api/settings', { comboThreshold: 100 });
 });
 

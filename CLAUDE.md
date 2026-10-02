@@ -45,6 +45,11 @@ Requires Node ≥ 22.13 (built-in `node:sqlite`, hence `--disable-warning=Experi
 - Shifts (`src/routes/shifts.js`):
   - opening snapshots meter indexes and prices into `shift_readings` (prices are frozen for the shift);
   - closing reconciles litres from the indexes against cash: `expected = sold + subscriber surcharge − credit − combos + payments collected − cash expenses`.
+- Cancelling an operation (sale, payment, expense):
+  - the attendant only asks: `POST /shifts/:id/:kind/:itemId/cancel`, which sets `cancel_requested_*`;
+  - the manager decides: `DELETE` cancels it, `POST …/keep` keeps it;
+  - `reconcile()` recomputes a closed shift after a cancellation;
+  - validating a shift is refused while a cancellation is pending.
 - Customer purchase requests (`src/routes/requests.js`): pending for 30 min. Attendants poll `/requests/pending` (every 4 s on the client); a request becomes a sale only when confirmed.
 
 **Frontend** (`public/`, no framework, native ES modules):
@@ -56,7 +61,9 @@ Requires Node ≥ 22.13 (built-in `node:sqlite`, hence `--disable-warning=Experi
   - `fmt` (fr-FR money/litres/dates; `parseServerDate` handles SQLite UTC timestamps and date-only strings);
   - `formDialog` (iOS-style sheet; field types include `segment`, `checkbox` switch, `select`, `hidden`, `list` datalist), `confirmDialog`, `actionSheet`, `segmented`, `toast`.
 - `public/js/api.js` throws errors carrying `.status` and `.code`.
-- Design target: Apple iOS/macOS 26 "Liquid Glass". Tokens, glass materials, spring easings and dark mode are in `public/css/app.css`; reuse its existing classes rather than inline styles where possible.
+- Design: the apple.com web language, personalised as MTG Station (chosen by the user). The tokens and rules are in `DESIGN.md`, the product facts in `PRODUCT.md`, and the direction in `.impeccable/surfaces/`. The Impeccable design skill is installed in `.claude/skills/impeccable`.
+- CSS: tokens, components and dark mode are in `public/css/app.css`; reuse its classes rather than inline styles. Inter is self-hosted in `public/fonts/`.
+- Sheets are flex columns: `.sheet-body` scrolls (`min-height: 0`) so that `.sheet-footer` stays visible. Use `dvh` units, because iOS Safari's `vh` includes its toolbars.
 - The attendant screen is used on a phone with a queue of customers waiting, so keep it to as few taps as possible.
 
 ## Deployment

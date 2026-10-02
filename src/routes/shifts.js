@@ -42,6 +42,7 @@ module.exports = function shiftRoutes(db) {
       )
       .all(id);
     shift.expenses = db.prepare('SELECT * FROM expenses WHERE shift_id = ? ORDER BY id').all(id);
+    shift.pending_cancellations = pendingCancellations(id);
     if (shift.status === 'open') {
       shift.credit_amount = round(shift.sales.filter((s) => s.kind === 'credit').reduce((t, s) => t + s.amount, 0));
       shift.combo_amount = round(shift.sales.filter((s) => s.kind === 'combo').reduce((t, s) => t + s.amount, 0));
@@ -144,17 +145,6 @@ module.exports = function shiftRoutes(db) {
     res.status(201).json(createSale(db, shift, { ...(req.body || {}), source: 'attendant' }));
   });
 
-  router.delete('/shifts/:id/sales/:saleId', staff, (req, res) => {
-    const shift = getOwnShift(req);
-    const sale = db.prepare('SELECT * FROM sales WHERE id = ? AND shift_id = ?').get(req.params.saleId, shift.id);
-    if (!sale) fail(404, 'Vente introuvable.');
-    transaction(db, () => {
-      db.prepare('DELETE FROM sales WHERE id = ?').run(sale.id);
-      refreshCustomer(db, sale.customer_id);
-    });
-    res.status(204).end();
-  });
-
   // A customer settling their account at the pump: the money goes into the shift's cash.
   router.post('/shifts/:id/payments', staff, (req, res) => {
     const shift = getOwnShift(req);
@@ -173,17 +163,6 @@ module.exports = function shiftRoutes(db) {
     res.status(201).json({ id: Number(id), balance: customerBalance(db, customer.id) });
   });
 
-  router.delete('/shifts/:id/payments/:paymentId', staff, (req, res) => {
-    const shift = getOwnShift(req);
-    const payment = db.prepare('SELECT * FROM payments WHERE id = ? AND shift_id = ?').get(req.params.paymentId, shift.id);
-    if (!payment) fail(404, 'Règlement introuvable.');
-    transaction(db, () => {
-      db.prepare('DELETE FROM payments WHERE id = ?').run(payment.id);
-      refreshCustomer(db, payment.customer_id);
-    });
-    res.status(204).end();
-  });
-
   // Small expense paid from the shift's cash (deducted from the amount to hand over).
   router.post('/shifts/:id/expenses', staff, (req, res) => {
     const shift = getOwnShift(req);
@@ -200,12 +179,86 @@ module.exports = function shiftRoutes(db) {
     res.status(201).json(db.prepare('SELECT * FROM expenses WHERE id = ?').get(id));
   });
 
-  router.delete('/shifts/:id/expenses/:expenseId', staff, (req, res) => {
+  // ---- Cancelling an operation: the attendant asks, the manager decides ----
+
+  const CANCELLABLE = {
+    sales: { table: 'sales', missing: 'Vente introuvable.' },
+    payments: { table: 'payments', missing: 'Règlement introuvable.' },
+    expenses: { table: 'expenses', missing: 'Dépense introuvable.' },
+  };
+
+  function cancellable(req, shift) {
+    const k = CANCELLABLE[req.params.kind];
+    if (!k) fail(404, 'Opération introuvable.');
+    const item = db.prepare(`SELECT * FROM ${k.table} WHERE id = ? AND shift_id = ?`).get(req.params.itemId, shift.id);
+    if (!item) fail(404, k.missing);
+    return { table: k.table, item };
+  }
+
+  // The operation stays counted until the manager validates its cancellation.
+  router.post('/shifts/:id/:kind/:itemId/cancel', staff, (req, res) => {
     const shift = getOwnShift(req);
-    const r = db.prepare('DELETE FROM expenses WHERE id = ? AND shift_id = ?').run(req.params.expenseId, shift.id);
-    if (!r.changes) fail(404, 'Dépense introuvable.');
+    const { table, item } = cancellable(req, shift);
+    if (item.cancel_requested_at) fail(409, 'L’annulation a déjà été demandée au gérant.');
+    const reason = str(req.body?.reason, 'La raison', { required: false, max: 200 });
+    db.prepare(`UPDATE ${table} SET cancel_requested_at = datetime('now'), cancel_requested_by = ?, cancel_reason = ? WHERE id = ?`).run(
+      req.user.id,
+      reason,
+      item.id,
+    );
+    res.status(202).json({ pending: true });
+  });
+
+  // Manager: cancels the operation (whether or not it was asked), also after the shift is closed.
+  router.delete('/shifts/:id/:kind/:itemId', requireRole('manager'), (req, res) => {
+    const shift = db.prepare('SELECT * FROM shifts WHERE id = ?').get(req.params.id);
+    if (!shift) fail(404, 'Poste introuvable.');
+    if (shift.status === 'validated') fail(409, 'Ce poste est déjà validé : il ne peut plus être modifié.');
+    const { table, item } = cancellable(req, shift);
+    transaction(db, () => {
+      db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(item.id);
+      if (item.customer_id) refreshCustomer(db, item.customer_id);
+      if (shift.status === 'closed') reconcile(shift.id);
+    });
     res.status(204).end();
   });
+
+  // Manager: refuses the cancellation, the operation stays.
+  router.post('/shifts/:id/:kind/:itemId/keep', requireRole('manager'), (req, res) => {
+    const shift = db.prepare('SELECT * FROM shifts WHERE id = ?').get(req.params.id);
+    if (!shift) fail(404, 'Poste introuvable.');
+    const { table, item } = cancellable(req, shift);
+    db.prepare(`UPDATE ${table} SET cancel_requested_at = NULL, cancel_requested_by = NULL, cancel_reason = NULL WHERE id = ?`).run(item.id);
+    res.status(204).end();
+  });
+
+  // Amounts of a closed shift, from its meter readings and its operations.
+  function reconcile(shiftId) {
+    const shift = db.prepare('SELECT * FROM shifts WHERE id = ?').get(shiftId);
+    const readings = db.prepare('SELECT * FROM shift_readings WHERE shift_id = ?').all(shiftId);
+    const sales = db.prepare('SELECT * FROM sales WHERE shift_id = ?').all(shiftId);
+    // Subscribers pay a higher price than the pump price used for the meters.
+    const unitPrices = new Map(readings.map((r) => [r.nozzle_id, r.unit_price]));
+    const surcharge = round(sales.reduce((t, s) => t + (s.amount - s.liters * unitPrices.get(s.nozzle_id)), 0));
+    const totalAmount = round(readings.reduce((t, r) => t + (r.amount || 0), 0) + surcharge);
+    const creditAmount = round(sales.filter((s) => s.kind === 'credit').reduce((t, s) => t + s.amount, 0));
+    const comboAmount = round(sales.filter((s) => s.kind === 'combo').reduce((t, s) => t + s.amount, 0));
+    const paymentsAmount = round(db.prepare('SELECT COALESCE(SUM(amount), 0) AS v FROM payments WHERE shift_id = ?').get(shiftId).v);
+    const expensesAmount = round(db.prepare('SELECT COALESCE(SUM(amount), 0) AS v FROM expenses WHERE shift_id = ?').get(shiftId).v);
+    // To hand over = fuel sold − sold on credit − exchanged for combos
+    //               + account payments received − expenses paid from the till.
+    const expected = round(totalAmount - creditAmount - comboAmount + paymentsAmount - expensesAmount);
+    db.prepare(
+      `UPDATE shifts SET total_amount = ?, credit_amount = ?, combo_amount = ?, payments_amount = ?, expenses_amount = ?, expected_amount = ?, variance = ?
+       WHERE id = ?`,
+    ).run(totalAmount, creditAmount, comboAmount, paymentsAmount, expensesAmount, expected, round(shift.cash + shift.card - expected), shiftId);
+  }
+
+  const pendingCancellations = (shiftId) =>
+    ['sales', 'payments', 'expenses'].reduce(
+      (n, table) => n + db.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE shift_id = ? AND cancel_requested_at IS NOT NULL`).get(shiftId).n,
+      0,
+    );
 
   // Closing = reconciliation: litres from meters, expected money vs declared money,
   // then meters and tank book stocks move forward.
@@ -227,7 +280,6 @@ module.exports = function shiftRoutes(db) {
       const sales = db.prepare('SELECT * FROM sales WHERE shift_id = ?').all(shift.id);
 
       let totalLiters = 0;
-      let totalAmount = 0;
       for (const r of readings) {
         const end = num(ends.get(r.nozzle_id), `L'index de fin (${r.nozzle_name})`, { max: 1e12 });
         if (end < r.start_meter) {
@@ -238,29 +290,15 @@ module.exports = function shiftRoutes(db) {
         if (customerLiters > liters + 0.001) {
           fail(400, `${r.nozzle_name} : les ventes clients (${round(customerLiters)} L) dépassent les litres du compteur (${liters} L).`);
         }
-        const amount = round(liters * r.unit_price);
         totalLiters += liters;
-        totalAmount += amount;
-        db.prepare('UPDATE shift_readings SET end_meter = ?, liters = ?, amount = ? WHERE id = ?').run(end, liters, amount, r.id);
+        db.prepare('UPDATE shift_readings SET end_meter = ?, liters = ?, amount = ? WHERE id = ?').run(end, liters, round(liters * r.unit_price), r.id);
         db.prepare('UPDATE nozzles SET meter = ? WHERE id = ?').run(end, r.nozzle_id);
         db.prepare('UPDATE tanks SET book_stock = ROUND(book_stock - ?, 2) WHERE id = ?').run(liters, r.tank_id);
       }
-      // Subscribers pay a higher price than the pump price used for the meters.
-      const unitPrices = new Map(readings.map((r) => [r.nozzle_id, r.unit_price]));
-      const surcharge = round(sales.reduce((t, s) => t + (s.amount - s.liters * unitPrices.get(s.nozzle_id)), 0));
-      totalAmount += surcharge;
-      const creditAmount = round(sales.filter((s) => s.kind === 'credit').reduce((t, s) => t + s.amount, 0));
-      const comboAmount = round(sales.filter((s) => s.kind === 'combo').reduce((t, s) => t + s.amount, 0));
-      const paymentsAmount = round(db.prepare('SELECT COALESCE(SUM(amount), 0) AS v FROM payments WHERE shift_id = ?').get(shift.id).v);
-      const expensesAmount = round(db.prepare('SELECT COALESCE(SUM(amount), 0) AS v FROM expenses WHERE shift_id = ?').get(shift.id).v);
-      // To hand over = fuel sold − sold on credit − exchanged for combos
-      //               + account payments received − expenses paid from the till.
-      const expected = round(totalAmount - creditAmount - comboAmount + paymentsAmount - expensesAmount);
       db.prepare(
-        `UPDATE shifts SET status = 'closed', closed_at = datetime('now'), cash = ?, card = ?, total_liters = ?,
-           total_amount = ?, credit_amount = ?, combo_amount = ?, payments_amount = ?, expenses_amount = ?, expected_amount = ?, variance = ?, notes = ?
-         WHERE id = ?`,
-      ).run(cash, card, round(totalLiters), round(totalAmount), creditAmount, comboAmount, paymentsAmount, expensesAmount, expected, round(cash + card - expected), notes, shift.id);
+        "UPDATE shifts SET status = 'closed', closed_at = datetime('now'), cash = ?, card = ?, total_liters = ?, notes = ? WHERE id = ?",
+      ).run(cash, card, round(totalLiters), notes, shift.id);
+      reconcile(shift.id);
     });
     res.json(shiftDetail(shift.id));
   });
@@ -269,6 +307,8 @@ module.exports = function shiftRoutes(db) {
     const shift = db.prepare('SELECT * FROM shifts WHERE id = ?').get(req.params.id);
     if (!shift) fail(404, 'Poste introuvable.');
     if (shift.status !== 'closed') fail(409, 'Seul un poste clôturé peut être validé.');
+    const pending = pendingCancellations(shift.id);
+    if (pending) fail(409, `Décidez d’abord ${pending > 1 ? `des ${pending} annulations demandées` : 'de l’annulation demandée'} sur ce poste.`);
     const comment = str(req.body?.comment, 'Le commentaire', { required: false, max: 500 });
     db.prepare(
       "UPDATE shifts SET status = 'validated', validated_by = ?, validated_at = datetime('now'), manager_comment = ? WHERE id = ?",

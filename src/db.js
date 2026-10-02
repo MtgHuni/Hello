@@ -222,7 +222,24 @@ const MIGRATIONS = [
   ['payments', 'shift_id', 'INTEGER REFERENCES shifts(id)'],
   ['shifts', 'payments_amount', 'REAL'],
   ['shifts', 'expenses_amount', 'REAL'],
+  // Cancellation asked by the attendant, pending the manager's decision.
+  ['sales', 'cancel_requested_at', 'TEXT'],
+  ['sales', 'cancel_requested_by', 'INTEGER REFERENCES users(id)'],
+  ['sales', 'cancel_reason', 'TEXT'],
+  ['payments', 'cancel_requested_at', 'TEXT'],
+  ['payments', 'cancel_requested_by', 'INTEGER REFERENCES users(id)'],
+  ['payments', 'cancel_reason', 'TEXT'],
+  ['expenses', 'cancel_requested_at', 'TEXT'],
+  ['expenses', 'cancel_requested_by', 'INTEGER REFERENCES users(id)'],
+  ['expenses', 'cancel_reason', 'TEXT'],
 ];
+
+function addMissingColumns(db) {
+  for (const [table, column, definition] of MIGRATIONS) {
+    const columns = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+    if (!columns.includes(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
 
 const EXPENSE_CATEGORIES = [
   'Salaires',
@@ -319,11 +336,9 @@ function openDb(file) {
   const db = new DatabaseSync(file);
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
   db.exec(SCHEMA);
-  for (const [table, column, definition] of MIGRATIONS) {
-    const columns = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
-    if (!columns.includes(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
-  }
+  addMissingColumns(db);
   const salesRebuilt = migrateSalesKind(db);
+  if (salesRebuilt) addMissingColumns(db); // the rebuilt table only has the older columns
   migrateRequests(db);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_payments_shift ON payments(shift_id);
     CREATE INDEX IF NOT EXISTS idx_expenses_shift ON expenses(shift_id);

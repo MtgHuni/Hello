@@ -63,6 +63,32 @@ async function renderStart(page, ctx) {
 }
 
 // ---------- 2. During the shift ----------
+
+// The attendant asks, the manager decides: the operation stays counted until then.
+// The manager, on their own pump, cancels directly.
+async function cancelEntry(ctx, x, reload) {
+  try {
+    if (ctx.state.user.role === 'manager') {
+      if (!(await confirmDialog(`${x.remove.label} ?`, `${x.title} · ${x.amount}`, { confirmLabel: 'Annuler l’opération', danger: true }))) return;
+      await api.del(x.remove.url);
+      toast('Opération annulée.');
+    } else {
+      const ok = await formDialog({
+        title: 'Demander l’annulation',
+        intro: `${x.title} · ${x.amount}. Le gérant doit valider l’annulation : l’opération reste comptée jusque-là.`,
+        grid: false,
+        fields: [{ name: 'reason', label: 'Raison', placeholder: 'Erreur de saisie, client parti…' }],
+        submitLabel: 'Envoyer au gérant',
+        onSubmit: (d) => api.post(`${x.remove.url}/cancel`, d),
+      });
+      if (!ok) return;
+      toast('Demande envoyée au gérant.');
+    }
+    reload();
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+}
 function renderOpenShift(page, ctx, shift) {
   const pumps = [...new Set(shift.readings.map((r) => r.pump_name))].join(', ');
   const reload = () => renderAttendant(page, ctx);
@@ -81,7 +107,7 @@ function renderOpenShift(page, ctx, shift) {
         s.source === 'customer' ? badge('Demande client') : null,
       ),
       amount: fmt.money(s.amount),
-      remove: { url: `/shifts/${shift.id}/sales/${s.id}`, label: 'Annuler cette vente' },
+      remove: { url: `/shifts/${shift.id}/sales/${s.id}`, label: 'Annuler cette vente', pending: !!s.cancel_requested_at },
     })),
     ...shift.payments.map((p) => ({
       at: p.created_at,
@@ -89,7 +115,7 @@ function renderOpenShift(page, ctx, shift) {
       detail: `Règlement ${p.method}${p.reference ? ` · ${p.reference}` : ''}`,
       tag: badge('Encaissé', 'good'),
       amount: `+${fmt.money(p.amount)}`,
-      remove: { url: `/shifts/${shift.id}/payments/${p.id}`, label: 'Annuler ce règlement' },
+      remove: { url: `/shifts/${shift.id}/payments/${p.id}`, label: 'Annuler ce règlement', pending: !!p.cancel_requested_at },
     })),
     ...shift.expenses.map((e) => ({
       at: e.created_at,
@@ -97,7 +123,7 @@ function renderOpenShift(page, ctx, shift) {
       detail: `${e.category}${e.beneficiary ? ` · ${e.beneficiary}` : ''}`,
       tag: badge('Dépense', 'warning'),
       amount: `−${fmt.money(e.amount)}`,
-      remove: { url: `/shifts/${shift.id}/expenses/${e.id}`, label: 'Annuler cette dépense' },
+      remove: { url: `/shifts/${shift.id}/expenses/${e.id}`, label: 'Annuler cette dépense', pending: !!e.cancel_requested_at },
     })),
   ].sort((a, b) => b.at.localeCompare(a.at));
 
@@ -139,24 +165,9 @@ function renderOpenShift(page, ctx, shift) {
                   h('div', { style: 'margin-top:4px' }, x.tag),
                 ),
                 h('div', { class: 'num', style: 'font-weight:600' }, x.amount),
-                h(
-                  'button',
-                  {
-                    class: 'btn danger sm',
-                    'aria-label': x.remove.label,
-                    title: x.remove.label,
-                    onClick: async () => {
-                      if (!(await confirmDialog(`${x.remove.label} ?`, `${x.title} · ${x.amount}`, { confirmLabel: 'Annuler l’opération', danger: true }))) return;
-                      try {
-                        await api.del(x.remove.url);
-                        reload();
-                      } catch (err) {
-                        toast(err.message, 'error');
-                      }
-                    },
-                  },
-                  icon('trash'),
-                ),
+                x.remove.pending
+                  ? badge('Annulation demandée', 'warning')
+                  : h('button', { class: 'btn danger sm', 'aria-label': x.remove.label, title: x.remove.label, onClick: () => cancelEntry(ctx, x, reload) }, icon('trash')),
               ),
             )
           : h('p', { class: 'muted' }, 'Aucune opération pour le moment.'),
