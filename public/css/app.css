@@ -837,7 +837,7 @@ dialog.action-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; 
 .action-group button.cancel { font-weight: 600; }
 
 /* ---------- Banner notification ---------- */
-.toasts { position: fixed; bottom: max(20px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); z-index: 100; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; width: max-content; max-width: calc(100vw - 24px); }
+.toasts { position: fixed; top: calc(env(safe-area-inset-top, 0px) + var(--lnav-h) + 8px); left: 50%; transform: translateX(-50%); z-index: 100; display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; width: max-content; max-width: calc(100vw - 24px); }
 .toast {
   display: flex;
   align-items: center;
@@ -1010,8 +1010,8 @@ html[data-nav='fade']::view-transition-new(page) { animation: fade-up 0.5s var(-
 @keyframes modal-out { to { opacity: 0; transform: translateY(12px); } }
 @keyframes sheet-in { from { transform: translateY(110%); } }
 @keyframes sheet-out { to { transform: translateY(110%); } }
-@keyframes banner-in { from { opacity: 0; transform: translateY(120%); } }
-@keyframes banner-out { to { opacity: 0; transform: translateY(120%); } }
+@keyframes banner-in { from { opacity: 0; transform: translateY(-40%); } }
+@keyframes banner-out { to { opacity: 0; transform: translateY(-40%); } }
 @keyframes shake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
 @keyframes push-in { from { opacity: 0; transform: translateX(24%); } }
 @keyframes pop-back-in { from { opacity: 0; transform: translateX(-16%); } }
