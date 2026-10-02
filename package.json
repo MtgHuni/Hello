@@ -1,0 +1,19 @@
+{
+  "name": "hello",
+  "version": "1.0.0",
+  "description": "Application web de liste de tâches (Node.js + Express)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MtgHuni/Hello.git"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}

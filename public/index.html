@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mes tâches</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="card">
+    <h1>Mes tâches</h1>
+
+    <form id="task-form">
+      <input id="task-input" type="text" placeholder="Nouvelle tâche…" autocomplete="off" required>
+      <button type="submit">Ajouter</button>
+    </form>
+
+    <p id="error" class="error" hidden></p>
+
+    <ul id="task-list"></ul>
+
+    <footer>
+      <span id="counter"></span>
+      <a href="hello.html">Page hello</a>
+    </footer>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
