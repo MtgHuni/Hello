@@ -11,6 +11,10 @@ const PATHS = {
   logout: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
   plus: 'M12 5v14M5 12h14',
   close: 'M18 6 6 18M6 6l12 12',
+  wallet: 'M20 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2v-2M21 11h-5a2 2 0 0 0 0 4h5zM3 7h17',
+  cash: 'M2 6h20v12H2zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 9v.01M18 15v.01',
+  more: 'M5 12h.01M12 12h.01M19 12h.01',
+  userPlus: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM19 8v6M22 11h-6',
   chevron: 'M9 18l6-6-6-6',
   back: 'M15 18l-6-6 6-6',
   alert: 'M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z',
@@ -38,6 +42,20 @@ export function icon(name) {
   svg.setAttribute('aria-hidden', 'true');
   const path = document.createElementNS(ns, 'path');
   path.setAttribute('d', PATHS[name] || PATHS.info);
+  svg.append(path);
+  return svg;
+}
+
+// Station mark: a fuel drop, drawn filled so it holds at 16px.
+export function brandMark() {
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('class', 'brand-mark');
+  svg.setAttribute('aria-hidden', 'true');
+  const path = document.createElementNS(ns, 'path');
+  path.setAttribute('d', 'M12 2.5c.4 0 .7.2 1 .5 2.4 3 6 7.6 6 11.2A7 7 0 0 1 5 14.2C5 10.6 8.6 6 11 3c.3-.3.6-.5 1-.5zm-3.2 11.8a.9.9 0 0 0-1.8.1 5 5 0 0 0 4.2 4.9.9.9 0 1 0 .3-1.8 3.2 3.2 0 0 1-2.7-3.2z');
+  path.setAttribute('fill', 'currentColor');
   svg.append(path);
   return svg;
 }

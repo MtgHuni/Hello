@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { h, fmt, pageHeader, card, cardHeader, table, segmented, shiftBadge, varianceCell, kpi, formDialog, toast, button } from '../ui.js';
+import { h, fmt, pageHeader, card, cardHeader, table, segmented, shiftBadge, varianceCell, kpi, formDialog, confirmDialog, toast, button, badge, setContent } from '../ui.js';
 import { icon } from '../icons.js';
 
 let filter = 'closed';
@@ -8,7 +8,7 @@ export async function renderShifts(page, ctx) {
   const shifts = await api.get(`/shifts${filter === 'all' ? '' : `?status=${filter}`}`);
   const tol = ctx.state.settings.cashTolerance;
 
-  page.replaceChildren(
+  setContent(page, 
     pageHeader('Postes', 'Rapprochement des index et de la caisse, pompiste par pompiste.'),
     h(
       'section',
@@ -40,7 +40,7 @@ export async function renderShifts(page, ctx) {
           { label: 'Litres', align: 'right', render: (s) => (s.total_liters == null ? '—' : fmt.liters(s.total_liters)) },
           { label: 'Ventes', align: 'right', render: (s) => (s.total_amount == null ? '—' : fmt.money(s.total_amount)) },
           { label: 'Écart caisse', align: 'right', render: (s) => varianceCell(s.variance, tol) },
-          { label: 'Statut', render: (s) => shiftBadge(s.status) },
+          { label: 'Statut', render: (s) => h('span', { class: 'row', style: 'gap:6px;flex-wrap:nowrap' }, shiftBadge(s.status), s.over_limit_count ? badge('Crédit hors plafond', 'serious') : null) },
         ],
         shifts,
         {
@@ -56,7 +56,7 @@ export async function renderShiftDetail(page, ctx) {
   const shift = await api.get(`/shifts/${ctx.id}`);
   const isManager = ctx.state.user.role === 'manager';
   const backPath = isManager ? 'postes' : 'historique';
-  page.replaceChildren(
+  setContent(page, 
     h('a', { class: 'back no-print', href: `#/${backPath}` }, icon('back'), isManager ? 'Postes' : 'Historique'),
     pageHeader(
       `Poste n°${shift.id}`,
@@ -80,7 +80,53 @@ export async function renderShiftDetail(page, ctx) {
           }, { iconName: 'check' })
         : null,
     ),
+    isManager ? cancellationRequests(shift, () => renderShiftDetail(page, ctx)) : null,
     shiftSummary(shift, ctx.state.settings.cashTolerance),
+  );
+}
+
+// Operations the attendant asked to cancel: they stay counted until the manager decides.
+function cancellationRequests(shift, reload) {
+  const items = [
+    ...shift.sales.map((x) => ({ x, kind: 'sales', title: `Vente · ${x.customer_name}`, detail: `${x.product_name} · ${fmt.liters(x.liters)}`, amount: x.amount })),
+    ...shift.payments.map((x) => ({ x, kind: 'payments', title: `Règlement · ${x.customer_name}`, detail: x.method, amount: x.amount })),
+    ...shift.expenses.map((x) => ({ x, kind: 'expenses', title: `Dépense · ${x.category}`, detail: x.description, amount: x.amount })),
+  ].filter((i) => i.x.cancel_requested_at);
+  if (!items.length) return null;
+  const decide = async (i, cancel) => {
+    if (cancel && !(await confirmDialog('Annuler cette opération ?', `${i.title} · ${fmt.money(i.amount)}. Elle sera retirée du poste et du compte du client.`, { confirmLabel: 'Annuler l’opération', danger: true }))) return;
+    try {
+      const url = `/shifts/${shift.id}/${i.kind}/${i.x.id}`;
+      if (cancel) await api.del(url);
+      else await api.post(`${url}/keep`);
+      toast(cancel ? 'Opération annulée.' : 'Opération conservée.');
+      reload();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  };
+  return card(
+    cardHeader('Annulations à valider', `${items.length > 1 ? `${items.length} opérations comptent` : 'Cette opération compte'} encore dans le poste tant que vous n’avez pas décidé.`),
+    items.map((i) =>
+      h(
+        'div',
+        { class: 'nozzle-row' },
+        h(
+          'div',
+          { class: 'grow' },
+          h('div', { style: 'font-weight:600' }, i.title),
+          h('div', { class: 'muted small' }, `${fmt.time(i.x.created_at)} · ${i.detail} · demandé à ${fmt.time(i.x.cancel_requested_at)}`),
+          i.x.cancel_reason ? h('div', { class: 'small', style: 'margin-top:2px' }, `Raison : ${i.x.cancel_reason}`) : null,
+        ),
+        h('div', { class: 'num', style: 'font-weight:600' }, fmt.money(i.amount)),
+        h(
+          'div',
+          { class: 'row no-print', style: 'gap:6px' },
+          button('Garder', () => decide(i, false), { variant: 'secondary sm' }),
+          button('Annuler', () => decide(i, true), { variant: 'destructive sm' }),
+        ),
+      ),
+    ),
   );
 }
 
@@ -95,8 +141,8 @@ export function shiftSummary(shift, tolerance) {
           'div',
           { class: 'grid grid-4' },
           kpi('Ventes totales', fmt.money(shift.total_amount), fmt.liters(shift.total_liters)),
-          kpi('Crédit clients', fmt.money(shift.credit_amount), 'Non encaissé'),
-          kpi('À remettre', fmt.money(shift.expected_amount), `Déclaré : ${fmt.money(shift.cash + shift.card)}`),
+          kpi('Crédit clients', fmt.money(shift.credit_amount), shift.combo_amount ? `+ ${fmt.money(shift.combo_amount)} échangés en combos` : 'Non encaissé'),
+          kpi('À remettre', fmt.money(shift.expected_amount), [shift.payments_amount ? `+ ${fmt.money(shift.payments_amount)} règlements` : null, shift.expenses_amount ? `− ${fmt.money(shift.expenses_amount)} dépenses` : null].filter(Boolean).join(' · ') || `Déclaré : ${fmt.money(shift.cash + shift.card)}`),
           kpi('Écart de caisse', varianceCell(shift.variance, tolerance), Math.abs(shift.variance) <= tolerance ? 'Dans la tolérance' : `Tolérance : ± ${fmt.money(tolerance)}`),
         )
       : null,
@@ -125,7 +171,17 @@ export function shiftSummary(shift, tolerance) {
         [
           { label: 'Heure', render: (s) => fmt.time(s.created_at) },
           { label: 'Client', key: 'customer_name' },
-          { label: 'Type', render: (s) => (s.kind === 'credit' ? 'Crédit' : `Fidélité (+${s.points} pts)`) },
+          {
+            label: 'Paiement',
+            render: (s) =>
+              h(
+                'span',
+                { class: 'row', style: 'gap:6px;flex-wrap:nowrap' },
+                s.kind === 'credit' ? (s.over_limit ? badge('Crédit hors plafond', 'serious') : badge('Crédit', 'info')) : s.kind === 'combo' ? badge('Combos', 'warning') : badge('Payé', 'good'),
+                s.source === 'customer' ? badge('Demande client') : null,
+              ),
+          },
+          { label: 'Combos', align: 'right', render: (s) => (s.points ? `+${s.points}` : s.combos_used ? `−${s.combos_used}` : s.points_due ? `+${s.points_due} au paiement` : '—') },
           { label: 'Véhicule', render: (s) => s.plate || '—' },
           { label: 'Produit', key: 'product_name' },
           { label: 'Litres', align: 'right', render: (s) => fmt.liters(s.liters) },
@@ -135,6 +191,39 @@ export function shiftSummary(shift, tolerance) {
         { empty: 'Aucune vente client sur ce poste.' },
       ),
     ),
+    shift.payments.length
+      ? h(
+          'section',
+          { class: 'card flush' },
+          h('div', { class: 'card-header' }, h('h2', {}, 'Règlements encaissés'), h('p', {}, 'Ajoutés au montant à remettre')),
+          table(
+            [
+              { label: 'Heure', render: (p) => fmt.time(p.created_at) },
+              { label: 'Client', key: 'customer_name' },
+              { label: 'Mode', key: 'method' },
+              { label: 'Référence', render: (p) => p.reference || '—' },
+              { label: 'Montant', align: 'right', render: (p) => fmt.money(p.amount) },
+            ],
+            shift.payments,
+          ),
+        )
+      : null,
+    shift.expenses.length
+      ? h(
+          'section',
+          { class: 'card flush' },
+          h('div', { class: 'card-header' }, h('h2', {}, 'Dépenses payées en caisse'), h('p', {}, 'Déduites du montant à remettre')),
+          table(
+            [
+              { label: 'Heure', render: (e) => fmt.time(e.created_at) },
+              { label: 'Catégorie', key: 'category' },
+              { label: 'Description', wrap: true, render: (e) => e.description + (e.beneficiary ? ` · ${e.beneficiary}` : '') },
+              { label: 'Montant', align: 'right', render: (e) => fmt.money(e.amount) },
+            ],
+            shift.expenses,
+          ),
+        )
+      : null,
     closed
       ? card(
           cardHeader('Caisse'),
