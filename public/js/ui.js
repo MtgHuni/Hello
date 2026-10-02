@@ -324,6 +324,22 @@ export function field(f) {
       h('input', { id, type: 'checkbox', class: 'switch', role: 'switch', name: f.name, checked: f.value }),
     );
   }
+  if (f.type === 'segment') {
+    // One-tap choice (radio pills): faster than a select at the pump.
+    const current = String(f.value ?? f.options[0]?.[0]);
+    return h(
+      'fieldset',
+      { class: `seg-field ${f.full ? 'full' : ''}`, hidden: f.hidden },
+      h('legend', {}, f.label),
+      h(
+        'div',
+        { class: 'seg-options' },
+        f.options.map(([v, l]) =>
+          h('label', { class: 'seg-option' }, h('input', { type: 'radio', name: f.name, value: String(v), checked: String(v) === current, onChange: f.onInput }), h('span', {}, l)),
+        ),
+      ),
+    );
+  }
   if (f.type === 'select') {
     input = h('select', { id, name: f.name, required: f.required }, f.options.map(([v, l]) => h('option', { value: String(v), selected: String(v) === String(f.value ?? '') }, l)));
   } else if (f.type === 'textarea') {
@@ -341,6 +357,8 @@ export function field(f) {
       autocomplete: f.autocomplete || 'off',
       inputmode: f.inputmode || (f.type === 'number' ? 'decimal' : null),
       readonly: f.readonly,
+      list: f.list,
+      enterkeyhint: f.enterkeyhint,
     });
   }
   if (f.onInput) input.addEventListener('input', f.onInput);

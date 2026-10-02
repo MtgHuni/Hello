@@ -125,7 +125,17 @@ export function shiftSummary(shift, tolerance) {
         [
           { label: 'Heure', render: (s) => fmt.time(s.created_at) },
           { label: 'Client', key: 'customer_name' },
-          { label: 'Type', render: (s) => (s.kind === 'credit' ? (s.over_limit ? badge('Crédit hors plafond', 'serious') : 'Crédit') : `Fidélité (+${s.points} pts)`) },
+          {
+            label: 'Paiement',
+            render: (s) =>
+              h(
+                'span',
+                { class: 'row', style: 'gap:6px;flex-wrap:nowrap' },
+                s.kind === 'credit' ? (s.over_limit ? badge('Crédit hors plafond', 'serious') : badge('Crédit', 'info')) : badge('Payé', 'good'),
+                s.source === 'customer' ? badge('Demande client') : null,
+              ),
+          },
+          { label: 'Points', align: 'right', render: (s) => (s.points ? `+${s.points}` : '—') },
           { label: 'Véhicule', render: (s) => s.plate || '—' },
           { label: 'Produit', key: 'product_name' },
           { label: 'Litres', align: 'right', render: (s) => fmt.liters(s.liters) },

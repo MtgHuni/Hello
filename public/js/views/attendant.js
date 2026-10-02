@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { h, fmt, pageHeader, card, cardHeader, table, shiftBadge, varianceCell, button, formDialog, confirmDialog, toast, field, productColor, badge, kpi } from '../ui.js';
+import { h, fmt, pageHeader, card, cardHeader, table, shiftBadge, varianceCell, button, formDialog, confirmDialog, toast, field, productColor, badge, kpi, parseServerDate } from '../ui.js';
 import { icon } from '../icons.js';
 import { shiftSummary } from './shifts.js';
 
@@ -73,7 +73,13 @@ function renderOpenShift(page, ctx, shift) {
       at: s.created_at,
       title: s.customer_name,
       detail: `${s.product_name} · ${fmt.liters(s.liters)}${s.plate ? ` · ${s.plate}` : ''}`,
-      tag: s.kind === 'credit' ? (s.over_limit ? badge('Crédit hors plafond', 'serious') : badge('Crédit', 'info')) : badge(`+${s.points} pts`, 'good'),
+      tag: h(
+        'span',
+        { class: 'row', style: 'gap:6px' },
+        s.kind === 'credit' ? (s.over_limit ? badge('Crédit hors plafond', 'serious') : badge('Crédit', 'info')) : badge('Payé', 'good'),
+        s.points ? badge(`+${s.points} pts`) : null,
+        s.source === 'customer' ? badge('Demande client') : null,
+      ),
       amount: fmt.money(s.amount),
       remove: { url: `/shifts/${shift.id}/sales/${s.id}`, label: 'Annuler cette vente' },
     })),
@@ -103,6 +109,7 @@ function renderOpenShift(page, ctx, shift) {
     h(
       'div',
       { class: 'stack' },
+      requestQueue(shift, reload),
       h(
         'div',
         { class: 'quick-actions' },
@@ -171,65 +178,178 @@ function renderOpenShift(page, ctx, shift) {
   );
 }
 
-// Sale to a customer. A new customer can be created on the spot with just a name;
-// a credit beyond the limit can be granted after an explicit confirmation.
+// ---------- Purchases started by customers on their phone ----------
+// Polled every few seconds; the attendant confirms with one tap.
+function requestQueue(shift, reload) {
+  const host = h('div', { class: 'stack', style: 'gap:10px' });
+  const priceOf = (productId) => shift.readings.find((r) => r.product_id === productId)?.unit_price;
+  let known = null;
+  let seenConnected = false;
+
+  const act = async (fn) => {
+    try {
+      await fn();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  };
+
+  async function confirmRequest(r, adjust = {}) {
+    try {
+      const sale = await api.post(`/requests/${r.id}/confirm`, adjust);
+      toast(`${r.customer_name} : ${fmt.liters(sale.liters)} · ${fmt.money(sale.amount)}${sale.points ? ` · +${sale.points} pts` : ''}`);
+    } catch (err) {
+      if (err.code !== 'over_limit') throw err;
+      if (!(await confirmDialog('Accorder le crédit ?', `${err.message} Si vous accordez ce crédit, il sera signalé au gérant avec votre nom.`, { confirmLabel: 'Accorder' }))) return;
+      await api.post(`/requests/${r.id}/confirm`, { ...adjust, grantCredit: true });
+      toast('Crédit accordé et signalé au gérant');
+    }
+    reload();
+  }
+
+  async function adjust(r) {
+    await formDialog({
+      title: `Ajuster — ${r.customer_name}`,
+      submitLabel: 'Confirmer la vente',
+      intro: 'Saisissez la quantité réellement servie.',
+      grid: false,
+      fields: [{ name: 'liters', label: 'Litres servis', type: 'number', step: '0.01', min: '0.01', required: true, value: r.liters ?? (r.amount && priceOf(r.product_id) ? Math.round((r.amount / priceOf(r.product_id)) * 100) / 100 : '') }],
+      onSubmit: (d) => confirmRequest(r, { liters: d.liters }),
+    });
+  }
+
+  function draw(rows) {
+    if (!rows.length) return host.replaceChildren();
+    host.replaceChildren(
+      h('div', { class: 'queue-title' }, h('span', { class: 'pulse' }), `Demandes des clients (${rows.length})`),
+      ...rows.map((r) => {
+        const price = priceOf(r.product_id) ?? r.current_price;
+        const liters = r.liters ?? r.amount / price;
+        const amount = r.amount ?? r.liters * price;
+        const overLimit = r.payment === 'credit' && amount > r.available + 0.001;
+        return h(
+          'div',
+          { class: 'queue-card' },
+          h('div', { class: 'who' }, h('span', { class: 'name' }, r.customer_name), h('span', { class: 'muted small' }, `il y a ${Math.max(0, Math.round((Date.now() - parseServerDate(r.created_at)) / 60000))} min`)),
+          h('div', { class: 'row between' }, h('span', { class: 'what' }, r.amount ? fmt.money(r.amount) : fmt.liters(r.liters)), h('span', { class: 'muted' }, `${r.product_name} · ${r.amount ? `≈ ${fmt.liters(liters)}` : `≈ ${fmt.money(amount)}`}`)),
+          h(
+            'div',
+            { class: 'row', style: 'gap:6px' },
+            r.payment === 'credit' ? badge(overLimit ? 'Crédit · dépasse le plafond' : 'Crédit', overLimit ? 'serious' : 'info') : badge('Payé', 'good'),
+            r.plate ? badge(r.plate) : null,
+          ),
+          h(
+            'div',
+            { class: 'actions' },
+            button('Refuser', () => act(async () => {
+              if (!(await confirmDialog('Refuser la demande ?', `${r.customer_name} · ${r.product_name}`, { confirmLabel: 'Refuser', danger: true }))) return;
+              await api.post(`/requests/${r.id}/reject`, {});
+              reload();
+            }), { variant: 'secondary' }),
+            button('Ajuster', () => act(() => adjust(r)), { variant: 'secondary' }),
+            button('Confirmer', () => act(() => confirmRequest(r)), { iconName: 'check' }),
+          ),
+        );
+      }),
+    );
+  }
+
+  async function poll() {
+    if (host.isConnected) seenConnected = true;
+    else if (seenConnected) return clearInterval(timer); // screen left
+    if (document.hidden) return;
+    try {
+      const rows = await api.get('/requests/pending');
+      const ids = rows.map((r) => r.id);
+      if (known && ids.some((id) => !known.includes(id))) {
+        navigator.vibrate?.([80, 60, 80]);
+        toast(`Nouvelle demande : ${rows.find((r) => !known.includes(r.id)).customer_name}`);
+      }
+      known = ids;
+      draw(rows);
+    } catch (err) {
+      console.warn('Demandes clients :', err); // network hiccup: next poll will retry
+    }
+  }
+  const timer = setInterval(poll, 4000);
+  // Check right away when the phone screen comes back on.
+  const onVisible = () => {
+    if (!document.hidden) poll();
+    if (seenConnected && !host.isConnected) document.removeEventListener('visibilitychange', onVisible);
+  };
+  document.addEventListener('visibilitychange', onVisible);
+  poll();
+  return host;
+}
+
+// Sale entered by the attendant, built for speed: one search field for the customer
+// (name, plate or phone; an unknown name creates the customer), one-tap product,
+// payment and unit, amount in dollars or litres.
 async function addSale(ctx, shift, reload) {
   const customers = await api.get('/customers');
-  const NEW = '__new';
-  const priceOf = (nozzleId) => shift.readings.find((r) => r.nozzle_id === Number(nozzleId))?.unit_price || 0;
-  const amount = h('div', { class: 'summary-line total' }, h('span', {}, 'Montant'), h('span', {}, fmt.money(0)));
-  const info = h('p', { class: 'muted small' });
+  const label = (c) => [c.name, c.plate, c.phone].filter(Boolean).join(' · ');
+  const byLabel = new Map(customers.map((c) => [label(c).toLowerCase(), c]));
+  const byName = new Map(customers.map((c) => [c.name.toLowerCase(), c]));
+  const find = (text) => byLabel.get(text.trim().toLowerCase()) || byName.get(text.trim().toLowerCase());
+  const products = [...new Map(shift.readings.map((r) => [r.product_id, r])).values()];
+  const priceOf = (productId) => products.find((r) => r.product_id === Number(productId))?.unit_price || 0;
+  const ppl = ctx.state.settings.pointsPerLiter;
+
+  const who = h('p', { class: 'hint-line' });
+  const summary = h('div', { class: 'summary-line total' }, h('span', {}, 'Total'), h('span', {}, '—'));
   const update = (e) => {
     const form = e.target.form;
-    const isNew = form.elements.customerId.value === NEW;
-    form.elements.newName.closest('.field').hidden = !isNew;
-    form.elements.newName.required = isNew;
-    const c = customers.find((x) => x.id === Number(form.elements.customerId.value));
-    const total = (Number(form.elements.liters.value) || 0) * priceOf(form.elements.nozzleId.value);
-    amount.lastChild.textContent = fmt.money(total);
-    if (isNew) info.textContent = `Nouveau client en compte, plafond de départ ${fmt.money(ctx.state.settings.newCustomerCreditLimit)}. Le gérant complétera sa fiche.`;
-    else if (c?.type === 'account') info.textContent = `Crédit disponible : ${fmt.money(c.available)}`;
-    else info.textContent = c ? 'Client fidélité : paiement normal, points ajoutés.' : '';
-    if (e.target.name === 'customerId' && c?.plate && !form.elements.plate.value) form.elements.plate.value = c.plate;
-    if (isNew && e.target.name === 'customerId') form.elements.newName.focus();
+    const text = form.elements.customer.value.trim();
+    const c = text ? find(text) : null;
+    if (!text) {
+      who.textContent = '';
+      who.className = 'hint-line';
+    } else if (c) {
+      who.textContent = `${c.points ?? 0} pts · crédit disponible ${fmt.money(Math.max(0, c.available ?? 0))}`;
+      who.className = 'hint-line';
+      if (c.plate && !form.elements.plate.value) form.elements.plate.value = c.plate;
+    } else {
+      who.textContent = `Nouveau client « ${text} » : il sera créé à l’enregistrement.`;
+      who.className = 'hint-line new';
+    }
+    const price = priceOf(form.elements.productId.value);
+    const qty = Number(form.elements.qty.value) || 0;
+    const byAmount = form.elements.unit.value === 'amount';
+    const liters = byAmount ? qty / price : qty;
+    const amount = byAmount ? qty : qty * price;
+    summary.lastChild.textContent = qty ? `${fmt.liters(liters)} · ${fmt.money(amount)} · +${Math.floor(liters * ppl)} pts` : '—';
   };
+
+  const fields = [
+    { name: 'customer', label: 'Client (nom, plaque ou téléphone)', required: true, list: 'customer-list', placeholder: 'Tapez quelques lettres…', onInput: update, enterkeyhint: 'next' },
+    { name: 'productId', label: 'Produit', type: 'segment', options: products.map((r) => [r.product_id, r.product_name]), onInput: update },
+    { name: 'payment', label: 'Paiement', type: 'segment', options: [['paid', 'Payé'], ['credit', 'Crédit']], onInput: update },
+    { name: 'unit', label: 'Unité', type: 'segment', options: [['amount', '$'], ['liters', 'L']], onInput: update },
+    { name: 'qty', label: 'Quantité', type: 'number', step: '0.01', min: '0.01', required: true, onInput: update, inputmode: 'decimal' },
+    { name: 'plate', label: 'Plaque', placeholder: 'Facultatif' },
+  ];
 
   const ok = await formDialog({
     title: 'Vente client',
     submitLabel: 'Enregistrer la vente',
     grid: false,
-    fields: [
-      {
-        name: 'customerId',
-        label: 'Client',
-        type: 'select',
-        required: true,
-        options: [
-          ['', 'Choisir un client…'],
-          [NEW, '＋ Nouveau client'],
-          ...customers.map((c) => [c.id, `${c.name} — ${c.type === 'account' ? `dispo ${fmt.money(c.available)}` : 'fidélité'}`]),
-        ],
-        onInput: update,
-      },
-      { name: 'newName', label: 'Nom du nouveau client', placeholder: 'Nom ou société', hidden: true },
-      { name: 'nozzleId', label: 'Pistolet', type: 'select', required: true, options: shift.readings.map((r) => [r.nozzle_id, `${r.pump_name} · ${r.product_name} (${fmt.price(r.unit_price)})`]), onInput: update },
-      { name: 'liters', label: 'Litres servis', type: 'number', step: '0.01', min: '0.01', required: true, onInput: update },
-      { name: 'plate', label: 'Immatriculation du véhicule', placeholder: 'Facultatif' },
-    ],
-    extra: () => h('div', {}, info, amount),
+    fields,
+    extra: () => h('div', {}, h('datalist', { id: 'customer-list' }, customers.map((c) => h('option', { value: label(c) }))), who, summary),
     onSubmit: async (d, form) => {
-      let customerId = Number(d.customerId);
-      if (d.customerId === NEW) {
-        const created = await api.post('/customers/quick', { name: d.newName });
-        customers.push(created);
-        customerId = created.id;
-        // Keep the created customer selected if the sale itself fails afterwards.
-        form.elements.customerId.append(h('option', { value: String(created.id) }, created.name));
-        form.elements.customerId.value = String(created.id);
-        form.elements.newName.closest('.field').hidden = true;
-        form.elements.newName.required = false;
+      let customer = find(d.customer);
+      if (!customer) {
+        customer = await api.post('/customers/quick', { name: d.customer.trim() });
+        customers.push(customer);
+        byName.set(customer.name.toLowerCase(), customer);
+        form.elements.customer.value = customer.name;
       }
-      const body = { customerId, nozzleId: Number(d.nozzleId), liters: d.liters, plate: d.plate };
+      const body = {
+        customerId: customer.id,
+        productId: Number(d.productId),
+        payment: d.payment,
+        [d.unit === 'amount' ? 'amount' : 'liters']: d.qty,
+        plate: d.plate,
+      };
       try {
         return await api.post(`/shifts/${shift.id}/sales`, body);
       } catch (err) {
@@ -241,14 +361,14 @@ async function addSale(ctx, shift, reload) {
     },
   });
   if (ok) {
-    toast(ok.over_limit ? 'Crédit accordé et signalé au gérant' : 'Vente enregistrée');
+    toast(ok.over_limit ? 'Crédit accordé et signalé au gérant' : `Vente enregistrée${ok.points ? ` · +${ok.points} pts` : ''}`);
     reload();
   }
 }
 
 async function addPayment(shift, reload) {
-  const customers = (await api.get('/customers')).filter((c) => c.type === 'account');
-  if (!customers.length) return toast('Aucun client en compte.', 'error');
+  const customers = (await api.get('/customers')).filter((c) => c.balance > 0 || c.type === 'account');
+  if (!customers.length) return toast('Aucun client ne doit d’argent.', 'error');
   const ok = await formDialog({
     title: 'Règlement client',
     submitLabel: 'Encaisser',

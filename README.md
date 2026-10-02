@@ -8,7 +8,7 @@ Trois espaces, selon le rôle :
 |------|---------------|
 | **Gérant** | Tableau de bord et alertes, validation des postes, cuves (livraisons, jaugeages), clients (crédit, règlements, relevés, fiches à compléter), dépenses, rapports (marge, résultat) et export Excel, réglages (prix, pompes, pistolets, équipe) |
 | **Pompiste** | Sur téléphone : ouvre son poste, saisit les ventes clients (et crée un client avec son seul nom), accorde un crédit, encaisse un règlement, note une dépense payée en caisse, clôture avec les index de fin et le comptage. L'écart s'affiche immédiatement |
-| **Client** | Consulte ses achats, son solde ou ses points, imprime ses relevés |
+| **Client** | Crée son compte avec son téléphone, prépare son plein depuis son téléphone pendant qu'il attend (le pompiste confirme d'un geste), suit ses points, son solde et ses relevés |
 
 ## Principes de gestion
 
@@ -20,7 +20,9 @@ Trois espaces, selon le rôle :
 - Les **index de début** sont repris automatiquement de la clôture précédente : le pompiste ne peut pas les modifier.
 - Le **prix** est figé à l'ouverture du poste : un changement de prix s'applique au poste suivant.
 - **Stock théorique** d'une cuve = dernier jaugeage + livraisons − litres vendus. Chaque jaugeage enregistre l'écart, puis devient la nouvelle référence.
-- **Clients en compte** (sociétés, flottes) : ventes à crédit, bloquées au-delà du plafond. **Clients particuliers** : paiement normal, points de fidélité.
+- **Ventes clients** : chaque vente à un client identifié est enregistrée, **payée** ou **à crédit**, et rapporte des points de fidélité. Seules les ventes à crédit s'ajoutent au solde du client ; elles sont bloquées au-delà du plafond, sauf crédit accordé par le pompiste.
+- **Demande d'achat du client** : depuis son téléphone, le client choisit le carburant, le montant ($ ou litres) et le paiement. La demande apparaît en haut de l'écran du pompiste (actualisé toutes les 4 secondes, avec vibration) ; elle ne devient une vente, visible du gérant, qu'une fois confirmée. Les demandes non traitées expirent après 30 minutes.
+- **Saisie rapide par le pompiste** : un seul champ client (nom, plaque ou téléphone ; un nom inconnu crée le client), produit, paiement et unité en un geste, montant en dollars converti en litres au prix du poste.
 - Les **tolérances** (écart de caisse en $, écart de jaugeage en litres) déclenchent les alertes du tableau de bord.
 
 ## Démarrer en local

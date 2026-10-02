@@ -28,7 +28,7 @@ export async function renderCustomers(page, ctx) {
           },
           { label: 'Solde dû', align: 'right', render: (c) => (c.type === 'account' ? h('span', { class: c.balance > c.credit_limit ? 'variance-neg' : '' }, fmt.money(c.balance)) : '—') },
           { label: 'Plafond', align: 'right', render: (c) => (c.type === 'account' ? fmt.money(c.credit_limit) : '—') },
-          { label: 'Points', align: 'right', render: (c) => (c.type === 'individual' ? fmt.number(c.loyalty_points) : '—') },
+          { label: 'Points', align: 'right', render: (c) => fmt.number(c.loyalty_points) },
           { label: 'Dernier achat', render: (c) => fmt.date(c.last_purchase_at) },
         ],
         rows,
@@ -147,7 +147,8 @@ export function statement(acc, period, onPeriod) {
   from.querySelector('input').addEventListener('change', apply);
   to.querySelector('input').addEventListener('change', apply);
 
-  const isAccount = c.type === 'account';
+  // Show the debit/credit statement as soon as the customer can owe money.
+  const isAccount = c.type === 'account' || c.credit_limit > 0 || c.balance !== 0;
   return h(
     'div',
     { class: 'stack' },
@@ -156,9 +157,9 @@ export function statement(acc, period, onPeriod) {
       { class: 'grid grid-4' },
       isAccount
         ? [
-            kpi('Solde dû', h('span', { class: c.balance > c.credit_limit ? 'variance-neg' : '' }, fmt.money(c.balance)), c.balance > c.credit_limit ? 'Plafond dépassé' : 'À ce jour'),
-            kpi('Plafond de crédit', fmt.money(c.credit_limit)),
+            kpi('Solde dû', h('span', { class: c.balance > c.credit_limit ? 'variance-neg' : '' }, fmt.money(c.balance)), c.balance > c.credit_limit ? 'Plafond dépassé' : `Plafond ${fmt.money(c.credit_limit)}`),
             kpi('Crédit disponible', fmt.money(Math.max(0, c.credit_limit - c.balance))),
+            kpi('Points fidélité', fmt.number(c.loyalty_points), `+${fmt.number(acc.totals.points)} sur la période`),
             kpi('Achats sur la période', fmt.money(acc.totals.purchases), fmt.liters(acc.totals.liters)),
           ]
         : [

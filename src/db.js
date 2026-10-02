@@ -118,12 +118,32 @@ CREATE TABLE IF NOT EXISTS sales (
   customer_id INTEGER NOT NULL REFERENCES customers(id),
   nozzle_id   INTEGER NOT NULL REFERENCES nozzles(id),
   product_id  INTEGER NOT NULL REFERENCES products(id),
-  kind        TEXT NOT NULL CHECK (kind IN ('credit', 'loyalty')),
+  kind        TEXT NOT NULL CHECK (kind IN ('paid', 'credit')),
   liters      REAL NOT NULL,
   unit_price  REAL NOT NULL,
   amount      REAL NOT NULL,
   points      INTEGER NOT NULL DEFAULT 0,
   plate       TEXT,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  over_limit  INTEGER NOT NULL DEFAULT 0,
+  source      TEXT NOT NULL DEFAULT 'attendant'
+);
+
+-- Purchase started by a customer from their phone; becomes a sale once
+-- an attendant confirms it.
+CREATE TABLE IF NOT EXISTS purchase_requests (
+  id          INTEGER PRIMARY KEY,
+  customer_id INTEGER NOT NULL REFERENCES customers(id),
+  product_id  INTEGER NOT NULL REFERENCES products(id),
+  liters      REAL,
+  amount      REAL,
+  payment     TEXT NOT NULL CHECK (payment IN ('paid', 'credit')),
+  plate       TEXT,
+  status      TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'rejected', 'cancelled')),
+  sale_id     INTEGER REFERENCES sales(id),
+  handled_by  INTEGER REFERENCES users(id),
+  handled_at  TEXT,
+  note        TEXT,
   created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -188,6 +208,7 @@ const MIGRATIONS = [
   ['customers', 'needs_review', 'INTEGER NOT NULL DEFAULT 0'],
   ['customers', 'created_by', 'INTEGER REFERENCES users(id)'],
   ['sales', 'over_limit', 'INTEGER NOT NULL DEFAULT 0'],
+  ['sales', 'source', "TEXT NOT NULL DEFAULT 'attendant'"],
   ['payments', 'shift_id', 'INTEGER REFERENCES shifts(id)'],
   ['shifts', 'payments_amount', 'REAL'],
   ['shifts', 'expenses_amount', 'REAL'],
@@ -215,6 +236,49 @@ const DEFAULT_SETTINGS = {
   new_customer_credit_limit: '100',
 };
 
+// First release stored sales as 'credit' or 'loyalty' (loyalty = paid, with points).
+// Every sale now earns points and the payment mode is 'paid' or 'credit':
+// rebuild the table once with the new constraint.
+function migrateSalesKind(db) {
+  const { sql } = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'sales'").get();
+  if (!sql.includes("'loyalty'")) return;
+  db.exec('PRAGMA foreign_keys = OFF');
+  db.exec('BEGIN');
+  try {
+    db.exec(`
+      CREATE TABLE sales_new (
+        id          INTEGER PRIMARY KEY,
+        shift_id    INTEGER NOT NULL REFERENCES shifts(id),
+        customer_id INTEGER NOT NULL REFERENCES customers(id),
+        nozzle_id   INTEGER NOT NULL REFERENCES nozzles(id),
+        product_id  INTEGER NOT NULL REFERENCES products(id),
+        kind        TEXT NOT NULL CHECK (kind IN ('paid', 'credit')),
+        liters      REAL NOT NULL,
+        unit_price  REAL NOT NULL,
+        amount      REAL NOT NULL,
+        points      INTEGER NOT NULL DEFAULT 0,
+        plate       TEXT,
+        created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+        over_limit  INTEGER NOT NULL DEFAULT 0,
+        source      TEXT NOT NULL DEFAULT 'attendant'
+      );
+      INSERT INTO sales_new (id, shift_id, customer_id, nozzle_id, product_id, kind, liters, unit_price, amount, points, plate, created_at, over_limit, source)
+        SELECT id, shift_id, customer_id, nozzle_id, product_id, CASE kind WHEN 'loyalty' THEN 'paid' ELSE kind END,
+               liters, unit_price, amount, points, plate, created_at, over_limit, source FROM sales;
+      DROP TABLE sales;
+      ALTER TABLE sales_new RENAME TO sales;
+      CREATE INDEX IF NOT EXISTS idx_sales_customer ON sales(customer_id);
+      CREATE INDEX IF NOT EXISTS idx_sales_shift ON sales(shift_id);
+    `);
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  } finally {
+    db.exec('PRAGMA foreign_keys = ON');
+  }
+}
+
 function openDb(file) {
   if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true });
   const db = new DatabaseSync(file);
@@ -224,7 +288,10 @@ function openDb(file) {
     const columns = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
     if (!columns.includes(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
   }
-  db.exec('CREATE INDEX IF NOT EXISTS idx_payments_shift ON payments(shift_id); CREATE INDEX IF NOT EXISTS idx_expenses_shift ON expenses(shift_id);');
+  migrateSalesKind(db);
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_payments_shift ON payments(shift_id);
+    CREATE INDEX IF NOT EXISTS idx_expenses_shift ON expenses(shift_id);
+    CREATE INDEX IF NOT EXISTS idx_requests_status ON purchase_requests(status);`);
   const insert = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
   for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) insert.run(key, value);
   return db;

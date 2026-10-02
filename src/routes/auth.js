@@ -66,7 +66,9 @@ module.exports = function authRoutes(db) {
     const key = `${req.ip}|${login.toLowerCase()}`;
     limiter.check(key);
 
-    const user = db.prepare('SELECT id, password_hash, active FROM users WHERE login = ?').get(login);
+    const find = db.prepare('SELECT id, password_hash, active FROM users WHERE login = ?');
+    // Customers log in with their phone number, typed with or without spaces.
+    const user = find.get(login) || find.get(login.replace(/[\s.-]/g, ''));
     if (!user || !user.active || !verifyPassword(password, user.password_hash)) {
       limiter.fail(key);
       fail(401, 'Identifiant ou mot de passe incorrect.');
@@ -74,6 +76,33 @@ module.exports = function authRoutes(db) {
     limiter.reset(key);
     startSession(db, req, res, user.id);
     res.json({ ok: true });
+  });
+
+  // Self sign-up for customers: name, phone (used as login) and password.
+  // The record is flagged for the manager; no credit until the manager opens it.
+  router.post('/register', (req, res) => {
+    const key = `${req.ip}|register`;
+    limiter.check(key);
+    const name = str(req.body?.name, 'Votre nom', { max: 120 });
+    const phone = str(req.body?.phone, 'Votre téléphone', { max: 30 }).replace(/[\s.-]/g, '');
+    if (!/^\+?\d{6,15}$/.test(phone)) fail(400, 'Numéro de téléphone invalide.');
+    const password = checkPasswordStrength(req.body?.password);
+    if (db.prepare('SELECT 1 FROM users WHERE login = ?').get(phone)) {
+      limiter.fail(key);
+      fail(409, 'Un compte existe déjà avec ce numéro. Connectez-vous.');
+    }
+    const userId = transaction(db, () => {
+      const customerId = db
+        .prepare("INSERT INTO customers (type, name, phone, credit_limit, needs_review) VALUES ('individual', ?, ?, 0, 1)")
+        .run(name, phone).lastInsertRowid;
+      return Number(
+        db.prepare("INSERT INTO users (name, login, password_hash, role, customer_id) VALUES (?, ?, ?, 'customer', ?)").run(name, phone, hashPassword(password), customerId)
+          .lastInsertRowid,
+      );
+    });
+    limiter.fail(key); // counts towards the per-IP limit, to slow down mass sign-ups
+    startSession(db, req, res, userId);
+    res.status(201).json({ ok: true });
   });
 
   router.post('/auth/logout', (req, res) => {

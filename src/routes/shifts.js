@@ -1,11 +1,11 @@
 const express = require('express');
-const { getSettings, EXPENSE_CATEGORIES } = require('../db');
+const { EXPENSE_CATEGORIES } = require('../db');
 const { fail, num, str, oneOf, round, dateParam, transaction } = require('../util');
 const { requireRole } = require('../auth');
 const { customerBalance } = require('./customers');
+const { createSale } = require('../sales');
 
 const staff = requireRole('manager', 'attendant');
-const money = (n) => `${n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $`;
 
 module.exports = function shiftRoutes(db) {
   const router = express.Router();
@@ -136,50 +136,10 @@ module.exports = function shiftRoutes(db) {
     res.status(201).json(shiftDetail(id));
   });
 
-  // Customer sale during a shift: credit for account customers,
-  // loyalty points for individuals (who pay cash or card as usual).
+  // Customer sale entered by the attendant (paid or on credit; always earns points).
   router.post('/shifts/:id/sales', staff, (req, res) => {
     const shift = getOwnShift(req);
-    const b = req.body || {};
-    const customer = db.prepare('SELECT * FROM customers WHERE id = ? AND active = 1').get(Number(b.customerId));
-    if (!customer) fail(400, 'Client inconnu ou désactivé.');
-    const reading = db
-      .prepare('SELECT * FROM shift_readings WHERE shift_id = ? AND nozzle_id = ?')
-      .get(shift.id, Number(b.nozzleId));
-    if (!reading) fail(400, 'Ce pistolet ne fait pas partie de votre poste.');
-    const liters = round(num(b.liters, 'Le nombre de litres', { min: 0.01, max: 100000 }));
-    const plate = str(b.plate, "L'immatriculation", { required: false, max: 20 });
-    const amount = round(liters * reading.unit_price);
-    const kind = customer.type === 'account' ? 'credit' : 'loyalty';
-    const points = kind === 'loyalty' ? Math.floor(liters * getSettings(db).pointsPerLiter) : 0;
-
-    const id = transaction(db, () => {
-      let overLimit = 0;
-      if (kind === 'credit') {
-        const balance = customerBalance(db, customer.id);
-        if (balance + amount > customer.credit_limit + 0.001) {
-          // The attendant may still grant the credit, but must confirm it explicitly:
-          // the sale is then flagged and reported to the manager.
-          if (b.grantCredit !== true) {
-            fail(
-              409,
-              `Plafond de crédit dépassé : encours ${money(balance)}, plafond ${money(customer.credit_limit)}, disponible ${money(Math.max(0, customer.credit_limit - balance))}.`,
-              'over_limit',
-            );
-          }
-          overLimit = 1;
-        }
-      }
-      const r = db
-        .prepare(
-          `INSERT INTO sales (shift_id, customer_id, nozzle_id, product_id, kind, liters, unit_price, amount, points, plate, over_limit)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .run(shift.id, customer.id, reading.nozzle_id, reading.product_id, kind, liters, reading.unit_price, amount, points, plate ?? customer.plate, overLimit);
-      if (points) db.prepare('UPDATE customers SET loyalty_points = loyalty_points + ? WHERE id = ?').run(points, customer.id);
-      return r.lastInsertRowid;
-    });
-    res.status(201).json(db.prepare('SELECT * FROM sales WHERE id = ?').get(id));
+    res.status(201).json(createSale(db, shift, { ...(req.body || {}), source: 'attendant' }));
   });
 
   router.delete('/shifts/:id/sales/:saleId', staff, (req, res) => {
@@ -198,8 +158,8 @@ module.exports = function shiftRoutes(db) {
   // A customer settling their account at the pump: the money goes into the shift's cash.
   router.post('/shifts/:id/payments', staff, (req, res) => {
     const shift = getOwnShift(req);
-    const customer = db.prepare("SELECT * FROM customers WHERE id = ? AND type = 'account'").get(Number(req.body?.customerId));
-    if (!customer) fail(400, 'Choisissez un client en compte.');
+    const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(Number(req.body?.customerId));
+    if (!customer) fail(400, 'Choisissez un client.');
     const amount = round(num(req.body?.amount, 'Le montant', { min: 0.01, max: 1e8 }));
     const method = oneOf(req.body?.method ?? 'espèces', 'Le mode de règlement', ['espèces', 'mobile money', 'carte']);
     const reference = str(req.body?.reference, 'La référence', { required: false, max: 100 });

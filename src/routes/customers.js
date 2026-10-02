@@ -67,7 +67,7 @@ function customerRoutes(db) {
       ...sales.map((s) => ({
         date: s.created_at,
         type: 'sale',
-        label: `${s.product_name} — ${frNum(s.liters)} L à ${frNum(s.unit_price, 3)} $/L${s.plate ? ` (${s.plate})` : ''}${s.over_limit ? ' — crédit hors plafond' : ''}`,
+        label: `${s.product_name} — ${frNum(s.liters)} L à ${frNum(s.unit_price, 3)} $/L${s.plate ? ` (${s.plate})` : ''} — ${s.kind === 'credit' ? `à crédit${s.over_limit ? ' (hors plafond)' : ''}` : 'payé'}`,
         liters: s.liters,
         points: s.points,
         debit: s.kind === 'credit' ? s.amount : 0,
@@ -117,8 +117,10 @@ function customerRoutes(db) {
             name: c.name,
             type: c.type,
             plate: c.plate,
-            balance: c.type === 'account' ? c.balance : null,
-            available: c.type === 'account' ? round(c.credit_limit - c.balance) : null,
+            phone: c.phone,
+            points: c.loyalty_points,
+            balance: c.balance,
+            available: round(c.credit_limit - c.balance),
           })),
       );
     }
