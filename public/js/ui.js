@@ -68,9 +68,22 @@ export function productColor(productId) {
 
 // ---------- Feedback ----------
 export function toast(message, type = 'info') {
-  const el = h('div', { class: `toast ${type === 'error' ? 'error' : ''}`, role: 'status' }, message);
+  const el = h(
+    'div',
+    { class: `toast glass ${type === 'error' ? 'error' : ''}`, role: type === 'error' ? 'alert' : 'status' },
+    h('span', { class: 'toast-icon' }, icon(type === 'error' ? 'alert' : 'check')),
+    h('span', {}, message),
+  );
   document.getElementById('toasts').append(el);
-  setTimeout(() => el.remove(), type === 'error' ? 5000 : 3000);
+  setTimeout(() => {
+    el.classList.add('leaving');
+    el.addEventListener('animationend', () => el.remove(), { once: true });
+    setTimeout(() => el.remove(), 600);
+  }, type === 'error' ? 4500 : 2600);
+}
+
+export function spinner() {
+  return h('div', { class: 'spinner', role: 'progressbar', 'aria-label': 'Chargement' }, Array.from({ length: 8 }, (_, i) => h('span', { style: `transform:rotate(${i * 45}deg);animation-delay:${-0.8 + i * 0.1}s` })));
 }
 
 export function badge(text, level = '') {
@@ -155,14 +168,41 @@ export function table(columns, rows, { onRowClick, empty = 'Aucune donnée.', fo
   );
 }
 
+// Segmented control: the thumb slides (spring) to the tapped segment,
+// then the view is re-rendered once the motion has mostly settled.
 export function segmented(options, current, onChange) {
-  return h(
-    'div',
-    { class: 'segmented', role: 'tablist' },
-    options.map(([value, label]) =>
-      h('button', { type: 'button', role: 'tab', class: value === current ? 'active' : '', 'aria-selected': String(value === current), onClick: () => onChange(value) }, label),
-    ),
-  );
+  const thumb = h('span', { class: 'thumb', 'aria-hidden': 'true' });
+  const el = h('div', { class: 'segmented', role: 'tablist' }, thumb);
+  const place = (btn, animate) => {
+    if (!btn || !btn.offsetWidth) return false;
+    if (!animate) thumb.style.transition = 'none';
+    thumb.style.width = `${btn.offsetWidth}px`;
+    thumb.style.transform = `translateX(${btn.offsetLeft}px)`;
+    if (!animate) requestAnimationFrame(() => (thumb.style.transition = ''));
+    return true;
+  };
+  const buttons = options.map(([value, label]) => {
+    const btn = h('button', { type: 'button', role: 'tab', class: value === current ? 'active' : '', 'aria-selected': String(value === current) }, label);
+    btn.addEventListener('click', () => {
+      if (value === current) return;
+      buttons.forEach((b) => {
+        b.classList.toggle('active', b === btn);
+        b.setAttribute('aria-selected', String(b === btn));
+      });
+      place(btn, true);
+      setTimeout(() => onChange(value), 260);
+    });
+    return btn;
+  });
+  el.append(...buttons);
+  const active = () => buttons.find((b) => b.classList.contains('active'));
+  // Position once the control is laid out (it may be built before being attached).
+  const settle = (tries = 0) => {
+    if (!place(active(), false) && tries < 60) requestAnimationFrame(() => settle(tries + 1));
+  };
+  settle();
+  if ('ResizeObserver' in window) new ResizeObserver(() => place(active(), false)).observe(el);
+  return el;
 }
 
 // Tank level meter: fill in the product colour, low-level threshold marked,
@@ -202,31 +242,88 @@ export function tankGauge(tank) {
 }
 
 // ---------- Dialogs ----------
-export function openDialog(build) {
-  const dialog = h('dialog', {});
+// kind: 'sheet' (forms), 'alert' (confirmations), 'action' (action sheet).
+export function openDialog(build, { kind = 'sheet' } = {}) {
+  const dialog = h('dialog', { class: `${kind}-dialog` });
   document.body.append(dialog);
+  let closing = false;
   const close = () => {
-    dialog.close();
-    dialog.remove();
+    if (closing) return;
+    closing = true;
+    const panel = dialog.firstElementChild;
+    dialog.classList.add('closing');
+    panel?.classList.add('closing');
+    const done = () => {
+      dialog.close();
+      dialog.remove();
+    };
+    if (!panel || matchMedia('(prefers-reduced-motion: reduce)').matches) return done();
+    panel.addEventListener('animationend', done, { once: true });
+    setTimeout(done, 450);
   };
   dialog.addEventListener('cancel', (e) => {
     e.preventDefault();
     close();
+  });
+  // Tap on the dimmed backdrop dismisses sheets and action sheets (not alerts).
+  dialog.addEventListener('click', (e) => {
+    if (e.target === dialog && kind !== 'alert') close();
   });
   dialog.append(build(close));
   dialog.showModal();
   return { dialog, close };
 }
 
+// Swipe a sheet down by its header/grabber to dismiss it (touch & mouse).
+function enableSwipeToDismiss(sheet, handle, close) {
+  let startY = null;
+  let dy = 0;
+  handle.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('button') || !matchMedia('(max-width: 760px)').matches) return;
+    startY = e.clientY;
+    dy = 0;
+    sheet.classList.add('dragging');
+    handle.setPointerCapture(e.pointerId);
+  });
+  handle.addEventListener('pointermove', (e) => {
+    if (startY === null) return;
+    dy = Math.max(0, e.clientY - startY);
+    // Rubber-band resistance, like UIKit.
+    sheet.style.transform = `translateY(${dy < 0 ? dy / 3 : dy}px)`;
+  });
+  const end = () => {
+    if (startY === null) return;
+    startY = null;
+    sheet.classList.remove('dragging');
+    sheet.style.transition = 'transform 0.45s var(--spring)';
+    if (dy > 110) {
+      sheet.style.transform = 'translateY(110%)';
+      setTimeout(close, 200);
+    } else {
+      sheet.style.transform = '';
+    }
+    setTimeout(() => (sheet.style.transition = ''), 460);
+  };
+  handle.addEventListener('pointerup', end);
+  handle.addEventListener('pointercancel', end);
+}
+
 export function field(f) {
   const id = `f-${f.name}-${Math.random().toString(36).slice(2, 7)}`;
   let input;
+  if (f.type === 'checkbox') {
+    // Boolean settings use the iOS switch.
+    return h(
+      'label',
+      { class: `switch-row ${f.full ? 'full' : ''}`, for: id },
+      h('span', {}, f.label),
+      h('input', { id, type: 'checkbox', class: 'switch', role: 'switch', name: f.name, checked: f.value }),
+    );
+  }
   if (f.type === 'select') {
     input = h('select', { id, name: f.name, required: f.required }, f.options.map(([v, l]) => h('option', { value: String(v), selected: String(v) === String(f.value ?? '') }, l)));
   } else if (f.type === 'textarea') {
     input = h('textarea', { id, name: f.name, placeholder: f.placeholder }, f.value ?? '');
-  } else if (f.type === 'checkbox') {
-    return h('label', { class: `row ${f.full ? 'full' : ''}`, style: 'gap:10px' }, h('input', { type: 'checkbox', name: f.name, checked: f.value }), f.label);
   } else {
     input = h('input', {
       id,
@@ -258,21 +355,44 @@ export function readForm(form, fields) {
   return data;
 }
 
-// Generic form dialog. onSubmit may throw: the message is shown inline.
+// Form in an iOS 26 sheet: ✕ to dismiss, title, prominent confirm button.
+// onSubmit may throw: the message is shown inline.
 export function formDialog({ title, intro, fields, submitLabel = 'Enregistrer', onSubmit, extra, grid = true }) {
   return new Promise((resolve) => {
-    openDialog((close) => {
-      const error = h('p', { class: 'form-error', hidden: true });
-      const submit = h('button', { class: 'btn', type: 'submit' }, submitLabel);
+    let settled = false;
+    const finish = (value) => {
+      if (!settled) {
+        settled = true;
+        resolve(value);
+      }
+    };
+    const { dialog } = openDialog((close) => {
+      const dismiss = () => {
+        close();
+        finish(null);
+      };
+      const error = h('p', { class: 'form-error', hidden: true, role: 'alert' });
+      const submit = h('button', { class: 'circle-btn prominent', type: 'submit', 'aria-label': submitLabel, title: submitLabel }, icon('check'));
+      const header = h(
+        'div',
+        { class: 'sheet-header' },
+        h('div', {}, h('button', { class: 'circle-btn', type: 'button', 'aria-label': 'Annuler', title: 'Annuler', onClick: dismiss }, icon('close'))),
+        h('h2', {}, title),
+        h('div', { class: 'end' }, submit),
+      );
+      const handle = h('div', { class: 'sheet-handle' }, h('div', { class: 'sheet-grabber', 'aria-hidden': 'true' }), header);
       const form = h(
         'form',
-        { class: 'dialog-body' },
-        h('h2', {}, title),
-        intro ? h('p', { class: 'muted' }, intro) : null,
-        h('div', { class: grid ? 'form-grid' : 'stack' }, fields.map((f) => field(f))),
-        extra ? extra() : null,
-        error,
-        h('div', { class: 'dialog-actions' }, button('Annuler', () => { close(); resolve(null); }, { variant: 'secondary' }), submit),
+        { class: 'sheet' },
+        handle,
+        h(
+          'div',
+          { class: 'sheet-body' },
+          intro ? h('p', { class: 'intro' }, intro) : null,
+          h('div', { class: grid ? 'form-grid' : 'stack', style: grid ? '' : 'gap:14px' }, fields.map((f) => field(f))),
+          extra ? extra() : null,
+          error,
+        ),
       );
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -281,36 +401,75 @@ export function formDialog({ title, intro, fields, submitLabel = 'Enregistrer', 
         try {
           const result = await onSubmit(readForm(form, fields), form);
           close();
-          resolve(result ?? true);
+          finish(result ?? true);
         } catch (err) {
           error.textContent = err.message;
           error.hidden = false;
           submit.disabled = false;
         }
       });
-      setTimeout(() => form.querySelector('input:not([readonly]),select,textarea')?.focus(), 30);
+      enableSwipeToDismiss(form, handle, dismiss);
+      setTimeout(() => {
+        if (matchMedia('(hover: hover)').matches) form.querySelector('.sheet-body input:not([readonly]),.sheet-body select,.sheet-body textarea')?.focus();
+      }, 60);
       return form;
     });
+    dialog.addEventListener('close', () => finish(null));
   });
 }
 
+// iOS alert: title, message, two capsule buttons.
 export function confirmDialog(title, text, { confirmLabel = 'Confirmer', danger = false } = {}) {
   return new Promise((resolve) => {
-    openDialog((close) =>
-      h(
-        'div',
-        { class: 'dialog-body' },
-        h('h2', {}, title),
-        text ? h('p', { class: 'muted' }, text) : null,
+    openDialog(
+      (close) =>
         h(
           'div',
-          { class: 'dialog-actions' },
-          button('Annuler', () => { close(); resolve(false); }, { variant: 'secondary' }),
-          button(confirmLabel, () => { close(); resolve(true); }, { variant: danger ? 'danger' : '' }),
+          { class: 'alert', role: 'alertdialog', 'aria-label': title },
+          h('h2', {}, title),
+          text ? h('p', {}, text) : null,
+          h(
+            'div',
+            { class: 'alert-actions' },
+            button('Annuler', () => { close(); resolve(false); }, { variant: 'secondary' }),
+            button(confirmLabel, () => { close(); resolve(true); }, { variant: danger ? 'destructive' : '' }),
+          ),
         ),
-      ),
+      { kind: 'alert' },
     );
   });
+}
+
+// iOS action sheet: grouped choices + a separate Cancel button.
+export function actionSheet({ title, actions }) {
+  openDialog(
+    (close) =>
+      h(
+        'div',
+        { class: 'action-sheet' },
+        h(
+          'div',
+          { class: 'action-group glass' },
+          title ? h('div', { class: 'title' }, title) : null,
+          actions.map((a) =>
+            h(
+              'button',
+              {
+                type: 'button',
+                class: a.destructive ? 'destructive' : '',
+                onClick: () => {
+                  close();
+                  a.onClick();
+                },
+              },
+              a.label,
+            ),
+          ),
+        ),
+        h('div', { class: 'action-group glass' }, h('button', { type: 'button', class: 'cancel', onClick: close }, 'Annuler')),
+      ),
+    { kind: 'action' },
+  );
 }
 
 export function errorState(err) {

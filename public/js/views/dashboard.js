@@ -70,15 +70,15 @@ function alertList(alerts) {
 // Single-series bar chart: one hue, no legend, hover tooltip per bar, table fallback via aria.
 function barChart(days) {
   const max = Math.max(...days.map((d) => d.amount), 1);
-  const tip = h('div', { class: 'tooltip', hidden: true });
+  const tip = h('div', { class: 'tooltip glass', hidden: true });
   const chart = h(
     'div',
     { class: 'chart' },
     h(
       'div',
       { class: 'bars', role: 'img', 'aria-label': days.map((d) => `${fmt.day(d.date)} : ${fmt.money(d.amount)}`).join(', ') },
-      days.map((d) => {
-        const col = h('div', { class: 'bar-col' }, h('div', { class: 'bar', style: `height:${(d.amount / max) * 100}%` }));
+      days.map((d, i) => {
+        const col = h('div', { class: 'bar-col' }, h('div', { class: 'bar', style: `height:${(d.amount / max) * 100}%;--i:${i}` }));
         col.addEventListener('mouseenter', () => {
           tip.replaceChildren(h('div', { style: 'font-weight:600' }, fmt.money(d.amount)), h('div', { class: 'muted' }, `${fmt.day(d.date)} · ${fmt.liters(d.liters)}`));
           tip.hidden = false;

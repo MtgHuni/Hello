@@ -27,7 +27,7 @@ function authForm({ title, lead, fields, submitLabel, onSubmit, wide }) {
   return h(
     'div',
     { class: 'auth' },
-    h('div', { class: `card auth-card ${wide ? 'wide' : ''}` }, h('div', { class: 'brand-logo' }, icon('pump')), h('h1', {}, title), h('p', { class: 'lead' }, lead), form),
+    h('div', { class: `auth-card glass ${wide ? 'wide' : ''}` }, h('div', { class: 'app-icon lg' }, icon('pump')), h('h1', {}, title), h('p', { class: 'lead' }, lead), form),
   );
 }
 
