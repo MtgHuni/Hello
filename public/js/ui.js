@@ -270,7 +270,11 @@ export function openDialog(build, { kind = 'sheet' } = {}) {
     if (e.target === dialog && kind !== 'alert') close();
   });
   dialog.append(build(close));
+  // Focus the dialog itself rather than its first button, so no focus ring
+  // shows up on open (iOS sheets and menus open with nothing selected).
+  dialog.tabIndex = -1;
   dialog.showModal();
+  dialog.focus({ preventScroll: true });
   return { dialog, close };
 }
 
