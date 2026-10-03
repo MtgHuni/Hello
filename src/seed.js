@@ -32,7 +32,8 @@ function seedTestData(db, { force = false, fill = 0.9 } = {}) {
       if (!force && history > 1) continue;
       const price = TEST_PRICES[product.name] ?? FALLBACK_PRICE;
       if (price === product.price) continue;
-      db.prepare('UPDATE products SET price = ? WHERE id = ?').run(price, product.id);
+      // Prix abonné : 5 cents sous le prix public.
+      db.prepare('UPDATE products SET price = ?, subscriber_price = ? WHERE id = ?').run(price, round(price - 0.05, 2), product.id);
       db.prepare('INSERT INTO price_history (product_id, price, user_id) VALUES (?, ?, ?)').run(product.id, price, manager.id);
       result.prices.push({ name: product.name, price });
     }
