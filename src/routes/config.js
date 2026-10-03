@@ -28,8 +28,9 @@ module.exports = function configRoutes(db) {
       stock_tolerance: num(b.stockTolerance, 'La tolérance de stock', { max: 100000 }),
       points_per_liter: num(b.pointsPerLiter, 'Les points par litre', { max: 1000 }),
     };
-    const stmt = db.prepare('UPDATE settings SET value = ? WHERE key = ?');
-    for (const [key, value] of Object.entries(values)) stmt.run(String(value), key);
+    values.loyalty_enabled = bool(b.loyaltyEnabled, getSettings(db).loyaltyEnabled) ? 1 : 0;
+    const stmt = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
+    for (const [key, value] of Object.entries(values)) stmt.run(key, String(value));
     res.json(getSettings(db));
   });
 

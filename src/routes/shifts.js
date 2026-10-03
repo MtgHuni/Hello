@@ -141,7 +141,8 @@ module.exports = function shiftRoutes(db) {
     const plate = str(b.plate, "L'immatriculation", { required: false, max: 20 });
     const amount = round(liters * reading.unit_price);
     const kind = customer.type === 'account' ? 'credit' : 'loyalty';
-    const points = kind === 'loyalty' ? Math.floor(liters * getSettings(db).pointsPerLiter) : 0;
+    const settings = getSettings(db);
+    const points = kind === 'loyalty' && settings.loyaltyEnabled ? Math.floor(liters * settings.pointsPerLiter) : 0;
 
     const id = transaction(db, () => {
       if (kind === 'credit') {

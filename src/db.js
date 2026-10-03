@@ -173,6 +173,7 @@ const DEFAULT_SETTINGS = {
   cash_tolerance: '1',
   stock_tolerance: '20',
   points_per_liter: '1',
+  loyalty_enabled: '1',
 };
 
 function openDb(file) {
@@ -193,6 +194,7 @@ function getSettings(db) {
     cashTolerance: Number(s.cash_tolerance),
     stockTolerance: Number(s.stock_tolerance),
     pointsPerLiter: Number(s.points_per_liter),
+    loyaltyEnabled: s.loyalty_enabled !== '0',
   };
 }
 

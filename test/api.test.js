@@ -112,6 +112,15 @@ test('poste complet : ouverture, ventes clients, clôture et rapprochement', asy
   const loyalty = await pompiste('POST', `/api/shifts/${shift.id}/sales`, { customerId: ctx.person.id, nozzleId: nozzle.id, liters: 20.5 });
   assert.strictEqual(loyalty.data.points, 20);
 
+  // Loyalty programme switched off: no points are awarded.
+  const current = (await gerant('GET', '/api/settings')).data;
+  assert.strictEqual(current.loyaltyEnabled, true);
+  const off = await gerant('PUT', '/api/settings', { ...current, loyaltyEnabled: false });
+  assert.strictEqual(off.data.loyaltyEnabled, false);
+  const noPoints = await pompiste('POST', `/api/shifts/${shift.id}/sales`, { customerId: ctx.person.id, nozzleId: nozzle.id, liters: 10 });
+  assert.strictEqual(noPoints.data.points, 0);
+  assert.strictEqual((await gerant('PUT', '/api/settings', { ...current, loyaltyEnabled: true })).data.loyaltyEnabled, true);
+
   const bad = await pompiste('POST', `/api/shifts/${shift.id}/close`, {
     readings: [{ nozzleId: nozzle.id, endMeter: 30 }],
     cash: 0,

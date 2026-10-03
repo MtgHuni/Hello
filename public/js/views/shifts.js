@@ -80,12 +80,12 @@ export async function renderShiftDetail(page, ctx) {
           }, { iconName: 'check' })
         : null,
     ),
-    shiftSummary(shift, ctx.state.settings.cashTolerance),
+    shiftSummary(shift, ctx.state.settings.cashTolerance, ctx.state.settings.loyaltyEnabled),
   );
 }
 
 // Shared by the manager detail page and the attendant's end-of-shift screen.
-export function shiftSummary(shift, tolerance) {
+export function shiftSummary(shift, tolerance, loyalty) {
   const closed = shift.status !== 'open';
   return h(
     'div',
@@ -125,7 +125,7 @@ export function shiftSummary(shift, tolerance) {
         [
           { label: 'Heure', render: (s) => fmt.time(s.created_at) },
           { label: 'Client', key: 'customer_name' },
-          { label: 'Type', render: (s) => (s.kind === 'credit' ? 'Crédit' : `Fidélité (+${s.points} pts)`) },
+          { label: 'Type', render: (s) => (s.kind === 'credit' ? 'Crédit' : loyalty ? `Fidélité (+${s.points} pts)` : 'Particulier') },
           { label: 'Véhicule', render: (s) => s.plate || '—' },
           { label: 'Produit', key: 'product_name' },
           { label: 'Litres', align: 'right', render: (s) => fmt.liters(s.liters) },

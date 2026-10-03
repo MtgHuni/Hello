@@ -72,7 +72,7 @@ function renderOpenShift(page, ctx, shift) {
       { class: 'stack' },
       button('Nouvelle vente client', () => addSale(page, ctx, shift), { variant: 'large block', iconName: 'plus' }),
       card(
-        cardHeader('Ventes clients', 'Clients en compte (crédit) et clients fidélité'),
+        cardHeader('Ventes clients', ctx.state.settings.loyaltyEnabled ? 'Clients en compte (crédit) et clients fidélité' : 'Clients en compte (crédit) et particuliers'),
         shift.sales.length
           ? shift.sales.map((s) =>
               h(
@@ -135,7 +135,7 @@ async function addSale(page, ctx, shift) {
     const c = customers.find((x) => x.id === Number(form.elements.customerId.value));
     const total = (Number(form.elements.liters.value) || 0) * priceOf(form.elements.nozzleId.value);
     amount.lastChild.textContent = fmt.money(total);
-    info.textContent = c?.type === 'account' ? `Crédit disponible : ${fmt.money(c.available)}` : c ? 'Client fidélité : paiement normal, points ajoutés.' : '';
+    info.textContent = c?.type === 'account' ? `Crédit disponible : ${fmt.money(c.available)}` : c ? (ctx.state.settings.loyaltyEnabled ? 'Client fidélité : paiement normal, points ajoutés.' : 'Particulier : paiement normal.') : '';
     if (e.target.name === 'customerId' && c?.plate && !form.elements.plate.value) form.elements.plate.value = c.plate;
   };
   const ok = await formDialog({
@@ -147,7 +147,7 @@ async function addSale(page, ctx, shift) {
         label: 'Client',
         type: 'select',
         required: true,
-        options: [['', 'Choisir un client…'], ...customers.map((c) => [c.id, `${c.name} — ${c.type === 'account' ? `en compte (dispo ${fmt.money(c.available)})` : 'fidélité'}`])],
+        options: [['', 'Choisir un client…'], ...customers.map((c) => [c.id, `${c.name} — ${c.type === 'account' ? `en compte (dispo ${fmt.money(c.available)})` : (ctx.state.settings.loyaltyEnabled ? 'fidélité' : 'particulier')}`])],
         onInput: update,
       },
       { name: 'nozzleId', label: 'Pistolet', type: 'select', required: true, options: shift.readings.map((r) => [r.nozzle_id, `${r.pump_name} · ${r.product_name} (${fmt.price(r.unit_price)})`]), onInput: update },
@@ -278,7 +278,7 @@ function renderClosed(page, ctx, shift) {
           h('div', { class: 'muted' }, ok ? 'Votre caisse est juste.' : 'L’écart dépasse la tolérance : le gérant va vérifier.'),
         ),
       ),
-      shiftSummary(shift, tol),
+      shiftSummary(shift, tol, ctx.state.settings.loyaltyEnabled),
       button('Terminé', () => renderAttendant(page, ctx), { variant: 'large block' }),
     ),
   );

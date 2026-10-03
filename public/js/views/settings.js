@@ -104,7 +104,8 @@ export async function renderSettings(page, ctx) {
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Nom'), h('span', {}, settings.stationName)),
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Tolérance d’écart de caisse'), h('span', {}, `± ${fmt.money(settings.cashTolerance)}`)),
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Tolérance d’écart de jaugeage'), h('span', {}, `± ${fmt.liters(settings.stockTolerance)}`)),
-        h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Points fidélité par litre'), h('span', {}, fmt.number(settings.pointsPerLiter))),
+        h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Programme de fidélité'), h('span', {}, settings.loyaltyEnabled ? 'Activé' : 'Désactivé')),
+        ...(settings.loyaltyEnabled ? [h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Points fidélité par litre'), h('span', {}, fmt.number(settings.pointsPerLiter)))] : []),
       ),
     ),
   );
@@ -117,6 +118,7 @@ async function stationDialog(s) {
       { name: 'stationName', label: 'Nom de la station', value: s.stationName, required: true, full: true },
       { name: 'cashTolerance', label: 'Tolérance de caisse ($)', type: 'number', step: '0.01', min: '0', value: s.cashTolerance, hint: 'Écart toléré à la clôture d’un poste' },
       { name: 'stockTolerance', label: 'Tolérance de jaugeage (L)', type: 'number', step: '0.01', min: '0', value: s.stockTolerance, hint: 'Écart toléré entre stock théorique et mesuré' },
+      { name: 'loyaltyEnabled', label: 'Programme de fidélité', type: 'checkbox', value: s.loyaltyEnabled, hint: 'Désactivé : aucun point n’est attribué ni affiché' },
       { name: 'pointsPerLiter', label: 'Points fidélité par litre', type: 'number', step: '0.01', min: '0', value: s.pointsPerLiter },
     ],
     onSubmit: (d) => api.put('/settings', d),

@@ -8,6 +8,7 @@ let search = '';
 const TYPE_LABEL = { account: 'En compte', individual: 'Particulier' };
 
 export async function renderCustomers(page, ctx) {
+  const loyalty = ctx.state.settings.loyaltyEnabled;
   const customers = await api.get('/customers');
   const listHost = h('div');
 
@@ -23,7 +24,7 @@ export async function renderCustomers(page, ctx) {
           { label: 'Type', render: (c) => (c.active ? TYPE_LABEL[c.type] : badge('Désactivé')) },
           { label: 'Solde dû', align: 'right', render: (c) => (c.type === 'account' ? h('span', { class: c.balance > c.credit_limit ? 'variance-neg' : '' }, fmt.money(c.balance)) : '—') },
           { label: 'Plafond', align: 'right', render: (c) => (c.type === 'account' ? fmt.money(c.credit_limit) : '—') },
-          { label: 'Points', align: 'right', render: (c) => (c.type === 'individual' ? fmt.number(c.loyalty_points) : '—') },
+          ...(loyalty ? [{ label: 'Points', align: 'right', render: (c) => (c.type === 'individual' ? fmt.number(c.loyalty_points) : '—') }] : []),
           { label: 'Dernier achat', render: (c) => fmt.date(c.last_purchase_at) },
         ],
         rows,
@@ -103,7 +104,7 @@ export async function renderCustomerDetail(page, ctx) {
         button('Modifier', () => customerDialog(c, ctx, reload), { variant: 'secondary', iconName: 'edit' }),
         button(c.login ? 'Accès client' : 'Créer un accès', () => loginDialog(c, reload), { variant: 'secondary', iconName: 'user' }),
       ),
-      statement(acc, period, (p) => {
+      statement(acc, period, ctx.state.settings.loyaltyEnabled, (p) => {
         Object.assign(period, p);
         load();
       }),
@@ -118,7 +119,7 @@ export function defaultPeriod() {
 }
 
 // Account statement shared with the client space: KPIs, period picker, movements, print.
-export function statement(acc, period, onPeriod) {
+export function statement(acc, period, loyalty, onPeriod) {
   const c = acc.customer;
   const from = field({ name: 'from', label: 'Du', type: 'date', value: period.from });
   const to = field({ name: 'to', label: 'Au', type: 'date', value: period.to });
@@ -141,10 +142,10 @@ export function statement(acc, period, onPeriod) {
             kpi('Achats sur la période', fmt.money(acc.totals.purchases), fmt.liters(acc.totals.liters)),
           ]
         : [
-            kpi('Points fidélité', fmt.number(c.loyalty_points), 'Cumulés'),
+            ...(loyalty ? [kpi('Points fidélité', fmt.number(c.loyalty_points), 'Cumulés')] : []),
             kpi('Achats sur la période', fmt.money(acc.totals.purchases)),
             kpi('Litres sur la période', fmt.liters(acc.totals.liters)),
-            kpi('Points sur la période', `+${fmt.number(acc.totals.points)}`),
+            ...(loyalty ? [kpi('Points sur la période', `+${fmt.number(acc.totals.points)}`)] : []),
           ],
     ),
     h(
@@ -169,7 +170,7 @@ export function statement(acc, period, onPeriod) {
               ]
             : [
                 { label: 'Montant', align: 'right', render: (m) => fmt.money(m.amount) },
-                { label: 'Points', align: 'right', render: (m) => (m.points ? `+${m.points}` : '') },
+                ...(loyalty ? [{ label: 'Points', align: 'right', render: (m) => (m.points ? `+${m.points}` : '') }] : []),
               ]),
         ],
         acc.movements,
