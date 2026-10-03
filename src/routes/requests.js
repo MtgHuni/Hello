@@ -41,7 +41,8 @@ module.exports = function requestRoutes(db) {
     if (payment === 'credit' && customer.credit_limit <= 0) {
       fail(400, "Le crédit n'est pas ouvert sur votre compte. Adressez-vous au gérant.");
     }
-    const { comboThreshold } = getSettings(db);
+    const { comboThreshold, combosEnabled } = getSettings(db);
+    if (payment === 'combo' && !combosEnabled) fail(400, 'Les combos sont désactivés.');
     if (payment === 'combo' && customer.loyalty_points < comboThreshold) {
       fail(400, `Il faut au moins ${comboThreshold} combos pour les échanger (vous en avez ${customer.loyalty_points}).`);
     }

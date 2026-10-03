@@ -1,3 +1,4 @@
+import { flags } from '../ui.js';
 import { api } from '../api.js';
 import { h, fmt, pageHeader, card, cardHeader, table, segmented, kpi, badge, button, formDialog, toast, field, todayISO, isoDate, setContent } from '../ui.js';
 import { icon } from '../icons.js';
@@ -28,7 +29,7 @@ export async function renderCustomers(page, ctx) {
           },
           { label: 'Solde dû', align: 'right', render: (c) => (c.balance ? h('span', { class: c.balance > c.credit_limit ? 'variance-neg' : '' }, fmt.money(c.balance)) : '—') },
           { label: 'Plafond', align: 'right', render: (c) => fmt.money(c.credit_limit) },
-          { label: 'Combos', align: 'right', render: (c) => fmt.number(c.loyalty_points) },
+          ...(flags.combos ? [{ label: 'Combos', align: 'right', render: (c) => fmt.number(c.loyalty_points) }] : []),
           { label: 'Dernier achat', render: (c) => fmt.date(c.last_purchase_at) },
         ],
         rows,
@@ -183,7 +184,7 @@ export function statement(acc, period, onPeriod) {
       { class: 'grid grid-4' },
       kpi('Solde dû', h('span', { class: c.balance > c.credit_limit ? 'variance-neg' : '' }, fmt.money(c.balance)), c.balance > c.credit_limit ? 'Plafond dépassé' : `Plafond ${fmt.money(c.credit_limit)}`),
       kpi('Crédit disponible', fmt.money(Math.max(0, c.credit_limit - c.balance)), TYPE_LABEL[c.type]),
-      kpi(
+      !flags.combos ? null : kpi(
         'Combos',
         fmt.number(combos.balance),
         combos.balance >= combos.threshold
@@ -210,7 +211,7 @@ export function statement(acc, period, onPeriod) {
           { label: 'Dû', align: 'right', render: (m) => (m.debit ? fmt.money(m.debit) : '') },
           { label: 'Payé', align: 'right', render: (m) => (m.credit ? fmt.money(m.credit) : '') },
           { label: 'Solde', align: 'right', render: (m) => fmt.money(m.balance) },
-          { label: 'Combos', align: 'right', render: (m) => (m.points ? `+${m.points}` : m.combosUsed ? `−${m.combosUsed}` : '') },
+          ...(flags.combos ? [{ label: 'Combos', align: 'right', render: (m) => (m.points ? `+${m.points}` : m.combosUsed ? `−${m.combosUsed}` : '') }] : []),
         ],
         acc.movements,
         { empty: 'Aucune opération sur cette période.' },

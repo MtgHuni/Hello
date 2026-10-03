@@ -1,3 +1,4 @@
+import { flags } from '../ui.js';
 import { api } from '../api.js';
 import { h, fmt, pageHeader, button, formDialog, confirmDialog, toast, spinner, setContent } from '../ui.js';
 import { icon } from '../icons.js';
@@ -16,7 +17,7 @@ export async function renderAccount(page) {
 
   const loadStatement = async () => {
     acc = await api.get(`/me/account?from=${period.from}&to=${period.to}`);
-    setContent(combosHost, combosCard(acc));
+    setContent(combosHost, flags.combos ? combosCard(acc) : null);
     setContent(statementHost, 
       statement(acc, period, (p) => {
         Object.assign(period, p);
@@ -74,7 +75,7 @@ export async function renderAccount(page) {
           ? h('div', { class: 'big' }, `${fmt.liters(r.sale_liters)} · ${fmt.money(r.sale_amount)}`)
           : h('p', { class: 'muted', style: 'margin-top:6px' }, r.note || 'Adressez-vous au pompiste.'),
         confirmed
-          ? h('div', {}, `${r.sale_points ? `+${r.sale_points} combos · ` : r.sale_combos ? `−${r.sale_combos} combos · ` : r.payment === 'credit' ? 'combos au paiement du crédit · ' : ''}confirmé par ${r.handled_by_name}`)
+          ? h('div', {}, `${!flags.combos ? '' : r.sale_points ? `+${r.sale_points} combos · ` : r.sale_combos ? `−${r.sale_combos} combos · ` : r.payment === 'credit' ? 'combos au paiement du crédit · ' : ''}confirmé par ${r.handled_by_name}`)
           : null,
         h('div', { style: 'margin-top:16px' }, startButton),
       ),
@@ -111,7 +112,7 @@ export async function renderAccount(page) {
     const products = (await api.get('/products')).filter((p) => p.active);
     const c = acc.customer;
     const canCredit = c.credit_limit > 0;
-    const canCombo = acc.combos.balance >= acc.combos.threshold;
+    const canCombo = flags.combos && acc.combos.balance >= acc.combos.threshold;
     const priceOf = (p) => (c.type === 'account' ? p.subscriber_price : p.price);
     const estimate = h('div', { class: 'summary-line total' }, h('span', {}, 'Estimation'), h('span', {}, '—'));
     const update = (e) => {

@@ -1,3 +1,4 @@
+import { flags } from '../ui.js';
 import { api } from '../api.js';
 import { h, fmt, kpi, card, cardHeader, tankGauge, pageHeader, button, setContent } from '../ui.js';
 import { icon } from '../icons.js';
@@ -42,7 +43,7 @@ export async function renderDashboard(page, { state, navigate }) {
     h(
       'div',
       { class: 'grid grid-2 section' },
-      kpi('Combos des clients', fmt.number(d.combos.total), `Valeur ${fmt.money(d.combos.value)} en carburant · ${d.combos.redeemable} client${d.combos.redeemable > 1 ? 's peuvent' : ' peut'} échanger`),
+      !flags.combos ? null : kpi('Combos des clients', fmt.number(d.combos.total), `Valeur ${fmt.money(d.combos.value)} en carburant · ${d.combos.redeemable} client${d.combos.redeemable > 1 ? 's peuvent' : ' peut'} échanger`),
       kpi('Fiches clients à compléter', String(d.toReview), d.toReview ? 'Créées à la pompe avec le nom seulement' : 'Toutes les fiches sont complètes'),
     ),
   );

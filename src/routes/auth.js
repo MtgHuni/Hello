@@ -17,7 +17,8 @@ module.exports = function authRoutes(db) {
   const userCount = () => db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
 
   router.get('/setup', (req, res) => {
-    res.json({ needsSetup: userCount() === 0, stationName: getSettings(db).stationName });
+    const { stationName, combosEnabled } = getSettings(db);
+    res.json({ needsSetup: userCount() === 0, stationName, combosEnabled });
   });
 
   // First launch: creates the manager account and a default station

@@ -1,3 +1,4 @@
+import { flags } from '../ui.js';
 import { api } from '../api.js';
 import { h, fmt, pageHeader, card, cardHeader, table, badge, button, formDialog, openDialog, toast, productColor, setContent } from '../ui.js';
 
@@ -117,10 +118,11 @@ export async function renderSettings(page, ctx) {
         line('Plafond de crédit', fmt.money(settings.subscriberCreditLimit)),
         line('Paiement du mois', `avant le ${settings.subscriberGraceDays} du mois suivant`),
         h('h3', { style: 'margin:14px 0 2px' }, 'Combos'),
-        line('Combos gagnés par litre', fmt.number(settings.combosPerLiter)),
+        line('Programme de combos', settings.combosEnabled ? 'Activé' : 'Désactivé'),
+        ...(settings.combosEnabled ? [line('Combos gagnés par litre', fmt.number(settings.combosPerLiter)),
         line('Valeur d’un combo', fmt.money(settings.comboValue)),
         line('Seuil d’échange', `${fmt.number(settings.comboThreshold)} combos (= ${fmt.money(settings.comboThreshold * settings.comboValue)})`),
-        h('p', { class: 'muted small', style: 'margin-top:8px' }, 'Une vente à crédit ne rapporte ses combos qu’une fois entièrement payée.'),
+        h('p', { class: 'muted small', style: 'margin-top:8px' }, 'Une vente à crédit ne rapporte ses combos qu’une fois entièrement payée.')] : []),
       ),
     ),
   );
@@ -149,6 +151,7 @@ async function customersDialog(s, reload) {
       { name: 'individualCreditLimit', label: 'Plafond particuliers ($)', type: 'number', step: '0.01', min: '0', value: s.individualCreditLimit, required: true },
       { name: 'subscriberCreditLimit', label: 'Plafond abonnés ($)', type: 'number', step: '0.01', min: '0', value: s.subscriberCreditLimit, required: true },
       { name: 'subscriberGraceDays', label: 'Abonnés : payer avant le (jour du mois)', type: 'number', step: '1', min: '1', value: s.subscriberGraceDays, required: true, hint: 'Après ce jour, un abonné qui doit le mois précédent ne peut plus prendre à crédit' },
+      { name: 'combosEnabled', label: 'Programme de combos', type: 'checkbox', value: s.combosEnabled, full: true },
       { name: 'combosPerLiter', label: 'Combos par litre', type: 'number', step: '0.01', min: '0', value: s.combosPerLiter, required: true },
       { name: 'comboValue', label: 'Valeur d’un combo ($)', type: 'number', step: '0.0001', min: '0.0001', value: s.comboValue, required: true },
       { name: 'comboThreshold', label: 'Seuil d’échange (combos)', type: 'number', step: '1', min: '1', value: s.comboThreshold, required: true, hint: 'Minimum pour échanger des combos contre du carburant' },
@@ -156,8 +159,8 @@ async function customersDialog(s, reload) {
     onSubmit: (d) => api.put('/settings', d),
   });
   if (ok) {
-    toast('Réglages enregistrés');
-    reload();
+    // Les combos s'affichent dans tout l'écran : on recharge l'application.
+    location.reload();
   }
 }
 

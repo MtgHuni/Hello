@@ -36,6 +36,7 @@ module.exports = function configRoutes(db) {
       subscriber_credit_limit: pick(b.subscriberCreditLimit, cur.subscriberCreditLimit, 'Le plafond des abonnés', { max: 1e8 }),
       subscriber_grace_days: pick(b.subscriberGraceDays, cur.subscriberGraceDays, 'Le délai de paiement des abonnés', { min: 1, max: 28, integer: true }),
     };
+    values.combos_enabled = bool(b.combosEnabled, cur.combosEnabled) ? 1 : 0;
     const stmt = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
     for (const [key, value] of Object.entries(values)) stmt.run(key, String(value));
     syncCreditLimits(db);

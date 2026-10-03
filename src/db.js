@@ -262,6 +262,7 @@ const DEFAULT_SETTINGS = {
   points_per_liter: '1', // combos per litre
   combo_value: '0.05', // value of one combo, in dollars
   combo_threshold: '100', // combos needed before they can be exchanged
+  combos_enabled: '1', // '0' : no combo is earned, none is shown, no exchange is possible
   individual_credit_limit: '50',
   subscriber_credit_limit: '500',
   subscriber_grace_days: '5', // days after month end for subscribers to pay
@@ -364,6 +365,7 @@ function getSettings(db) {
     combosPerLiter: Number(s.points_per_liter),
     comboValue: Number(s.combo_value),
     comboThreshold: Number(s.combo_threshold),
+    combosEnabled: s.combos_enabled !== '0',
     individualCreditLimit: Number(s.individual_credit_limit),
     subscriberCreditLimit: Number(s.subscriber_credit_limit),
     subscriberGraceDays: Number(s.subscriber_grace_days),

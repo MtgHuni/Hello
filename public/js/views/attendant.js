@@ -1,3 +1,4 @@
+import { flags } from '../ui.js';
 import { api } from '../api.js';
 import { h, fmt, pageHeader, card, cardHeader, table, shiftBadge, varianceCell, button, formDialog, confirmDialog, toast, field, productColor, badge, kpi, parseServerDate, setContent } from '../ui.js';
 import { icon } from '../icons.js';
@@ -103,7 +104,7 @@ function renderOpenShift(page, ctx, shift) {
         'span',
         { class: 'row', style: 'gap:6px' },
         s.kind === 'credit' ? (s.over_limit ? badge('Crédit hors plafond', 'serious') : badge('Crédit', 'info')) : s.kind === 'combo' ? badge(`Combos −${s.combos_used}`, 'warning') : badge('Payé', 'good'),
-        s.points ? badge(`+${s.points} combos`) : null,
+        s.points && flags.combos ? badge(`+${s.points} combos`) : null,
         s.source === 'customer' ? badge('Demande client') : null,
       ),
       amount: fmt.money(s.amount),
@@ -211,7 +212,7 @@ function requestQueue(shift, reload) {
   async function confirmRequest(r, adjust = {}) {
     try {
       const sale = await api.post(`/requests/${r.id}/confirm`, adjust);
-      toast(`${r.customer_name} : ${fmt.liters(sale.liters)} · ${fmt.money(sale.amount)}${sale.points ? ` · +${sale.points} combos` : sale.combos_used ? ` · −${sale.combos_used} combos` : ''}`);
+      toast(`${r.customer_name} : ${fmt.liters(sale.liters)} · ${fmt.money(sale.amount)}${flags.combos && sale.points ? ` · +${sale.points} combos` : sale.combos_used ? ` · −${sale.combos_used} combos` : ''}`);
     } catch (err) {
       if (err.code !== 'over_limit') throw err;
       if (!(await confirmDialog('Accorder le crédit ?', `${err.message} Si vous accordez ce crédit, il sera signalé au gérant avec votre nom.`, { confirmLabel: 'Accorder' }))) return;
@@ -328,7 +329,8 @@ async function addSale(ctx, shift, reload) {
       who.textContent = '';
       who.className = 'hint-line';
     } else if (c) {
-      const parts = [c.type === 'account' ? 'Abonné' : 'Particulier', `${c.points ?? 0} combos${c.points >= comboThreshold ? ` (= ${fmt.money(c.points * comboValue)})` : ''}`];
+      const parts = [c.type === 'account' ? 'Abonné' : 'Particulier'];
+      if (flags.combos) parts.push(`${c.points ?? 0} combos${c.points >= comboThreshold ? ` (= ${fmt.money(c.points * comboValue)})` : ''}`);
       parts.push(c.late ? 'mois précédent impayé' : `crédit disponible ${fmt.money(Math.max(0, c.available ?? 0))}`);
       who.textContent = parts.join(' · ');
       who.className = c.late ? 'hint-line variance-neg' : 'hint-line';
@@ -349,13 +351,13 @@ async function addSale(ctx, shift, reload) {
         : payment === 'credit'
           ? `+${Math.floor(liters * combosPerLiter)} combos au paiement`
           : `+${Math.floor(liters * combosPerLiter)} combos`;
-    summary.lastChild.textContent = qty ? `${fmt.liters(liters)} · ${fmt.money(amount)} · ${combos}` : '—';
+    summary.lastChild.textContent = qty ? `${fmt.liters(liters)} · ${fmt.money(amount)}${flags.combos ? ` · ${combos}` : ''}` : '—';
   };
 
   const fields = [
     { name: 'customer', label: 'Client (nom, plaque ou téléphone)', required: true, list: 'customer-list', placeholder: 'Tapez quelques lettres…', onInput: update, enterkeyhint: 'next' },
     { name: 'productId', label: 'Produit', type: 'segment', options: products.map((r) => [r.product_id, r.product_name]), onInput: update },
-    { name: 'payment', label: 'Paiement', type: 'segment', options: [['paid', 'Payé'], ['credit', 'Crédit'], ['combo', 'Combos']], onInput: update },
+    { name: 'payment', label: 'Paiement', type: 'segment', options: [['paid', 'Payé'], ['credit', 'Crédit'], ...(flags.combos ? [['combo', 'Combos']] : [])], onInput: update },
     { name: 'unit', label: 'Unité', type: 'segment', options: [['amount', '$'], ['liters', 'L']], onInput: update },
     { name: 'qty', label: 'Quantité', type: 'number', step: '0.01', min: '0.01', required: true, onInput: update, inputmode: 'decimal' },
     { name: 'plate', label: 'Plaque', placeholder: 'Facultatif' },
@@ -398,7 +400,7 @@ async function addSale(ctx, shift, reload) {
         ? 'Crédit accordé et signalé au gérant'
         : ok.kind === 'combo'
           ? `Échange enregistré · −${ok.combos_used} combos`
-          : `Vente enregistrée${ok.points ? ` · +${ok.points} combos` : ''}`,
+          : `Vente enregistrée${flags.combos && ok.points ? ` · +${ok.points} combos` : ''}`,
     );
     reload();
   }

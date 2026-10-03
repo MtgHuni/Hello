@@ -1,3 +1,4 @@
+import { flags } from '../ui.js';
 import { api } from '../api.js';
 import { h, field, readForm, setContent } from '../ui.js';
 import { brandMark } from '../icons.js';
@@ -57,7 +58,7 @@ export function renderRegister(root, stationName, onDone) {
   setContent(root, 
     authForm({
       title: 'Créer mon compte',
-      lead: `Client de ${stationName} : préparez vos pleins depuis votre téléphone et cumulez des combos.`,
+      lead: `Client de ${stationName} : préparez vos pleins depuis votre téléphone${flags.combos ? ' et cumulez des combos' : ''}.`,
       submitLabel: 'Créer mon compte',
       fields: [
         { name: 'name', label: 'Nom complet', required: true, autocomplete: 'name' },

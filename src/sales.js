@@ -40,7 +40,8 @@ function createSale(db, shift, input) {
     liters = round(amount / unitPrice);
   }
   const plate = str(input.plate, "L'immatriculation", { required: false, max: 20 }) ?? customer.plate;
-  const pointsDue = payment === 'combo' ? 0 : Math.floor(liters * settings.combosPerLiter);
+  if (payment === 'combo' && !settings.combosEnabled) fail(409, 'Les combos sont désactivés.', 'combos');
+  const pointsDue = payment === 'combo' || !settings.combosEnabled ? 0 : Math.floor(liters * settings.combosPerLiter);
   const combosUsed = payment === 'combo' ? Math.ceil(amount / settings.comboValue - 1e-9) : 0;
 
   const id = transaction(db, () => {

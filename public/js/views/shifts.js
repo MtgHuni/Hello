@@ -1,3 +1,4 @@
+import { flags } from '../ui.js';
 import { api } from '../api.js';
 import { h, fmt, pageHeader, card, cardHeader, table, segmented, shiftBadge, varianceCell, kpi, formDialog, confirmDialog, toast, button, badge, setContent } from '../ui.js';
 import { icon } from '../icons.js';
@@ -181,7 +182,7 @@ export function shiftSummary(shift, tolerance) {
                 s.source === 'customer' ? badge('Demande client') : null,
               ),
           },
-          { label: 'Combos', align: 'right', render: (s) => (s.points ? `+${s.points}` : s.combos_used ? `−${s.combos_used}` : s.points_due ? `+${s.points_due} au paiement` : '—') },
+          ...(flags.combos ? [{ label: 'Combos', align: 'right', render: (s) => (s.points ? `+${s.points}` : s.combos_used ? `−${s.combos_used}` : s.points_due ? `+${s.points_due} au paiement` : '—') }] : []),
           { label: 'Véhicule', render: (s) => s.plate || '—' },
           { label: 'Produit', key: 'product_name' },
           { label: 'Litres', align: 'right', render: (s) => fmt.liters(s.liters) },

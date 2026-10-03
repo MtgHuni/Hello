@@ -1,3 +1,4 @@
+import { flags } from './ui.js';
 import { api } from './api.js';
 import { h, errorState, toast, formDialog, actionSheet, spinner } from './ui.js';
 import { icon, brandMark } from './icons.js';
@@ -54,11 +55,13 @@ async function boot() {
   lastRoute = null;
   try {
     const setup = await api.get('/setup');
+    flags.combos = setup.combosEnabled !== false;
     if (setup.needsSetup) return renderSetup(root, boot);
     const me = await api.get('/auth/me').catch(() => null);
     if (!me) return renderLogin(root, setup.stationName, boot);
     state.user = me.user;
     state.settings = me.settings;
+    flags.combos = me.settings.combosEnabled !== false;
     document.title = me.settings.stationName;
     route();
   } catch (err) {

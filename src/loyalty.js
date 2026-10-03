@@ -1,4 +1,5 @@
 const { round } = require('./util');
+const { getSettings } = require('./db');
 
 // Payments settle a customer's credit sales from the oldest to the newest.
 // Returns each credit sale with what is still unpaid on it.
@@ -21,7 +22,8 @@ function creditAllocation(db, customerId) {
 // combos spent on fuel are deducted. Call after any sale or payment change.
 function refreshCustomer(db, customerId) {
   const update = db.prepare('UPDATE sales SET points = ? WHERE id = ?');
-  for (const c of creditAllocation(db, customerId)) {
+  // Programme switched off: nothing new is earned (combos already earned are kept).
+  for (const c of getSettings(db).combosEnabled ? creditAllocation(db, customerId) : []) {
     const points = c.unpaid <= 0.001 ? c.points_due : 0;
     if (points !== c.points) update.run(points, c.id);
   }

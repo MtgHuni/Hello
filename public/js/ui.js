@@ -36,6 +36,9 @@ const moneyFmt = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: '
 const numFmt = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 });
 const priceFmt = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 
+// Programme de combos activé ? Réglage du gérant, posé par main.js au démarrage.
+export const flags = { combos: true };
+
 export const fmt = {
   money: (n) => moneyFmt.format(Number(n) || 0),
   signedMoney: (n) => (n > 0 ? '+' : '') + moneyFmt.format(Number(n) || 0),

@@ -202,6 +202,17 @@ test('échange de combos contre du carburant, déduit de la caisse', async () =>
   assert.strictEqual(exchange.data.points, 0);
   assert.strictEqual((await customer(ctx.person.id)).customer.loyalty_points, 20);
 
+  // Combos désactivés : rien n'est gagné et l'échange est refusé ; réactivés, tout revient.
+  assert.strictEqual((await gerant('PUT', '/api/settings', { combosEnabled: false })).data.combosEnabled, false);
+  assert.strictEqual((await pompiste('GET', '/api/setup')).data.combosEnabled, false);
+  const noEarn = await sell({ amount: 1, payment: 'paid' });
+  assert.strictEqual(noEarn.status, 201);
+  assert.strictEqual(noEarn.data.points, 0);
+  assert.strictEqual(noEarn.data.points_due, 0);
+  assert.strictEqual((await sell({ amount: 1 })).status, 409, 'échange refusé');
+  assert.strictEqual((await customer(ctx.person.id)).customer.loyalty_points, 20, 'les combos acquis sont conservés');
+  assert.strictEqual((await gerant('PUT', '/api/settings', { combosEnabled: true })).data.combosEnabled, true);
+
   // An expense entered by mistake: its cancellation is asked, still pending at closing time.
   const expense = await pompiste('POST', `/api/shifts/${ctx.shift.id}/expenses`, { category: 'Autre', amount: 3, description: 'Erreur' });
   await pompiste('POST', `/api/shifts/${ctx.shift.id}/expenses/${expense.data.id}/cancel`);
