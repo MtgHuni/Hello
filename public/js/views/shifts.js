@@ -1,6 +1,6 @@
 import { flags } from '../ui.js';
 import { api } from '../api.js';
-import { h, fmt, pageHeader, card, cardHeader, table, segmented, shiftBadge, varianceCell, kpi, formDialog, confirmDialog, toast, button, badge, setContent } from '../ui.js';
+import { shiftLine, h, fmt, pageHeader, card, cardHeader, table, segmented, shiftBadge, varianceCell, kpi, formDialog, confirmDialog, toast, button, badge, setContent } from '../ui.js';
 import { icon } from '../icons.js';
 
 let filter = 'closed';
@@ -81,6 +81,7 @@ export async function renderShiftDetail(page, ctx) {
           }, { iconName: 'check' })
         : null,
     ),
+    shiftLine(shift.status),
     isManager ? cancellationRequests(shift, () => renderShiftDetail(page, ctx)) : null,
     shiftSummary(shift, ctx.state.settings.cashTolerance),
   );

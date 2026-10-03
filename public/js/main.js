@@ -90,8 +90,30 @@ async function changePassword() {
   if (ok) toast('Mot de passe modifié');
 }
 
+// Mode nuit (par défaut) ou mode jour pour la pompe en plein soleil ; mémorisé sur l'appareil.
+function applyTheme(theme) {
+  if (theme === 'light') document.documentElement.dataset.theme = 'light';
+  else delete document.documentElement.dataset.theme;
+  const color = theme === 'light' ? '#ffffff' : '#08101e';
+  document.querySelector('meta[name=theme-color]')?.setAttribute('content', color);
+}
+try {
+  applyTheme(localStorage.getItem('theme'));
+} catch {
+  /* stockage indisponible : mode nuit */
+}
+function toggleTheme() {
+  const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+  applyTheme(next);
+  try {
+    localStorage.setItem('theme', next);
+  } catch {
+    /* ignoré */
+  }
+}
+
 function accountMenu() {
-  const actions = [{ label: 'Changer le mot de passe', onClick: changePassword }];
+  const actions = [{ label: document.documentElement.dataset.theme === 'light' ? 'Passer en mode nuit' : 'Passer en mode jour (plein soleil)', onClick: toggleTheme }, { label: 'Changer le mot de passe', onClick: changePassword }];
   if (state.user.role === 'manager') actions.push({ label: 'Mon poste (pompe)', onClick: () => navigate('pompe') });
   actions.push({ label: 'Se déconnecter', destructive: true, onClick: logout });
   actionSheet({ title: `${state.user.name} · ${state.settings.stationName}`, actions });

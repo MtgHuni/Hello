@@ -1,6 +1,6 @@
 /* =====================================================================
-   MTG Station — design system in the apple.com web language
-   Light grey ground, white tiles, SF headlines, one blue for every action.
+   MTG Station — « Midnight Line »
+   Midnight enamel ground, porcelain type, one amber action ink, one line colour per product.
    ===================================================================== */
 
 /* Inter, served by the station itself (no third-party request on weak networks) */
@@ -14,166 +14,135 @@
 }
 
 :root {
-  color-scheme: light;
+  color-scheme: dark;
+
+  /* Midnight enamel: the ground is a deep blue-black, panels are lacquered navy,
+     text is porcelain. Amber is the one action ink; each product owns a line colour. */
 
   /* Grounds */
-  --bg: #f5f5f7;
-  --surface: #ffffff;
-  --surface-2: #f5f5f7;
-  --surface-3: #e8e8ed;
+  --bg: #070e1b;
+  --surface: #0f1b2f;
+  --surface-2: #0b1527;
+  --surface-3: #1b2c49;
 
   /* Text */
-  --text: #1d1d1f;
-  --text-2: #6e6e73;
-  --text-3: #86868b;
+  --text: #f4f1ea;
+  --text-2: #aab5c8;
+  --text-3: #8391ab;
 
   /* Fills & lines */
-  --fill: #d2d2d7;
-  --fill-2: #e3e3e8;
-  --fill-3: #ececf0;
-  --fill-4: #f5f5f7;
-  --separator: #d2d2d7;
-  --hairline: rgba(0, 0, 0, 0.08);
-  --field-border: #86868b;
+  --fill: #2b3d5d;
+  --fill-2: #243551;
+  --fill-3: #1b2c49;
+  --fill-4: #14233b;
+  --separator: #2b3d5d;
+  --hairline: rgba(244, 241, 234, 0.12);
+  --field-border: #5d6f8f;
 
   /* Action and links */
-  --accent: #0071e3;
-  --accent-hover: #0077ed;
-  --accent-press: #006edb;
-  --accent-soft: rgba(0, 113, 227, 0.1);
-  --link: #0066cc;
-  --on-accent: #ffffff;
-  --focus: rgba(0, 125, 250, 0.6);
+  --accent: #f2b134;
+  --accent-hover: #ffc24d;
+  --accent-press: #e09f1f;
+  --accent-soft: rgba(242, 177, 52, 0.16);
+  --link: #8db6ff;
+  --on-accent: #1a1405;
+  --focus: rgba(242, 177, 52, 0.55);
 
   /* Status: fills (dots, switches) and text (readable in the sun) */
-  --green: #29a33f;
-  --red: #e30000;
-  --orange: #f56300;
-  --yellow: #ffcc00;
-  --good-text: #008009;
-  --bad-text: #e30000;
+  --green: #3ddc97;
+  --red: #ff5a52;
+  --orange: #ff9a3d;
+  --yellow: #ffd24a;
+  --good-text: #4be3a2;
+  --bad-text: #ff7d75;
   --good: var(--green);
   --warning: var(--yellow);
   --serious: var(--orange);
   --critical: var(--red);
 
-  /* Data: products and series */
-  --series-1: #0071e3;
-  --series-2: #f56300;
-  --series-3: #29a33f;
-  --series-4: #bf4800;
-  --track: #e8e8ed;
+  /* Data: one line colour per product (gasoil, essence), then spares */
+  --series-1: #5b9cff;
+  --series-2: #ff6a7d;
+  --series-3: #3ddc97;
+  --series-4: #f2b134;
+  --track: #1d2f4f;
 
   /* Bars and overlays */
-  --nav-bg: rgba(250, 250, 252, 0.94);
-  --nav-solid: #fafafc;
-  --backdrop: rgba(0, 0, 0, 0.36);
-  --shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
-  --shadow-lift: 0 11px 34px rgba(0, 0, 0, 0.16);
-  --thumb: #ffffff;
+  --nav-bg: rgba(8, 16, 30, 0.92);
+  --nav-solid: #08101e;
+  --backdrop: rgba(2, 6, 14, 0.72);
+  --shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
+  --shadow-lift: 0 11px 34px rgba(0, 0, 0, 0.55);
+  --thumb: #53688d;
 
-  /* Shape */
-  --radius-xl: 28px;
-  --radius-lg: 18px;
-  --radius: 18px;
-  --radius-md: 12px;
-  --radius-sm: 8px;
+  /* Shape: enamel panels, tighter than before */
+  --radius-xl: 24px;
+  --radius-lg: 16px;
+  --radius: 16px;
+  --radius-md: 11px;
+  --radius-sm: 7px;
 
-  /* Type: SF on Apple devices, Inter (optical sizes) elsewhere */
-  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro', 'Inter', 'Helvetica Neue', 'Segoe UI', Roboto, sans-serif;
-  --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro', 'Inter', 'Helvetica Neue', 'Segoe UI', Roboto, sans-serif;
+  /* Type: Inter everywhere, so every device speaks with the same voice */
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
 
-  /* Motion: the apple.com curves */
+  /* Motion */
   --ease: cubic-bezier(0.28, 0.11, 0.32, 1);
   --ease-out: cubic-bezier(0.25, 0.1, 0.25, 1);
   --ease-menu: cubic-bezier(0.4, 0, 0.6, 1);
 
-  /* Tracking: tight for Inter; SF Pro values restored below on Apple systems */
-  --track-h1: -0.022em;
-  --track-h1-sm: -0.02em;
-  --track-h2: -0.017em;
-  --track-h3: -0.012em;
+  /* Tracking */
+  --track-h1: -0.03em;
+  --track-h1-sm: -0.026em;
+  --track-h2: -0.02em;
+  --track-h3: -0.014em;
   --track-sub: -0.014em;
 
   --gnav-h: 48px;
   --lnav-h: 52px;
 }
 
-@supports (font: -apple-system-body) {
-  :root { --track-h1: 0; --track-h1-sm: 0.004em; --track-h2: 0.009em; --track-h3: 0.012em; --track-sub: 0.011em; }
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    color-scheme: dark;
-    --bg: #000000;
-    --surface: #1d1d1f;
-    --surface-2: #161617;
-    --surface-3: #333336;
-    --text: #f5f5f7;
-    --text-2: #a1a1a6;
-    --text-3: #86868b;
-    --fill: #424245;
-    --fill-2: #3a3a3d;
-    --fill-3: #2c2c2e;
-    --fill-4: #232325;
-    --separator: #424245;
-    --hairline: rgba(255, 255, 255, 0.1);
-    --field-border: #86868b;
-    --link: #2997ff;
-    --accent-soft: rgba(41, 151, 255, 0.18);
-    --green: #30d158;
-    --red: #ff453a;
-    --orange: #ff9f0a;
-    --good-text: #30d158;
-    --bad-text: #ff6961;
-    --series-1: #2997ff;
-    --series-2: #ff9f0a;
-    --series-3: #30d158;
-    --series-4: #ff7a33;
-    --track: #333336;
-    --nav-bg: rgba(22, 22, 23, 0.94);
-    --nav-solid: #161617;
-    --backdrop: rgba(0, 0, 0, 0.6);
-    --shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
-    --shadow-lift: 0 11px 34px rgba(0, 0, 0, 0.6);
-    --thumb: #636366;
-  }
-}
-
-:root[data-theme='dark'] {
-  color-scheme: dark;
-  --bg: #000000;
-  --surface: #1d1d1f;
-  --surface-2: #161617;
-  --surface-3: #333336;
-  --text: #f5f5f7;
-  --text-2: #a1a1a6;
-  --text-3: #86868b;
-  --fill: #424245;
-  --fill-2: #3a3a3d;
-  --fill-3: #2c2c2e;
-  --fill-4: #232325;
-  --separator: #424245;
-  --hairline: rgba(255, 255, 255, 0.1);
-  --link: #2997ff;
-  --accent-soft: rgba(41, 151, 255, 0.18);
-  --green: #30d158;
-  --red: #ff453a;
-  --orange: #ff9f0a;
-  --good-text: #30d158;
-  --bad-text: #ff6961;
-  --series-1: #2997ff;
-  --series-2: #ff9f0a;
-  --series-3: #30d158;
-  --series-4: #ff7a33;
-  --track: #333336;
-  --nav-bg: rgba(22, 22, 23, 0.94);
-  --nav-solid: #161617;
-  --backdrop: rgba(0, 0, 0, 0.6);
-  --shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
-  --shadow-lift: 0 11px 34px rgba(0, 0, 0, 0.6);
-  --thumb: #636366;
+/* Day mode: the same enamel, lit. For the pump in full sun (account menu). */
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #eceff5;
+  --surface: #ffffff;
+  --surface-2: #f4f6fa;
+  --surface-3: #dde3ee;
+  --text: #0b1527;
+  --text-2: #4a566b;
+  --text-3: #66738a;
+  --fill: #c9d1e0;
+  --fill-2: #dde3ee;
+  --fill-3: #e6eaf2;
+  --fill-4: #f4f6fa;
+  --separator: #c9d1e0;
+  --hairline: rgba(11, 21, 39, 0.1);
+  --field-border: #66738a;
+  --accent: #b86a00;
+  --accent-hover: #c97800;
+  --accent-press: #a35d00;
+  --accent-soft: rgba(184, 106, 0, 0.12);
+  --link: #0b57d0;
+  --on-accent: #ffffff;
+  --focus: rgba(184, 106, 0, 0.5);
+  --green: #1f9e68;
+  --red: #d92d20;
+  --orange: #d9650a;
+  --yellow: #f2b134;
+  --good-text: #0a7a4b;
+  --bad-text: #c4281c;
+  --series-1: #1f6fe0;
+  --series-2: #d6304a;
+  --series-3: #1f9e68;
+  --series-4: #b86a00;
+  --track: #dde3ee;
+  --nav-bg: rgba(255, 255, 255, 0.92);
+  --nav-solid: #ffffff;
+  --backdrop: rgba(7, 14, 27, 0.4);
+  --shadow: 0 4px 24px rgba(11, 21, 39, 0.1);
+  --shadow-lift: 0 11px 34px rgba(11, 21, 39, 0.18);
+  --thumb: #ffffff;
 }
 
 /* ---------- Base ---------- */
@@ -912,9 +881,9 @@ dialog.action-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; 
 .quick-action:hover { box-shadow: var(--shadow-lift); }
 .quick-action .qa-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--accent-soft); color: var(--link); }
 .quick-action .qa-icon svg { width: 21px; height: 21px; }
-.quick-action.primary { background: var(--accent); color: #fff; }
+.quick-action.primary { background: var(--accent); color: var(--on-accent); }
 .quick-action.primary:hover { background: var(--accent-hover); }
-.quick-action.primary .qa-icon { background: rgba(255, 255, 255, 0.2); color: #fff; }
+.quick-action.primary .qa-icon { background: color-mix(in srgb, var(--on-accent) 14%, transparent); color: var(--on-accent); }
 .kpi-row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .kpi-row .card { padding: 18px; }
 .kpi-row .kpi .label { font-size: 13px; }
@@ -1085,6 +1054,50 @@ html[data-nav='fade']::view-transition-new(page) { animation: fade-up 0.5s var(-
   .queue-card .actions { grid-template-columns: 1fr 1fr; }
   .queue-card .actions .btn:last-child { grid-column: 1 / -1; }
 }
+
+/* ---------- Midnight Line : le monde ----------
+   Les tuiles sont des panneaux d'émail : un filet porcelaine de 1 px, pas d'ombre au repos.
+   Un fond bleu nuit, une encre d'action ambre, une couleur de ligne par produit. */
+:where(.card) { box-shadow: inset 0 0 0 1px var(--hairline); }
+:where(.sheet, .alert, .toast) { box-shadow: inset 0 0 0 1px var(--hairline), var(--shadow-lift); }
+:where(.lnav) { box-shadow: inset 0 -1px 0 var(--hairline); }
+.kpi .value, .tank-pct, .big-result .value { letter-spacing: -0.025em; }
+h1 { font-weight: 650; }
+html { background: var(--bg); }
+
+/* Signature : le poste est une ligne à quatre arrêts. */
+.shift-line {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0 0 24px;
+  padding: 0;
+  list-style: none;
+}
+.shift-line li { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; min-width: 0; padding-top: 2px; }
+/* le trait entre deux arrêts : plein jusqu'à l'arrêt courant, fin ensuite */
+.shift-line li::before {
+  content: '';
+  position: absolute;
+  top: 11px;
+  left: 22px;
+  right: -2px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--fill);
+}
+.shift-line li:last-child::before { display: none; }
+.shift-line li.done::before { background: var(--accent); }
+.shift-line .stop { position: relative; z-index: 1; width: 22px; height: 22px; border-radius: 50%; background: var(--bg); box-shadow: inset 0 0 0 4px var(--fill); }
+.shift-line .done .stop { background: var(--accent); box-shadow: inset 0 0 0 4px var(--accent); }
+.shift-line .now .stop { background: var(--bg); box-shadow: inset 0 0 0 6px var(--accent); animation: stop-glow 2.4s var(--ease) 0.4s 2; }
+.shift-line .stop-label { font-size: 13px; line-height: 1.2; font-weight: 600; letter-spacing: -0.01em; color: var(--text-3); }
+.shift-line .done .stop-label { color: var(--text-2); }
+.shift-line .now .stop-label { color: var(--text); }
+@keyframes stop-glow { 50% { box-shadow: inset 0 0 0 6px var(--accent), 0 0 0 7px var(--accent-soft); } }
+.page-slot.entering .shift-line li::before { transform-origin: left; animation: grow-x 0.8s var(--ease) both; }
+.page-slot.entering .shift-line li:nth-child(2)::before { animation-delay: 0.1s; }
+.page-slot.entering .shift-line li:nth-child(3)::before { animation-delay: 0.2s; }
 
 /* ---------- Mouvement ----------
    Un moment signature : la caisse juste (coche tracée, onde, écart compté).

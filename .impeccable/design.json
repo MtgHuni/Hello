@@ -1,615 +1,157 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-02T22:49:30+00:00",
+  "generatedAt": "2026-10-03T00:00:00.000Z",
   "title": "Design System: MTG Station",
   "extensions": {
     "colorMeta": {
-      "action-blue": {
-        "role": "primary",
-        "displayName": "Action Blue",
-        "canonical": "oklch(56.3% 0.193 256.2)",
-        "darkTheme": "#0071e3",
-        "tonalRamp": [
-          "#000039",
-          "#00057f",
-          "#0036a4",
-          "#005bcb",
-          "#1d7ff2",
-          "#5fa6ff",
-          "#a2ccff",
-          "#dff0ff"
-        ]
-      },
-      "action-blue-hover": {
-        "role": "primary",
-        "displayName": "Action Blue Hover",
-        "canonical": "oklch(58.3% 0.199 256.0)",
-        "tonalRamp": [
-          "#00003b",
-          "#000f78",
-          "#00399d",
-          "#005ace",
-          "#137ff5",
-          "#65a7fe",
-          "#a0ccff",
-          "#dff0ff"
-        ]
-      },
-      "action-blue-press": {
-        "role": "primary",
-        "displayName": "Action Blue Press",
-        "canonical": "oklch(55.1% 0.187 255.8)",
-        "tonalRamp": [
-          "#000138",
-          "#001473",
-          "#0037a1",
-          "#005cc7",
-          "#2180ef",
-          "#61a7ff",
-          "#a3ccff",
-          "#e0f0ff"
-        ]
-      },
-      "link-blue": {
-        "role": "primary",
-        "displayName": "Link Blue",
-        "canonical": "oklch(52.2% 0.177 255.8)",
-        "darkTheme": "#2997ff",
-        "tonalRamp": [
-          "#00003a",
-          "#001077",
-          "#00399c",
-          "#005dc2",
-          "#2b81e9",
-          "#5ca6ff",
-          "#a1ccff",
-          "#dff0ff"
-        ]
-      },
-      "ink": {
-        "role": "neutral",
-        "displayName": "Ink",
-        "canonical": "oklch(23.2% 0.004 286.1)",
-        "darkTheme": "#f5f5f7",
-        "tonalRamp": [
-          "#0b0b0d",
-          "#252527",
-          "#424244",
-          "#616163",
-          "#828284",
-          "#a5a5a7",
-          "#c9c9cb",
-          "#eeeef1"
-        ]
-      },
-      "graphite": {
-        "role": "neutral",
-        "displayName": "Graphite",
-        "canonical": "oklch(54.0% 0.008 286.1)",
-        "darkTheme": "#a1a1a6",
-        "tonalRamp": [
-          "#0b0b0e",
-          "#252529",
-          "#414146",
-          "#616165",
-          "#828287",
-          "#a4a4aa",
-          "#c8c8ce",
-          "#eeeef4"
-        ]
-      },
-      "pebble": {
-        "role": "neutral",
-        "displayName": "Pebble",
-        "canonical": "oklch(62.2% 0.007 286.2)",
-        "darkTheme": "#86868b",
-        "tonalRamp": [
-          "#0b0b0e",
-          "#252529",
-          "#414146",
-          "#616165",
-          "#828287",
-          "#a4a4aa",
-          "#c8c8ce",
-          "#eeeef3"
-        ]
-      },
-      "ground": {
-        "role": "neutral",
-        "displayName": "Ground",
-        "canonical": "oklch(97.1% 0.003 286.4)",
-        "darkTheme": "#000000",
-        "tonalRamp": [
-          "#0b0b0c",
-          "#252526",
-          "#424243",
-          "#616163",
-          "#828284",
-          "#a5a5a7",
-          "#c9c9cb",
-          "#eeeef0"
-        ]
-      },
-      "tile": {
-        "role": "neutral",
-        "displayName": "Tile",
-        "canonical": "oklch(100.0% 0.000 89.9)",
-        "darkTheme": "#1d1d1f",
-        "tonalRamp": [
-          "#0b0b0b",
-          "#252525",
-          "#424242",
-          "#616161",
-          "#828282",
-          "#a5a5a5",
-          "#c9c9c9",
-          "#eeeeee"
-        ]
-      },
-      "mist": {
-        "role": "neutral",
-        "displayName": "Mist",
-        "canonical": "oklch(93.2% 0.007 286.3)",
-        "darkTheme": "#333336",
-        "tonalRamp": [
-          "#0b0b0e",
-          "#252528",
-          "#414145",
-          "#616165",
-          "#828286",
-          "#a4a4a9",
-          "#c8c8cd",
-          "#eeeef3"
-        ]
-      },
-      "hairline-grey": {
-        "role": "neutral",
-        "displayName": "Hairline Grey",
-        "canonical": "oklch(86.5% 0.007 286.3)",
-        "darkTheme": "#424245",
-        "tonalRamp": [
-          "#0b0b0e",
-          "#252528",
-          "#414146",
-          "#616165",
-          "#828286",
-          "#a4a4a9",
-          "#c8c8cd",
-          "#eeeef3"
-        ]
-      },
-      "chip-fill": {
-        "role": "neutral",
-        "displayName": "Chip Fill",
-        "canonical": "oklch(94.4% 0.005 286.3)",
-        "darkTheme": "#2c2c2e",
-        "tonalRamp": [
-          "#0b0b0d",
-          "#252528",
-          "#424245",
-          "#616164",
-          "#828285",
-          "#a4a4a8",
-          "#c9c9cc",
-          "#eeeef2"
-        ]
-      },
-      "nav-frost": {
-        "role": "neutral",
-        "displayName": "Nav Frost",
-        "canonical": "oklch(98.6% 0.003 286.4)",
-        "darkTheme": "#161617",
-        "tonalRamp": [
-          "#0b0b0c",
-          "#252526",
-          "#424243",
-          "#616163",
-          "#828284",
-          "#a5a5a7",
-          "#c9c9cb",
-          "#eeeef0"
-        ]
-      },
-      "pump-green": {
-        "role": "status",
-        "displayName": "Pump Green",
-        "canonical": "oklch(62.9% 0.175 145.8)",
-        "darkTheme": "#30d158",
-        "tonalRamp": [
-          "#001100",
-          "#003002",
-          "#00520c",
-          "#00790c",
-          "#1e9c38",
-          "#4dc15c",
-          "#75e780",
-          "#c2ffc5"
-        ]
-      },
-      "ledger-green": {
-        "role": "status",
-        "displayName": "Ledger Green",
-        "canonical": "oklch(52.0% 0.174 143.0)",
-        "darkTheme": "#30d158",
-        "tonalRamp": [
-          "#001100",
-          "#002f00",
-          "#005103",
-          "#007800",
-          "#309b30",
-          "#59c055",
-          "#7ee57a",
-          "#c1ffbc"
-        ]
-      },
-      "signal-red": {
-        "role": "status",
-        "displayName": "Signal Red",
-        "canonical": "oklch(57.5% 0.236 29.2)",
-        "darkTheme": "#ff453a",
-        "tonalRamp": [
-          "#220000",
-          "#4f0000",
-          "#810100",
-          "#bc0000",
-          "#ef1f16",
-          "#fe7463",
-          "#ffb0a3",
-          "#ffe5df"
-        ]
-      },
-      "flare-orange": {
-        "role": "status",
-        "displayName": "Flare Orange",
-        "canonical": "oklch(67.7% 0.197 43.9)",
-        "darkTheme": "#ff9f0a",
-        "tonalRamp": [
-          "#200000",
-          "#4e0000",
-          "#800a00",
-          "#ad2e00",
-          "#dc4c00",
-          "#ff7222",
-          "#ffb391",
-          "#ffe7d9"
-        ]
-      },
-      "caution-yellow": {
-        "role": "status",
-        "displayName": "Caution Yellow",
-        "canonical": "oklch(86.5% 0.177 90.4)",
-        "darkTheme": "#ffcc00",
-        "tonalRamp": [
-          "#120a00",
-          "#302300",
-          "#533f00",
-          "#785e00",
-          "#a07e00",
-          "#c7a015",
-          "#f5c200",
-          "#ffec9c"
-        ]
-      },
-      "rust": {
-        "role": "tertiary",
-        "displayName": "Rust (series 4)",
-        "canonical": "oklch(55.7% 0.166 42.5)",
-        "darkTheme": "#ff7a33",
-        "tonalRamp": [
-          "#210000",
-          "#4c0400",
-          "#830000",
-          "#a93300",
-          "#d0581e",
-          "#f97c47",
-          "#ffb290",
-          "#ffe6d9"
-        ]
-      }
+      "midnight-ground": { "role": "neutral", "displayName": "Midnight Ground", "canonical": "#070e1b", "tonalRamp": ["#070e1b", "#0b1527", "#0f1b2f", "#14233b", "#1b2c49", "#2b3d5d", "#5d6f8f", "#aab5c8"] },
+      "enamel-panel": { "role": "neutral", "displayName": "Enamel Panel", "canonical": "#0f1b2f", "tonalRamp": ["#070e1b", "#0b1527", "#0f1b2f", "#14233b", "#1b2c49", "#243551", "#2b3d5d", "#53688d"] },
+      "porcelain": { "role": "neutral", "displayName": "Porcelain", "canonical": "#f4f1ea", "tonalRamp": ["#8391ab", "#aab5c8", "#c9cdd6", "#dcdad6", "#e8e5de", "#f4f1ea", "#f8f6f1", "#ffffff"] },
+      "amber-ink": { "role": "primary", "displayName": "Amber Ink", "canonical": "#f2b134", "tonalRamp": ["#1a1405", "#5a3f06", "#9a6a0e", "#e09f1f", "#f2b134", "#ffc24d", "#ffd786", "#ffecc4"] },
+      "link-sky": { "role": "secondary", "displayName": "Link Sky", "canonical": "#8db6ff", "tonalRamp": ["#0b57d0", "#2f73e6", "#5b9cff", "#8db6ff", "#a9c9ff", "#c6dbff", "#e0ecff", "#f2f7ff"] },
+      "gasoil-cobalt": { "role": "secondary", "displayName": "Gasoil Cobalt", "canonical": "#5b9cff", "tonalRamp": ["#1f6fe0", "#3a82f0", "#5b9cff", "#7db1ff", "#9ec6ff", "#bfd9ff", "#dcebff", "#f0f6ff"] },
+      "essence-coral": { "role": "secondary", "displayName": "Essence Coral", "canonical": "#ff6a7d", "tonalRamp": ["#d6304a", "#ea4a62", "#ff6a7d", "#ff8b99", "#ffa9b3", "#ffc4cb", "#ffdde1", "#fff0f2"] },
+      "ok-green": { "role": "status", "displayName": "Ok Green", "canonical": "#3ddc97", "tonalRamp": ["#0a7a4b", "#1f9e68", "#3ddc97", "#4be3a2", "#74ebb9", "#9df1cd", "#c6f7e1", "#e8fcf3"] },
+      "alert-red": { "role": "status", "displayName": "Alert Red", "canonical": "#ff5a52", "tonalRamp": ["#c4281c", "#d92d20", "#ff5a52", "#ff7d75", "#ff9b95", "#ffb8b4", "#ffd4d1", "#ffeeed"] }
     },
     "typographyMeta": {
-      "display": {
-        "displayName": "Display",
-        "purpose": "The one page headline per screen; 32px / 1.125 below 834px."
-      },
-      "headline": {
-        "displayName": "Headline",
-        "purpose": "Sheet and dialog titles, phone-menu links."
-      },
-      "title": {
-        "displayName": "Title",
-        "purpose": "Tile headers (21px on phones), local-nav page name at 21px."
-      },
-      "subhead": {
-        "displayName": "Subhead",
-        "purpose": "Grey line under the page headline; 17px on phones."
-      },
-      "figure": {
-        "displayName": "Figure",
-        "purpose": "KPI values with tabular figures; 32px on phones, 56px for big results."
-      },
-      "body": {
-        "displayName": "Body",
-        "purpose": "Running text, fields, buttons, summary lines."
-      },
-      "body-small": {
-        "displayName": "Body Small",
-        "purpose": "Tile descriptions, tables, toasts, hints."
-      },
-      "label": {
-        "displayName": "Label",
-        "purpose": "Badges, table headers, action-sheet titles."
-      }
-    },
-    "fontLoading": {
-      "family": "Inter",
-      "src": "/fonts/inter-latin.woff2",
-      "weights": "100 900",
-      "opticalSizing": "auto",
-      "note": "Self-hosted variable Inter; SF Pro is used on Apple systems with its own tracking values."
-    },
-    "tracking": {
-      "inter": {
-        "h1": "-0.022em",
-        "h1-sm": "-0.02em",
-        "h2": "-0.017em",
-        "h3": "-0.012em",
-        "sub": "-0.014em"
-      },
-      "sf-pro": {
-        "h1": "0",
-        "h1-sm": "0.004em",
-        "h2": "0.009em",
-        "h3": "0.012em",
-        "sub": "0.011em"
-      }
+      "display": { "displayName": "Display", "purpose": "Page headline h1 (32px on phones)." },
+      "headline": { "displayName": "Headline", "purpose": "Card titles and h2; 28px in sheets and the phone menu." },
+      "title": { "displayName": "Title", "purpose": "h3 and the local-nav page name." },
+      "figure": { "displayName": "Figure", "purpose": "KPI values, tank percentages, till result; tabular figures." },
+      "body": { "displayName": "Body", "purpose": "Default text, inputs and buttons." },
+      "label": { "displayName": "Label", "purpose": "Column heads, badges, shift-line stop names." }
     },
     "shadows": [
-      {
-        "name": "ambient",
-        "value": "0 4px 24px rgba(0, 0, 0, 0.08)",
-        "purpose": "Under the customer-request queue card, with its 2px blue inset ring."
-      },
-      {
-        "name": "lift",
-        "value": "0 11px 34px rgba(0, 0, 0, 0.16)",
-        "purpose": "Toasts, tooltips, action-sheet groups, quick-action hover."
-      },
-      {
-        "name": "modal",
-        "value": "0 30px 90px rgba(0, 0, 0, 0.25)",
-        "purpose": "Sheets and alerts over the rgba(0,0,0,0.36) backdrop."
-      },
-      {
-        "name": "focus-ring",
-        "value": "0 0 0 4px rgba(0, 125, 250, 0.6)",
-        "purpose": "Focused fields and choice tiles."
-      },
-      {
-        "name": "nav-hairline",
-        "value": "inset 0 -1px 0 rgba(0, 0, 0, 0.08)",
-        "purpose": "Bottom edge of the local nav."
-      },
-      {
-        "name": "nav-frost",
-        "value": "backdrop-filter: saturate(180%) blur(20px)",
-        "purpose": "Global and local nav translucency over rgba(250,250,252,0.94)."
-      }
+      { "name": "float", "value": "0 11px 34px rgba(0, 0, 0, 0.55)", "purpose": "Tooltips, toasts, action sheets, hovered quick actions; day mode 0 11px 34px rgba(11,21,39,0.18)." },
+      { "name": "lift", "value": "0 4px 24px rgba(0, 0, 0, 0.45)", "purpose": "Pending request card, paired with a 2px amber inset frame." },
+      { "name": "panel-hairline", "value": "inset 0 0 0 1px rgba(244, 241, 234, 0.12)", "purpose": "Resting edge of every card; there is no resting drop shadow." },
+      { "name": "focus-ring", "value": "0 0 0 4px rgba(242, 177, 52, 0.55)", "purpose": "Field focus alongside an amber border." }
     ],
     "motion": [
-      {
-        "name": "ease",
-        "value": "cubic-bezier(0.28, 0.11, 0.32, 1)",
-        "purpose": "The apple.com curve: reveals, sheets, local nav, page transitions."
-      },
-      {
-        "name": "ease-out",
-        "value": "cubic-bezier(0.25, 0.1, 0.25, 1)",
-        "purpose": "Exits, floating labels, field focus."
-      },
-      {
-        "name": "ease-menu",
-        "value": "cubic-bezier(0.4, 0, 0.6, 1)",
-        "purpose": "Menu button morph and full-screen menu fade."
-      },
-      {
-        "name": "fade-up",
-        "value": "opacity 0 -> 1, translateY(20px) -> 0, 0.7s ease",
-        "purpose": "Page entry, staggered 60ms per child up to 180ms."
-      },
-      {
-        "name": "menu-stagger",
-        "value": "0.32s ease-menu, delay i*25ms + 40ms, translateY(-8px)",
-        "purpose": "Phone-menu links cascade."
-      },
-      {
-        "name": "local-nav-slide",
-        "value": "translateY(-100%) -> 0, 0.36s ease",
-        "purpose": "Local nav appears once the headline scrolls out."
-      },
-      {
-        "name": "sheet-rise",
-        "value": "translateY(110%) -> 0, 0.45s ease (phones); translateY(24px) fade 0.4s (desktop)",
-        "purpose": "Modal sheets."
-      },
-      {
-        "name": "label-float",
-        "value": "translateY(-9px) scale(0.705), 0.125s ease-out",
-        "purpose": "Floating field labels."
-      },
-      {
-        "name": "reduced-motion",
-        "value": "all durations 1ms, delays 0",
-        "purpose": "prefers-reduced-motion: reduce."
-      }
+      { "name": "ease", "value": "cubic-bezier(0.28, 0.11, 0.32, 1)", "purpose": "Default easing for entry, sheets and gauges." },
+      { "name": "ease-out", "value": "cubic-bezier(0.25, 0.1, 0.25, 1)", "purpose": "Fades, floating labels, exits." },
+      { "name": "ease-menu", "value": "cubic-bezier(0.4, 0, 0.6, 1)", "purpose": "Phone menu and the menu button cross." },
+      { "name": "stagger", "value": "50ms per card, 350ms maximum", "purpose": "Grid cards arriving after page entry." }
     ],
     "breakpoints": [
-      {
-        "name": "container",
-        "value": "1068px",
-        "purpose": "Max content width; 4- and 3-column grids fall to 2 below it."
-      },
-      {
-        "name": "phone",
-        "value": "833px",
-        "purpose": "Menu button replaces links, one column, docked sheets, 16px gutter."
-      },
-      {
-        "name": "small-phone",
-        "value": "420px",
-        "purpose": "Tighter quick actions and KPI row."
-      }
-    ],
-    "shell": {
-      "globalNavHeight": "48px",
-      "localNavHeight": "52px",
-      "gutter": "22px (16px on phones)",
-      "narrowPage": "640px"
-    }
+      { "name": "wide", "value": "1068px" },
+      { "name": "tablet", "value": "833px" },
+      { "name": "narrow", "value": "420px" }
+    ]
   },
   "components": [
     {
-      "name": "Primary Pill",
+      "name": "Primary Button",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "The one action of a screen or region; also mirrored small in the local nav.",
-      "html": "<button class=\"ds-btn-primary\">Enregistrer la vente</button>",
-      "css": ".ds-btn-primary{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:10px 22px;border-radius:980px;border:1px solid transparent;font-family:var(--font, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Helvetica Neue', sans-serif);font-size:17px;font-weight:400;letter-spacing:-0.022em;cursor:pointer;white-space:nowrap;transition:background-color 0.2s var(--ease, cubic-bezier(0.28, 0.11, 0.32, 1)),color 0.2s,border-color 0.2s;background:var(--accent, #0071e3);color:var(--on-accent, #fff);} .ds-btn-primary:hover{background:var(--accent-hover, #0077ed);} .ds-btn-primary:active{background:var(--accent-press, #006edb);} .ds-btn-primary:focus-visible{outline:2px solid var(--accent, #0071e3);outline-offset:2px;} .ds-btn-primary:disabled{opacity:0.42;cursor:default;}"
+      "description": "The one amber pill action on a surface.",
+      "html": "<button class=\"ds-btn-primary\">Ouvrir le poste</button>",
+      "css": ".ds-btn-primary { min-height: 44px; padding: 10px 22px; border: 1px solid transparent; border-radius: 980px; background: #f2b134; color: #1a1405; font: 400 17px/1.47 Inter, -apple-system, 'Segoe UI', Roboto, sans-serif; letter-spacing: -0.022em; cursor: pointer; transition: background-color 0.2s, transform 0.2s; } .ds-btn-primary:hover { background: #ffc24d; } .ds-btn-primary:active { background: #e09f1f; transform: scale(0.97); } .ds-btn-primary:focus-visible { outline: 2px solid #f2b134; outline-offset: 2px; }"
     },
     {
-      "name": "Secondary Pill",
+      "name": "Secondary Button",
       "kind": "button",
       "refersTo": "button-secondary",
-      "description": "Outlined alternative action beside a primary pill; fills blue on hover.",
-      "html": "<button class=\"ds-btn-secondary\">Encaisser</button>",
-      "css": ".ds-btn-secondary{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:10px 22px;border-radius:980px;border:1px solid transparent;font-family:var(--font, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Helvetica Neue', sans-serif);font-size:17px;font-weight:400;letter-spacing:-0.022em;cursor:pointer;white-space:nowrap;transition:background-color 0.2s var(--ease, cubic-bezier(0.28, 0.11, 0.32, 1)),color 0.2s,border-color 0.2s;background:transparent;border-color:var(--accent, #0071e3);color:var(--link, #0066cc);} .ds-btn-secondary:hover{background:var(--accent, #0071e3);color:#fff;} .ds-btn-secondary:focus-visible{outline:2px solid var(--accent, #0071e3);outline-offset:2px;}"
+      "description": "Quiet alternative: amber outline, link-coloured text.",
+      "html": "<button class=\"ds-btn-secondary\">Voir le détail</button>",
+      "css": ".ds-btn-secondary { min-height: 44px; padding: 10px 22px; border: 1px solid #f2b134; border-radius: 980px; background: transparent; color: #8db6ff; font: 400 17px/1.47 Inter, -apple-system, 'Segoe UI', Roboto, sans-serif; letter-spacing: -0.022em; cursor: pointer; transition: background-color 0.2s, color 0.2s; } .ds-btn-secondary:hover { background: #f2b134; color: #1a1405; } .ds-btn-secondary:focus-visible { outline: 2px solid #f2b134; outline-offset: 2px; }"
     },
     {
-      "name": "More Link",
-      "kind": "button",
-      "refersTo": "link-blue",
-      "description": "apple.com chevron link that leads from a tile to its full page.",
-      "html": "<a class=\"ds-more-link\" href=\"#\">Voir les cuves <svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M9 18l6-6-6-6\"/></svg></a>",
-      "css": ".ds-more-link{display:inline-flex;align-items:center;gap:1px;color:var(--link, #0066cc);font-size:17px;letter-spacing:-0.022em;text-decoration:none;text-underline-offset:0.18em;} .ds-more-link svg{margin-top:1px;} .ds-more-link:hover{text-decoration:underline;} .ds-more-link:focus-visible{outline:2px solid var(--accent, #0071e3);outline-offset:2px;border-radius:6px;}"
+      "name": "Panel Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Lacquered navy panel with a porcelain hairline and no resting shadow.",
+      "html": "<div class=\"ds-card\"><p class=\"ds-card-label\">Ventes du jour</p><p class=\"ds-card-value\">1 284 L</p></div>",
+      "css": ".ds-card { padding: 28px; border-radius: 16px; background: #0f1b2f; color: #f4f1ea; box-shadow: inset 0 0 0 1px rgba(244, 241, 234, 0.12); font-family: Inter, -apple-system, 'Segoe UI', Roboto, sans-serif; } .ds-card-label { margin: 0; color: #aab5c8; font-size: 15px; font-weight: 600; letter-spacing: -0.014em; } .ds-card-value { margin: 6px 0 0; font-size: 40px; line-height: 1.1; font-weight: 600; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; }"
     },
     {
-      "name": "Floating-Label Field",
+      "name": "Floating Label Field",
       "kind": "input",
-      "refersTo": "field",
-      "description": "56px apple.com store field; the label floats up on focus or when filled.",
-      "html": "<label class=\"ds-field\"><input placeholder=\" \" value=\"Transports Kivu SARL\"><span class=\"ds-field-label\">Client (nom, plaque ou téléphone)</span></label>",
-      "css": ".ds-field{position:relative;display:block;width:320px;} .ds-field input{width:100%;box-sizing:border-box;min-height:56px;padding:25px 16px 8px;border:1px solid var(--field-border, #86868b);border-radius:12px;background:var(--surface, #fff);color:var(--text, #1d1d1f);font-family:var(--font, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Helvetica Neue', sans-serif);font-size:17px;letter-spacing:-0.022em;transition:border-color 0.2s,box-shadow 0.2s;-webkit-appearance:none;appearance:none;} .ds-field input:focus{outline:none;border-color:var(--accent, #0071e3);box-shadow:0 0 0 4px var(--focus, rgba(0,125,250,0.6));} .ds-field-label{position:absolute;top:17px;left:17px;right:17px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:var(--text-2, #6e6e73);font-family:var(--font, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Helvetica Neue', sans-serif);font-size:17px;line-height:21px;pointer-events:none;transform-origin:left top;transition:transform 0.125s cubic-bezier(0.25,0.1,0.25,1);} .ds-field:focus-within .ds-field-label, .ds-field input:not(:placeholder-shown) + .ds-field-label{transform:translateY(-9px) scale(0.705);}"
+      "refersTo": "input",
+      "description": "56px field whose label rises when filled or focused.",
+      "html": "<label class=\"ds-field\"><input class=\"ds-input\" placeholder=\" \" value=\"1200\"><span class=\"ds-field-label\">Index de clôture</span></label>",
+      "css": ".ds-field { position: relative; display: block; font-family: Inter, -apple-system, 'Segoe UI', Roboto, sans-serif; } .ds-input { width: 100%; min-height: 56px; padding: 25px 16px 8px; border: 1px solid #5d6f8f; border-radius: 11px; background: #0f1b2f; color: #f4f1ea; font: inherit; font-size: 17px; letter-spacing: -0.022em; transition: border-color 0.2s, box-shadow 0.2s; } .ds-input:focus { outline: none; border-color: #f2b134; box-shadow: 0 0 0 4px rgba(242, 177, 52, 0.55); } .ds-field-label { position: absolute; top: 17px; left: 17px; color: #aab5c8; font-size: 17px; line-height: 21px; pointer-events: none; transform-origin: left top; transition: transform 0.125s; } .ds-input:not(:placeholder-shown) + .ds-field-label, .ds-input:focus + .ds-field-label { transform: translateY(-9px) scale(0.705); }"
     },
     {
-      "name": "Choice Tiles",
+      "name": "Choice Tile",
       "kind": "chip",
       "refersTo": "choice-tile",
-      "description": "One-tap store selector for product, payment and unit; selected gets a 2px blue frame and tint.",
-      "html": "<div class=\"ds-choices\" role=\"radiogroup\"><label class=\"ds-choice\"><input type=\"radio\" name=\"ds-pay\"><span>Payé</span></label><label class=\"ds-choice\"><input type=\"radio\" name=\"ds-pay\" checked><span>Crédit</span></label><label class=\"ds-choice\"><input type=\"radio\" name=\"ds-pay\"><span>Combos</span></label></div>",
-      "css": ".ds-choices{display:flex;gap:10px;width:360px;} .ds-choice{position:relative;flex:1 1 0;min-width:84px;cursor:pointer;} .ds-choice input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none;} .ds-choice span{display:flex;align-items:center;justify-content:center;min-height:56px;padding:10px 14px;border-radius:12px;border:1px solid var(--field-border, #86868b);background:var(--surface, #fff);color:var(--text, #1d1d1f);font-family:var(--font, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Helvetica Neue', sans-serif);font-size:17px;font-weight:600;transition:border-color 0.2s,box-shadow 0.2s;} .ds-choice:hover span{border-color:var(--text-2, #6e6e73);} .ds-choice input:checked + span{border-color:var(--accent, #0071e3);box-shadow:inset 0 0 0 1px var(--accent, #0071e3);background:var(--accent-soft, rgba(0,113,227,0.1));color:var(--link, #0066cc);} .ds-choice input:focus-visible + span{box-shadow:inset 0 0 0 1px var(--accent, #0071e3),0 0 0 4px var(--focus, rgba(0,125,250,0.6));}"
+      "description": "One-tap option; selected is an amber frame with a soft amber wash.",
+      "html": "<div style=\"display:flex;gap:10px\"><span class=\"ds-tile\">Gasoil</span><span class=\"ds-tile ds-tile-on\">Essence</span></div>",
+      "css": ".ds-tile { display: flex; align-items: center; justify-content: center; min-width: 96px; min-height: 56px; padding: 10px 14px; border: 1px solid #5d6f8f; border-radius: 11px; background: #0f1b2f; color: #f4f1ea; font: 600 17px/1.24 Inter, -apple-system, 'Segoe UI', Roboto, sans-serif; cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s; } .ds-tile:hover { border-color: #aab5c8; } .ds-tile-on { border-color: #f2b134; box-shadow: inset 0 0 0 1px #f2b134; background: rgba(242, 177, 52, 0.16); color: #8db6ff; }"
     },
     {
       "name": "Status Badge",
       "kind": "chip",
       "refersTo": "badge",
-      "description": "A state as a word plus a coloured dot.",
-      "html": "<span class=\"ds-badge\"><span class=\"ds-dot ds-good\"></span>Payé</span> <span class=\"ds-badge\"><span class=\"ds-dot ds-serious\"></span>Crédit</span> <span class=\"ds-badge\"><span class=\"ds-dot ds-critical\"></span>En retard</span>",
-      "css": ".ds-badge{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;background:var(--fill-3, #ececf0);color:var(--text, #1d1d1f);font-family:var(--font, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Helvetica Neue', sans-serif);font-size:13px;font-weight:600;letter-spacing:-0.01em;white-space:nowrap;} .ds-dot{width:7px;height:7px;border-radius:50%;background:var(--text-3, #86868b);} .ds-good{background:var(--green, #29a33f);} .ds-serious{background:var(--orange, #f56300);} .ds-critical{background:var(--red, #e30000);}"
+      "description": "Pill with a status dot and always a word.",
+      "html": "<span class=\"ds-badge\"><span class=\"ds-dot\"></span>Poste ouvert</span>",
+      "css": ".ds-badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: #1b2c49; color: #f4f1ea; font: 600 13px/1.4 Inter, -apple-system, 'Segoe UI', Roboto, sans-serif; letter-spacing: -0.01em; white-space: nowrap; } .ds-dot { width: 7px; height: 7px; border-radius: 50%; background: #3ddc97; }"
     },
     {
-      "name": "KPI Tile",
-      "kind": "card",
-      "refersTo": "tile",
-      "description": "Borderless white tile on the grey ground carrying a label, a tabular figure and a more link.",
-      "html": "<div class=\"ds-tile-ground\"><div class=\"ds-tile\"><div class=\"ds-kpi-label\">Ventes du jour</div><div class=\"ds-kpi-value\">1 284,50 $</div><div class=\"ds-kpi-sub\">412,3 L · 38 ventes</div><a class=\"ds-tile-link\" href=\"#\">Voir le rapport <svg viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M9 18l6-6-6-6\"/></svg></a></div></div>",
-      "css": ".ds-tile-ground{padding:22px;background:var(--bg, #f5f5f7);} .ds-tile{width:300px;padding:28px;border-radius:18px;background:var(--surface, #fff);color:var(--text, #1d1d1f);font-family:var(--font, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Helvetica Neue', sans-serif);} .ds-kpi-label{color:var(--text-2, #6e6e73);font-size:15px;font-weight:600;letter-spacing:-0.014em;} .ds-kpi-value{margin-top:6px;font-family:var(--font-display, -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', 'Helvetica Neue', sans-serif);font-size:40px;line-height:1.1;font-weight:600;letter-spacing:-0.005em;font-variant-numeric:tabular-nums;} .ds-kpi-sub{margin-top:6px;color:var(--text-2, #6e6e73);font-size:14px;line-height:1.43;} .ds-tile-link{display:inline-flex;align-items:center;margin-top:14px;color:var(--link, #0066cc);font-size:17px;text-decoration:none;} .ds-tile-link:hover{text-decoration:underline;}"
-    },
-    {
-      "name": "Global Nav",
-      "kind": "nav",
-      "refersTo": "global-nav",
-      "description": "Thin translucent bar: drop mark and station name left, centred links, account icon right.",
-      "html": "<nav class=\"ds-gnav\"><a class=\"ds-gnav-mark\" href=\"#\"><svg viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" aria-hidden=\"true\"><path fill=\"currentColor\" d=\"M12 2.5c.4 0 .7.2 1 .5 2.4 3 6 7.6 6 11.2A7 7 0 0 1 5 14.2C5 10.6 8.6 6 11 3c.3-.3.6-.5 1-.5zm-3.2 11.8a.9.9 0 0 0-1.8.1 5 5 0 0 0 4.2 4.9.9.9 0 1 0 .3-1.8 3.2 3.2 0 0 1-2.7-3.2z\"/></svg><span>MTG Station</span></a><div class=\"ds-gnav-links\"><a class=\"active\" href=\"#\">Accueil</a><a href=\"#\">Postes</a><a href=\"#\">Cuves</a><a href=\"#\">Clients</a><a href=\"#\">Rapports</a></div><button class=\"ds-gnav-icon\" aria-label=\"Compte\"><svg viewBox=\"0 0 24 24\" width=\"19\" height=\"19\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z\"/></svg></button></nav>",
-      "css": ".ds-gnav{display:flex;align-items:center;gap:8px;height:48px;padding:0 22px;background:var(--nav-bg, rgba(250,250,252,0.94));-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);font-family:var(--font, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Helvetica Neue', sans-serif);} .ds-gnav-mark{display:flex;align-items:center;gap:8px;color:var(--text, #1d1d1f);font-size:15px;font-weight:600;letter-spacing:-0.01em;text-decoration:none;white-space:nowrap;} .ds-gnav-mark svg{color:var(--accent, #0071e3);} .ds-gnav-links{flex:1;display:flex;justify-content:center;gap:4px;} .ds-gnav-links a{padding:0 10px;line-height:48px;color:var(--text, #1d1d1f);font-size:13px;letter-spacing:-0.01em;opacity:0.8;text-decoration:none;transition:opacity 0.32s var(--ease, cubic-bezier(0.28, 0.11, 0.32, 1));} .ds-gnav-links a:hover{opacity:1;} .ds-gnav-links a.active{opacity:1;font-weight:600;} .ds-gnav-links a:focus-visible, .ds-gnav-icon:focus-visible{outline:2px solid var(--accent, #0071e3);outline-offset:2px;border-radius:6px;} .ds-gnav-icon{display:grid;place-items:center;width:44px;height:44px;padding:0;border:none;background:transparent;color:var(--text, #1d1d1f);opacity:0.8;cursor:pointer;transition:opacity 0.32s var(--ease, cubic-bezier(0.28, 0.11, 0.32, 1));} .ds-gnav-icon:hover{opacity:1;}"
-    },
-    {
-      "name": "Local Nav",
-      "kind": "nav",
-      "refersTo": "local-nav",
-      "description": "Signature: the sticky bar that slides in once the headline leaves, page name left and the action pill right.",
-      "html": "<div class=\"ds-lnav\"><span class=\"ds-lnav-title\">Poste en cours</span><button class=\"ds-lnav-action\">Nouvelle vente</button></div>",
-      "css": ".ds-lnav{display:flex;align-items:center;justify-content:space-between;gap:16px;height:52px;padding:0 22px;background:var(--nav-bg, rgba(250,250,252,0.94));-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);box-shadow:inset 0 -1px 0 var(--hairline, rgba(0,0,0,0.08));animation:ds-lnav-in 0.36s var(--ease, cubic-bezier(0.28, 0.11, 0.32, 1)) both;} .ds-lnav-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text, #1d1d1f);font-family:var(--font-display, -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', 'Helvetica Neue', sans-serif);font-size:21px;font-weight:600;letter-spacing:-0.012em;} .ds-lnav-action{min-height:32px;padding:5px 15px;border:none;border-radius:980px;background:var(--accent, #0071e3);color:#fff;font-family:var(--font, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Helvetica Neue', sans-serif);font-size:14px;letter-spacing:-0.016em;cursor:pointer;transition:background-color 0.2s var(--ease, cubic-bezier(0.28, 0.11, 0.32, 1));} .ds-lnav-action:hover{background:var(--accent-hover, #0077ed);} .ds-lnav-action:focus-visible{outline:2px solid var(--accent, #0071e3);outline-offset:2px;} @keyframes ds-lnav-in{from{transform:translateY(-100%);}} @media (prefers-reduced-motion: reduce){.ds-lnav{animation:none;}}"
-    },
-    {
-      "name": "Quick Action",
+      "name": "Tank Gauge (Cuve)",
       "kind": "custom",
-      "refersTo": "tile",
-      "description": "Attendant's large one-tap tiles; the primary one is solid action blue.",
-      "html": "<div class=\"ds-qa-row\"><button class=\"ds-qa ds-qa-primary\"><span class=\"ds-qa-icon\"><svg viewBox=\"0 0 24 24\" width=\"21\" height=\"21\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 21V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v16M3 21h13M7 8h5M15 10h2a2 2 0 0 1 2 2v5a1.5 1.5 0 0 0 3 0V9l-3-3\"/></svg></span>Vente</button><button class=\"ds-qa\"><span class=\"ds-qa-icon\"><svg viewBox=\"0 0 24 24\" width=\"21\" height=\"21\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 21V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v16M3 21h13M7 8h5M15 10h2a2 2 0 0 1 2 2v5a1.5 1.5 0 0 0 3 0V9l-3-3\"/></svg></span>Règlement</button></div>",
-      "css": ".ds-qa-row{display:grid;grid-template-columns:repeat(2,140px);gap:12px;padding:16px;background:var(--bg, #f5f5f7);} .ds-qa{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;min-height:104px;padding:16px 8px;border:none;border-radius:18px;background:var(--surface, #fff);color:var(--text, #1d1d1f);font-family:var(--font, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Helvetica Neue', sans-serif);font-size:15px;font-weight:600;letter-spacing:-0.014em;cursor:pointer;transition:box-shadow 0.3s var(--ease, cubic-bezier(0.28, 0.11, 0.32, 1)),background-color 0.2s;} .ds-qa:hover{box-shadow:0 11px 34px rgba(0,0,0,0.16);} .ds-qa:focus-visible{outline:2px solid var(--accent, #0071e3);outline-offset:2px;} .ds-qa-icon{display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background:var(--accent-soft, rgba(0,113,227,0.1));color:var(--link, #0066cc);} .ds-qa-primary{background:var(--accent, #0071e3);color:#fff;} .ds-qa-primary:hover{background:var(--accent-hover, #0077ed);} .ds-qa-primary .ds-qa-icon{background:rgba(255,255,255,0.2);color:#fff;}"
+      "refersTo": "card",
+      "description": "Tank level in the product's line colour over an 8px capsule track, with a threshold mark.",
+      "html": "<div class=\"ds-tank\"><div class=\"ds-tank-head\"><span>Gasoil</span><span class=\"ds-tank-pct\">72%</span></div><div class=\"ds-meter\"><div class=\"ds-meter-fill\"></div><div class=\"ds-meter-mark\"></div></div><div class=\"ds-tank-foot\">14 400 L</div></div>",
+      "css": ".ds-tank { display: flex; flex-direction: column; gap: 12px; padding: 28px; border-radius: 16px; background: #0f1b2f; color: #f4f1ea; box-shadow: inset 0 0 0 1px rgba(244, 241, 234, 0.12); font-family: Inter, -apple-system, 'Segoe UI', Roboto, sans-serif; } .ds-tank-head { display: flex; align-items: baseline; justify-content: space-between; } .ds-tank-pct { font-size: 32px; font-weight: 600; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; } .ds-meter { position: relative; height: 8px; border-radius: 999px; background: #1d2f4f; overflow: hidden; } .ds-meter-fill { width: 72%; height: 100%; border-radius: 999px; background: #5b9cff; transform-origin: left center; animation: ds-grow 1.2s cubic-bezier(0.28, 0.11, 0.32, 1) both 0.15s; } .ds-meter-mark { position: absolute; top: 0; bottom: 0; left: 20%; width: 2px; background: #0f1b2f; } .ds-tank-foot { color: #aab5c8; font-size: 14px; } @keyframes ds-grow { from { transform: scaleX(0); } }"
+    },
+    {
+      "name": "Shift Line",
+      "kind": "custom",
+      "refersTo": "card",
+      "description": "Signature: the Poste as a four-stop transit line. Past stops and bars amber, current stop a burning ring, future stops hollow.",
+      "html": "<ol class=\"ds-shift\"><li class=\"done\"><span class=\"ds-stop\"></span><span class=\"ds-stop-label\">Ouverture</span></li><li class=\"now\"><span class=\"ds-stop\"></span><span class=\"ds-stop-label\">Ventes</span></li><li><span class=\"ds-stop\"></span><span class=\"ds-stop-label\">Clôture</span></li><li><span class=\"ds-stop\"></span><span class=\"ds-stop-label\">Validation</span></li></ol>",
+      "css": ".ds-shift { position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; padding: 12px; list-style: none; background: #070e1b; font-family: Inter, -apple-system, 'Segoe UI', Roboto, sans-serif; } .ds-shift li { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; min-width: 0; padding-top: 2px; } .ds-shift li::before { content: ''; position: absolute; top: 11px; left: 22px; right: -2px; height: 4px; border-radius: 2px; background: #2b3d5d; } .ds-shift li:last-child::before { display: none; } .ds-shift li.done::before { background: #f2b134; } .ds-stop { position: relative; z-index: 1; width: 22px; height: 22px; border-radius: 50%; background: #070e1b; box-shadow: inset 0 0 0 4px #2b3d5d; } .ds-shift .done .ds-stop { background: #f2b134; box-shadow: inset 0 0 0 4px #f2b134; } .ds-shift .now .ds-stop { background: #070e1b; box-shadow: inset 0 0 0 6px #f2b134; } .ds-stop-label { font-size: 13px; line-height: 1.2; font-weight: 600; letter-spacing: -0.01em; color: #8391ab; } .ds-shift .done .ds-stop-label { color: #aab5c8; } .ds-shift .now .ds-stop-label { color: #f4f1ea; }"
+    },
+    {
+      "name": "Segmented Control",
+      "kind": "nav",
+      "refersTo": "segmented",
+      "description": "Pill view filter with a raised active option.",
+      "html": "<div class=\"ds-seg\"><button class=\"ds-seg-on\">Jour</button><button>Semaine</button><button>Mois</button></div>",
+      "css": ".ds-seg { display: inline-flex; padding: 3px; border-radius: 999px; background: #1b2c49; } .ds-seg button { min-height: 34px; padding: 6px 16px; border: none; border-radius: 999px; background: transparent; color: #aab5c8; font: 400 14px Inter, -apple-system, 'Segoe UI', Roboto, sans-serif; letter-spacing: -0.016em; cursor: pointer; } .ds-seg button:hover { color: #f4f1ea; } .ds-seg .ds-seg-on { background: #53688d; color: #f4f1ea; font-weight: 600; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12); } .ds-seg button:focus-visible { outline: 2px solid #f2b134; outline-offset: 2px; }"
     }
   ],
   "narrative": {
-    "northStar": "The Showroom Forecourt",
-    "overview": "**Creative North Star: \"The Showroom Forecourt\"**\n\nMTG Station is a fuel counter dressed as a product page. The ground is a calm light grey (#f5f5f7), every piece of content sits on a white rounded tile with no border, every screen opens with one big semibold headline saying where you are, and every action is the same blue pill. The language is apple.com's web idiom, played straight: thin translucent global nav, a sticky local nav that slides in carrying the page's one action, store-style floating-label fields and choice tiles. It is personalised by the station's own mark (a filled fuel drop in action blue), its French vocabulary and its numbers, never by Apple's logo, name or imagery.\n\nDensity is deliberately low for a business tool. The attendant works in sun, one-handed, on modest Android phones, so type starts at 17px, targets start at 44px, and states read as a word plus a colour dot (Payé, Crédit, Combos, En retard). The system refuses iOS app chrome (floating glass tab bars, glass cards) and dashboard-template density; depth comes from tile-on-ground contrast, not from borders or stacked shadows.\n\nMotion follows the apple.com curve (cubic-bezier(0.28, 0.11, 0.32, 1)): fade-up reveals of 20px, staggered page entry, sheets that rise and can be swiped down, no bounce. Reduced motion collapses all of it to 1ms.",
+    "northStar": "Midnight Line",
+    "overview": "The product is a midnight-blue enamel board read under pump-island lights. The ground is a deep blue-black, panels are lacquered navy edged by a one-pixel porcelain hairline, type is warm porcelain, and a single amber ink marks every action. Gasoil and essence each own a line colour (cobalt and coral) that follows the product through gauges, bars and charts. Premium, calm and legible: the Gérant reads credit, combos and stock on one board, and the Pompiste records a sale in a few taps.\n\nDark is the default. A day mode (white enamel, darker amber, deeper link blue) is chosen from the account menu for full sun and swaps the same token names, so no component is restyled. Inter, served from the station itself, is the only face on every device. Density is generous on phones (44px minimum tap targets, 56px fields) and tidy on desktop (1068px page column).\n\nDepth comes from hairlines and tonal steps, not shadows. Motion is short and answers the hand or explains a state; the one signature moment is the balanced till (drawn check, ripple, counted figure).",
     "keyCharacteristics": [
-      "Light grey ground, white 18px tiles, no tile borders.",
-      "One blue for every action; a second, deeper blue for every link.",
-      "SF Pro on Apple devices, self-hosted Inter with optical sizing everywhere else, tight negative tracking.",
-      "One headline per screen, grey subhead beneath it.",
-      "Global nav scrolls away; local nav with its action pill slides in.",
-      "Full-screen phone menu with large staggered links.",
-      "Full dark theme (black ground, #1d1d1f tiles) driven by the same tokens."
+      "Midnight ground, lacquered navy panels, porcelain text, amber as the only action ink.",
+      "One line colour per product, status colours always paired with a word.",
+      "Inter throughout, tight negative tracking, tabular figures for every amount.",
+      "Pill-shaped controls over softly rounded (16px) panels.",
+      "Hairline-edged panels with no resting shadow.",
+      "Signature: the shift line, a four-stop transit line for the Poste."
     ],
     "rules": [
-      {
-        "name": "The One Blue Rule",
-        "body": "Action blue is the only fill that means \"do this\". There is one blue pill per screen region, and the local nav repeats the page's main action as a small pill. Nothing decorative is blue.",
-        "section": "colors"
-      },
-      {
-        "name": "The Word Plus Dot Rule",
-        "body": "A status is never colour alone: it is a badge with a 7px dot and a French word. Text that carries a value judgement uses ledger-green or signal-red, never the lighter fills.",
-        "section": "colors"
-      },
-      {
-        "name": "The One Headline Rule",
-        "body": "Every screen states where you are in one display headline, followed by a grey subhead. No kicker or eyebrow above it, no second headline at the same size.",
-        "section": "typography"
-      },
-      {
-        "name": "The Tabular Money Rule",
-        "body": "Every amount, litre count and meter reading is set with tabular figures, so columns of dollars align and nothing looks rounded.",
-        "section": "typography"
-      },
-      {
-        "name": "The Phone First Rule",
-        "body": "Layout is designed at phone width and widened, not the reverse: one column, full-width pills, sheets from the bottom.",
-        "section": "layout"
-      },
-      {
-        "name": "The No Border Tile Rule",
-        "body": "Tiles never carry a border. A tile that needs emphasis gets a 2px inset ring (action blue for a live request, signal red for a late account), never an outline and never a heavier shadow.",
-        "section": "elevation"
-      }
+      { "name": "The One Ink Rule", "body": "Amber is the only action colour. It marks what can be pressed or what has been done; it never decorates.", "section": "colors" },
+      { "name": "The Line Per Product Rule", "body": "Gasoil is cobalt, essence is coral, everywhere a product is drawn. Series colours never stand in for status.", "section": "colors" },
+      { "name": "The Word Beside The Colour Rule", "body": "Status is never colour alone: every dot, disc or variance carries a word or sign.", "section": "colors" },
+      { "name": "The Two Modes Rule", "body": "Every colour is a token with a day value. Components read tokens and never hard-code a mode.", "section": "colors" },
+      { "name": "The Tabular Rule", "body": "Every amount, percentage and count is set with tabular figures so columns and counters hold still.", "section": "typography" },
+      { "name": "The Tight Track Rule", "body": "Headings and figures carry negative tracking that grows with size (-0.014em at 19px to -0.03em at 48px).", "section": "typography" },
+      { "name": "The Quiet Panel Rule", "body": "Panels sit on a hairline, not a shadow. A shadow means the element is above the page.", "section": "elevation" }
     ],
     "dos": [
-      "Do open every screen with one display headline (48px, 32px on phones) and a graphite subhead.",
-      "Do put the screen's one job in an action-blue pill, and mirror it in the local nav.",
-      "Do keep tiles white, borderless and 18px-rounded on the #f5f5f7 ground.",
-      "Do write states as a badge with a dot and a French word (Payé, Crédit, Combos, En retard).",
-      "Do set every amount and reading with tabular figures.",
-      "Do use the apple ease cubic-bezier(0.28, 0.11, 0.32, 1) for reveals and sheets, and honour reduced motion.",
-      "Do keep touch targets at 44px or more and body text at 17px."
+      "Do colour every action in amber (#f2b134, day #b86a00) with dark text, and only actions or completed steps.",
+      "Do reference tokens (`var(--surface)`, `var(--text-2)`, `var(--accent)`) so day mode follows automatically.",
+      "Do colour products by their line (gasoil cobalt, essence coral) wherever they are charted.",
+      "Do set amounts in tabular figures at 600 weight and tighten tracking as size grows.",
+      "Do separate panels from the ground with the 1px hairline and the one-step tonal change.",
+      "Do keep tap targets at 44px or more and fields at 56px on touch surfaces.",
+      "Do pair status colour with a word or sign, and use the lighter `-text` status colours for text on navy.",
+      "Do keep the French product terms (Gérant, Pompiste, Poste, Cuve) in the interface."
     ],
     "donts": [
-      "Don't show an Apple logo, the Apple name or Apple product imagery; the station's drop mark is the only brand glyph.",
-      "Don't add iOS app chrome: no floating glass tab bar, no glass cards.",
-      "Don't put a border or a resting shadow on a tile.",
-      "Don't introduce a second action colour or use blue decoratively.",
-      "Don't put white text on caution yellow, or carry a status by colour alone.",
-      "Don't add kickers or eyebrows above headlines.",
-      "Don't add bounce or overshoot to motion."
+      "Don't add a second accent colour or use amber for decoration.",
+      "Don't put a resting shadow on a panel; reserve shadows for floating layers.",
+      "Don't use pure black or pure white as the ground; the dark ground is #070e1b and the day ground #eceff5.",
+      "Don't use neon-on-black dashboard colours or glow as ornament; the only glow is the current shift-line stop.",
+      "Don't animate layout properties; use transform and opacity.",
+      "Don't convey status by colour alone.",
+      "Don't reintroduce a light-grey tile look or a second typeface."
     ]
   }
 }

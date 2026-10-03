@@ -1,164 +1,131 @@
 ---
 name: MTG Station
-description: Fuel-station manager for MTG Station (Goma), spoken in the apple.com web language and personalised for the station.
+description: Fuel-station manager for MTG Station (Goma), a midnight-blue enamel board with porcelain type, one amber action ink and a day mode for full sun.
 colors:
-  action-blue: "#0071e3"
-  action-blue-hover: "#0077ed"
-  action-blue-press: "#006edb"
-  link-blue: "#0066cc"
-  ink: "#1d1d1f"
-  graphite: "#6e6e73"
-  pebble: "#86868b"
-  ground: "#f5f5f7"
-  tile: "#ffffff"
-  mist: "#e8e8ed"
-  hairline-grey: "#d2d2d7"
-  chip-fill: "#ececf0"
-  nav-frost: "#fafafc"
-  pump-green: "#29a33f"
-  ledger-green: "#008009"
-  signal-red: "#e30000"
-  flare-orange: "#f56300"
-  caution-yellow: "#ffcc00"
-  rust: "#bf4800"
+  midnight-ground: "#070e1b"
+  enamel-panel: "#0f1b2f"
+  enamel-well: "#0b1527"
+  enamel-raised: "#1b2c49"
+  porcelain: "#f4f1ea"
+  porcelain-dim: "#aab5c8"
+  porcelain-faint: "#8391ab"
+  lacquer-line: "#2b3d5d"
+  field-edge: "#5d6f8f"
+  amber-ink: "#f2b134"
+  amber-hover: "#ffc24d"
+  amber-press: "#e09f1f"
+  amber-text-on: "#1a1405"
+  link-sky: "#8db6ff"
+  gasoil-cobalt: "#5b9cff"
+  essence-coral: "#ff6a7d"
+  ok-green: "#3ddc97"
+  ok-green-text: "#4be3a2"
+  alert-red: "#ff5a52"
+  alert-red-text: "#ff7d75"
+  serious-orange: "#ff9a3d"
+  caution-yellow: "#ffd24a"
+  day-ground: "#eceff5"
+  day-panel: "#ffffff"
+  day-ink: "#0b1527"
+  day-amber: "#b86a00"
+  day-link: "#0b57d0"
 typography:
   display:
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro', 'Inter', 'Helvetica Neue', 'Segoe UI', Roboto, sans-serif"
+    fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif"
     fontSize: "48px"
-    fontWeight: 600
+    fontWeight: 650
     lineHeight: 1.08
-    letterSpacing: "-0.022em"
+    letterSpacing: "-0.03em"
   headline:
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro', 'Inter', 'Helvetica Neue', 'Segoe UI', Roboto, sans-serif"
-    fontSize: "28px"
-    fontWeight: 600
-    lineHeight: 1.14
-    letterSpacing: "-0.017em"
-  title:
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro', 'Inter', 'Helvetica Neue', 'Segoe UI', Roboto, sans-serif"
+    fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif"
     fontSize: "24px"
     fontWeight: 600
     lineHeight: 1.17
-    letterSpacing: "-0.017em"
-  subhead:
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro', 'Inter', 'Helvetica Neue', 'Segoe UI', Roboto, sans-serif"
-    fontSize: "21px"
-    fontWeight: 400
-    lineHeight: 1.38
+    letterSpacing: "-0.02em"
+  title:
+    fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif"
+    fontSize: "19px"
+    fontWeight: 600
+    lineHeight: 1.21
     letterSpacing: "-0.014em"
   figure:
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro', 'Inter', 'Helvetica Neue', 'Segoe UI', Roboto, sans-serif"
+    fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif"
     fontSize: "40px"
     fontWeight: 600
     lineHeight: 1.1
-    letterSpacing: "-0.005em"
-    fontFeature: "'tnum'"
+    letterSpacing: "-0.025em"
+    fontFeature: "tabular-nums"
   body:
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro', 'Inter', 'Helvetica Neue', 'Segoe UI', Roboto, sans-serif"
+    fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif"
     fontSize: "17px"
     fontWeight: 400
     lineHeight: 1.47
     letterSpacing: "-0.022em"
-  body-small:
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro', 'Inter', 'Helvetica Neue', 'Segoe UI', Roboto, sans-serif"
-    fontSize: "15px"
-    fontWeight: 400
-    lineHeight: 1.4
-    letterSpacing: "-0.014em"
   label:
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro', 'Inter', 'Helvetica Neue', 'Segoe UI', Roboto, sans-serif"
+    fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif"
     fontSize: "13px"
     fontWeight: 600
-    lineHeight: 1.38
+    lineHeight: 1.2
     letterSpacing: "-0.01em"
 rounded:
-  sm: "8px"
-  md: "12px"
-  lg: "18px"
-  xl: "28px"
-  pill: "980px"
+  sm: "7px"
+  md: "11px"
+  lg: "16px"
+  xl: "24px"
+  pill: "999px"
 spacing:
   xs: "6px"
   sm: "10px"
   md: "14px"
   lg: "20px"
-  gutter: "22px"
-  tile: "28px"
+  xl: "28px"
   section: "40px"
 components:
   button-primary:
-    backgroundColor: "{colors.action-blue}"
-    textColor: "{colors.tile}"
-    typography: "{typography.body}"
+    backgroundColor: "{colors.amber-ink}"
+    textColor: "{colors.amber-text-on}"
     rounded: "{rounded.pill}"
     padding: "10px 22px"
     height: "44px"
   button-primary-hover:
-    backgroundColor: "{colors.action-blue-hover}"
+    backgroundColor: "{colors.amber-hover}"
   button-primary-active:
-    backgroundColor: "{colors.action-blue-press}"
-  button-primary-large:
-    backgroundColor: "{colors.action-blue}"
-    textColor: "{colors.tile}"
-    rounded: "{rounded.pill}"
-    padding: "14px 28px"
-    height: "52px"
+    backgroundColor: "{colors.amber-press}"
   button-secondary:
     backgroundColor: "transparent"
-    textColor: "{colors.link-blue}"
+    textColor: "{colors.link-sky}"
     rounded: "{rounded.pill}"
     padding: "10px 22px"
     height: "44px"
-  button-small:
-    backgroundColor: "{colors.action-blue}"
-    textColor: "{colors.tile}"
-    rounded: "{rounded.pill}"
-    padding: "5px 15px"
-    height: "32px"
   button-destructive:
-    backgroundColor: "{colors.signal-red}"
-    textColor: "{colors.tile}"
+    backgroundColor: "{colors.alert-red}"
+    textColor: "#ffffff"
     rounded: "{rounded.pill}"
     padding: "10px 22px"
-    height: "44px"
-  tile:
-    backgroundColor: "{colors.tile}"
-    textColor: "{colors.ink}"
+  card:
+    backgroundColor: "{colors.enamel-panel}"
+    textColor: "{colors.porcelain}"
     rounded: "{rounded.lg}"
     padding: "28px"
-  field:
-    backgroundColor: "{colors.tile}"
-    textColor: "{colors.ink}"
-    typography: "{typography.body}"
+  input:
+    backgroundColor: "{colors.enamel-panel}"
+    textColor: "{colors.porcelain}"
     rounded: "{rounded.md}"
     padding: "25px 16px 8px"
     height: "56px"
   choice-tile:
-    backgroundColor: "{colors.tile}"
-    textColor: "{colors.ink}"
+    backgroundColor: "{colors.enamel-panel}"
+    textColor: "{colors.porcelain}"
     rounded: "{rounded.md}"
-    padding: "10px 14px"
     height: "56px"
-  choice-tile-selected:
-    backgroundColor: "rgba(0, 113, 227, 0.1)"
-    textColor: "{colors.link-blue}"
   badge:
-    backgroundColor: "{colors.chip-fill}"
-    textColor: "{colors.ink}"
-    typography: "{typography.label}"
+    backgroundColor: "{colors.enamel-raised}"
+    textColor: "{colors.porcelain}"
     rounded: "{rounded.pill}"
     padding: "3px 10px"
-  global-nav:
-    backgroundColor: "rgba(250, 250, 252, 0.94)"
-    textColor: "{colors.ink}"
-    height: "48px"
-  local-nav:
-    backgroundColor: "rgba(250, 250, 252, 0.94)"
-    textColor: "{colors.ink}"
-    height: "52px"
   segmented:
-    backgroundColor: "{colors.chip-fill}"
-    textColor: "{colors.graphite}"
+    backgroundColor: "{colors.enamel-raised}"
+    textColor: "{colors.porcelain-dim}"
     rounded: "{rounded.pill}"
     padding: "3px"
 ---
@@ -167,175 +134,166 @@ components:
 
 ## Overview
 
-**Creative North Star: "The Showroom Forecourt"**
+**Creative North Star: "Midnight Line"**
 
-MTG Station is a fuel counter dressed as a product page. The ground is a calm light grey (#f5f5f7), every piece of content sits on a white rounded tile with no border, every screen opens with one big semibold headline saying where you are, and every action is the same blue pill. The language is apple.com's web idiom, played straight: thin translucent global nav, a sticky local nav that slides in carrying the page's one action, store-style floating-label fields and choice tiles. It is personalised by the station's own mark (a filled fuel drop in action blue), its French vocabulary and its numbers, never by Apple's logo, name or imagery.
+The product is a midnight-blue enamel board read under pump-island lights. The ground is a deep blue-black, panels are lacquered navy edged by a one-pixel porcelain hairline, type is warm porcelain, and a single amber ink marks every action. Gasoil and essence each own a line colour (cobalt and coral) that follows the product through gauges, bars and charts. Premium, calm and legible: the Gérant reads credit, combos and stock on one board, and the Pompiste records a sale in a few taps.
 
-Density is deliberately low for a business tool. The attendant works in sun, one-handed, on modest Android phones, so type starts at 17px, targets start at 44px, and states read as a word plus a colour dot (Payé, Crédit, Combos, En retard). The system refuses iOS app chrome (floating glass tab bars, glass cards) and dashboard-template density; depth comes from tile-on-ground contrast, not from borders or stacked shadows.
+Dark is the default. A day mode (white enamel, darker amber, deeper link blue) is chosen from the account menu for full sun and swaps the same token names, so no component is restyled. Inter, served from the station itself, is the only face on every device. Density is generous on phones (44px minimum tap targets, 56px fields) and tidy on desktop (1068px page column).
 
-Motion follows the apple.com curve (cubic-bezier(0.28, 0.11, 0.32, 1)): fade-up reveals of 20px, staggered page entry, sheets that rise and can be swiped down, no bounce. Reduced motion collapses all of it to 1ms.
+Depth comes from hairlines and tonal steps, not shadows. Motion is short and answers the hand or explains a state; the one signature moment is the balanced till (drawn check, ripple, counted figure).
 
 **Key Characteristics:**
-- Light grey ground, white 18px tiles, no tile borders.
-- One blue for every action; a second, deeper blue for every link.
-- SF Pro on Apple devices, self-hosted Inter with optical sizing everywhere else, tight negative tracking.
-- One headline per screen, grey subhead beneath it.
-- Global nav scrolls away; local nav with its action pill slides in.
-- Full-screen phone menu with large staggered links.
-- Full dark theme (black ground, #1d1d1f tiles) driven by the same tokens.
+- Midnight ground, lacquered navy panels, porcelain text, amber as the only action ink.
+- One line colour per product, status colours always paired with a word.
+- Inter throughout, tight negative tracking, tabular figures for every amount.
+- Pill-shaped controls over softly rounded (16px) panels.
+- Hairline-edged panels with no resting shadow.
+- Signature: the shift line, a four-stop transit line for the Poste.
 
 ## Colors
 
-A near-monochrome Apple grey scale with one saturated action blue and a small, sun-legible status set.
+A blue-black enamel palette with one warm accent; the day mode is the same roles re-lit.
 
 ### Primary
-- **Action Blue** (action-blue): the fill of every primary pill, the checked checkbox, the selected choice-tile frame, the caret, the focus outline and the brand mark. Hover lightens to action-blue-hover, press deepens to action-blue-press. A 10% tint (rgba(0, 113, 227, 0.1)) fills selected choice tiles and quick-action icon discs.
-- **Link Blue** (link-blue): text links, "more" links with a trailing chevron, ghost and secondary button labels, the active item in the phone menu, the selected choice-tile label. In dark theme it becomes #2997ff.
+- **Amber Ink** (#f2b134): the action colour. Primary buttons, the focus ring, caret, checked boxes, selected choice-tile frame, completed stops of the shift line, the pulse on pending requests. Hover #ffc24d, press #e09f1f. Text on amber is **Amber Text-On** (#1a1405). In day mode it deepens to **Day Amber** (#b86a00) with white text.
 
-### Tertiary (data series)
-- **Action Blue / Flare Orange / Pump Green / Rust** (series 1 to 4): products and chart series, assigned by product id in that order. Single-series charts use only series 1.
+### Secondary
+- **Gasoil Cobalt** (#5b9cff): the series colour for gasoil (first chart series, gauges, horizontal bars). Day: #1f6fe0.
+- **Essence Coral** (#ff6a7d): the series colour for essence. Day: #d6304a.
+- Spare series: green #3ddc97 and amber #f2b134.
 
 ### Neutral
-- **Ink** (ink): all primary text and headlines. Becomes the tile colour in dark theme.
-- **Graphite** (graphite): subheads, secondary text, labels of KPIs, table headers, floating field labels.
-- **Pebble** (pebble): tertiary text, focused placeholders, the 1px field and choice-tile stroke, select and search glyphs.
-- **Ground** (ground): the page background; also read-only field fill.
-- **Tile** (tile): every card, sheet, alert, toast, field and choice tile.
-- **Mist** (mist): circle buttons, avatars, meter and bar tracks.
-- **Hairline Grey** (hairline-grey): strong separators (table header rule, totals rule), switch off-state, sheet grabber. Row dividers use a softer rgba(0, 0, 0, 0.08) hairline.
-- **Chip Fill** (chip-fill): badge and segmented-control wells.
-- **Nav Frost** (nav-frost): the solid phone menu; navs use it at 94% opacity with saturate(180%) blur(20px).
+- **Midnight Ground** (#070e1b): page background. Day: #eceff5.
+- **Enamel Panel** (#0f1b2f): cards, sheets, alerts, toasts, inputs. Day: #ffffff.
+- **Enamel Well** (#0b1527): read-only fields. Day: #f4f6fa.
+- **Enamel Raised** (#1b2c49): badges, segmented track, avatars, circle buttons. Day: #dde3ee.
+- **Porcelain** (#f4f1ea): primary text. Day ink: #0b1527.
+- **Porcelain Dim** (#aab5c8): secondary text and labels. Day: #4a566b.
+- **Porcelain Faint** (#8391ab): tertiary text, placeholders, future shift-line stops. Day: #66738a.
+- **Lacquer Line** (#2b3d5d): separators, switch track, shift-line track.
+- **Field Edge** (#5d6f8f): input, choice-tile and pump-option borders, high enough to read as an edge.
+- **Link Sky** (#8db6ff): links and secondary-button text. Day: #0b57d0.
 
 ### Status
-- **Pump Green** (pump-green): success dots, switch on, success toast icon. Text that says "good" uses the darker **Ledger Green** (ledger-green) so it holds contrast in sun.
-- **Signal Red** (signal-red): critical dots, destructive pill, error toast, negative variance text.
-- **Flare Orange** (flare-orange): serious state, over-limit badge tint (16% mix), combos meter.
-- **Caution Yellow** (caution-yellow): warning dots and warning alert icon, always with ink text on top, never white.
+Green #3ddc97 (text #4be3a2), red #ff5a52 (text #ff7d75), orange #ff9a3d, yellow #ffd24a. Fills colour dots, switches and icon discs; the lighter text variants colour figures such as variances. Day values are darkened (green #1f9e68 / text #0a7a4b, red #d92d20 / text #c4281c).
 
 ### Named Rules
-**The One Blue Rule.** Action blue is the only fill that means "do this". There is one blue pill per screen region, and the local nav repeats the page's main action as a small pill. Nothing decorative is blue.
+**The One Ink Rule.** Amber is the only action colour. It marks what can be pressed or what has been done; it never decorates.
 
-**The Word Plus Dot Rule.** A status is never colour alone: it is a badge with a 7px dot and a French word. Text that carries a value judgement uses ledger-green or signal-red, never the lighter fills.
+**The Line Per Product Rule.** Gasoil is cobalt, essence is coral, everywhere a product is drawn. Series colours never stand in for status.
+
+**The Word Beside The Colour Rule.** Status is never colour alone: every dot, disc or variance carries a word or sign.
+
+**The Two Modes Rule.** Every colour is a token with a day value. Components read tokens and never hard-code a mode.
 
 ## Typography
 
-**Display Font:** SF Pro Display (with Inter, Helvetica Neue, Segoe UI, Roboto)
-**Body Font:** SF Pro Text (with Inter, Helvetica Neue, Segoe UI, Roboto)
+**Display Font:** Inter (with -apple-system, Segoe UI, Roboto fallbacks), self-hosted variable woff2.
+**Body Font:** Inter, same stack.
+**Label/Mono Font:** none; numerals use Inter with tabular figures.
 
-**Character:** One family in two optical cuts, semibold for anything that names or counts, regular for everything that explains. Inter is self-hosted with `font-optical-sizing: auto` so Android gets the same confident, tightly tracked voice without a third-party request on weak networks.
+**Character:** One family, one voice, on every device. Weight and tracking do the hierarchy: semibold headings pulled tight, regular body, figures large and tabular.
 
 ### Hierarchy
-- **Display** (600, 48px, 1.08): the one page headline. Drops to 32px / 1.125 below 834px; 40px (32px on phones) on sign-in screens.
-- **Headline** (600, 28px, 1.14): sheet and dialog titles, phone-menu links (24px for sheets on phones).
-- **Title** (600, 24px, 1.17): tile headers (21px on phones); 21px in the local nav and alerts; 19px for h3.
-- **Subhead** (400, 21px, 1.38): the grey line under the page headline (17px on phones) and sign-in lead (19px).
-- **Figure** (600, 40px, 1.1, tabular): KPI values (32px on phones, 28px small); big results go to 56px, tank percentages and queued amounts to 32px.
-- **Body** (400, 17px, 1.47): all running text, fields, buttons, summary lines.
-- **Body small** (400, 15px, 1.4): tile header descriptions, tables, toasts, hints; 14px for meta lines and small pills.
-- **Label** (600, 13px): badges, table headers, action-sheet titles, nav links (13px regular at 80% opacity).
-
-Tracking is negative for Inter (h1 -0.022em, h2 -0.017em, h3 -0.012em, subhead -0.014em) and is reset to SF Pro's own values on Apple systems (h1 0, h2 +0.009em, h3 +0.012em, subhead +0.011em).
+- **Display** (650, 48px, 1.08, -0.03em): page headline h1; 32px under 833px; 40px on the sign-in card.
+- **Headline** (600, 24px, 1.17, -0.02em): card titles and h2; 28px in sheets and the phone menu; 21px on phones for card headers.
+- **Title** (600, 19-21px, 1.21, -0.014em): h3, the local-nav page name.
+- **Figure** (600, 40px, 1.1, -0.025em, tabular): KPI values (28px small, 24px in the three-up row), tank percentage 32px, queue amount 32px, till result 56px.
+- **Body** (400, 17px, 1.47, -0.022em): default text, inputs, buttons. Subheads under the headline are 21px dim porcelain (17px on phones).
+- **Label** (600, 13px, 1.2, -0.01em): column heads, badges, shift-line stop names, KPI labels in tiles. Sentence case, never uppercase.
 
 ### Named Rules
-**The One Headline Rule.** Every screen states where you are in one display headline, followed by a grey subhead. No kicker or eyebrow above it, no second headline at the same size.
+**The Tabular Rule.** Every amount, percentage and count is set with tabular figures so columns and counters hold still.
 
-**The Tabular Money Rule.** Every amount, litre count and meter reading is set with tabular figures, so columns of dollars align and nothing looks rounded.
+**The Tight Track Rule.** Headings and figures carry negative tracking that grows with size (-0.014em at 19px to -0.03em at 48px).
 
 ## Layout
 
-Content sits in a centred column of 1068px max (640px for narrow form pages) with a 22px side gutter, 16px below 834px. The global nav is 48px, the local nav 52px. The page headline sits 40px below the nav and 32px above content (28px / 24px on phones). Tiles sit in grids with a 20px gap (14px on phones); sections are separated by 40px (28px on phones). Stacks use 20px, form grids 14px.
+A single centred column, 1068px maximum, with 22px side padding (16px under 833px) and 96px bottom room (72px on phones). Pages open with a header block (40px above, 32px below) and stack sections 40px apart (28px on phones). Grids are 2, 3 or 4 equal columns with 20px gaps (14px on phones); at 1068px 4 and 3 columns become 2, and at 833px everything becomes one column. Card interiors use 28px padding (22px 20px on phones); stacked content uses 20px gaps, form grids 14px.
 
-Breakpoints: at 1068px four- and three-column grids fall to two; at 833px nav links fold into the menu button, all grids and form grids become one column, tile padding goes from 28px to 22px 20px, and sheets dock to the bottom edge; at 420px the attendant's quick actions and KPI row tighten to 8px gaps and queue actions wrap.
+The global bar is 48px and scrolls away; a 52px local bar with the page name and main action slides in once the headline has gone. Under 833px the link row folds into a full-screen menu opened by a two-bar button that turns into a cross. Sheets rise from the bottom on phones, with a grabber, and can be swiped down. Print drops chrome, makes panels flat and unpadded, and avoids breaking cards.
 
-**The Phone First Rule.** Layout is designed at phone width and widened, not the reverse: one column, full-width pills, sheets from the bottom.
+Breakpoints: 1068px, 833px, 420px.
 
 ## Elevation & Depth
 
-Flat by default. Depth is tonal: white tiles on a grey ground, with no border and no shadow at rest. Shadows are reserved for things that float above the page (sheets, alerts, toasts, action sheets, tooltips) and for one hover response (quick actions lift). Navs use frosted translucency instead of shadow, with a single inset hairline under the local nav.
+Flat by default and tonal. A panel is one step lighter than the ground and edged by a 1px inset porcelain hairline (rgba(244,241,234,0.12), day rgba(11,21,39,0.1)). There is no resting shadow. Shadows appear only on things that float above the page or answer a hover.
 
 ### Shadow Vocabulary
-- **Ambient** (`box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08)`): under the customer-request queue card, alongside its 2px blue inset ring.
-- **Lift** (`box-shadow: 0 11px 34px rgba(0, 0, 0, 0.16)`): toasts, tooltips, action-sheet groups, quick-action hover.
-- **Modal** (`box-shadow: 0 30px 90px rgba(0, 0, 0, 0.25)`): sheets and alerts over a rgba(0, 0, 0, 0.36) backdrop.
-- **Focus ring** (`box-shadow: 0 0 0 4px rgba(0, 125, 250, 0.6)`): focused fields and choice tiles, with the stroke turned action blue.
+- **Float** (`0 11px 34px rgba(0,0,0,0.55)`, day `0 11px 34px rgba(11,21,39,0.18)`): tooltips, toasts, action sheets, hovered quick actions, with the hairline stacked beneath.
+- **Lift** (`0 4px 24px rgba(0,0,0,0.45)`): the pending-request card, paired with a 2px amber inset frame.
+- **Glass** (`backdrop-filter: saturate(180%) blur(20px)` on 92%-opaque navy): global and local bars only.
 
 ### Named Rules
-**The No Border Tile Rule.** Tiles never carry a border. A tile that needs emphasis gets a 2px inset ring (action blue for a live request, signal red for a late account), never an outline and never a heavier shadow.
+**The Quiet Panel Rule.** Panels sit on a hairline, not a shadow. A shadow means the element is above the page.
 
 ## Shapes
 
-Generously rounded, never sharp. Tiles, sheets, alerts and action groups use 18px; fields, choice tiles, pump options, tooltips and toasts use 12px; every button, badge, segmented control, search field and meter is a full pill (980px / 999px). Circles are reserved for icon discs, avatars, circle buttons, round checkboxes and status dots. On phones, sheets keep only their top corners rounded and show a 36 by 5px grabber. Icons are 24px-grid strokes at 2px with round caps and joins, drawn in currentColor; the brand mark is the one filled glyph.
+Pills for controls (buttons, badges, search, segmented control, switch), 16px for panels and sheets, 11px for fields, choice tiles, tooltips and toasts, 7px for small inset parts. Circles (999px) for avatars, round icon buttons, status discs and the round checkbox. Bar-chart columns round only their top corners (6px). Gauge and horizontal bar tracks are 8px-high capsules. Borders are 1px; selection is a 1px border plus a matching 1px inset ring.
 
 ## Components
 
 ### Buttons
-Calm, confident apple.com pills.
-- **Shape:** full pill (980px), 44px minimum height.
-- **Primary:** action blue fill, white 17px regular label, 10px 22px padding. Large: 52px, 14px 28px. Small: 32px, 5px 15px, 14px label (used in the local nav).
-- **Hover / Press:** fill shifts to action-blue-hover / action-blue-press over 0.2s on the apple ease; disabled drops to 42% opacity.
-- **Secondary:** transparent with a 1px action-blue stroke and link-blue label; fills blue on hover.
-- **Ghost:** link-blue text only, underline on hover. **Danger:** red text, 10% red wash on hover. **Destructive:** solid signal red.
-- **More link:** link-blue text with a trailing chevron, the apple.com "Voir" idiom.
+- **Shape:** full pill, 44px minimum height (52px large, 32px small, 48px in the request queue).
+- **Primary:** amber fill, dark text, 10px 22px padding, 17px regular. Hover brightens, press darkens and scales to 0.97.
+- **Secondary:** transparent with an amber border and link-colour text; hover fills amber with dark text.
+- **Ghost / Danger / Destructive:** ghost is link text that underlines on hover; danger is red text that tints on hover; destructive is solid red with white text.
 
-### Chips / Badges
-- **Style:** chip-fill pill, 3px 10px, 13px semibold ink label preceded by a 7px status dot.
-- **State:** dot colour carries good / warning / serious / critical / info; over-limit gets a 16% orange wash.
-
-### Cards / Containers (Tiles)
-- **Corner Style:** 18px.
-- **Background:** tile white on ground grey (#1d1d1f on black in dark).
-- **Shadow Strategy:** none at rest (see Elevation & Depth).
-- **Border:** none.
-- **Internal Padding:** 28px (22px 20px on phones); flush tiles hold full-bleed tables with 28px cell insets.
+### Cards / Containers
+- **Corner Style:** 16px.
+- **Background:** Enamel Panel with the hairline frame.
+- **Shadow Strategy:** none at rest (see Elevation).
+- **Internal Padding:** 28px (22px 20px on phones); `flush` cards hold tables edge to edge with a 26px 28px header.
 
 ### Inputs / Fields
-apple.com store fields with floating labels.
-- **Style:** 56px tall, white, 1px pebble stroke, 12px radius, 17px text; the grey label sits inside at 17px and floats up to 70.5% scale on focus or when filled (0.125s).
-- **Focus:** stroke turns action blue plus a 4px translucent blue ring.
-- **Read-only:** ground fill, graphite text. **Error:** 15px red message with a short horizontal shake.
-- **Search:** pill-shaped 40px field with an inline magnifier glyph.
+- **Style:** panel fill, 1px Field Edge border, 11px radius, 56px tall with a floating label that rises and shrinks to 0.705 when filled or focused.
+- **Focus:** border turns amber and a 4px translucent amber ring appears.
+- **Error / Disabled:** error text is the light red with a short horizontal shake; read-only fields drop to the well tone and dim text.
+- **Switch:** 51x31 pill, green when on, white thumb. **Checkbox:** 24px round, amber when checked, white drawn tick.
 
-### Choice Tiles
-The apple.com store selector, used for product, payment and unit.
-- **Style:** equal-width 56px tiles, 12px radius, 1px pebble stroke, 17px semibold centred label.
-- **Selected:** action-blue stroke doubled by a 1px inset ring (2px visual frame), 10% blue tint, link-blue label. Hover darkens the stroke to graphite.
+### Chips and segmented control
+Badges are pills on Enamel Raised with a 7px status dot and a 13px semibold word. The segmented control is a pill track with a sliding thumb behind the active 14px option.
 
-### Switches, Checkboxes, Segmented Control
-- **Switch:** 51 by 31px pill, hairline-grey off, pump-green on, white 27px knob.
-- **Checkbox:** 24px circle, blue fill with a white tick when checked.
-- **Segmented:** chip-fill pill well with a white sliding thumb (0.4s apple ease).
+### Choice tiles
+One-tap options 56px tall with a Field Edge border; selected state is an amber border, inset amber ring, soft amber wash and link-colour text. Pump options use the same selected treatment.
 
 ### Navigation
-- **Global nav:** 48px, translucent nav-frost with saturate(180%) blur(20px), scrolls away with the page. Drop mark and station name (15px semibold) left; 13px links centred at 80% opacity, active link full opacity and semibold; account icon right.
-- **Phone menu:** below 834px links fold into a two-bar button that crosses on open; the full-screen menu fades in and its 28px semibold links cascade down 8px with a 25ms stagger.
-- **Local nav:** 52px, same frost plus an inset hairline; slides down when the headline leaves, page name left (21px semibold) and the page's primary action as a small pill right.
+Thin glass bar: brand drop in amber, 15px semibold name, centred 13px links at 80% opacity (full and semibold when active), account button. Phone menu lists 28px semibold links that fade and slide in with a 25ms stagger; the active link takes the link colour.
 
-### Sheets, Alerts, Toasts
-- **Sheet:** 560px white panel, 18px radius, modal shadow, rises 24px on open; on phones it docks to the bottom, rises from below and can be dragged down. Header 28px title with a circle close button, footer separated by a hairline.
-- **Alert:** 320px centred, 21px title, stacked full-width pills.
-- **Action sheet:** grouped 56px rows in link blue, destructive in red, cancel semibold.
-- **Toast:** white banner with lift shadow under the local nav, green (or red) circle icon, 15px semibold text, slides in from above.
+### Tables
+Tabular 15px figures, 13px dim semibold column heads, hairline row dividers, 14px 28px cell padding, clickable rows tint to the faint well on hover, totals in semibold above a separator.
 
-### Quick Actions and Request Queue (signature, attendant)
-- **Quick action:** 104px white tile with a 40px tinted icon disc and 15px semibold label, three across; the primary one is solid action blue with a white disc. Lifts on hover.
-- **Queue card:** a customer's prepared purchase, white tile with a 2px action-blue inset ring and ambient shadow, 32px tabular amount, actions in a 1:1:2 grid with the confirm pill widest; a pulsing blue dot heads the queue.
+### Tank gauge (Cuve)
+Large percentage in Figure style over an 8px capsule track, filled in the product's line colour with a 2px mark for the threshold; the fill grows from the left once and a single sheen passes over it. A foot line gives litres or status in dim text.
+
+### Shift line (signature)
+A four-stop transit line built as an ordered list: Ouverture, Ventes, Clôture, Validation. Each stop is a 22px ring with a 4px connecting bar. Future stops are hollow rings on Lacquer Line with faint labels; past stops and their outgoing bar fill solid amber with dim labels; the current stop is a hollow ring with a 6px amber border, a porcelain label and a short glow (two pulses, then still). Under the open Poste the current stop is Ventes, once closed it is Validation, and when everything is past all four are filled. Bars draw in left to right on page entry. It sits directly under the page headline on the shift pages.
+
+### Dialogs and toasts
+Sheets (560px wide, 16px radius, hairline plus float shadow) centre on desktop and rise from the bottom on phones. Alerts are 320px centred with stacked full-width buttons, cancel last in reading order. Action sheets are grouped link-colour rows, 56px each. Toasts drop in from the top below the local bar with a green or red disc and a drawn tick.
+
+### Motion
+Standard easing is cubic-bezier(0.28, 0.11, 0.32, 1) with 0.2-0.45s durations; transform and opacity only. Pages push or pop with View Transitions; grid cards arrive staggered by 50ms (350ms maximum). The signature moment is the balanced till: pop-in disc, drawn tick, ripple, and the figure fading up. Reduced-motion collapses all animation to 1ms.
 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** open every screen with one display headline (48px, 32px on phones) and a graphite subhead.
-- **Do** put the screen's one job in an action-blue pill, and mirror it in the local nav.
-- **Do** keep tiles white, borderless and 18px-rounded on the #f5f5f7 ground.
-- **Do** write states as a badge with a dot and a French word (Payé, Crédit, Combos, En retard).
-- **Do** set every amount and reading with tabular figures.
-- **Do** use the apple ease cubic-bezier(0.28, 0.11, 0.32, 1) for reveals and sheets, and honour reduced motion.
-- **Do** keep touch targets at 44px or more and body text at 17px.
+- **Do** colour every action in amber (#f2b134, day #b86a00) with dark text, and only actions or completed steps.
+- **Do** reference tokens (`var(--surface)`, `var(--text-2)`, `var(--accent)`) so day mode follows automatically.
+- **Do** colour products by their line (gasoil cobalt, essence coral) wherever they are charted.
+- **Do** set amounts in tabular figures at 600 weight and tighten tracking as size grows.
+- **Do** separate panels from the ground with the 1px hairline and the one-step tonal change.
+- **Do** keep tap targets at 44px or more and fields at 56px on touch surfaces.
+- **Do** pair status colour with a word or sign, and use the lighter `-text` status colours for text on navy.
+- **Do** keep the French product terms (Gérant, Pompiste, Poste, Cuve) in the interface.
 
 ### Don't:
-- **Don't** show an Apple logo, the Apple name or Apple product imagery; the station's drop mark is the only brand glyph.
-- **Don't** add iOS app chrome: no floating glass tab bar, no glass cards.
-- **Don't** put a border or a resting shadow on a tile.
-- **Don't** introduce a second action colour or use blue decoratively.
-- **Don't** put white text on caution yellow, or carry a status by colour alone.
-- **Don't** add kickers or eyebrows above headlines.
-- **Don't** add bounce or overshoot to motion.
+- **Don't** add a second accent colour or use amber for decoration.
+- **Don't** put a resting shadow on a panel; reserve shadows for floating layers.
+- **Don't** use pure black or pure white as the ground; the dark ground is #070e1b and the day ground #eceff5.
+- **Don't** use neon-on-black dashboard colours or glow as ornament; the only glow is the current shift-line stop.
+- **Don't** animate layout properties; use transform and opacity.
+- **Don't** convey status by colour alone.
+- **Don't** reintroduce a light-grey tile look or a second typeface.
+
+*Not canonized (build drift)*: leftovers from the earlier world remain in the stylesheet (hard-coded #fff glyphs on discs, a dark #1d1d1f on the yellow alert disc, a chevron and search icon stroked in #86868b, a 0.25-alpha sheet shadow, Apple-era comments and a 980px pill value). They are defects to repair, not rules.

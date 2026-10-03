@@ -126,6 +126,25 @@ export function varianceCell(value, tolerance) {
 }
 
 // ---------- Layout pieces ----------
+// Signature « Midnight Line » : le cycle d'un poste est une ligne de métro à quatre arrêts.
+// L'arrêt courant brûle, les arrêts passés sont pleins, les suivants sont des cercles creux.
+const LINE_STOPS = ['Ouverture', 'Ventes', 'Clôture', 'Validation'];
+export function shiftLine(status) {
+  const current = status === 'open' ? 1 : status === 'closed' ? 3 : 4; // 4 = tout est passé
+  return h(
+    'ol',
+    { class: 'shift-line', 'aria-label': 'Avancement du poste' },
+    LINE_STOPS.map((label, i) =>
+      h(
+        'li',
+        { class: i < current ? 'done' : i === current ? 'now' : '', 'aria-current': i === current ? 'step' : null },
+        h('span', { class: 'stop' }),
+        h('span', { class: 'stop-label' }, label),
+      ),
+    ),
+  );
+}
+
 export function pageHeader(title, subtitle, ...actions) {
   return h(
     'header',

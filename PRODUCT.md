@@ -56,7 +56,7 @@ Everything is in US dollars and French, on the Africa/Lubumbashi timezone.
 
 - Name: **MTG Station**. There is no logo or brand palette yet: the visual identity is to be created.
 - The user wants an identity specific to the station, while keeping the quality and native gestures of Apple apps: sheets, fluid animations, iOS-level finish. This was previously stated as "exactement ce que fait Apple" and is now refined to "identité propre à la station".
-- Standing visual preference, chosen by the user: the **apple.com website** language, played straight and personalised for MTG Station. The app must never show an Apple logo, name or product imagery.
+- Standing visual preference, chosen by the user on 2026-10-03 (replaces the earlier apple.com choice): **luxe sombre et premium**, built as "Midnight Line". Midnight-blue enamel ground, porcelain type, one amber action ink, one line colour per product. A day mode exists only for use in full sun. No Apple logo, name or product imagery.
 - Language: French.
 
 ## Evidence on Hand

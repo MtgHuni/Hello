@@ -1,6 +1,6 @@
 import { flags } from '../ui.js';
 import { api } from '../api.js';
-import { h, fmt, pageHeader, card, cardHeader, table, shiftBadge, varianceCell, button, formDialog, confirmDialog, toast, field, productColor, badge, kpi, parseServerDate, setContent } from '../ui.js';
+import { shiftLine, h, fmt, pageHeader, card, cardHeader, table, shiftBadge, varianceCell, button, formDialog, confirmDialog, toast, field, productColor, badge, kpi, parseServerDate, setContent } from '../ui.js';
 import { icon } from '../icons.js';
 import { shiftSummary } from './shifts.js';
 
@@ -133,6 +133,7 @@ function renderOpenShift(page, ctx, shift) {
 
   setContent(page, 
     pageHeader('Poste en cours', `Ouvert à ${fmt.time(shift.opened_at)} · ${pumps}`, shiftBadge('open')),
+    shiftLine('open'),
     h(
       'div',
       { class: 'stack' },
@@ -559,6 +560,7 @@ function renderClosed(page, ctx, shift) {
   const ok = Math.abs(shift.variance) <= tol;
   setContent(page, 
     pageHeader('Poste clôturé', `Merci ${ctx.state.user.name.split(' ')[0]} !`),
+    shiftLine('closed'),
     h(
       'div',
       { class: 'stack' },

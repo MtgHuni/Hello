@@ -5,23 +5,22 @@ primary_target: "public/index.html"
 related_targets: []
 ---
 
-# Surface: application shell (all screens: pompiste, gérant, client)
+# Surface: application shell (all screens)
 
-Scope: the whole web app, mode Operate. Audience: attendant outdoors in sun on modest Android phones; customers in the queue; manager mostly on phone.
-Chosen direction: the standing exit (canon), pinned by the user in words: "Site apple.com". Execute apple.com's web language at full fidelity, played straight, personalised as MTG Station. No Apple logo, name or product imagery.
+Mode: Operate. Redesign: the apple.com world is replaced by "Midnight Line", pinned by the user as "luxe sombre et premium".
 
 ## Direction contract
 
-THESIS: MTG Station feels like apple.com: calm light-grey ground, white rounded tiles, big confident SF headlines, one blue for every action. It refuses the iOS app chrome (floating glass tab bar, glass cards) and dashboard-template density.
+THESIS: MTG Station is a midnight-blue enamel board with porcelain type: premium, calm, readable. It refuses the light-grey Apple tile look and the neon-on-black dashboard.
 
-OWN-WORLD: #f5f5f7 ground, #ffffff tiles at 18px radius with no borders, #1d1d1f text, #6e6e73 secondary, #0071e3 pill buttons, #0066cc links with chevron, #d2d2d7 hairlines. SF Pro Display/Text (Inter with optical sizing as Android fallback), tight tracking. Thin translucent global nav; apple.com store idioms: 56px floating-label fields, choice tiles with a 2px blue selected border.
+OWN-WORLD: ground #070e1b, lacquered navy panels #0f1b2f with a 1px porcelain hairline and no resting shadow, porcelain text #f4f1ea, one amber action ink #f2b134 with dark text, a line colour per product (gasoil cobalt, essence coral), status green/red/orange always with a word. Inter throughout, tight tracking, tabular figures. A day mode (white enamel, darker amber) for full sun.
 
-STORY: every screen states where you are in one big headline. The one job of that screen is always a blue pill away. States read as words plus colour (Payé, Crédit, Combos, En retard).
+STORY: the attendant sees at a glance where the shift stands and records a sale in a few taps; the manager reads credit, combos and stock on one board.
 
-FIRST VIEWPORT: global nav 48px (MTG Station mark left; links centred on desktop; menu button on phone opening a full-screen menu with large staggered links), then a 32–40px semibold headline with a grey subhead, then content tiles. On scroll the global nav leaves and a sticky local nav slides in: page name left, primary action pill right.
+FIRST VIEWPORT: dark header with the amber drop, one big semibold headline with grey subhead, then the shift line (four stops: Ouverture, Ventes, Clôture, Validation), then the amber primary quick action beside two quiet panels.
 
-FORM: canon (apple.com), user-pinned; seed key f4410311 (degraded roll, overridden by the user's choice).
+SIGNATURE: the shift line, a transit line with four stops; the current stop burns, past stops are filled amber. Motion: numbers count in, tank gauges rise with one sheen, a drawn check and ripple confirm a balanced till.
 
-SIGNATURE: the sticky local nav with its action pill (the apple.com "Acheter" bar), and the full-screen menu with large staggered links. Motion: apple.com ease cubic-bezier(0.28,0.11,0.32,1); fade-up reveals; no bounce.
+FORM: user-pinned dark luxury, fused with the midnight transit diagram (catalog challenger, seed 083e3a8b); the roll was superseded by the user's pin.
 
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
