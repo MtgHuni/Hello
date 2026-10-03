@@ -16,6 +16,14 @@ export function h(tag, props, ...children) {
   return el;
 }
 
+// Like el.replaceChildren(), but skips null/false and flattens arrays
+// (replaceChildren would print "null" or "[object HTMLDivElement]").
+export function setContent(el, ...children) {
+  el.replaceChildren();
+  append(el, children);
+  return el;
+}
+
 function append(el, children) {
   for (const child of children.flat(Infinity)) {
     if (child === null || child === undefined || child === false) continue;
@@ -45,7 +53,9 @@ export const fmt = {
 };
 
 // Server timestamps are UTC "YYYY-MM-DD HH:MM:SS".
+// Date-only values ("YYYY-MM-DD") are local calendar days.
 export function parseServerDate(s) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(`${s}T12:00:00`);
   return new Date(s.includes('T') ? s : `${s.replace(' ', 'T')}Z`);
 }
 
@@ -70,7 +80,7 @@ export function productColor(productId) {
 export function toast(message, type = 'info') {
   const el = h(
     'div',
-    { class: `toast glass ${type === 'error' ? 'error' : ''}`, role: type === 'error' ? 'alert' : 'status' },
+    { class: `toast ${type === 'error' ? 'error' : ''}`, role: type === 'error' ? 'alert' : 'status' },
     h('span', { class: 'toast-icon' }, icon(type === 'error' ? 'alert' : 'check')),
     h('span', {}, message),
   );
@@ -270,7 +280,11 @@ export function openDialog(build, { kind = 'sheet' } = {}) {
     if (e.target === dialog && kind !== 'alert') close();
   });
   dialog.append(build(close));
+  // Focus the dialog itself rather than its first button, so no focus ring
+  // shows up on open (iOS sheets and menus open with nothing selected).
+  dialog.tabIndex = -1;
   dialog.showModal();
+  dialog.focus({ preventScroll: true });
   return { dialog, close };
 }
 
@@ -295,7 +309,7 @@ function enableSwipeToDismiss(sheet, handle, close) {
     if (startY === null) return;
     startY = null;
     sheet.classList.remove('dragging');
-    sheet.style.transition = 'transform 0.45s var(--spring)';
+    sheet.style.transition = 'transform 0.45s var(--ease)';
     if (dy > 110) {
       sheet.style.transform = 'translateY(110%)';
       setTimeout(close, 200);
@@ -320,10 +334,26 @@ export function field(f) {
       h('input', { id, type: 'checkbox', class: 'switch', role: 'switch', name: f.name, checked: f.value }),
     );
   }
+  if (f.type === 'segment') {
+    // One-tap choice (radio pills): faster than a select at the pump.
+    const current = String(f.value ?? f.options[0]?.[0]);
+    return h(
+      'fieldset',
+      { class: `seg-field ${f.full ? 'full' : ''}`, hidden: f.hidden },
+      h('legend', {}, f.label),
+      h(
+        'div',
+        { class: 'seg-options' },
+        f.options.map(([v, l]) =>
+          h('label', { class: 'seg-option' }, h('input', { type: 'radio', name: f.name, value: String(v), checked: String(v) === current, onChange: f.onInput }), h('span', {}, l)),
+        ),
+      ),
+    );
+  }
   if (f.type === 'select') {
     input = h('select', { id, name: f.name, required: f.required }, f.options.map(([v, l]) => h('option', { value: String(v), selected: String(v) === String(f.value ?? '') }, l)));
   } else if (f.type === 'textarea') {
-    input = h('textarea', { id, name: f.name, placeholder: f.placeholder }, f.value ?? '');
+    input = h('textarea', { id, name: f.name, placeholder: f.placeholder || ' ' }, f.value ?? '');
   } else {
     input = h('input', {
       id,
@@ -333,14 +363,25 @@ export function field(f) {
       required: f.required,
       step: f.step,
       min: f.min,
-      placeholder: f.placeholder,
+      // A placeholder is always set so the floating label can tell an empty field (:placeholder-shown).
+      placeholder: f.placeholder || ' ',
       autocomplete: f.autocomplete || 'off',
       inputmode: f.inputmode || (f.type === 'number' ? 'decimal' : null),
       readonly: f.readonly,
+      list: f.list,
+      enterkeyhint: f.enterkeyhint,
     });
   }
   if (f.onInput) input.addEventListener('input', f.onInput);
-  return h('label', { class: `field ${f.full ? 'full' : ''}`, for: id }, h('span', {}, f.label), input, f.hint ? h('span', { class: 'hint' }, f.hint) : null);
+  // apple.com store field: the label sits inside the box and floats up once the field is used.
+  // Selects, text areas and dates always show a value, so their label stays up.
+  const pinned = f.type === 'select' || f.type === 'textarea' || f.type === 'date';
+  return h(
+    'label',
+    { class: `field ${f.full ? 'full' : ''}`, for: id, hidden: f.hidden },
+    h('span', { class: `field-box ${pinned ? 'pinned' : ''}` }, input, h('span', { class: 'field-label' }, f.label)),
+    f.hint ? h('span', { class: 'hint' }, f.hint) : null,
+  );
 }
 
 export function readForm(form, fields) {
@@ -355,7 +396,7 @@ export function readForm(form, fields) {
   return data;
 }
 
-// Form in an iOS 26 sheet: ✕ to dismiss, title, prominent confirm button.
+// Form in a sheet (apple.com modal): title and ✕ on top, the action as a full-width pill at the bottom.
 // onSubmit may throw: the message is shown inline.
 export function formDialog({ title, intro, fields, submitLabel = 'Enregistrer', onSubmit, extra, grid = true }) {
   return new Promise((resolve) => {
@@ -372,13 +413,12 @@ export function formDialog({ title, intro, fields, submitLabel = 'Enregistrer', 
         finish(null);
       };
       const error = h('p', { class: 'form-error', hidden: true, role: 'alert' });
-      const submit = h('button', { class: 'circle-btn prominent', type: 'submit', 'aria-label': submitLabel, title: submitLabel }, icon('check'));
+      const submit = h('button', { class: 'btn large block', type: 'submit' }, submitLabel);
       const header = h(
         'div',
         { class: 'sheet-header' },
-        h('div', {}, h('button', { class: 'circle-btn', type: 'button', 'aria-label': 'Annuler', title: 'Annuler', onClick: dismiss }, icon('close'))),
         h('h2', {}, title),
-        h('div', { class: 'end' }, submit),
+        h('button', { class: 'circle-btn', type: 'button', 'aria-label': 'Fermer', title: 'Fermer', onClick: dismiss }, icon('close')),
       );
       const handle = h('div', { class: 'sheet-handle' }, h('div', { class: 'sheet-grabber', 'aria-hidden': 'true' }), header);
       const form = h(
@@ -393,6 +433,7 @@ export function formDialog({ title, intro, fields, submitLabel = 'Enregistrer', 
           extra ? extra() : null,
           error,
         ),
+        h('div', { class: 'sheet-footer' }, submit),
       );
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -449,7 +490,7 @@ export function actionSheet({ title, actions }) {
         { class: 'action-sheet' },
         h(
           'div',
-          { class: 'action-group glass' },
+          { class: 'action-group' },
           title ? h('div', { class: 'title' }, title) : null,
           actions.map((a) =>
             h(
@@ -466,7 +507,7 @@ export function actionSheet({ title, actions }) {
             ),
           ),
         ),
-        h('div', { class: 'action-group glass' }, h('button', { type: 'button', class: 'cancel', onClick: close }, 'Annuler')),
+        h('div', { class: 'action-group' }, h('button', { type: 'button', class: 'cancel', onClick: close }, 'Annuler')),
       ),
     { kind: 'action' },
   );

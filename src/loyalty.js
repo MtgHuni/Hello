@@ -1,0 +1,62 @@
+const { round } = require('./util');
+
+// Payments settle a customer's credit sales from the oldest to the newest.
+// Returns each credit sale with what is still unpaid on it.
+function creditAllocation(db, customerId) {
+  let remaining = db.prepare('SELECT COALESCE(SUM(amount), 0) AS v FROM payments WHERE customer_id = ?').get(customerId).v;
+  const credits = db
+    .prepare(
+      `SELECT id, amount, points, points_due, date(created_at, 'localtime') AS day
+       FROM sales WHERE customer_id = ? AND kind = 'credit' ORDER BY created_at, id`,
+    )
+    .all(customerId);
+  return credits.map((c) => {
+    const paid = Math.min(remaining, c.amount);
+    remaining = round(remaining - paid);
+    return { ...c, unpaid: round(c.amount - paid) };
+  });
+}
+
+// Combos: a paid sale earns them at once, a credit sale only once fully paid;
+// combos spent on fuel are deducted. Call after any sale or payment change.
+function refreshCustomer(db, customerId) {
+  const update = db.prepare('UPDATE sales SET points = ? WHERE id = ?');
+  for (const c of creditAllocation(db, customerId)) {
+    const points = c.unpaid <= 0.001 ? c.points_due : 0;
+    if (points !== c.points) update.run(points, c.id);
+  }
+  db.prepare(
+    `UPDATE customers SET loyalty_points =
+       (SELECT COALESCE(SUM(points), 0) - COALESCE(SUM(combos_used), 0) FROM sales WHERE customer_id = ?)
+     WHERE id = ?`,
+  ).run(customerId, customerId);
+}
+
+// Subscribers pay the whole month at the end of the month (within a few grace days):
+// what is still unpaid from previous months is overdue and blocks new credit.
+function subscriberDues(db, customerId, graceDays) {
+  const today = db
+    .prepare(
+      `SELECT date('now', 'localtime', 'start of month') AS month_start,
+              CAST(strftime('%d', 'now', 'localtime') AS INTEGER) AS day,
+              date('now', 'localtime', 'start of month', '+' || ? || ' days') AS overdue_deadline,
+              date('now', 'localtime', 'start of month', '+1 month', '+' || ? || ' days') AS next_deadline`,
+    )
+    .get(Math.max(0, graceDays - 1), Math.max(0, graceDays - 1));
+  let overdue = 0;
+  let currentMonth = 0;
+  for (const c of creditAllocation(db, customerId)) {
+    if (c.day < today.month_start) overdue += c.unpaid;
+    else currentMonth += c.unpaid;
+  }
+  overdue = round(overdue);
+  return {
+    overdue,
+    currentMonth: round(currentMonth),
+    overdueDeadline: today.overdue_deadline,
+    nextDeadline: today.next_deadline,
+    late: overdue > 0.001 && today.day > graceDays,
+  };
+}
+
+module.exports = { creditAllocation, refreshCustomer, subscriberDues };

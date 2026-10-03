@@ -1,12 +1,13 @@
 class HttpError extends Error {
-  constructor(status, message) {
+  constructor(status, message, code) {
     super(message);
     this.status = status;
+    this.code = code;
   }
 }
 
-const fail = (status, message) => {
-  throw new HttpError(status, message);
+const fail = (status, message, code) => {
+  throw new HttpError(status, message, code);
 };
 
 const round = (n, digits = 2) => {

@@ -1,5 +1,5 @@
 const express = require('express');
-const { getSettings } = require('../db');
+const { getSettings, syncCreditLimits } = require('../db');
 const { fail, num, str, bool, transaction } = require('../util');
 const { requireRole } = require('../auth');
 
@@ -20,31 +20,41 @@ module.exports = function configRoutes(db) {
 
   router.get('/settings', requireRole(), (req, res) => res.json(getSettings(db)));
 
+  // Partial update: only the fields sent are changed.
   router.put('/settings', manager, (req, res) => {
     const b = req.body || {};
+    const cur = getSettings(db);
+    const pick = (value, fallback, label, opts) => (value === undefined ? fallback : num(value, label, opts));
     const values = {
-      station_name: str(b.stationName, 'Le nom de la station', { max: 100 }),
-      cash_tolerance: num(b.cashTolerance, 'La tolérance de caisse', { max: 10000 }),
-      stock_tolerance: num(b.stockTolerance, 'La tolérance de stock', { max: 100000 }),
-      points_per_liter: num(b.pointsPerLiter, 'Les points par litre', { max: 1000 }),
+      station_name: b.stationName === undefined ? cur.stationName : str(b.stationName, 'Le nom de la station', { max: 100 }),
+      cash_tolerance: pick(b.cashTolerance, cur.cashTolerance, 'La tolérance de caisse', { max: 10000 }),
+      stock_tolerance: pick(b.stockTolerance, cur.stockTolerance, 'La tolérance de stock', { max: 100000 }),
+      points_per_liter: pick(b.combosPerLiter, cur.combosPerLiter, 'Les combos par litre', { max: 1000 }),
+      combo_value: pick(b.comboValue, cur.comboValue, "La valeur d'un combo", { min: 0.0001, max: 1000 }),
+      combo_threshold: pick(b.comboThreshold, cur.comboThreshold, "Le seuil d'échange", { min: 1, max: 1e7, integer: true }),
+      individual_credit_limit: pick(b.individualCreditLimit, cur.individualCreditLimit, 'Le plafond des particuliers', { max: 1e8 }),
+      subscriber_credit_limit: pick(b.subscriberCreditLimit, cur.subscriberCreditLimit, 'Le plafond des abonnés', { max: 1e8 }),
+      subscriber_grace_days: pick(b.subscriberGraceDays, cur.subscriberGraceDays, 'Le délai de paiement des abonnés', { min: 1, max: 28, integer: true }),
     };
-    const stmt = db.prepare('UPDATE settings SET value = ? WHERE key = ?');
-    for (const [key, value] of Object.entries(values)) stmt.run(String(value), key);
+    const stmt = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
+    for (const [key, value] of Object.entries(values)) stmt.run(key, String(value));
+    syncCreditLimits(db);
     res.json(getSettings(db));
   });
 
   // ---- Products & prices -------------------------------------------------
 
   router.get('/products', requireRole(), (req, res) => {
-    res.json(db.prepare('SELECT id, name, price, active FROM products ORDER BY id').all());
+    res.json(db.prepare('SELECT id, name, price, COALESCE(subscriber_price, price) AS subscriber_price, active FROM products ORDER BY id').all());
   });
 
   router.post('/products', manager, (req, res) => {
     const name = str(req.body?.name, 'Le nom du produit', { max: 50 });
     const price = num(req.body?.price, 'Le prix', { min: 0.001, max: 1000 });
+    const subscriberPrice = num(req.body?.subscriberPrice, 'Le prix abonnés', { min: 0.001, max: 1000, required: false }) ?? price;
     if (db.prepare('SELECT 1 FROM products WHERE name = ?').get(name)) fail(409, 'Ce produit existe déjà.');
     const id = transaction(db, () => {
-      const pid = Number(db.prepare('INSERT INTO products (name, price) VALUES (?, ?)').run(name, price).lastInsertRowid);
+      const pid = Number(db.prepare('INSERT INTO products (name, price, subscriber_price) VALUES (?, ?, ?)').run(name, price, subscriberPrice).lastInsertRowid);
       db.prepare('INSERT INTO price_history (product_id, price, user_id) VALUES (?, ?, ?)').run(pid, price, req.user.id);
       return pid;
     });
@@ -56,9 +66,11 @@ module.exports = function configRoutes(db) {
     if (!product) fail(404, 'Produit introuvable.');
     const name = str(req.body?.name, 'Le nom du produit', { required: false, max: 50 }) ?? product.name;
     const price = num(req.body?.price, 'Le prix', { min: 0.001, max: 1000, required: false }) ?? product.price;
+    const subscriberPrice =
+      num(req.body?.subscriberPrice, 'Le prix abonnés', { min: 0.001, max: 1000, required: false }) ?? product.subscriber_price ?? price;
     const active = bool(req.body?.active, !!product.active) ? 1 : 0;
     transaction(db, () => {
-      db.prepare('UPDATE products SET name = ?, price = ?, active = ? WHERE id = ?').run(name, price, active, product.id);
+      db.prepare('UPDATE products SET name = ?, price = ?, subscriber_price = ?, active = ? WHERE id = ?').run(name, price, subscriberPrice, active, product.id);
       if (price !== product.price) {
         db.prepare('INSERT INTO price_history (product_id, price, user_id) VALUES (?, ?, ?)').run(product.id, price, req.user.id);
       }

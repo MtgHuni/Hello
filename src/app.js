@@ -24,7 +24,7 @@ function createApp({ dbFile }) {
     res.setHeader('Cache-Control', 'no-store');
     next();
   });
-  for (const routes of ['auth', 'config', 'stock', 'shifts', 'customers', 'users', 'reports']) {
+  for (const routes of ['auth', 'config', 'stock', 'shifts', 'customers', 'requests', 'expenses', 'users', 'reports']) {
     api.use(require(`./routes/${routes}`)(db));
   }
   api.use((req, res) => res.status(404).json({ error: 'Route inconnue.' }));
@@ -36,7 +36,7 @@ function createApp({ dbFile }) {
     if (status >= 500) console.error(err);
     const message =
       err.type === 'entity.parse.failed' ? 'Requête invalide.' : status >= 500 ? 'Erreur interne du serveur.' : err.message;
-    res.status(status).json({ error: message });
+    res.status(status).json({ error: message, code: status < 500 ? err.code : undefined });
   });
 
   app.locals.db = db;
