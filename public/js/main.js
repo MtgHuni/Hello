@@ -2,6 +2,7 @@ import { flags } from './ui.js';
 import { api } from './api.js';
 import { h, errorState, toast, formDialog, actionSheet, spinner } from './ui.js';
 import { icon, brandMark } from './icons.js';
+import { enhance } from './motion.js';
 import { renderLogin, renderSetup } from './views/auth.js';
 import { renderDashboard } from './views/dashboard.js';
 import { renderShifts, renderShiftDetail } from './views/shifts.js';
@@ -273,6 +274,7 @@ async function route() {
     shell.slot.replaceChildren(page);
     window.scrollTo(0, 0);
     updateLnav();
+    enhance(page);
   }, direction);
 }
 

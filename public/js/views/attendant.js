@@ -566,6 +566,7 @@ function renderClosed(page, ctx, shift) {
         h(
           'div',
           { class: 'big-result' },
+          h('div', { class: 'status-icon', style: `background:var(${ok ? '--green' : '--orange'})` }, icon(ok ? 'check' : 'alert')),
           h('div', { class: 'muted' }, 'Écart de caisse'),
           h('div', { class: 'value' }, varianceCell(shift.variance, tol)),
           h('div', { class: 'muted' }, ok ? 'Votre caisse est juste.' : 'L’écart dépasse la tolérance : le gérant va vérifier.'),

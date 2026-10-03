@@ -1,5 +1,6 @@
 const express = require('express');
 const { getSettings } = require('../db');
+const { seedTestData } = require('../seed');
 const { fail, num, str, transaction } = require('../util');
 const {
   hashPassword,
@@ -57,6 +58,8 @@ module.exports = function authRoutes(db) {
       return id;
     });
 
+    // DEMO_SEED=1 : les cuves sont remplies dès la création du compte gérant (essais uniquement).
+    if (process.env.DEMO_SEED === '1') seedTestData(db);
     startSession(db, req, res, userId);
     res.status(201).json({ ok: true });
   });
