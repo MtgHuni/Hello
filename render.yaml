@@ -13,6 +13,8 @@ services:
         value: "22"
       - key: DB_FILE
         value: /var/data/station.db
+      - key: DEMO_SEED # Essais uniquement : complète les cuves sous 50 % au démarrage. À retirer en production.
+        value: "1"
       - key: TZ
         value: Africa/Lubumbashi # Goma (UTC+2) : fuseau horaire des rapports "du jour"
     disk:
