@@ -59,3 +59,10 @@ public/                interface (HTML, CSS, JavaScript sans framework)
 public/js/views/       un fichier par écran
 test/                  tests de l'API
 ```
+
+## Données de test
+
+Pour ne pas tout ressaisir à chaque essai :
+
+- `npm run seed` remplit les cuves à 90 % (avec une livraison « Données de test » dans l'historique) et applique des prix de test (gasoil 1,35 ; essence 1,55). Le compte gérant doit déjà exister.
+- Variable `DEMO_SEED=1` (par exemple dans Render, *Environment*) : à chaque démarrage, les cuves sous 50 % sont complétées et les prix ne sont posés que s'ils n'ont jamais été modifiés. À retirer en production.
