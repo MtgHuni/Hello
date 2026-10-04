@@ -63,8 +63,8 @@ export function renderLogin(root, stationName, onDone) {
   document.title = stationName;
   setContent(root, 
     authForm({
-      title: stationName,
-      lead: 'Connectez-vous pour continuer.',
+      title: 'Connexion',
+      lead: `Accédez à ${stationName}.`,
       submitLabel: 'Se connecter',
       fields: [
         { name: 'login', label: 'Identifiant ou téléphone', required: true, autocomplete: 'username' },

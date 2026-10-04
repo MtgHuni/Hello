@@ -61,8 +61,12 @@ Requires Node ≥ 22.13 (built-in `node:sqlite`, hence `--disable-warning=Experi
   - `fmt` (fr-FR money/litres/dates; `parseServerDate` handles SQLite UTC timestamps and date-only strings);
   - `formDialog` (iOS-style sheet; field types include `segment`, `checkbox` switch, `select`, `hidden`, `list` datalist), `confirmDialog`, `actionSheet`, `segmented`, `toast`.
 - `public/js/api.js` throws errors carrying `.status` and `.code`.
-- Design: the apple.com web language, personalised as MTG Station (chosen by the user). The tokens and rules are in `DESIGN.md`, the product facts in `PRODUCT.md`, and the direction in `.impeccable/surfaces/`. The Impeccable design skill is installed in `.claude/skills/impeccable`.
-- CSS: tokens, components and dark mode are in `public/css/app.css`; reuse its classes rather than inline styles. Inter is self-hosted in `public/fonts/`.
+- Design: « Totem de nuit », the station's price totem at night (chosen by the user): black ground, gasoil green and essence red fields, condensed figures, white action slabs, a day mode for full sun.
+  - Shell: side rail on wide screens; top bar + bottom tab bar (four tabs + Plus) below 1024px; forms open as a right drawer from 834px and as bottom sheets below.
+  - Signatures: `priceTotem` and `shiftLine` in `ui.js`, count-up in `public/js/motion.js`, the brand film on the sign-in screen.
+  - The tokens and rules are in `DESIGN.md`, the product facts in `PRODUCT.md`, and the direction in `.impeccable/surfaces/`. The Impeccable design skill is installed in `.claude/skills/impeccable`.
+- CSS: tokens, components and both themes are in `public/css/app.css`; reuse its classes rather than inline styles. Fuel colours go through `productColor(id)` / `--gasoil`, `--essence`. Inter and Barlow Condensed are self-hosted in `public/fonts/`.
+- Brand film: the HyperFrames source is `videos/mtg-totem-sting/`; the rendered WebM/MP4 and poster live in `public/media/`. Re-render and re-encode after changing it.
 - Sheets are flex columns: `.sheet-body` scrolls (`min-height: 0`) so that `.sheet-footer` stays visible. Use `dvh` units, because iOS Safari's `vh` includes its toolbars.
 - The attendant screen is used on a phone with a queue of customers waiting, so keep it to as few taps as possible.
 

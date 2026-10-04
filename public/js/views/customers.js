@@ -94,7 +94,7 @@ async function customerDialog(customer, ctx, onDone) {
       { name: 'name', label: 'Nom ou raison sociale', value: customer?.name, required: true, full: true },
       { name: 'phone', label: 'Téléphone', value: customer?.phone, type: 'tel' },
       { name: 'email', label: 'E-mail', value: customer?.email, type: 'email' },
-      { name: 'plate', label: 'Immatriculation principale', value: customer?.plate },
+      { name: 'plate', label: 'Immatriculation principale', value: customer?.plate, full: true },
       { name: 'address', label: 'Adresse', value: customer?.address, full: true },
       ...(customer ? [{ name: 'active', label: 'Client actif', type: 'checkbox', value: !!customer.active, full: true }] : []),
     ],

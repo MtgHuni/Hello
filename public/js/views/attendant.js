@@ -160,18 +160,18 @@ function renderOpenShift(page, ctx, shift) {
           ? entries.map((x) =>
               h(
                 'div',
-                { class: 'nozzle-row' },
+                { class: 'nozzle-row op-row' },
                 h(
                   'div',
                   { class: 'grow' },
                   h('div', { style: 'font-weight:600' }, x.title),
                   h('div', { class: 'muted small' }, `${fmt.time(x.at)} · ${x.detail}`),
-                  h('div', { style: 'margin-top:4px' }, x.tag),
                 ),
                 h('div', { class: 'num', style: 'font-weight:600' }, x.amount),
                 x.remove.pending
                   ? badge('Annulation demandée', 'warning')
                   : h('button', { class: 'btn danger sm', 'aria-label': x.remove.label, title: x.remove.label, onClick: () => cancelEntry(ctx, x, reload) }, icon('trash')),
+                h('div', { class: 'op-tags' }, x.tag),
               ),
             )
           : h('p', { class: 'muted' }, 'Aucune opération pour le moment.'),

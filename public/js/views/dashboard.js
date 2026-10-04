@@ -1,6 +1,6 @@
 import { flags } from '../ui.js';
 import { api } from '../api.js';
-import { h, fmt, kpi, card, cardHeader, tankGauge, pageHeader, button, setContent, priceTotem } from '../ui.js';
+import { h, fmt, kpi, cardHeader, tankGauge, pageHeader, button, setContent, priceTotem } from '../ui.js';
 import { icon } from '../icons.js';
 
 const ALERT_ICON = { critical: 'alert', serious: 'alert', warning: 'info' };
@@ -28,25 +28,35 @@ export async function renderDashboard(page, { state, navigate }) {
       kpi('Encours clients', fmt.money(d.receivables), `${d.toValidate} poste${d.toValidate > 1 ? 's' : ''} à valider`),
     ),
 
+    // One ruled board: sales, alerts, stock and customer facts share a single surface.
     h(
       'div',
-      { class: 'grid grid-3 section' },
-      h('section', { class: 'card span-2' }, cardHeader('Ventes des 7 derniers jours', 'Chiffre d’affaires par jour, en dollars'), barChart(d.last7)),
-      card(cardHeader('Alertes', d.alerts.length ? `${d.alerts.length} point${d.alerts.length > 1 ? 's' : ''} à surveiller` : null), alertList(d.alerts)),
+      { class: 'board section' },
+      h('section', { class: 'card board-chart' }, cardHeader('Ventes des 7 derniers jours', 'Chiffre d’affaires par jour, en dollars'), barChart(d.last7)),
+      h('section', { class: 'card board-alerts' }, cardHeader('Alertes', d.alerts.length ? `${d.alerts.length} point${d.alerts.length > 1 ? 's' : ''} à surveiller` : null), alertList(d.alerts)),
+      h(
+        'section',
+        { class: 'card board-wide' },
+        cardHeader('Niveau des cuves', 'Stock théorique : dernier jaugeage + livraisons − ventes', h('a', { class: 'more-link', href: '#/cuves' }, 'Voir les cuves', icon('chevron'))),
+        d.tanks.length ? h('div', { class: 'grid grid-2', style: 'gap:28px' }, d.tanks.map(tankGauge)) : h('div', { class: 'empty' }, 'Aucune cuve configurée.'),
+      ),
+      facts([
+        flags.combos ? ['Combos des clients', fmt.number(d.combos.total), `Valeur ${fmt.money(d.combos.value)} en carburant · ${d.combos.redeemable} client${d.combos.redeemable > 1 ? 's peuvent' : ' peut'} échanger`, '#/clients'] : null,
+        ['Fiches clients à compléter', String(d.toReview), d.toReview ? 'Créées à la pompe avec le nom seulement' : 'Toutes les fiches sont complètes', '#/clients'],
+      ]),
     ),
+  );
+}
 
+// Customer facts as ruled rows: label and note on the left, the figure on the right.
+function facts(rows) {
+  const list = rows.filter(Boolean);
+  return list.map(([label, value, sub, href]) =>
     h(
-      'section',
-      { class: 'card section' },
-      cardHeader('Niveau des cuves', 'Stock théorique : dernier jaugeage + livraisons − ventes', h('a', { class: 'more-link', href: '#/cuves' }, 'Voir les cuves', icon('chevron'))),
-      d.tanks.length ? h('div', { class: 'grid grid-2', style: 'gap:28px' }, d.tanks.map(tankGauge)) : h('div', { class: 'empty' }, 'Aucune cuve configurée.'),
-    ),
-
-    h(
-      'div',
-      { class: 'grid grid-2 section' },
-      !flags.combos ? null : kpi('Combos des clients', fmt.number(d.combos.total), `Valeur ${fmt.money(d.combos.value)} en carburant · ${d.combos.redeemable} client${d.combos.redeemable > 1 ? 's peuvent' : ' peut'} échanger`),
-      kpi('Fiches clients à compléter', String(d.toReview), d.toReview ? 'Créées à la pompe avec le nom seulement' : 'Toutes les fiches sont complètes'),
+      'a',
+      { class: `card fact${list.length === 1 ? ' board-wide' : ''}`, href },
+      h('span', { class: 'fact-text' }, h('span', { class: 'fact-label' }, label), h('span', { class: 'fact-sub' }, sub)),
+      h('span', { class: 'fact-value' }, value),
     ),
   );
 }
