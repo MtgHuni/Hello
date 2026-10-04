@@ -514,17 +514,45 @@ async function addPayment(shift, reload) {
   const clientRef = newRef();
   const owes = h('p', { class: 'hint-line' });
   // A debt from before the app: asked when the payment is more than what the app knows.
+  const oldField = h(
+    'div',
+    {},
+    field({ name: 'oldDebt', label: 'Ancienne dette, d’avant l’application ($)', type: 'number', step: '0.01', min: '0.01', placeholder: 'Vide = le montant payé', hint: 'D’après le cahier : ce que le client devait avant ce règlement.' }),
+  );
+  const advanceNote = h('p', { class: 'hint-line', hidden: true }, 'Le surplus est gardé pour le client : ses prochains crédits seront déduits de cette avance.');
   const oldBox = h(
     'div',
-    { hidden: true },
-    field({ name: 'oldDebt', label: 'Ancienne dette, d’avant l’application ($)', type: 'number', step: '0.01', min: '0.01', placeholder: 'Vide = le montant payé', hint: 'D’après le cahier : ce que le client devait avant ce règlement.' }),
+    { class: 'stack', style: 'gap:12px', hidden: true },
+    field({
+      name: 'surplus',
+      label: 'Le client paie plus que sa dette connue : c’est…',
+      type: 'segment',
+      options: [
+        ['old', 'Une ancienne dette'],
+        ['advance', 'Une avance'],
+      ],
+      onInput: (e) => refresh(e.target.form),
+    }),
+    oldField,
+    advanceNote,
   );
   const known = (c) => (c?.id ? Math.max(0, c.balance) : 0);
   const refresh = (form) => {
     const c = search.picked();
     const amount = Number(form.elements.amount.value) || 0;
     oldBox.hidden = !c || amount <= known(c) + 0.001;
-    owes.textContent = !c ? '' : !c.id ? 'Nouveau client : il sera créé avec ce règlement.' : c.balance > 0 ? `Doit ${fmt.money(c.balance)} dans l’application` : 'Aucune dette dans l’application.';
+    const advance = form.elements.surplus.value === 'advance';
+    oldField.hidden = advance;
+    advanceNote.hidden = !advance;
+    owes.textContent = !c
+      ? ''
+      : !c.id
+        ? 'Nouveau client : il sera créé avec ce règlement.'
+        : c.balance > 0
+          ? `Doit ${fmt.money(c.balance)} dans l’application`
+          : c.balance < 0
+            ? `A déjà une avance de ${fmt.money(-c.balance)}`
+            : 'Aucune dette dans l’application.';
   };
   const search = customerSearch(customers, {
     allowNew: true,
@@ -559,13 +587,13 @@ async function addPayment(shift, reload) {
       }
       // What the app does not know is a debt from before it (never an advance by mistake).
       const excess = Math.round((Number(d.amount) - known(choice)) * 100) / 100;
-      const oldDebt = excess > 0 ? Number(form.elements.oldDebt.value) || excess : 0;
+      const oldDebt = excess > 0 && form.elements.surplus.value !== 'advance' ? Number(form.elements.oldDebt.value) || excess : 0;
       return api.post(`/shifts/${shift.id}/payments`, { amount: d.amount, method: d.method, reference: d.reference, customerId: customer.id, oldDebt, clientRef });
     },
   });
   if (ok) {
     forgetCustomers();
-    toast(`Règlement encaissé · reste dû ${fmt.money(Math.max(0, ok.balance))}`);
+    toast(ok.balance < 0 ? `Règlement encaissé · avance du client ${fmt.money(-ok.balance)}` : `Règlement encaissé · reste dû ${fmt.money(ok.balance)}`);
     reload();
   }
 }

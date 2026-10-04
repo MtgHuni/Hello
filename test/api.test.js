@@ -340,6 +340,10 @@ test('pompiste : client rapide (particulier), crédit accordé, règlement et d�
   const added = (await customer(payer.data.id)).movements.find((m) => m.type === 'old_debt' && m.debit === 15);
   assert.strictEqual((await gerant('DELETE', `/api/customers/${payer.data.id}/old-debts/${added.id}`)).data.balance, 30);
   assert.ok((await gerant('GET', '/api/audit?category=clients')).data.some((a) => a.action === 'old_debt_removed'));
+  // Paying more without an old debt: the surplus is an advance (negative balance), used by the next credit.
+  assert.strictEqual((await pompiste('POST', `/api/shifts/${shift.id}/payments`, { customerId: payer.data.id, amount: 40 })).data.balance, -10);
+  assert.strictEqual((await pompiste('POST', `/api/shifts/${shift.id}/sales`, { customerId: payer.data.id, nozzleId: nozzle.nozzle_id, amount: 6 })).status, 201);
+  assert.strictEqual((await customer(payer.data.id)).balance, -4, 'le crédit est pris sur l’avance');
 
   const dash = (await gerant('GET', '/api/dashboard')).data;
   assert.ok(dash.alerts.some((a) => a.text.includes('hors plafond')));
