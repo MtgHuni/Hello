@@ -12,44 +12,32 @@ export async function renderAttendant(page, ctx) {
 
 // ---------- 1. Opening a shift ----------
 async function renderStart(page, ctx) {
-  const [allPumps, remarks] = await Promise.all([api.get('/pumps'), api.get('/shifts/remarks/unread').catch(() => [])]);
-  const pumps = allPumps.filter((p) => p.active);
-  const submit = button('Ouvrir mon poste', null, { variant: 'large block', type: 'submit', disabled: true });
+  const [allPumps, remarks, open] = await Promise.all([api.get('/pumps'), api.get('/shifts/remarks/unread').catch(() => []), api.get('/shifts/open')]);
+  // One shift at a time for the whole station: it takes every active pump.
+  const nozzles = allPumps.filter((p) => p.active).flatMap((p) => p.nozzles.filter((n) => n.active).map((n) => ({ ...n, pump: p.name })));
+  const submit = button('Ouvrir le poste', null, { variant: 'large block', type: 'submit', disabled: !!open || !nozzles.length });
   const form = h(
     'form',
     { class: 'stack' },
-    pumps.length
-      ? pumps.map((p) => {
-          const busy = !!p.busy_with;
-          const nozzles = p.nozzles.filter((n) => n.active);
-          return h(
-            'label',
-            { class: `pump-option ${busy ? 'disabled' : ''}` },
-            h('input', { type: 'checkbox', name: 'pump', value: String(p.id), disabled: busy || !nozzles.length }),
-            h(
-              'div',
-              { class: 'grow', style: 'flex:1' },
-              h('h3', {}, p.name),
-              busy
-                ? h('div', { class: 'muted small' }, `Occupée par ${p.busy_with}`)
-                : nozzles.map((n) =>
-                    h('div', { class: 'muted small' }, h('span', { class: 'swatch', style: `background:${productColor(n.product_id)}` }), `${n.name} · index ${fmt.number(n.meter)} · ${fmt.price(n.price)}`),
-                  ),
+    open
+      ? h('div', { class: 'empty' }, `Le poste est ouvert par ${open.attendant_name} depuis ${fmt.time(open.opened_at)}. Il doit le clôturer avant que vous preniez le relais.`)
+      : nozzles.length
+        ? h(
+            'div',
+            { class: 'stack', style: 'gap:10px' },
+            h('p', { class: 'muted' }, 'Index de départ, relevés automatiquement'),
+            nozzles.map((n) =>
+              h('div', { class: 'summary-line' }, h('span', {}, h('span', { class: 'swatch', style: `background:${productColor(n.product_id)}` }), `${n.pump} · ${n.name}`), h('span', { class: 'num' }, fmt.number(n.meter))),
             ),
-          );
-        })
-      : h('div', { class: 'empty' }, "Aucune pompe n'est configurée. Demandez au gérant."),
-    submit,
+          )
+        : h('div', { class: 'empty' }, "Aucune pompe n'est configurée. Demandez au gérant."),
+    open ? null : submit,
   );
-  form.addEventListener('change', () => {
-    submit.disabled = !form.querySelector('input[name=pump]:checked');
-  });
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const pumpIds = [...form.querySelectorAll('input[name=pump]:checked')].map((i) => Number(i.value));
     submit.disabled = true;
     try {
-      await api.post('/shifts', { pumpIds });
+      await api.post('/shifts', {});
       toast('Poste ouvert. Bon courage !');
       renderAttendant(page, ctx);
     } catch (err) {
@@ -59,7 +47,7 @@ async function renderStart(page, ctx) {
   });
 
   setContent(page, 
-    pageHeader('Ouvrir mon poste', 'Choisissez la ou les pompes dont vous êtes responsable. Les index de départ sont relevés automatiquement.'),
+    pageHeader('Ouvrir le poste', open ? 'Un seul poste à la fois pour toute la station.' : 'Toutes les pompes de la station, avec les prix du moment.'),
     remarks.map((r) => unreadRemark(r, ctx, () => renderStart(page, ctx))),
     card(form),
   );

@@ -60,7 +60,6 @@ export async function renderShifts(page, ctx) {
         [
           { label: 'N°', render: (s) => `#${s.id}` },
           { label: 'Pompiste', key: 'attendant_name' },
-          { label: 'Pompes', render: (s) => s.pumps || '—' },
           { label: 'Ouverture', render: (s) => fmt.dateTime(s.opened_at) },
           { label: 'Clôture', render: (s) => fmt.dateTime(s.closed_at) },
           { label: 'Litres', align: 'right', render: (s) => (s.total_liters == null ? '—' : fmt.liters(s.total_liters)) },

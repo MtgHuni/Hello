@@ -1,8 +1,9 @@
 const express = require('express');
 const { getSettings } = require('../db');
-const { round, dateParam, fail, csvCell } = require('../util');
+const { round, dateParam, fail, csvCell, money } = require('../util');
 const { requireRole } = require('../auth');
 const { balanceSql, subscriberDues, creditAllocation } = require('../loyalty');
+const { balances, supplierBalances } = require('../cashbook');
 const { periodReportPdf } = require('../periodReport');
 
 const manager = requireRole('manager');
@@ -62,7 +63,9 @@ module.exports = function reportRoutes(db) {
 
     const openShifts = db
       .prepare(
-        `SELECT s.id, s.opened_at, u.name AS attendant_name FROM shifts s JOIN users u ON u.id = s.attendant_id
+        `SELECT s.id, s.opened_at, u.name AS attendant_name,
+           (SELECT COALESCE(SUM(amount), 0) FROM sales WHERE shift_id = s.id AND kind = 'credit') AS credit_so_far
+         FROM shifts s JOIN users u ON u.id = s.attendant_id
          WHERE s.status = 'open' ORDER BY s.id`,
       )
       .all();
@@ -167,6 +170,8 @@ module.exports = function reportRoutes(db) {
         link: '#/clients',
       });
     }
+    const supplierDebt = round(supplierBalances(db).reduce((t, s) => t + Math.max(0, s.balance), 0));
+    if (supplierDebt > 0) alerts.push({ level: 'warning', text: `${money(supplierDebt)} dus aux fournisseurs (livraisons à crédit)`, link: '#/cuves' });
     const todayExpenses = round(db.prepare('SELECT COALESCE(SUM(amount), 0) AS v FROM expenses WHERE expense_date = ?').get(today).v);
 
     res.json({
@@ -180,6 +185,8 @@ module.exports = function reportRoutes(db) {
       last7,
       tanks,
       openShifts,
+      cash: balances(db),
+      supplierDebt,
       toValidate: toValidate.length,
       receivables: round(customers.reduce((t, c) => t + Math.max(0, c.balance), 0)),
       // Unpaid credit older than 30 days (payments settle the oldest credit first).

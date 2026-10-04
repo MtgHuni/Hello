@@ -35,7 +35,7 @@ Everything is in US dollars and French, on the Africa/Lubumbashi timezone.
 ## Operating Context
 
 - **Outdoors and devices**: the attendant uses the app outdoors in bright sunlight, on modest Android phones that are often slow, over mobile networks that can be weak. The customer uses it in the queue on their own phone.
-- **Shift cycle**: open the shift (start meter readings are taken over from the previous shift and frozen) → credits, payments, expenses → close (end readings, cash count) → the manager validates, after correcting the closing if needed.
+- **Shift cycle**: one shift at a time for the whole station, on every pump; attendants take turns. Open the shift (start meter readings are taken over from the previous shift and frozen) → credits, payments, expenses → close (end readings, cash count) → the manager validates, after correcting the closing if needed.
 - **Customer purchases**: the attendant's screen checks for new customer requests every 4 seconds and vibrates when one arrives. Requests expire after 30 minutes.
 
 ## Capabilities and Constraints

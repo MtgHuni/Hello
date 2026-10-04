@@ -1,5 +1,5 @@
 const express = require('express');
-const { fail, num, str, round, transaction } = require('../util');
+const { fail, num, str, oneOf, round, transaction } = require('../util');
 const { requireRole } = require('../auth');
 
 const manager = requireRole('manager');
@@ -37,14 +37,23 @@ module.exports = function stockRoutes(db) {
     const unitCost = num(b.unitCost, "Le prix d'achat", { required: false, max: 1000 });
     const supplier = str(b.supplier, 'Le fournisseur', { required: false, max: 100 });
     const reference = str(b.reference, 'La référence', { required: false, max: 100 });
+    // Paid on the spot (out of the cash book) or taken on credit (a debt to the supplier).
+    const payment = oneOf(b.payment || 'cash', 'Le paiement', ['cash', 'credit']);
+    const payMethod = payment === 'cash' ? oneOf(b.payMethod || 'espèces', 'Le mode de paiement', ['espèces', 'mobile money', 'banque']) : null;
+    const computed = unitCost ? round(unitCost * received) : null;
+    const amount = b.amount === undefined || b.amount === '' || b.amount === null ? computed : round(num(b.amount, 'Le montant de la facture', { min: 0.01, max: 1e9 }));
+    if (payment === 'credit') {
+      if (!supplier) fail(400, 'Indiquez le fournisseur : la livraison à crédit devient une dette envers lui.');
+      if (!amount) fail(400, 'Indiquez le prix d’achat ou le montant de la facture : c’est ce que la station devra au fournisseur.');
+    }
 
     const id = transaction(db, () => {
       const r = db
         .prepare(
-          `INSERT INTO deliveries (tank_id, supplier, reference, liters_ordered, liters_received, unit_cost, book_before, user_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO deliveries (tank_id, supplier, reference, liters_ordered, liters_received, unit_cost, book_before, user_id, payment, amount, pay_method)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
-        .run(tank.id, supplier, reference, ordered, received, unitCost, tank.book_stock, req.user.id);
+        .run(tank.id, supplier, reference, ordered, received, unitCost ?? (amount ? round(amount / received, 4) : null), tank.book_stock, req.user.id, payment, amount, payMethod);
       db.prepare('UPDATE tanks SET book_stock = ? WHERE id = ?').run(round(tank.book_stock + received), tank.id);
       return r.lastInsertRowid;
     });

@@ -7,7 +7,7 @@ const { requireRole } = require('../auth');
 const { audit } = require('../audit');
 
 const manager = requireRole('manager');
-const CATEGORIES = ['annulations', 'prix', 'reglages', 'equipe', 'clients', 'postes', 'donnees'];
+const CATEGORIES = ['annulations', 'prix', 'reglages', 'equipe', 'clients', 'postes', 'caisse', 'donnees'];
 
 module.exports = function adminRoutes(db) {
   const router = express.Router();

@@ -14,6 +14,7 @@ import { renderSettings } from './views/settings.js';
 import { renderJournal } from './views/journal.js';
 import { renderAccount } from './views/account.js';
 import { renderExpenses } from './views/expenses.js';
+import { renderCashbook } from './views/cashbook.js';
 
 const root = document.getElementById('app');
 export const state = { user: null, settings: null };
@@ -23,6 +24,7 @@ const NAV = {
   manager: [
     ['', 'Tableau de bord', 'home', renderDashboard, 'Accueil'],
     ['postes', 'Postes', 'shifts', renderShifts],
+    ['caisse', 'Caisse', 'cash', renderCashbook],
     ['clients', 'Clients', 'users', renderCustomers],
     ['depenses', 'Dépenses', 'wallet', renderExpenses],
     ['cuves', 'Cuves', 'tank', renderTanks],

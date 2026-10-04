@@ -554,6 +554,73 @@ test('créances par ancienneté, relevé PDF, prix programmé', async () => {
   assert.ok((await gerant('GET', '/api/audit?category=prix')).data.some((a) => a.action === 'price_applied'));
 });
 
+test('un seul poste à la fois, livre de caisse (espèces et mobile money), livraisons à crédit', async () => {
+  const cash = async () => (await gerant('GET', '/api/cashbook')).data.balances;
+  // Timestamps are to the second: the count is taken apart from what came before and after.
+  const nextSecond = () => new Promise((r) => setTimeout(r, 1100));
+  await nextSecond();
+  assert.strictEqual((await gerant('POST', '/api/cashbook/movements', { kind: 'opening', account: 'cash', amount: 100 })).status, 201);
+  await gerant('POST', '/api/cashbook/movements', { kind: 'opening', account: 'momo', amount: 0 });
+  await nextSecond();
+  assert.strictEqual((await cash()).cash.balance, 100, 'le livre part du comptage');
+
+  // One shift for the whole station: every active nozzle, and nobody else can open one.
+  assert.strictEqual((await gerant('GET', '/api/shifts/open')).data, null);
+  const opened = await pompiste('POST', '/api/shifts', {});
+  assert.strictEqual(opened.status, 201);
+  const nozzles = (await gerant('GET', '/api/pumps')).data.filter((p) => p.active).flatMap((p) => p.nozzles.filter((n) => n.active));
+  assert.strictEqual(opened.data.readings.length, nozzles.length);
+  await gerant('POST', '/api/users', { name: 'Béa', login: 'bea', password: 'pompiste9', role: 'attendant' });
+  const bea = client();
+  await bea('POST', '/api/auth/login', { login: 'bea', password: 'pompiste9' });
+  const refused = await bea('POST', '/api/shifts', {});
+  assert.strictEqual(refused.status, 409);
+  assert.strictEqual(refused.data.code, 'shift_open');
+  assert.strictEqual((await bea('GET', '/api/shifts/open')).data.attendant_name, opened.data.attendant_name);
+
+  // Cash handed over goes into the till, mobile money into its own balance.
+  await gerant('POST', `/api/shifts/${opened.data.id}/close`, { readings: opened.data.readings.map((r) => ({ nozzleId: r.nozzle_id, endMeter: r.start_meter })), cash: 50, mobileMoney: 20 });
+  let b = await cash();
+  assert.strictEqual(b.cash.balance, 150);
+  assert.strictEqual(b.momo.balance, 20);
+  // Mobile money only reaches the till when withdrawn.
+  await gerant('POST', '/api/cashbook/movements', { kind: 'retrait_momo', amount: 15 });
+  assert.strictEqual((await gerant('POST', '/api/cashbook/movements', { kind: 'versement_banque', account: 'momo', amount: 1 })).status, 400);
+  b = await cash();
+  assert.strictEqual(b.cash.balance, 165);
+  assert.strictEqual(b.momo.balance, 5);
+  // The manager's cash expense and a payment received by the manager.
+  await gerant('POST', '/api/expenses', { category: 'Fournitures', amount: 10, description: 'Ampoules', method: 'espèces' });
+  await gerant('POST', `/api/customers/${ctx.person.id}/payments`, { amount: 5, method: 'espèces' });
+  assert.strictEqual((await cash()).cash.balance, 160);
+
+  // A delivery paid on the spot leaves the till; one on credit is a debt to the supplier.
+  const tank = ctx.tanks[0];
+  await gerant('POST', '/api/deliveries', { tankId: tank.id, litersOrdered: 30, litersReceived: 30, unitCost: 1, payment: 'cash', payMethod: 'espèces' });
+  assert.strictEqual((await cash()).cash.balance, 130);
+  assert.strictEqual((await gerant('POST', '/api/deliveries', { tankId: tank.id, litersOrdered: 100, litersReceived: 100, unitCost: 1.1, payment: 'credit' })).status, 400, 'fournisseur obligatoire');
+  await gerant('POST', '/api/deliveries', { tankId: tank.id, litersOrdered: 100, litersReceived: 100, unitCost: 1.1, payment: 'credit', supplier: 'Total Goma' });
+  assert.strictEqual((await cash()).cash.balance, 130, 'à crédit : rien ne sort de la caisse');
+  let sup = (await gerant('GET', '/api/suppliers')).data.suppliers.find((s) => s.name === 'Total Goma');
+  assert.strictEqual(sup.balance, 110);
+  assert.ok((await gerant('GET', '/api/dashboard')).data.alerts.some((a) => a.text.includes('fournisseurs')));
+  const paid = await gerant('POST', '/api/suppliers/payments', { supplier: 'total goma', amount: 60, method: 'espèces' });
+  sup = paid.data.suppliers.find((s) => s.name === 'Total Goma');
+  assert.strictEqual(sup.balance, 50, 'même fournisseur, quelle que soit la casse');
+  assert.strictEqual((await cash()).cash.balance, 70);
+
+  // Counting the till keeps the gap; the book and its PDF.
+  const counted = await gerant('POST', '/api/cashbook/counts', { account: 'cash', counted: 69 });
+  assert.strictEqual(counted.data.balances.cash.lastCount.diff, -1);
+  const book = (await gerant('GET', '/api/cashbook?account=cash')).data;
+  assert.ok(book.movements.some((m) => m.source === 'shift') && book.movements.some((m) => m.source === 'supplier_payment'));
+  assert.strictEqual(book.days.at(-1).end, 70);
+  const pdf = await gerant('GET', '/api/cashbook.pdf');
+  assert.strictEqual(pdf.raw.subarray(0, 5).toString(), '%PDF-');
+  assert.strictEqual((await pompiste('GET', '/api/cashbook')).status, 403);
+  assert.ok((await gerant('GET', '/api/audit?category=caisse')).data.some((a) => a.action === 'supplier_payment'));
+});
+
 test('migration : une base ancienne est convertie (loyalty → paid, combos)', () => {
   const fs = require('node:fs');
   const os = require('node:os');

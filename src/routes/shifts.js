@@ -92,6 +92,13 @@ module.exports = function shiftRoutes(db) {
     );
   });
 
+  router.get('/shifts/open', staff, (req, res) => {
+    const row = db
+      .prepare("SELECT s.id, s.opened_at, s.attendant_id, u.name AS attendant_name FROM shifts s JOIN users u ON u.id = s.attendant_id WHERE s.status = 'open' ORDER BY s.id LIMIT 1")
+      .get();
+    res.json(row || null);
+  });
+
   router.get('/shifts/current', staff, (req, res) => {
     const row = db.prepare("SELECT id FROM shifts WHERE attendant_id = ? AND status = 'open'").get(req.user.id);
     res.json(row ? shiftDetail(row.id) : null);
@@ -169,15 +176,16 @@ module.exports = function shiftRoutes(db) {
 
   // Opening a shift snapshots each nozzle's meter and the current price,
   // so a price change during the shift only applies to the next one.
+  // The station runs one shift at a time, on every active pump (pumpIds, if sent, narrows it).
   router.post('/shifts', staff, (req, res) => {
-    const pumpIds = Array.isArray(req.body?.pumpIds) ? req.body.pumpIds.map(Number) : [];
-    if (!pumpIds.length) fail(400, 'Choisissez au moins une pompe.');
-
     const id = transaction(db, () => {
       applyScheduledPrices(db); // a price due by now is frozen into this shift
-      if (db.prepare("SELECT 1 FROM shifts WHERE attendant_id = ? AND status = 'open'").get(req.user.id)) {
-        fail(409, 'Vous avez déjà un poste ouvert.');
-      }
+      const open = db.prepare("SELECT s.attendant_id, u.name FROM shifts s JOIN users u ON u.id = s.attendant_id WHERE s.status = 'open'").get();
+      if (open) fail(409, open.attendant_id === req.user.id ? 'Vous avez déjà un poste ouvert.' : `Un poste est déjà ouvert par ${open.name} : il doit être clôturé avant d’en ouvrir un autre.`, 'shift_open');
+      const pumpIds = Array.isArray(req.body?.pumpIds) && req.body.pumpIds.length
+        ? req.body.pumpIds.map(Number)
+        : db.prepare('SELECT DISTINCT p.id FROM pumps p JOIN nozzles n ON n.pump_id = p.id AND n.active = 1 WHERE p.active = 1 ORDER BY p.id').all().map((p) => p.id);
+      if (!pumpIds.length) fail(400, 'Aucune pompe active : demandez au gérant de les configurer.');
       const nozzles = [];
       for (const pumpId of pumpIds) {
         const pump = db.prepare('SELECT * FROM pumps WHERE id = ? AND active = 1').get(pumpId);

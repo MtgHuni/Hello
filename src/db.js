@@ -213,6 +213,36 @@ CREATE TABLE IF NOT EXISTS old_debts (
 );
 CREATE INDEX IF NOT EXISTS idx_old_debts_customer ON old_debts(customer_id);
 
+-- Cash book (src/cashbook.js): movements entered by hand on the cash or mobile money balance,
+-- counts of the till, and payments of deliveries taken on credit.
+CREATE TABLE IF NOT EXISTS cash_movements (
+  id         INTEGER PRIMARY KEY,
+  kind       TEXT NOT NULL,
+  account    TEXT NOT NULL CHECK (account IN ('cash', 'momo')),
+  amount     REAL NOT NULL CHECK (amount >= 0),
+  note       TEXT,
+  user_id    INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS cash_counts (
+  id         INTEGER PRIMARY KEY,
+  account    TEXT NOT NULL CHECK (account IN ('cash', 'momo')),
+  counted    REAL NOT NULL,
+  book       REAL NOT NULL,
+  note       TEXT,
+  user_id    INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS supplier_payments (
+  id         INTEGER PRIMARY KEY,
+  supplier   TEXT NOT NULL,
+  amount     REAL NOT NULL CHECK (amount > 0),
+  method     TEXT NOT NULL,
+  reference  TEXT,
+  user_id    INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- Journal: who changed what (see src/audit.js).
 CREATE TABLE IF NOT EXISTS audit_log (
   id         INTEGER PRIMARY KEY,
@@ -277,10 +307,14 @@ const MIGRATIONS = [
   ['shifts', 'manager_comment_at', 'TEXT'],
   ['shifts', 'manager_comment_by', 'INTEGER REFERENCES users(id)'],
   ['shifts', 'comment_seen_at', 'TEXT'],
+  // Delivery paid on the spot ('cash', from pay_method) or taken on credit from the supplier.
+  ['deliveries', 'payment', 'TEXT'],
+  ['deliveries', 'amount', 'REAL'],
+  ['deliveries', 'pay_method', 'TEXT'],
 ];
 
 // Bumped with every schema change; recorded in PRAGMA user_version.
-const SCHEMA_VERSION = 8;
+const SCHEMA_VERSION = 9;
 
 function missingColumns(db) {
   return MIGRATIONS.filter(([table, column]) => {

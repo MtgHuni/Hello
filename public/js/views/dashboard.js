@@ -23,8 +23,14 @@ export async function renderDashboard(page, { state, navigate }) {
       'div',
       { class: 'grid grid-4' },
       kpi("Ventes aujourd'hui", fmt.money(d.todayTotal.amount), [d.openShifts.length ? `${d.openShifts.length} poste${d.openShifts.length > 1 ? 's' : ''} en cours, compté${d.openShifts.length > 1 ? 's' : ''} à la clôture` : 'Postes clôturés', `Dépenses : ${fmt.money(d.todayExpenses)}`].join(' · ')),
-      kpi('Litres vendus', fmt.liters(d.todayTotal.liters), d.todayByProduct.map((p) => `${p.name} ${fmt.number(p.liters)}`).join(' · ')),
-      kpi('Postes ouverts', String(d.openShifts.length), [d.openShifts.length ? d.openShifts.map((s) => s.attendant_name).join(', ') : 'Aucun pompiste en service', d.toValidate ? `${d.toValidate} à valider` : null].filter(Boolean).join(' · ')),
+      shiftKpi(d.openShifts[0], d.toValidate),
+      h(
+        'a',
+        { class: 'card kpi kpi-link', href: '#/caisse' },
+        h('div', { class: 'label' }, 'Caisse'),
+        h('div', { class: 'value' }, fmt.money(d.cash.cash.balance)),
+        h('div', { class: 'sub' }, `Mobile money ${fmt.money(d.cash.momo.balance)}${d.supplierDebt ? ` · fournisseurs ${fmt.money(d.supplierDebt)}` : ''}`),
+      ),
       h('a', { class: 'card kpi kpi-link', href: '#/clients/creances' }, h('div', { class: 'label' }, 'Encours clients'), h('div', { class: 'value' }, fmt.money(d.receivables)), h('div', { class: 'sub' }, d.receivablesOld ? `${fmt.money(d.receivablesOld)} à plus de 30 jours` : 'Rien à plus de 30 jours')),
     ),
 
@@ -58,6 +64,18 @@ function facts(rows) {
       h('span', { class: 'fact-text' }, h('span', { class: 'fact-label' }, label), h('span', { class: 'fact-sub' }, sub)),
       h('span', { class: 'fact-value' }, value),
     ),
+  );
+}
+
+// The station runs one shift at a time: who holds it, since when, or that none is open.
+function shiftKpi(s, toValidate) {
+  const pending = toValidate ? ` · ${toValidate} à valider` : '';
+  return h(
+    'a',
+    { class: 'card kpi kpi-link', href: s ? `#/postes/${s.id}` : '#/postes' },
+    h('div', { class: 'label' }, 'Poste en cours'),
+    h('div', { class: 'value sm' }, s ? s.attendant_name : 'Aucun'),
+    h('div', { class: 'sub' }, s ? `Ouvert à ${fmt.time(s.opened_at)} · crédits ${fmt.money(s.credit_so_far)}${pending}` : `Personne en service${pending}`),
   );
 }
 
