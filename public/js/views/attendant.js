@@ -10,11 +10,11 @@ import { renderJoin, renderCheckpoint } from './relay.js';
 export async function renderAttendant(page, ctx) {
   const [state, remarks] = await Promise.all([api.get('/shifts/state'), api.get('/shifts/remarks/unread').catch(() => [])]);
   const reload = () => renderAttendant(page, ctx);
-  const remarkCards = remarks.map((r) => unreadRemark(r, ctx, reload));
+  const remarkCards = remarkCarousel(remarks, ctx, reload);
   if (!state.shift) return renderStart(page, ctx, remarkCards);
   if (state.shift.station_closed_at) return renderCheckpoint(page, ctx, state.shift, 'ouverture', { report: state.lastReport });
   if (!state.onDuty) return renderJoin(page, ctx, state, remarkCards);
-  return renderOpenShift(page, ctx, state.shift);
+  return renderOpenShift(page, ctx, state.shift, remarkCards);
 }
 
 // ---------- 1. Opening a shift ----------
@@ -58,9 +58,13 @@ async function renderStart(page, ctx, remarkCards = []) {
   );
 }
 
-// The manager's remark on a closed shift, until the attendant has read it.
-function unreadRemark(r, ctx, reload) {
-  const seen = async () => {
+// The manager's remarks the attendant has not read yet: one card, one remark per slide
+// (swipe, or the arrows), each with « C’est noté ». Shown until they are all read.
+function remarkCarousel(remarks, ctx, reload) {
+  if (!remarks.length) return null;
+  const many = remarks.length > 1;
+  const seen = (r) => async (e) => {
+    e.currentTarget.disabled = true;
     try {
       await api.post(`/shifts/${r.id}/remark/seen`);
     } catch {
@@ -68,17 +72,50 @@ function unreadRemark(r, ctx, reload) {
     }
     reload();
   };
+  const track = h(
+    'div',
+    { class: 'remark-track', tabindex: many ? '0' : null, 'aria-label': many ? 'Remarques, faites glisser pour la suivante' : null },
+    remarks.map((r, i) =>
+      h(
+        'article',
+        { class: 'remark-slide', 'aria-label': many ? `Remarque ${i + 1} sur ${remarks.length}` : null },
+        h('p', { class: 'remark-meta' }, `Poste n°${r.id} du ${fmt.dateTime(r.closed_at)}${r.manager_comment_by_name ? ` · ${r.manager_comment_by_name}` : ''}`),
+        h('p', { class: 'remark-text' }, r.manager_comment),
+        h(
+          'div',
+          { class: 'grid grid-2' },
+          button('Voir le poste', () => ctx.navigate(`historique/${r.id}`), { variant: 'secondary' }),
+          button('C’est noté', seen(r), { iconName: 'check' }),
+        ),
+      ),
+    ),
+  );
+  if (!many) return h('section', { class: 'card flush remark-card' }, cardHeader('Remarque du gérant', 'À lire, puis « C’est noté »'), track);
+
+  const count = h('span', { class: 'remark-count', 'aria-live': 'polite' }, `1 / ${remarks.length}`);
+  const dots = h('div', { class: 'remark-dots', 'aria-hidden': 'true' }, remarks.map((_, i) => h('span', { class: i ? '' : 'on' })));
+  const step = (dir) => track.scrollBy({ left: dir * track.clientWidth, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  const prev = h('button', { type: 'button', class: 'circle-btn', 'aria-label': 'Remarque précédente', disabled: true, onClick: () => step(-1) }, icon('back'));
+  const next = h('button', { type: 'button', class: 'circle-btn', 'aria-label': 'Remarque suivante', onClick: () => step(1) }, icon('chevron'));
+  track.addEventListener('scroll', () => {
+    const i = Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
+    count.textContent = `${i + 1} / ${remarks.length}`;
+    [...dots.children].forEach((d, j) => d.classList.toggle('on', j === i));
+    prev.disabled = i === 0;
+    next.disabled = i === remarks.length - 1;
+  }, { passive: true });
+  track.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      e.preventDefault();
+      step(e.key === 'ArrowRight' ? 1 : -1);
+    }
+  });
   return h(
     'section',
-    { class: 'card remark-card' },
-    cardHeader('Remarque du gérant', `Poste n°${r.id} du ${fmt.dateTime(r.closed_at)}${r.manager_comment_by_name ? ` · ${r.manager_comment_by_name}` : ''}`),
-    h('p', { class: 'remark-text' }, r.manager_comment),
-    h(
-      'div',
-      { class: 'grid grid-2' },
-      button('Voir le poste', () => ctx.navigate(`historique/${r.id}`), { variant: 'secondary' }),
-      button('C’est noté', seen, { iconName: 'check' }),
-    ),
+    { class: 'card flush remark-card', 'aria-roledescription': 'carrousel' },
+    cardHeader(`${remarks.length} remarques du gérant`, 'Faites glisser pour lire la suivante', h('div', { class: 'remark-nav' }, prev, count, next)),
+    track,
+    dots,
   );
 }
 
@@ -109,7 +146,7 @@ async function cancelEntry(ctx, x, reload) {
     toast(err.message, 'error');
   }
 }
-function renderOpenShift(page, ctx, shift) {
+function renderOpenShift(page, ctx, shift, remarks = null) {
   const reload = () => renderAttendant(page, ctx);
 
   // One list of everything recorded during the shift, newest first.
@@ -167,6 +204,7 @@ function renderOpenShift(page, ctx, shift) {
       h('button', { type: 'button', class: 'btn secondary sm theme-toggle', onClick: toggleTheme, 'aria-label': 'Changer de mode : jour ou nuit' }, 'Jour / nuit'),
     ),
     shiftLine('open'),
+    remarks,
     shift.closing_due
       ? h('p', { class: 'offline-strip', role: 'status', style: 'margin-bottom:16px' }, `L’heure de clôture (${ctx.state.settings.closingTime || '15:30'}) est passée : le gérant doit clôturer le poste.`)
       : null,

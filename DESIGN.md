@@ -204,7 +204,7 @@ components:
 
 **Creative North Star: "Totem de nuit"**
 
-The app is the station's price totem at night, seen from the forecourt: a black ground, porcelain type, and the day's prices lit in one colour field per fuel. Gasoil is green, essence is red, and each fuel owns its colour everywhere it appears (totem field, tank gauge, product swatch). Names and figures speak in Barlow Condensed, set big and bold like the numerals on a pylon; everything that is read rather than glanced at is in Inter. Actions are solid white rectangular slabs, one per region. The brand is a single lit yellow drop.
+The app is the station's price totem at night, seen from the forecourt: a black ground, porcelain type, and the day's prices lit in one colour field per fuel. Gasoil is green, essence is red, and each fuel owns its colour everywhere it appears (totem field, tank gauge, product swatch). Names and figures speak in Barlow Condensed, set big and bold like the numerals on a pylon; everything that is read rather than glanced at is in Inter. Actions and headers are lit like the forecourt's signs (user's request, 2026-10-05: "chaque en-tête ou bouton doit avoir une couleur différente du reste"): the main action is a solid yellow slab, every other action and every panel header is a sign of its own colour (sky, violet, orange) that neighbours never share. The brand is a single lit yellow drop.
 
 Density is that of an operating tool: a wide-screen side rail with an icon nav, a condensed headline ruled off from its content, the totem, then figures on one ruled board. On phones the rail folds into a top bar with the page name and a bottom tab bar, and the totem drops to two columns. The attendant uses the app on a phone with customers queuing, so the figures are large and the actions are few. A day mode keeps every role and swaps the values, for the pump in full sun.
 
@@ -212,10 +212,10 @@ This world replaces the apple.com tile grid and centred top nav that came before
 
 **Key Characteristics:**
 - Black ground (night) or bone ground (day), porcelain or ink text, no tinted neutrals.
-- Colour belongs to the fuels; the brand yellow is a signal, not a theme.
+- Green and red belong to the fuels; yellow, sky, violet and orange are the signs of actions and headers.
 - Barlow Condensed for names and figures, Inter for reading.
 - Ruled boards: panels share one surface divided by 1px hairlines.
-- White rectangular action slabs with a 10px radius.
+- One shape everywhere: the rounded rectangle (14px panels, 10px controls, 6px small marks); no circle, no pill, and an inner radius follows its container.
 - Motion fills, counts and sweeps once per arrival, then stays still.
 
 ## Colors
@@ -223,7 +223,9 @@ This world replaces the apple.com tile grid and centred top nav that came before
 A near-neutral black and porcelain world with two saturated fuel fields and one lit yellow; every value has a day twin with the same role.
 
 ### Primary
-- **Porcelain Slab** (porcelain, night) / **Day Ink** (day-ink, day): the action colour. Primary buttons, the selected choice tile frame, the checked pump option, links, the caret. Porcelain on night, near-black ink on day; text on it is the opposite ground. Hover goes to pure white (night) or day-slab-hover (day).
+- **Sign Yellow** (`--sign-yellow` #ffc414; day #f5b800): the main action. Primary buttons, the main quick action, the segmented thumb, the selected choice tile and pump option, the checked box, the remark card. Text on it is always night-ground black. Hover #ffd34f, press #e8ac00.
+- **Signs Sky, Violet, Orange** (`--sign-sky` #7fb2ff, `--sign-violet` #b69cff, `--sign-orange` #ff9a3d; day #2f6fd6, #6a4bd1, #d9650a, with darker `-ink` twins for text on bone): every other action and every panel header. A secondary button is a tint of its sign (15% night, 12% day) with a 55% edge and its text in the sign's ink; side by side, buttons take turns sky → violet → orange (`:nth-child(… of .btn.secondary)`). Panel headers are a band tinted the same way with the title in the sign's ink, panels taking turns in the same order; table heads carry a faint (6%) wash of their panel's sign. Quick actions: the first is solid yellow, then sky, violet, orange tiles with a solid icon square.
+- **Porcelain** (porcelain; day: day-ink): links and the caret.
 
 ### Secondary
 - **Gasoil Green** (gasoil-green; day: day-gasoil-green): the gasoil product colour. Its totem field, tank fill, swatch and series 1 in product data. Text on it is always night-ground black.
@@ -251,7 +253,7 @@ A near-neutral black and porcelain world with two saturated fuel fields and one 
 ### Named Rules
 **The Colour Belongs to the Fuel Rule.** Green and red appear only where a fuel is meant: its totem field, its tank, its swatch, its series. Totals, revenue bars and every non-product figure are porcelain (night) or ink (day).
 
-**The Lit Drop Rule.** Brand yellow marks exactly four things: the brand drop, the active nav icon, the shift line's progress, and focus. It is never a button, a background or a heading colour.
+**The Lit Sign Rule.** Every button and every header is lit in a colour that sets it apart from what surrounds it: yellow for the one main action, sky, violet or orange for the rest, never the same colour as its neighbour. Yellow also keeps its signal roles (the brand drop, the active nav item, the shift line, focus).
 
 **The Black Text on Fuel Rule.** Text on a fuel field is always night-ground black, in both modes, at solid weight; never white, never translucent.
 
@@ -304,16 +306,16 @@ Flat at rest. Depth is tonal (well, panel, raised) and edges are hairlines drawn
 
 ## Shapes
 
-Rectangular with modest rounding. Panels, totem fields and the board are 14px; buttons, fields, nav items, choice tiles and segmented controls 10px; badges and the focus outline 6px; drawers and phone sheets 20px on their open edge only. Pills (999px) are kept for the search field, switches and gauge tracks; tank meters are squarer (3px). Round shapes are reserved for the shift-line stops, status dots, avatars, alert and status icons, and pump checkboxes.
+One shape: the rounded rectangle, everywhere (user's request, 2026-10-05: "si c'est oblong c'est oblong partout"). Panels, totem fields, the board and status icons are 14px; buttons, fields, nav items, choice tiles, segmented controls, the search field, icon buttons and quick-action icons 10px; avatars, alert icons and the switch track 8px; badges, checkboxes, shift-line stops, the switch knob, toast icons and the focus outline 6px; status dots, gauge and bar tracks 2-3px; drawers and phone sheets 20px on their open edge only. Nothing is a circle or a pill. A shape inside another keeps the same family and a concentric radius (the segmented thumb is 7px inside a 10px track with 3px of padding).
 
 ## Components
 
 ### Buttons
-Solid white slabs, the one action of each region.
+Lit signs: the main action is the yellow slab, every other one is tinted in its own colour.
 - **Shape:** 10px radius, 46px minimum height (34px small, 54px large).
-- **Primary:** porcelain slab with night-ground text (day: ink slab, white text), Inter 16px 600, 10px 20px padding. Hover white, press slab-press, and a 0.97 press scale.
-- **Secondary:** transparent with a field-edge 1px outline and porcelain text; hover outlines in text colour over the faintest fill.
-- **Ghost:** link-coloured text, underline on hover. **Danger:** bad-text on transparent; **Destructive:** status red with white text.
+- **Primary:** sign-yellow slab with night-ground text in both modes, Inter 16px 600, 10px 20px padding. Hover sign-yellow-hover, press sign-yellow-press, and a 0.97 press scale.
+- **Secondary:** a tint of its sign (sky, then violet, then orange among its siblings) with a 1px edge of the sign at 55% and the text in the sign's ink; hover deepens the tint and the edge goes solid.
+- **Ghost:** a sky tint without an edge, sky ink text (light actions such as Modifier, + Ajouter). **Danger:** a red tint with a red edge and bad-text; **Destructive:** status red with white text.
 - **Focus:** the global 2px brand-yellow outline at 2px offset.
 
 ### Cards / Containers

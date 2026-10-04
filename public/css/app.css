@@ -1,7 +1,9 @@
 /* =====================================================================
    MTG Station — « Totem de nuit »
    The forecourt at night: black ground, porcelain type, the price totem lit up.
-   Gasoil green and essence red own their fields; actions are white slabs.
+   Gasoil green and essence red own their fields; actions and headers are lit like the
+   forecourt's signs: the main action yellow, the others sky, violet or orange.
+   One shape everywhere: the rounded rectangle (no circle, no pill).
    ===================================================================== */
 
 /* Inter, served by the station itself (no third-party request on weak networks) */
@@ -65,6 +67,20 @@
   --on-accent: #0a0a0b;
   --focus: #ffc414;
   --brand: #ffc414;
+
+  /* Signs: each action and each header is lit in its own colour (solid, and ink on a tint). */
+  --sign-yellow: #ffc414;
+  --sign-yellow-hover: #ffd34f;
+  --sign-yellow-press: #e8ac00;
+  --sign-yellow-ink: #ffc414;
+  --sign-sky: #7fb2ff;
+  --sign-sky-ink: #8fbcff;
+  --sign-violet: #b69cff;
+  --sign-violet-ink: #c2acff;
+  --sign-orange: #ff9a3d;
+  --sign-orange-ink: #ffa552;
+  --on-sign: #0a0a0b;
+  --sign-tint: 15%;
 
   /* Fuels */
   --gasoil: #23c46b;
@@ -153,6 +169,17 @@
   --on-accent: #ffffff;
   --focus: #a87300;
   --brand: #e0a800;
+  --sign-yellow: #f5b800;
+  --sign-yellow-hover: #ffc414;
+  --sign-yellow-press: #d9a200;
+  --sign-yellow-ink: #6f5000;
+  --sign-sky: #2f6fd6;
+  --sign-sky-ink: #1f5bbd;
+  --sign-violet: #6a4bd1;
+  --sign-violet-ink: #5a3cc0;
+  --sign-orange: #d9650a;
+  --sign-orange-ink: #a84a00;
+  --sign-tint: 12%;
   --gasoil: #1fb862;
   --essence: #e4303a;
   --green: #17a35a;
@@ -191,7 +218,7 @@ body {
   text-rendering: optimizeLegibility;
   caret-color: var(--accent);
 }
-::selection { background: color-mix(in srgb, var(--accent) 24%, transparent); }
+::selection { background: color-mix(in srgb, var(--sign-yellow) 34%, transparent); }
 
 h1, h2, h3 { margin: 0; font-family: var(--font-display); text-wrap: balance; }
 h1 { font-size: 48px; line-height: 1.08; font-weight: 600; letter-spacing: var(--track-h1); }
@@ -275,7 +302,7 @@ a.btn:hover { text-decoration: none; }
 }
 .side-nav a svg { width: 20px; height: 20px; stroke-width: 1.8; flex: none; }
 .side-nav a:hover { color: var(--text); background: var(--fill-4); text-decoration: none; }
-.side-nav a.active { color: var(--text); background: var(--surface-3); font-weight: 600; }
+.side-nav a.active { color: var(--text); background: color-mix(in oklab, var(--sign-yellow) var(--sign-tint), var(--surface-2)); font-weight: 600; }
 .side-nav a.active svg { color: var(--brand); }
 .side-foot {
   display: flex;
@@ -385,9 +412,25 @@ a.btn:hover { text-decoration: none; }
   background: var(--surface);
   box-shadow: inset 0 0 0 1px var(--hairline);
 }
-/* The header is a strip across the top of the panel, ruled off from its content. */
-.card-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: -24px -24px 22px; padding: 18px 24px 16px; border-bottom: 1px solid var(--hairline); }
-.card-header h2 { font-size: 26px; }
+/* The header is a lit band across the top of the panel: a tint of its sign, the title in that
+   colour. Panels take turns (sky, violet, orange), so neighbouring headers never match. */
+.card { --hue: var(--sign-sky); --hue-ink: var(--sign-sky-ink); }
+.card:nth-child(3n + 2 of section.card) { --hue: var(--sign-violet); --hue-ink: var(--sign-violet-ink); }
+.card:nth-child(3n + 3 of section.card) { --hue: var(--sign-orange); --hue-ink: var(--sign-orange-ink); }
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: -24px -24px 22px;
+  padding: 18px 24px 16px;
+  border-bottom: 1px solid color-mix(in oklab, var(--hue) 40%, transparent);
+  border-top-left-radius: inherit; /* square in a board cell, rounded on a lone panel */
+  border-top-right-radius: inherit;
+  background: color-mix(in oklab, var(--hue) var(--sign-tint), var(--surface));
+}
+.card-header h2 { font-size: 26px; color: var(--hue-ink); }
 .card-header p { color: var(--text-2); font-size: 14px; line-height: 1.4; margin-top: 3px; letter-spacing: -0.012em; }
 /* A filter beside the segmented control (e.g. one attendant's shifts). */
 .card-header .header-select { width: auto; min-width: 200px; min-height: 40px; padding: 8px 36px 8px 14px; }
@@ -496,8 +539,8 @@ a.btn:hover { text-decoration: none; }
 .tank { display: flex; flex-direction: column; gap: 12px; }
 .tank-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .tank-pct { font-family: var(--font-display); font-size: 32px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.meter { position: relative; height: 8px; border-radius: 999px; background: var(--track); overflow: hidden; }
-.meter-fill { height: 100%; border-radius: 999px; transform-origin: left center; animation: grow-x 1.2s var(--ease) both 0.15s; }
+.meter { position: relative; height: 8px; border-radius: 3px; background: var(--track); overflow: hidden; }
+.meter-fill { height: 100%; border-radius: 3px; transform-origin: left center; animation: grow-x 1.2s var(--ease) both 0.15s; }
 .meter-mark { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--surface); }
 .tank-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: var(--text-2); font-size: 14px; flex-wrap: wrap; }
 
@@ -541,7 +584,7 @@ a.btn:hover { text-decoration: none; }
   align-items: center;
   gap: 6px;
   padding: 3px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   background: var(--fill-3);
   color: var(--text);
   font-size: 13px;
@@ -549,12 +592,12 @@ a.btn:hover { text-decoration: none; }
   letter-spacing: -0.01em;
   white-space: nowrap;
 }
-.badge .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-3); }
+.badge .dot { width: 7px; height: 7px; border-radius: 2px; background: var(--text-3); }
 .badge.good .dot { background: var(--good); }
 .badge.warning .dot { background: var(--warning); }
 .badge.serious .dot { background: var(--serious); }
 .badge.critical .dot { background: var(--critical); }
-.badge.info .dot { background: var(--accent); }
+.badge.info .dot { background: var(--sign-sky); }
 .badge.over { background: color-mix(in srgb, var(--orange) 16%, transparent); }
 
 .alert-list { display: flex; flex-direction: column; }
@@ -563,7 +606,7 @@ a.btn:hover { text-decoration: none; }
 .card-header + .alert-item { border-top: none; padding-top: 0; }
 .alert-item:hover { text-decoration: none; }
 .alert-item:hover .alert-text { text-decoration: underline; text-underline-offset: 0.18em; }
-.alert-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; flex: none; color: #fff; }
+.alert-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; flex: none; color: #fff; }
 .alert-icon svg { width: 17px; height: 17px; }
 .alert-icon.critical { background: var(--critical); }
 .alert-icon.serious { background: var(--serious); }
@@ -589,7 +632,7 @@ tfoot td { font-weight: 600; border-top: 1px solid var(--separator); border-bott
 .card:not(.flush) table th:last-child, .card:not(.flush) table td:last-child { padding-right: 0; }
 .empty { padding: 44px 24px; text-align: center; color: var(--text-2); font-size: 17px; }
 
-/* ---------- Buttons: solid white slabs, the one action of each region ---------- */
+/* ---------- Buttons: the main action is the yellow slab; every other one is lit in its own colour ---------- */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -599,8 +642,8 @@ tfoot td { font-weight: 600; border-top: 1px solid var(--separator); border-bott
   padding: 10px 20px;
   border-radius: var(--radius-md);
   border: 1px solid transparent;
-  background: var(--accent);
-  color: var(--on-accent);
+  background: var(--sign-yellow);
+  color: var(--on-sign);
   font: inherit;
   font-size: 16px;
   font-weight: 600;
@@ -610,19 +653,32 @@ tfoot td { font-weight: 600; border-top: 1px solid var(--separator); border-bott
   user-select: none;
   transition: background-color 0.2s var(--ease), color 0.2s, border-color 0.2s, opacity 0.2s, transform 0.2s var(--ease);
 }
-.btn:hover { background: var(--accent-hover); text-decoration: none; }
-.btn:active { background: var(--accent-press); }
+.btn:hover { background: var(--sign-yellow-hover); text-decoration: none; }
+.btn:active { background: var(--sign-yellow-press); }
 .btn:disabled { opacity: 0.42; cursor: default; }
 .btn svg { width: 18px; height: 18px; stroke-width: 2; }
-.btn.secondary { background: transparent; border-color: var(--field-border); color: var(--text); }
-.btn.secondary:hover { border-color: var(--text); background: var(--fill-4); }
-.btn.ghost { background: transparent; color: var(--link); padding-left: 10px; padding-right: 10px; }
-.btn.ghost:hover { background: transparent; text-decoration: underline; text-underline-offset: 0.2em; }
+/* Secondary actions: a tinted sign with its edge and text in the same colour. Side by side,
+   they take turns (sky, violet, orange), so no two neighbours look the same. */
+.btn.secondary {
+  --hue: var(--sign-sky);
+  --hue-ink: var(--sign-sky-ink);
+  background: color-mix(in oklab, var(--hue) var(--sign-tint), var(--surface));
+  border-color: color-mix(in oklab, var(--hue) 55%, transparent);
+  color: var(--hue-ink);
+}
+.btn.secondary:nth-child(3n + 2 of .btn.secondary) { --hue: var(--sign-violet); --hue-ink: var(--sign-violet-ink); }
+.btn.secondary:nth-child(3n + 3 of .btn.secondary) { --hue: var(--sign-orange); --hue-ink: var(--sign-orange-ink); }
+.btn.secondary:hover { background: color-mix(in oklab, var(--hue) calc(var(--sign-tint) + 12%), var(--surface)); border-color: var(--hue); }
+.btn.secondary:active { background: color-mix(in oklab, var(--hue) calc(var(--sign-tint) + 20%), var(--surface)); }
+/* A light action (Modifier, + Ajouter): the same rounded sign, tinted, without an edge. */
+.btn.ghost { background: color-mix(in oklab, var(--sign-sky) var(--sign-tint), var(--surface)); color: var(--sign-sky-ink); padding-left: 12px; padding-right: 12px; }
+.btn.ghost:hover { background: color-mix(in oklab, var(--sign-sky) calc(var(--sign-tint) + 12%), var(--surface)); }
 .more-link { display: inline-flex; align-items: center; gap: 2px; font-size: 15px; font-weight: 600; white-space: nowrap; }
 .more-link svg { width: 16px; height: 16px; stroke-width: 2.2; margin-top: 1px; }
-.btn.danger { background: transparent; color: var(--bad-text); }
-.btn.danger:hover { background: color-mix(in srgb, var(--red) 12%, transparent); }
+.btn.danger { background: color-mix(in oklab, var(--red) var(--sign-tint), var(--surface)); border-color: color-mix(in oklab, var(--red) 50%, transparent); color: var(--bad-text); }
+.btn.danger:hover { background: color-mix(in oklab, var(--red) calc(var(--sign-tint) + 12%), var(--surface)); }
 .btn.destructive { background: var(--red); color: #fff; }
+.btn.destructive:hover { background: color-mix(in oklab, var(--red) 86%, #fff); }
 .btn.large { min-height: 54px; padding: 14px 26px; font-size: 17px; }
 .btn.block { width: 100%; }
 .btn.sm { min-height: 34px; padding: 6px 14px; font-size: 14px; }
@@ -637,7 +693,7 @@ tfoot td { font-weight: 600; border-top: 1px solid var(--separator); border-bott
   height: 36px;
   padding: 0;
   border: none;
-  border-radius: 50%;
+  border-radius: var(--radius-md);
   background: var(--surface-3);
   color: var(--text-2);
   cursor: pointer;
@@ -645,7 +701,7 @@ tfoot td { font-weight: 600; border-top: 1px solid var(--separator); border-bott
 }
 .circle-btn:hover { color: var(--text); }
 .circle-btn svg { width: 16px; height: 16px; stroke-width: 2.4; }
-.avatar { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--surface-3); color: var(--text); font-weight: 600; font-size: 13px; flex: none; }
+.avatar { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 8px; background: var(--surface-3); color: var(--text); font-weight: 600; font-size: 13px; flex: none; }
 
 /* ---------- Fields: dark wells with floating labels ---------- */
 .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
@@ -716,7 +772,7 @@ input.switch {
   min-height: 0;
   padding: 0;
   border: none;
-  border-radius: 999px;
+  border-radius: 8px;
   background: var(--fill);
   cursor: pointer;
   transition: background-color 0.3s var(--ease-out);
@@ -728,7 +784,7 @@ input.switch::before {
   left: 2px;
   width: 27px;
   height: 27px;
-  border-radius: 999px;
+  border-radius: 6px;
   background: #fff;
   box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15), 0 3px 1px rgba(0, 0, 0, 0.06);
   transition: transform 0.3s var(--ease);
@@ -746,7 +802,7 @@ input[type='checkbox']:not(.switch) {
   min-height: 0;
   padding: 0;
   border: 1.5px solid var(--field-border);
-  border-radius: 50%;
+  border-radius: var(--radius-sm);
   background: transparent;
   display: grid;
   place-items: center;
@@ -758,12 +814,12 @@ input[type='checkbox']:not(.switch)::after {
   width: 6px;
   height: 11px;
   margin-top: -2px;
-  border: solid var(--on-accent);
+  border: solid var(--on-sign);
   border-width: 0 2.5px 2.5px 0;
   transform: rotate(45deg) scale(0);
   transition: transform 0.25s var(--ease);
 }
-input[type='checkbox']:not(.switch):checked { background: var(--accent); border-color: var(--accent); }
+input[type='checkbox']:not(.switch):checked { background: var(--sign-yellow); border-color: var(--sign-yellow); }
 input[type='checkbox']:not(.switch):checked::after { transform: rotate(45deg) scale(1); }
 input[type='checkbox']:not(.switch):focus { box-shadow: none; }
 
@@ -772,7 +828,7 @@ input[type='checkbox']:not(.switch):focus { box-shadow: none; }
   position: relative;
   display: inline-flex;
   padding: 3px;
-  border-radius: 999px;
+  border-radius: var(--radius-md);
   background: var(--fill-3);
   max-width: 100%;
   overflow-x: auto;
@@ -785,8 +841,8 @@ input[type='checkbox']:not(.switch):focus { box-shadow: none; }
   bottom: 3px;
   left: 0;
   width: 0;
-  border-radius: 999px;
-  background: var(--thumb);
+  border-radius: 7px; /* 10px outside, 3px of padding */
+  background: var(--sign-yellow);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
   transition: transform 0.4s var(--ease), width 0.4s var(--ease);
 }
@@ -797,7 +853,7 @@ input[type='checkbox']:not(.switch):focus { box-shadow: none; }
   min-height: 34px;
   padding: 6px 16px;
   border: none;
-  border-radius: 999px;
+  border-radius: 7px;
   background: transparent;
   color: var(--text-2);
   font: inherit;
@@ -807,8 +863,8 @@ input[type='checkbox']:not(.switch):focus { box-shadow: none; }
   white-space: nowrap;
   transition: color 0.2s;
 }
-.segmented button.active { color: var(--text); font-weight: 600; }
-.search { max-width: 320px; min-height: 40px; padding: 8px 16px 8px 38px; font-size: 15px; border-radius: 999px; border-color: var(--separator); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2386868b' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-4-4'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: 14px center; background-size: 16px; }
+.segmented button.active { color: var(--on-sign); font-weight: 600; }
+.search { max-width: 320px; min-height: 40px; padding: 8px 16px 8px 38px; font-size: 15px; border-radius: var(--radius-md); border-color: var(--separator); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2386868b' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-4-4'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: 14px center; background-size: 16px; }
 
 /* ---------- Activity indicator ---------- */
 .loading { display: grid; place-items: center; min-height: 50vh; }
@@ -927,7 +983,7 @@ dialog.action-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; 
   pointer-events: auto;
   animation: banner-in 0.45s var(--ease);
 }
-.toast .toast-icon { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--green); color: #fff; flex: none; }
+.toast .toast-icon { display: grid; place-items: center; width: 24px; height: 24px; border-radius: var(--radius-sm); background: var(--green); color: #fff; flex: none; }
 .toast.error .toast-icon { background: var(--red); }
 .toast .toast-icon svg { width: 14px; height: 14px; stroke-width: 3; }
 .toast.leaving { animation: banner-out 0.3s var(--ease-out) forwards; }
@@ -963,7 +1019,7 @@ dialog.action-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; 
   cursor: pointer;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
-.pump-option:has(input:checked) { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: var(--accent-soft); }
+.pump-option:has(input:checked) { border-color: var(--sign-yellow); box-shadow: inset 0 0 0 1px var(--sign-yellow); background: color-mix(in oklab, var(--sign-yellow) var(--sign-tint), var(--surface)); }
 .pump-option.disabled { opacity: 0.45; cursor: default; }
 .summary-line { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; font-size: 17px; font-variant-numeric: tabular-nums; }
 .summary-line.total { border-top: 1px solid var(--separator); margin-top: 4px; padding-top: 14px; font-weight: 600; }
@@ -993,11 +1049,16 @@ dialog.action-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; 
   transition: box-shadow 0.3s var(--ease), background-color 0.2s, transform 0.2s var(--ease);
 }
 .quick-action:hover { box-shadow: var(--shadow-lift); }
-.quick-action .qa-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--accent-soft); color: var(--link); }
+/* Each action is its own sign: the main one solid yellow, the others tinted sky, violet, orange. */
+.quick-action { --hue: var(--sign-sky); --hue-ink: var(--sign-sky-ink); background: color-mix(in oklab, var(--hue) var(--sign-tint), var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--hue) 45%, transparent); color: var(--hue-ink); }
+.quick-action:nth-child(4n + 3) { --hue: var(--sign-violet); --hue-ink: var(--sign-violet-ink); }
+.quick-action:nth-child(4n + 4) { --hue: var(--sign-orange); --hue-ink: var(--sign-orange-ink); }
+.quick-action:hover { background: color-mix(in oklab, var(--hue) calc(var(--sign-tint) + 10%), var(--surface)); }
+.quick-action .qa-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--radius-md); background: var(--hue); color: var(--on-sign); }
 .quick-action .qa-icon svg { width: 21px; height: 21px; }
-.quick-action.primary { background: var(--accent); color: var(--on-accent); }
-.quick-action.primary:hover { background: var(--accent-hover); }
-.quick-action.primary .qa-icon { background: color-mix(in srgb, var(--on-accent) 14%, transparent); color: var(--on-accent); }
+.quick-action.primary { background: var(--sign-yellow); box-shadow: none; color: var(--on-sign); }
+.quick-action.primary:hover { background: var(--sign-yellow-hover); }
+.quick-action.primary .qa-icon { background: color-mix(in srgb, var(--on-sign) 14%, transparent); color: var(--on-sign); }
 .kpi-row { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .kpi-row .card { padding: 18px; }
 .kpi-row .kpi .label { font-size: 13px; }
@@ -1025,8 +1086,8 @@ dialog.action-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; 
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 .seg-option:hover span { border-color: var(--text-2); }
-.seg-option input:checked + span { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: var(--accent-soft); color: var(--link); }
-.seg-option input:focus-visible + span { box-shadow: inset 0 0 0 1px var(--accent), 0 0 0 2px var(--focus); }
+.seg-option input:checked + span { border-color: var(--sign-yellow); box-shadow: inset 0 0 0 1px var(--sign-yellow); background: color-mix(in oklab, var(--sign-yellow) var(--sign-tint), var(--surface)); color: var(--sign-yellow-ink); }
+.seg-option input:focus-visible + span { box-shadow: inset 0 0 0 1px var(--sign-yellow), 0 0 0 2px var(--focus); }
 .hint-line { min-height: 20px; font-size: 15px; color: var(--text-2); }
 .hint-line.new { color: var(--link); font-weight: 600; }
 
@@ -1038,7 +1099,7 @@ dialog.action-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; 
   padding: 22px;
   border-radius: var(--radius);
   background: var(--surface);
-  box-shadow: inset 0 0 0 2px var(--accent);
+  box-shadow: inset 0 0 0 2px var(--sign-yellow);
   animation: fade-up 0.5s var(--ease) both;
 }
 .queue-card .who { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
@@ -1047,21 +1108,21 @@ dialog.action-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; 
 .queue-card .actions { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 8px; }
 .queue-card .actions .btn { min-height: 48px; padding-left: 10px; padding-right: 10px; }
 .queue-title { display: flex; align-items: center; gap: 10px; font-size: 24px; }
-.queue-title .pulse { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); animation: pulse 1.4s ease-in-out infinite; }
+.queue-title .pulse { width: 10px; height: 10px; border-radius: 3px; background: var(--sign-yellow); animation: pulse 1.4s ease-in-out infinite; }
 
 /* Customer: fill-up request status */
 .fill-card { text-align: center; padding: 32px 24px; }
 .fill-card .big { font-family: var(--font-display); font-size: 40px; font-weight: 600; margin: 6px 0; font-variant-numeric: tabular-nums; }
 .fill-card .spinner { margin: 0 auto 14px; }
-.status-icon { display: grid; place-items: center; width: 56px; height: 56px; margin: 0 auto 12px; border-radius: 50%; color: #fff; animation: fade-up 0.5s var(--ease) both; }
+.status-icon { display: grid; place-items: center; width: 56px; height: 56px; margin: 0 auto 12px; border-radius: var(--radius-lg); color: #fff; animation: fade-up 0.5s var(--ease) both; }
 .status-icon svg { width: 28px; height: 28px; stroke-width: 3; }
 
 /* ---------- Horizontal bars (expenses by category) ---------- */
 .hbars { display: flex; flex-direction: column; gap: 14px; }
 .hbar-row { display: grid; grid-template-columns: minmax(110px, 200px) 1fr auto; align-items: center; gap: 14px; font-size: 15px; }
 .hbar-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hbar-track { height: 8px; border-radius: 999px; background: var(--track); overflow: hidden; }
-.hbar-fill { display: block; height: 100%; border-radius: 999px; background: var(--text-2); transform-origin: left; animation: grow-x 1s var(--ease) both; animation-delay: calc(var(--i, 0) * 50ms + 0.1s); }
+.hbar-track { height: 8px; border-radius: 3px; background: var(--track); overflow: hidden; }
+.hbar-fill { display: block; height: 100%; border-radius: 3px; background: var(--text-2); transform-origin: left; animation: grow-x 1s var(--ease) both; animation-delay: calc(var(--i, 0) * 50ms + 0.1s); }
 .hbar-value { min-width: 90px; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
 
 /* ---------- Page entry: fade-up, once per navigation ---------- */
@@ -1217,7 +1278,7 @@ html { background: var(--bg); }
 .toasts { top: calc(env(safe-area-inset-top, 0px) + 16px); }
 .badge { border-radius: 6px; }
 .segmented { border-radius: var(--radius-md); }
-table th { color: var(--text-3); font-size: 12px; letter-spacing: 0.01em; background: var(--surface-2); }
+table th { color: var(--text-2); font-size: 12px; letter-spacing: 0.01em; background: color-mix(in oklab, var(--hue, var(--sign-sky)) 6%, var(--surface-2)); }
 input, select, textarea { background: var(--surface-2); border-color: var(--separator); }
 input:focus, select:focus, textarea:focus { border-color: var(--text); }
 .sheet, .alert, .toast { box-shadow: inset 0 0 0 1px var(--hairline), var(--shadow-lift); }
@@ -1249,7 +1310,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--text); }
 }
 .shift-line li:last-child::before { display: none; }
 .shift-line li.done::before { background: var(--brand); }
-.shift-line .stop { position: relative; z-index: 1; width: 20px; height: 20px; border-radius: 50%; background: var(--bg); box-shadow: inset 0 0 0 4px var(--fill); }
+.shift-line .stop { position: relative; z-index: 1; width: 20px; height: 20px; border-radius: var(--radius-sm); background: var(--bg); box-shadow: inset 0 0 0 4px var(--fill); }
 .shift-line .done .stop { background: var(--brand); box-shadow: inset 0 0 0 4px var(--brand); }
 .shift-line .now .stop { background: var(--bg); box-shadow: inset 0 0 0 6px var(--brand); animation: stop-glow 2.4s var(--ease) 0.4s 2; }
 .shift-line .stop-label { font-family: var(--font-display); font-size: 17px; line-height: 1; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; color: var(--text-3); }
@@ -1310,7 +1371,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--text); }
 
 /* Confirmation : pastille qui apparaît, coche tracée, onde qui s'éloigne. */
 .status-icon { position: relative; animation-name: pop-in; animation-duration: 0.6s; }
-.status-icon::after { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: 50%; background: inherit; animation: ripple 0.9s var(--ease-out) 0.35s both; }
+.status-icon::after { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: inherit; animation: ripple 0.9s var(--ease-out) 0.35s both; }
 .status-icon svg path, .toast-icon svg path { stroke-dasharray: 40; stroke-dashoffset: 40; animation: draw 0.55s var(--ease) 0.25s forwards; }
 .big-result .value { animation: fade-up 0.8s var(--ease) 0.25s both; }
 @keyframes pop-in { from { opacity: 0; transform: scale(0.6); } }
@@ -1377,9 +1438,23 @@ input:focus, select:focus, textarea:focus { border-color: var(--text); }
   .circle-btn { min-width: 44px; min-height: 44px; }
 }
 
-/* The manager's remark to the attendant: set apart, read as written. */
-.remark-card { margin-bottom: 20px; border-left: 4px solid var(--accent); }
+/* The manager's remarks to the attendant: a yellow sign, one remark per slide, swiped or stepped. */
+.card.remark-card { --hue: var(--sign-yellow); --hue-ink: var(--sign-yellow-ink); margin-bottom: 20px; }
 .remark-text { margin: 0 0 12px; font-size: 17px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.remark-card .card-header { flex-wrap: nowrap; }
+.remark-card .card-header .row { flex: none; }
+.remark-nav { display: flex; align-items: center; gap: 6px; }
+.remark-count { min-width: 44px; text-align: center; font-family: var(--font-display); font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--hue-ink); }
+.remark-nav .circle-btn { background: color-mix(in oklab, var(--hue) 22%, var(--surface)); color: var(--hue-ink); }
+.remark-nav .circle-btn:disabled { opacity: 0.35; cursor: default; }
+.remark-track { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; }
+.remark-track::-webkit-scrollbar { display: none; }
+.remark-slide { flex: 0 0 100%; min-width: 0; padding: 20px 24px 24px; scroll-snap-align: start; scroll-snap-stop: always; }
+.remark-meta { margin-bottom: 8px; color: var(--text-2); font-size: 14px; }
+.remark-dots { display: flex; justify-content: center; gap: 6px; padding: 0 0 18px; }
+.remark-dots span { width: 18px; height: 4px; border-radius: 2px; background: var(--fill); transition: background-color 0.3s, width 0.3s var(--ease); }
+.remark-dots span.on { width: 28px; background: var(--hue); }
+@media (max-width: 833px) { .remark-slide { padding: 18px 18px 20px; } }
 
 /* Operations and checkpoint reports folded inside a card. */
 .nowrap { white-space: nowrap; }

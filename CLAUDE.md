@@ -78,6 +78,7 @@ Requires Node ≥ 22.13 (built-in `node:sqlite`, hence `--disable-warning=Experi
 - `public/js/api.js` throws errors carrying `.status` and `.code`.
 - Design: « Totem de nuit », the station's price totem at night (chosen by the user): black ground, gasoil green and essence red fields, condensed figures, white action slabs, a day mode for full sun.
   - Shell: side rail on wide screens; top bar + bottom tab bar (four tabs + Plus) below 1024px; forms open as a right drawer from 834px and as bottom sheets below.
+  - Colour and shape: the main action is a yellow slab; every other button and every card header is lit sky, violet or orange, neighbours taking turns (`--sign-*` tokens, `:nth-child(… of …)` in `app.css`). One shape everywhere, the rounded rectangle: no circle, no pill.
   - Signatures: `priceTotem` and `shiftLine` in `ui.js`, count-up in `public/js/motion.js`, the brand film on the sign-in screen.
   - The tokens and rules are in `DESIGN.md`, the product facts in `PRODUCT.md`, and the direction in `.impeccable/surfaces/`. The Impeccable design skill is installed in `.claude/skills/impeccable`.
 - CSS: tokens, components and both themes are in `public/css/app.css`; reuse its classes rather than inline styles. Fuel colours go through `productColor(id)` / `--gasoil`, `--essence`. Inter and Barlow Condensed are self-hosted in `public/fonts/`.
