@@ -43,7 +43,7 @@ export async function renderSettings(page, ctx) {
             {
               label: '',
               align: 'right',
-              render: (p) => h('span', { class: 'row', style: 'justify-content:flex-end' }, button('Historique', () => priceHistory(p), { variant: 'ghost sm' }), button('Changer le prix', () => productDialog(p, reload), { variant: 'secondary sm' })),
+              render: (p) => h('span', { class: 'btn-row' }, button('Historique', () => priceHistory(p), { variant: 'secondary sm' }), button('Changer le prix', () => productDialog(p, reload), { variant: 'secondary sm' })),
             },
           ],
           products,
@@ -124,7 +124,7 @@ export async function renderSettings(page, ctx) {
         ),
         h(
           'div',
-          { class: 'row' },
+          { class: 'btn-row' },
           h('a', { class: 'btn secondary', href: '/api/backup', download: '' }, icon('download'), 'Télécharger une sauvegarde'),
           button('Ouvrir le journal', () => ctx.navigate('reglages/journal'), { variant: 'secondary', iconName: 'shifts' }),
         ),

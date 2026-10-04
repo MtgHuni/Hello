@@ -209,7 +209,7 @@ function cancellationRequests(shift, reload) {
         h('div', { class: 'num', style: 'font-weight:600' }, fmt.money(i.amount)),
         h(
           'div',
-          { class: 'row no-print', style: 'gap:6px' },
+          { class: 'btn-row no-print', style: 'gap:6px' },
           button('Garder', () => decide(i, false), { variant: 'secondary sm' }),
           button('Annuler', () => decide(i, true), { variant: 'destructive sm' }),
         ),

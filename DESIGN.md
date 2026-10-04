@@ -223,7 +223,7 @@ This world replaces the apple.com tile grid and centred top nav that came before
 A near-neutral black and porcelain world with two saturated fuel fields and one lit yellow; every value has a day twin with the same role.
 
 ### Primary
-- **Sign Yellow** (`--sign-yellow` #ffc414; day #f5b800): the main action. Primary buttons, the main quick action, the segmented thumb, the selected choice tile and pump option, the checked box, the remark card. Text on it is always night-ground black. Hover #ffd34f, press #e8ac00.
+- **Sign Yellow** (`--sign-yellow` #ffc414; day #f5b800): the main action. Primary buttons (tinted like every button), the main quick action's icon square, the segmented thumb (a tint with an edge), the selected choice tile and pump option, the checked box, the remark card. Text on it is always night-ground black. Hover #ffd34f, press #e8ac00.
 - **Signs Sky, Violet, Orange** (`--sign-sky` #7fb2ff, `--sign-violet` #b69cff, `--sign-orange` #ff9a3d; day #2f6fd6, #6a4bd1, #d9650a, with darker `-ink` twins for text on bone): every other action and every panel header. A secondary button is a tint of its sign (15% night, 12% day) with a 55% edge and its text in the sign's ink; side by side, buttons take turns sky → violet → orange (`:nth-child(… of .btn.secondary)`). Panel headers are a band tinted the same way with the title in the sign's ink, panels taking turns in the same order; table heads carry a faint (6%) wash of their panel's sign. Quick actions are all built alike, a tinted tile with a solid icon square: yellow for the main one (Crédit), then sky, violet, orange.
 - **Porcelain** (porcelain; day: day-ink): links and the caret.
 
@@ -311,11 +311,11 @@ One shape: the rounded rectangle, everywhere (user's request, 2026-10-05: "si c'
 ## Components
 
 ### Buttons
-Lit signs: the main action is the yellow slab, every other one is tinted in its own colour.
+Lit signs, all built alike (user's request, 2026-10-05): a tint of the button's colour, a 1px edge of it at 55%, the text in its ink. Only the colour changes: yellow for the main action, sky, violet, orange for the others, red for a destructive one. Buttons side by side are the same size (`.btn-row`: each takes the width of the widest; on a phone a page header's buttons fill the width in equal columns), and a status badge sits under the page title, not among the buttons.
 - **Shape:** 10px radius, 46px minimum height (34px small, 54px large).
-- **Primary:** sign-yellow slab with night-ground text in both modes, Inter 16px 600, 10px 20px padding. Hover sign-yellow-hover, press sign-yellow-press, and a 0.97 press scale.
+- **Primary:** the yellow sign, its tint 6 points stronger than the others, Inter 16px 600, 10px 20px padding. Hover deepens the tint and the edge goes solid; press deeper still, with a 0.97 press scale.
 - **Secondary:** a tint of its sign (sky, then violet, then orange among its siblings) with a 1px edge of the sign at 55% and the text in the sign's ink; hover deepens the tint and the edge goes solid.
-- **Ghost:** a sky tint without an edge, sky ink text (light actions such as Modifier, + Ajouter). **Danger:** a red tint with a red edge and bad-text; **Destructive:** status red with white text.
+- **Ghost:** the sky sign with less side padding (light actions such as Modifier, + Ajouter). **Danger / Destructive:** the red sign with bad-text.
 - **Focus:** the global 2px brand-yellow outline at 2px offset.
 
 ### Cards / Containers
