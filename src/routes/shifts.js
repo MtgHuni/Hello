@@ -1,10 +1,11 @@
 const express = require('express');
-const { EXPENSE_CATEGORIES } = require('../db');
+const { EXPENSE_CATEGORIES, getSettings } = require('../db');
 const { fail, num, str, oneOf, round, dateParam, transaction } = require('../util');
 const { requireRole } = require('../auth');
 const { customerBalance } = require('./customers');
 const { createSale } = require('../sales');
 const { refreshCustomer } = require('../loyalty');
+const { shiftReportPdf } = require('../shiftReport');
 
 const staff = requireRole('manager', 'attendant');
 
@@ -92,6 +93,21 @@ module.exports = function shiftRoutes(db) {
   router.get('/shifts/:id', staff, (req, res) => {
     getOwnShift(req, { open: false });
     res.json(shiftDetail(req.params.id));
+  });
+
+  // End-of-shift report (PDF): cash, sales from the indexes, credits, expenses, payments.
+  router.get('/shifts/:id/report.pdf', staff, (req, res) => {
+    const own = getOwnShift(req, { open: false });
+    if (own.status === 'open') fail(409, 'Le rapport est disponible une fois le poste clôturé.');
+    const settings = getSettings(db);
+    const pdf = shiftReportPdf(shiftDetail(own.id), {
+      stationName: settings.stationName,
+      combosEnabled: settings.combosEnabled,
+      cashTolerance: settings.cashTolerance,
+    });
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', `attachment; filename="rapport-poste-${own.id}.pdf"`);
+    res.send(pdf);
   });
 
   // Opening a shift snapshots each nozzle's meter and the current price,

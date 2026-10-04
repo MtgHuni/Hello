@@ -28,8 +28,12 @@ function client() {
     });
     const set = res.headers.get('set-cookie');
     if (set) cookie = set.split(';')[0];
-    const data = res.status === 204 ? null : await res.json().catch(() => null);
-    return { status: res.status, data };
+    const raw = res.status === 204 ? null : Buffer.from(await res.arrayBuffer());
+    let data = null;
+    try {
+      data = raw && JSON.parse(raw.toString('utf8'));
+    } catch {}
+    return { status: res.status, data, raw, type: res.headers.get('content-type') };
   };
 }
 
@@ -140,6 +144,16 @@ test('poste : prix abonné, crédit sans combos, plafond, rapprochement', async 
   assert.strictEqual(closed.data.expected_amount, 492);
   assert.strictEqual(closed.data.variance, -2);
 
+  // End-of-shift PDF report: sales from the indexes, credits, expenses.
+  const report = await pompiste('GET', `/api/shifts/${shift.id}/report.pdf`);
+  assert.strictEqual(report.status, 200);
+  assert.match(report.type, /application\/pdf/);
+  assert.strictEqual(report.raw.subarray(0, 5).toString(), '%PDF-');
+  // Accents are written as WinAnsi octal escapes: é = \351.
+  const pdfText = report.raw.toString('latin1');
+  assert.ok(pdfText.includes('(Ventes calcul\\351es par les index)'));
+  assert.ok(pdfText.includes('(Cr\\351dits accord\\351s)'));
+
   const dash = (await gerant('GET', '/api/dashboard')).data;
   assert.strictEqual(dash.todayTotal.amount, 600, 'ventes par produit selon les index');
   assert.ok(dash.alerts.some((a) => a.text.includes('écart de caisse')));
@@ -147,6 +161,7 @@ test('poste : prix abonné, crédit sans combos, plafond, rapprochement', async 
 
   ctx.shift = (await pompiste('POST', '/api/shifts', { pumpIds: [ctx.dieselPump.id] })).data;
   assert.strictEqual(ctx.shift.readings[0].start_meter, 500);
+  assert.strictEqual((await pompiste('GET', `/api/shifts/${ctx.shift.id}/report.pdf`)).status, 409, 'pas de rapport avant la clôture');
 });
 
 test('les combos d’une vente à crédit arrivent quand elle est entièrement payée', async () => {

@@ -37,7 +37,7 @@ colors:
   day-field-edge: "#8a8a90"
   day-slab-hover: "#26262a"
   day-gasoil-green: "#1fb862"
-  day-essence-red: "#e0262f"
+  day-essence-red: "#e4303a"
   day-brand-yellow: "#e0a800"
   day-focus: "#a87300"
   day-series-blue: "#2f6fd6"

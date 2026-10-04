@@ -532,7 +532,7 @@
       "day-essence-red": {
         "role": "secondary",
         "displayName": "Day Essence Red",
-        "canonical": "#e0262f",
+        "canonical": "#e4303a",
         "tonalRamp": [
           "#210000",
           "#500005",

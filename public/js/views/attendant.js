@@ -1,6 +1,6 @@
 import { flags } from '../ui.js';
 import { api } from '../api.js';
-import { priceTotem, shiftLine, h, fmt, pageHeader, card, cardHeader, table, shiftBadge, varianceCell, button, formDialog, confirmDialog, toast, field, productColor, badge, kpi, parseServerDate, setContent } from '../ui.js';
+import { priceTotem, shiftLine, h, fmt, pageHeader, card, cardHeader, table, shiftBadge, varianceCell, button, formDialog, confirmDialog, toast, field, productColor, badge, kpi, parseServerDate, setContent, reportLink } from '../ui.js';
 import { icon } from '../icons.js';
 import { shiftSummary } from './shifts.js';
 
@@ -577,6 +577,7 @@ function renderClosed(page, ctx, shift) {
         ),
       ),
       shiftSummary(shift, tol),
+      reportLink(shift.id, 'secondary large block'),
       button('Terminé', () => renderAttendant(page, ctx), { variant: 'large block' }),
     ),
   );

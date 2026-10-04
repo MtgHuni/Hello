@@ -146,7 +146,7 @@ export function varianceCell(value, tolerance) {
 }
 
 // ---------- Layout pieces ----------
-// Signature « Midnight Line » : le cycle d'un poste est une ligne de métro à quatre arrêts.
+// Ligne de poste : le cycle d'un poste en quatre arrêts, l'arrêt en cours éclairé en jaune.
 // L'arrêt courant brûle, les arrêts passés sont pleins, les suivants sont des cercles creux.
 const LINE_STOPS = ['Ouverture', 'Ventes', 'Clôture', 'Validation'];
 export function shiftLine(status) {
@@ -176,6 +176,11 @@ export function pageHeader(title, subtitle, ...actions) {
 
 export function button(label, onClick, { variant = '', iconName, type = 'button', ...rest } = {}) {
   return h('button', { class: `btn ${variant}`, type, onClick, ...rest }, iconName ? icon(iconName) : null, label);
+}
+
+// Download link to a closed shift's PDF report (cash, sales from the indexes, credits, expenses).
+export function reportLink(shiftId, variant = 'secondary') {
+  return h('a', { class: `btn ${variant}`, href: `/api/shifts/${shiftId}/report.pdf`, download: `rapport-poste-${shiftId}.pdf` }, icon('download'), 'Rapport PDF');
 }
 
 export function card(...children) {
@@ -415,7 +420,7 @@ export function field(f) {
     });
   }
   if (f.onInput) input.addEventListener('input', f.onInput);
-  // apple.com store field: the label sits inside the box and floats up once the field is used.
+  // Floating-label field: the label sits inside the box and floats up once the field is used.
   // Selects, text areas and dates always show a value, so their label stays up.
   const pinned = f.type === 'select' || f.type === 'textarea' || f.type === 'date';
   return h(
@@ -438,7 +443,7 @@ export function readForm(form, fields) {
   return data;
 }
 
-// Form in a sheet (apple.com modal): title and ✕ on top, the action as a full-width pill at the bottom.
+// Form in a sheet (right drawer on wide screens, bottom sheet on phones): title and ✕ on top, the action as a full-width slab at the bottom.
 // onSubmit may throw: the message is shown inline.
 export function formDialog({ title, intro, fields, submitLabel = 'Enregistrer', onSubmit, extra, grid = true }) {
   return new Promise((resolve) => {

@@ -1,6 +1,6 @@
 import { flags } from '../ui.js';
 import { api } from '../api.js';
-import { shiftLine, h, fmt, pageHeader, card, cardHeader, table, segmented, shiftBadge, varianceCell, kpi, formDialog, confirmDialog, toast, button, badge, setContent } from '../ui.js';
+import { shiftLine, h, fmt, pageHeader, card, cardHeader, table, segmented, shiftBadge, varianceCell, kpi, formDialog, confirmDialog, toast, button, badge, setContent, reportLink } from '../ui.js';
 import { icon } from '../icons.js';
 
 let filter = 'closed';
@@ -63,7 +63,7 @@ export async function renderShiftDetail(page, ctx) {
       `Poste n°${shift.id}`,
       `${shift.attendant_name} · ${fmt.dateTime(shift.opened_at)} → ${shift.closed_at ? fmt.dateTime(shift.closed_at) : 'en cours'}`,
       shiftBadge(shift.status),
-      shift.status !== 'open' ? button('Imprimer', () => window.print(), { variant: 'secondary', iconName: 'print' }) : null,
+      shift.status !== 'open' ? reportLink(shift.id) : null,
       isManager && shift.status === 'closed'
         ? button('Valider le poste', async () => {
             const ok = await formDialog({

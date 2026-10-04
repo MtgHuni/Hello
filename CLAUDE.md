@@ -45,6 +45,8 @@ Requires Node ≥ 22.13 (built-in `node:sqlite`, hence `--disable-warning=Experi
 - Shifts (`src/routes/shifts.js`):
   - opening snapshots meter indexes and prices into `shift_readings` (prices are frozen for the shift);
   - closing reconciles litres from the indexes against cash: `expected = sold + subscriber surcharge − credit − combos + payments collected − cash expenses`.
+  - not every sale is entered: the shift's sales come from the indexes, and entered sales only record credits, combos and subscriber prices;
+  - `GET /shifts/:id/report.pdf` (closed shifts) is the end-of-shift report: cash, sales from the indexes, credits, expenses, payments. It is built by `src/shiftReport.js` on `src/pdf.js`, a dependency-free PDF writer (Helvetica, WinAnsi).
 - Cancelling an operation (sale, payment, expense):
   - the attendant only asks: `POST /shifts/:id/:kind/:itemId/cancel`, which sets `cancel_requested_*`;
   - the manager decides: `DELETE` cancels it, `POST …/keep` keeps it;

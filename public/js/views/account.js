@@ -37,7 +37,7 @@ export async function renderAccount(page) {
   }
 
   function drawRequest(r) {
-    const startButton = button('Faire le plein', () => startFill(), { variant: 'large block', iconName: 'pump', 'data-lnav': 'Faire le plein' });
+    const startButton = button('Acheter du carburant', () => startFill(), { variant: 'large block', iconName: 'pump' });
     if (!r) return setContent(fillHost, startButton);
 
     if (r.status === 'pending') {
@@ -101,7 +101,7 @@ export async function renderAccount(page) {
         'p',
         { class: 'muted', style: 'font-size:15px' },
         balance >= threshold
-          ? `Vos combos valent ${fmt.money(value)} de carburant : choisissez « Mes combos » au moment de faire le plein.`
+          ? `Vos combos valent ${fmt.money(value)} de carburant : choisissez « Mes combos » au moment d’acheter du carburant.`
           : `Encore ${fmt.number(threshold - balance)} combos pour pouvoir les échanger contre du carburant.`,
         pending ? ` ${fmt.number(pending)} combos arriveront quand votre crédit sera payé.` : '',
       ),
@@ -124,7 +124,7 @@ export async function renderAccount(page) {
       estimate.lastChild.textContent = qty ? (byAmount ? `≈ ${fmt.liters(qty / price)}` : `≈ ${fmt.money(qty * price)}`) : '—';
     };
     const ok = await formDialog({
-      title: 'Faire le plein',
+      title: 'Acheter du carburant',
       submitLabel: 'Envoyer au pompiste',
       intro: 'Préparez votre achat pendant que vous attendez : le pompiste n’aura plus qu’à confirmer.',
       grid: false,
