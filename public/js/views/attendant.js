@@ -108,7 +108,7 @@ function renderOpenShift(page, ctx, shift) {
         s.source === 'customer' ? badge('Demande client') : null,
       ),
       amount: fmt.money(s.amount),
-      remove: { url: `/shifts/${shift.id}/sales/${s.id}`, label: 'Annuler cette vente', pending: !!s.cancel_requested_at },
+      remove: { url: `/shifts/${shift.id}/sales/${s.id}`, label: s.kind === 'credit' ? 'Annuler ce crédit' : 'Annuler cette vente', pending: !!s.cancel_requested_at },
     })),
     ...shift.payments.map((p) => ({
       at: p.created_at,
@@ -143,7 +143,7 @@ function renderOpenShift(page, ctx, shift) {
       h(
         'div',
         { class: 'quick-actions' },
-        quick('Vente client', 'plus', () => addSale(ctx, shift, reload), true),
+        quick('Crédit', 'plus', () => addCredit(ctx, shift, reload), true),
         quick('Règlement', 'cash', () => addPayment(shift, reload)),
         quick('Dépense', 'wallet', () => addExpense(ctx, shift, reload)),
       ),
@@ -155,7 +155,7 @@ function renderOpenShift(page, ctx, shift) {
         kpi('Dépenses', fmt.money(shift.expenses_amount)),
       ),
       card(
-        cardHeader('Opérations du poste', 'Les ventes payées normalement n’ont pas besoin d’être saisies : les index s’en chargent.'),
+        cardHeader('Opérations du poste', 'Seuls les crédits sont saisis : les ventes sont calculées par les index.'),
         entries.length
           ? entries.map((x) =>
               h(
@@ -305,10 +305,10 @@ function requestQueue(shift, reload) {
   return host;
 }
 
-// Sale entered by the attendant, built for speed: one search field for the customer
-// (name, plate or phone; an unknown name creates the customer), one-tap product,
-// payment and unit, amount in dollars or litres.
-async function addSale(ctx, shift, reload) {
+// Credit entered by the attendant (paid sales are not entered: the indexes count them),
+// built for speed: one search field for the customer (name, plate or phone; an unknown
+// name creates the customer), one-tap product and unit, amount in dollars or litres.
+async function addCredit(ctx, shift, reload) {
   const customers = await api.get('/customers');
   const label = (c) => [c.name, c.plate, c.phone].filter(Boolean).join(' · ');
   const byLabel = new Map(customers.map((c) => [label(c).toLowerCase(), c]));
@@ -347,28 +347,21 @@ async function addSale(ctx, shift, reload) {
     const byAmount = form.elements.unit.value === 'amount';
     const liters = byAmount ? qty / price : qty;
     const amount = byAmount ? qty : qty * price;
-    const payment = form.elements.payment.value;
-    const combos =
-      payment === 'combo'
-        ? `−${Math.ceil(amount / comboValue - 1e-9)} combos`
-        : payment === 'credit'
-          ? `+${Math.floor(liters * combosPerLiter)} combos au paiement`
-          : `+${Math.floor(liters * combosPerLiter)} combos`;
+    const combos = `+${Math.floor(liters * combosPerLiter)} combos au paiement`;
     summary.lastChild.textContent = qty ? `${fmt.liters(liters)} · ${fmt.money(amount)}${flags.combos ? ` · ${combos}` : ''}` : '—';
   };
 
   const fields = [
     { name: 'customer', label: 'Client (nom, plaque ou téléphone)', required: true, list: 'customer-list', placeholder: 'Tapez quelques lettres…', onInput: update, enterkeyhint: 'next' },
     { name: 'productId', label: 'Produit', type: 'segment', options: products.map((r) => [r.product_id, r.product_name]), onInput: update },
-    { name: 'payment', label: 'Paiement', type: 'segment', options: [['paid', 'Payé'], ['credit', 'Crédit'], ...(flags.combos ? [['combo', 'Combos']] : [])], onInput: update },
     { name: 'unit', label: 'Unité', type: 'segment', options: [['amount', '$'], ['liters', 'L']], onInput: update },
     { name: 'qty', label: 'Quantité', type: 'number', step: '0.01', min: '0.01', required: true, onInput: update, inputmode: 'decimal' },
     { name: 'plate', label: 'Plaque', placeholder: 'Facultatif' },
   ];
 
   const ok = await formDialog({
-    title: 'Vente client',
-    submitLabel: 'Enregistrer la vente',
+    title: 'Crédit',
+    submitLabel: 'Enregistrer le crédit',
     grid: false,
     fields,
     extra: () => h('div', {}, h('datalist', { id: 'customer-list' }, customers.map((c) => h('option', { value: label(c) }))), who, summary),
@@ -383,7 +376,7 @@ async function addSale(ctx, shift, reload) {
       const body = {
         customerId: customer.id,
         productId: Number(d.productId),
-        payment: d.payment,
+        payment: 'credit',
         [d.unit === 'amount' ? 'amount' : 'liters']: d.qty,
         plate: d.plate,
       };
@@ -392,19 +385,13 @@ async function addSale(ctx, shift, reload) {
       } catch (err) {
         if (err.code !== 'over_limit') throw err;
         const grant = await confirmDialog('Accorder le crédit ?', `${err.message} Si vous accordez ce crédit, il sera signalé au gérant avec votre nom.`, { confirmLabel: 'Accorder' });
-        if (!grant) throw new Error('Vente non enregistrée : crédit refusé.');
+        if (!grant) throw new Error('Crédit non enregistré : refusé.');
         return api.post(`/shifts/${shift.id}/sales`, { ...body, grantCredit: true });
       }
     },
   });
   if (ok) {
-    toast(
-      ok.over_limit
-        ? 'Crédit accordé et signalé au gérant'
-        : ok.kind === 'combo'
-          ? `Échange enregistré · −${ok.combos_used} combos`
-          : `Vente enregistrée${flags.combos && ok.points ? ` · +${ok.points} combos` : ''}`,
-    );
+    toast(ok.over_limit ? 'Crédit accordé et signalé au gérant' : `Crédit enregistré · ${fmt.liters(ok.liters)} · ${fmt.money(ok.amount)}`);
     reload();
   }
 }
