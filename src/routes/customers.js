@@ -4,21 +4,15 @@ const { requireRole, hashPassword, checkPasswordStrength } = require('../auth');
 const { audit } = require('../audit');
 const { statementPdf } = require('../statementReport');
 const { getSettings, syncCreditLimits } = require('../db');
-const { refreshCustomer, subscriberDues, creditAllocation } = require('../loyalty');
+const { balanceSql, refreshCustomer, subscriberDues, creditAllocation } = require('../loyalty');
 
 const manager = requireRole('manager');
 const frNum = (n, digits = 2) => n.toLocaleString('fr-FR', { maximumFractionDigits: digits });
 
-// Amount owed by the customer: credit sales minus payments received.
+// Amount owed by the customer: credit sales and debts from before the app, minus payments.
 function customerBalance(db, customerId) {
-  const row = db
-    .prepare(
-      `SELECT
-         (SELECT COALESCE(SUM(amount), 0) FROM sales WHERE customer_id = ? AND kind = 'credit') -
-         (SELECT COALESCE(SUM(amount), 0) FROM payments WHERE customer_id = ?) AS balance`,
-    )
-    .get(customerId, customerId);
-  return round(row.balance);
+  const row = db.prepare(`SELECT ${balanceSql('c.id')} AS balance FROM customers c WHERE c.id = ?`).get(customerId);
+  return round(row?.balance || 0);
 }
 
 function customerRoutes(db) {
@@ -26,8 +20,8 @@ function customerRoutes(db) {
 
   const listSql = `
     SELECT c.*,
-      ROUND((SELECT COALESCE(SUM(amount), 0) FROM sales WHERE customer_id = c.id AND kind = 'credit') -
-            (SELECT COALESCE(SUM(amount), 0) FROM payments WHERE customer_id = c.id), 2) AS balance,
+      ROUND(${balanceSql('c.id')}, 2) AS balance,
+      (SELECT COALESCE(SUM(amount), 0) FROM old_debts WHERE customer_id = c.id) AS old_debt,
       (SELECT MAX(created_at) FROM sales WHERE customer_id = c.id) AS last_purchase_at,
       (SELECT login FROM users WHERE customer_id = c.id) AS login,
       (SELECT name FROM users WHERE id = c.created_by) AS created_by_name,
@@ -54,16 +48,20 @@ function customerRoutes(db) {
          FROM (SELECT * FROM payments WHERE customer_id = ? AND ${inRange}) p ORDER BY p.created_at, p.id`,
       )
       .all(id, ...range);
+    const oldDebts = db
+      .prepare(`SELECT id, created_at, amount, note, shift_id FROM old_debts WHERE customer_id = ? AND ${inRange} ORDER BY created_at, id`)
+      .all(id, ...range);
 
     let opening = 0;
     if (from) {
       opening = db
         .prepare(
           `SELECT
-             (SELECT COALESCE(SUM(amount), 0) FROM sales WHERE customer_id = ? AND kind = 'credit' AND date(created_at, 'localtime') < ?) -
+             (SELECT COALESCE(SUM(amount), 0) FROM sales WHERE customer_id = ? AND kind = 'credit' AND date(created_at, 'localtime') < ?) +
+             (SELECT COALESCE(SUM(amount), 0) FROM old_debts WHERE customer_id = ? AND date(created_at, 'localtime') < ?) -
              (SELECT COALESCE(SUM(amount), 0) FROM payments WHERE customer_id = ? AND date(created_at, 'localtime') < ?) AS v`,
         )
-        .get(id, from, id, from).v;
+        .get(id, from, id, from, id, from).v;
     }
 
     const movements = [
@@ -82,6 +80,15 @@ function customerRoutes(db) {
         debit: s.kind === 'credit' ? s.amount : 0,
         amount: s.amount,
         credit: 0,
+      })),
+      ...oldDebts.map((d) => ({
+        date: d.created_at,
+        type: 'old_debt',
+        id: d.id,
+        label: `Ancienne dette, d’avant l’application${d.note ? ` — ${d.note}` : ''}${d.shift_id ? ` (déclarée à la pompe, poste n°${d.shift_id})` : ''}`,
+        debit: d.amount,
+        credit: 0,
+        amount: d.amount,
       })),
       ...payments.map((p) => ({
         date: p.created_at,
@@ -221,6 +228,10 @@ function customerRoutes(db) {
       let oldest = 0;
       for (const s of creditAllocation(db, c.id)) {
         if (s.unpaid <= 0.001) continue;
+        if (s.old) {
+          due.old += s.unpaid;
+          continue;
+        }
         const age = ageOf(s.day);
         oldest = Math.max(oldest, age);
         due[age <= 7 ? 'recent' : age <= 30 ? 'month' : 'old'] += s.unpaid;
@@ -263,6 +274,28 @@ function customerRoutes(db) {
       refreshCustomer(db, customer.id); // paid-off credit sales now earn their combos
     });
     res.status(201).json({ balance: customerBalance(db, customer.id) });
+  });
+
+  router.post('/customers/:id/old-debts', manager, (req, res) => {
+    const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(req.params.id);
+    if (!customer) fail(404, 'Client introuvable.');
+    const amount = round(num(req.body?.amount, 'Le montant', { min: 0.01, max: 1e8 }));
+    const note = str(req.body?.note, 'La remarque', { required: false, max: 200 });
+    transaction(db, () => {
+      const id = db.prepare('INSERT INTO old_debts (customer_id, amount, note, user_id) VALUES (?, ?, ?, ?)').run(customer.id, amount, note, req.user.id).lastInsertRowid;
+      audit(db, req, { category: 'clients', action: 'old_debt_added', entity: 'old_debts', id: Number(id), summary: `Ancienne dette de ${customer.name} : ${frNum(amount)} $${note ? ` (${note})` : ''}` });
+    });
+    res.status(201).json({ balance: customerBalance(db, customer.id) });
+  });
+
+  router.delete('/customers/:id/old-debts/:debtId', manager, (req, res) => {
+    const debt = db.prepare('SELECT d.*, c.name FROM old_debts d JOIN customers c ON c.id = d.customer_id WHERE d.id = ? AND d.customer_id = ?').get(req.params.debtId, req.params.id);
+    if (!debt) fail(404, 'Ancienne dette introuvable.');
+    transaction(db, () => {
+      db.prepare('DELETE FROM old_debts WHERE id = ?').run(debt.id);
+      audit(db, req, { category: 'clients', action: 'old_debt_removed', entity: 'old_debts', id: debt.id, summary: `Ancienne dette de ${debt.name} retirée : ${frNum(debt.amount)} $`, before: debt });
+    });
+    res.json({ balance: customerBalance(db, debt.customer_id) });
   });
 
   // Creates (or resets) the customer's own login to the client space.

@@ -1,6 +1,6 @@
 import { flags } from '../ui.js';
 import { api } from '../api.js';
-import { h, fmt, pageHeader, card, cardHeader, table, segmented, kpi, badge, button, formDialog, toast, field, todayISO, isoDate, setContent, pdfLinks, whatsappNumber } from '../ui.js';
+import { h, fmt, pageHeader, card, cardHeader, table, segmented, kpi, badge, button, formDialog, confirmDialog, toast, field, todayISO, isoDate, setContent, pdfLinks, whatsappNumber } from '../ui.js';
 import { icon } from '../icons.js';
 
 let typeFilter = 'all';
@@ -189,7 +189,8 @@ export async function renderCustomerDetail(page, ctx) {
       pageHeader(
         c.name,
         [TYPE_LABEL[c.type], c.phone, c.email, c.plate].filter(Boolean).join(' · '),
-        c.type === 'account' || acc.balance > 0 ? button('Règlement', () => paymentDialog(c, reload), { iconName: 'card' }) : null,
+        button('Règlement', () => paymentDialog(c, reload), { iconName: 'card' }),
+        button('Ancienne dette', () => oldDebtDialog(c, reload), { variant: 'secondary', iconName: 'plus' }),
         pdfLinks(`/api/customers/${c.id}/statement.pdf?month=${period.from.slice(0, 7)}`, `releve-${period.from.slice(0, 7)}.pdf`, { label: 'Relevé PDF' }),
         button('Modifier', () => customerDialog(c, ctx, reload), { variant: 'secondary', iconName: 'edit' }),
         button(c.login ? 'Accès client' : 'Créer un accès', () => loginDialog(c, reload), { variant: 'secondary', iconName: 'user' }),
@@ -207,10 +208,15 @@ export async function renderCustomerDetail(page, ctx) {
             button('Compléter la fiche', () => customerDialog(c, ctx, reload), { iconName: 'edit' }),
           )
         : null,
-      statement(acc, period, (p) => {
-        Object.assign(period, p);
-        load();
-      }),
+      statement(
+        acc,
+        period,
+        (p) => {
+          Object.assign(period, p);
+          load();
+        },
+        { onOldDebt: (m) => removeOldDebt(c, m, reload) },
+      ),
     );
   };
   await load();
@@ -222,7 +228,7 @@ export function defaultPeriod() {
 }
 
 // Account statement shared with the client space: KPIs, period picker, movements, print.
-export function statement(acc, period, onPeriod) {
+export function statement(acc, period, onPeriod, { onOldDebt } = {}) {
   const c = acc.customer;
   const from = field({ name: 'from', label: 'Du', type: 'date', value: period.from });
   const to = field({ name: 'to', label: 'Au', type: 'date', value: period.to });
@@ -255,7 +261,11 @@ export function statement(acc, period, onPeriod) {
     h(
       'div',
       { class: 'grid grid-4' },
-      kpi('Solde dû', h('span', { class: c.balance > c.credit_limit ? 'variance-neg' : '' }, fmt.money(c.balance)), c.balance > c.credit_limit ? 'Plafond dépassé' : `Plafond ${fmt.money(c.credit_limit)}`),
+      kpi(
+        'Solde dû',
+        h('span', { class: c.balance > c.credit_limit ? 'variance-neg' : '' }, fmt.money(c.balance)),
+        [c.balance > c.credit_limit ? 'Plafond dépassé' : `Plafond ${fmt.money(c.credit_limit)}`, c.old_debt ? `dont ancienne dette ${fmt.money(c.old_debt)} au départ` : null].filter(Boolean).join(' · '),
+      ),
       kpi('Crédit disponible', fmt.money(Math.max(0, c.credit_limit - c.balance)), TYPE_LABEL[c.type]),
       !flags.combos ? null : kpi(
         'Combos',
@@ -287,7 +297,7 @@ export function statement(acc, period, onPeriod) {
           ...(flags.combos ? [{ label: 'Combos', align: 'right', render: (m) => (m.points ? `+${m.points}` : m.combosUsed ? `−${m.combosUsed}` : '') }] : []),
         ],
         acc.movements,
-        { empty: 'Aucune opération sur cette période.' },
+        { empty: 'Aucune opération sur cette période.', onRowClick: onOldDebt ? (m) => m.type === 'old_debt' && onOldDebt(m) : undefined },
       ),
       acc.movements.length
         ? h('div', { class: 'summary-line total', style: 'padding:14px 22px' }, h('span', {}, 'Solde en fin de période'), h('span', {}, fmt.money(acc.closing)))
@@ -310,6 +320,36 @@ async function paymentDialog(c, reload) {
   if (ok) {
     toast(`Règlement enregistré. Nouveau solde : ${fmt.money(ok.balance)}`);
     reload();
+  }
+}
+
+// A debt from before the app (the notebook): added to the balance, settled first by payments.
+async function oldDebtDialog(c, reload) {
+  const ok = await formDialog({
+    title: `Ancienne dette — ${c.name}`,
+    intro: 'Ce que le client devait avant l’application, d’après le cahier. Elle s’ajoute à son solde et les règlements la soldent en premier.',
+    grid: false,
+    fields: [
+      { name: 'amount', label: 'Montant ($)', type: 'number', step: '0.01', min: '0.01', required: true },
+      { name: 'note', label: 'Remarque', placeholder: 'Facultatif (ex. : cahier 2025, page 12)' },
+    ],
+    submitLabel: 'Ajouter',
+    onSubmit: (d) => api.post(`/customers/${c.id}/old-debts`, d),
+  });
+  if (ok) {
+    toast(`Ancienne dette ajoutée. Nouveau solde : ${fmt.money(ok.balance)}`);
+    reload();
+  }
+}
+
+async function removeOldDebt(c, m, reload) {
+  if (!(await confirmDialog('Retirer cette ancienne dette ?', `${fmt.money(m.amount)} · ${m.label}. Le retrait est gardé au journal.`, { confirmLabel: 'Retirer', danger: true }))) return;
+  try {
+    const r = await api.del(`/customers/${c.id}/old-debts/${m.id}`);
+    toast(`Ancienne dette retirée. Nouveau solde : ${fmt.money(r.balance)}`);
+    reload();
+  } catch (err) {
+    toast(err.message, 'error');
   }
 }
 

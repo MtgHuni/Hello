@@ -200,6 +200,19 @@ CREATE TABLE IF NOT EXISTS expenses (
   created_at   TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Debt a customer had before the app (the station's notebook): counted in the balance,
+-- settled first by payments. Entered by the manager, or declared at the pump with a payment.
+CREATE TABLE IF NOT EXISTS old_debts (
+  id          INTEGER PRIMARY KEY,
+  customer_id INTEGER NOT NULL REFERENCES customers(id),
+  amount      REAL NOT NULL CHECK (amount > 0),
+  note        TEXT,
+  shift_id    INTEGER REFERENCES shifts(id),
+  user_id     INTEGER REFERENCES users(id),
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_old_debts_customer ON old_debts(customer_id);
+
 -- Journal: who changed what (see src/audit.js).
 CREATE TABLE IF NOT EXISTS audit_log (
   id         INTEGER PRIMARY KEY,
@@ -267,7 +280,7 @@ const MIGRATIONS = [
 ];
 
 // Bumped with every schema change; recorded in PRAGMA user_version.
-const SCHEMA_VERSION = 7;
+const SCHEMA_VERSION = 8;
 
 function missingColumns(db) {
   return MIGRATIONS.filter(([table, column]) => {

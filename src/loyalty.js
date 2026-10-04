@@ -1,16 +1,26 @@
 const { round } = require('./util');
 const { getSettings } = require('./db');
 
-// Payments settle a customer's credit sales from the oldest to the newest.
-// Returns each credit sale with what is still unpaid on it.
+// What a customer owes (SQL, for a customer id column): credit sales and debts from
+// before the app, minus payments.
+const balanceSql = (id) => `(SELECT COALESCE(SUM(amount), 0) FROM sales WHERE customer_id = ${id} AND kind = 'credit') +
+  (SELECT COALESCE(SUM(amount), 0) FROM old_debts WHERE customer_id = ${id}) -
+  (SELECT COALESCE(SUM(amount), 0) FROM payments WHERE customer_id = ${id})`;
+
+// Payments settle a customer's debts from the oldest to the newest: debts from before the
+// app first (old: true, no day), then credit sales. Returns each with what is still unpaid.
 function creditAllocation(db, customerId) {
   let remaining = db.prepare('SELECT COALESCE(SUM(amount), 0) AS v FROM payments WHERE customer_id = ?').get(customerId).v;
-  const credits = db
+  const oldDebts = db
+    .prepare('SELECT id, amount, 0 AS points, 0 AS points_due, NULL AS day, 1 AS old FROM old_debts WHERE customer_id = ? ORDER BY created_at, id')
+    .all(customerId);
+  const sales = db
     .prepare(
-      `SELECT id, amount, points, points_due, date(created_at, 'localtime') AS day
+      `SELECT id, amount, points, points_due, date(created_at, 'localtime') AS day, 0 AS old
        FROM sales WHERE customer_id = ? AND kind = 'credit' ORDER BY created_at, id`,
     )
     .all(customerId);
+  const credits = [...oldDebts, ...sales];
   return credits.map((c) => {
     const paid = Math.min(remaining, c.amount);
     remaining = round(remaining - paid);
@@ -24,6 +34,7 @@ function refreshCustomer(db, customerId) {
   const update = db.prepare('UPDATE sales SET points = ? WHERE id = ?');
   // Programme switched off: nothing new is earned (combos already earned are kept).
   for (const c of getSettings(db).combosEnabled ? creditAllocation(db, customerId) : []) {
+    if (c.old) continue; // a debt from before the app earns nothing
     const points = c.unpaid <= 0.001 ? c.points_due : 0;
     if (points !== c.points) update.run(points, c.id);
   }
@@ -48,6 +59,8 @@ function subscriberDues(db, customerId, graceDays) {
   let overdue = 0;
   let currentMonth = 0;
   for (const c of creditAllocation(db, customerId)) {
+    // Debts from before the app do not suspend credit: the manager follows them in Créances.
+    if (c.old) continue;
     if (c.day < today.month_start) overdue += c.unpaid;
     else currentMonth += c.unpaid;
   }
@@ -61,4 +74,4 @@ function subscriberDues(db, customerId, graceDays) {
   };
 }
 
-module.exports = { creditAllocation, refreshCustomer, subscriberDues };
+module.exports = { balanceSql, creditAllocation, refreshCustomer, subscriberDues };

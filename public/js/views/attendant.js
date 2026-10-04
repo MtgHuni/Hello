@@ -513,23 +513,37 @@ async function addPayment(shift, reload) {
   const customers = await customersList();
   const clientRef = newRef();
   const owes = h('p', { class: 'hint-line' });
+  // A debt from before the app: asked when the payment is more than what the app knows.
+  const oldBox = h(
+    'div',
+    { hidden: true },
+    field({ name: 'oldDebt', label: 'Ancienne dette, d’avant l’application ($)', type: 'number', step: '0.01', min: '0.01', placeholder: 'Vide = le montant payé', hint: 'D’après le cahier : ce que le client devait avant ce règlement.' }),
+  );
+  const known = (c) => (c?.id ? Math.max(0, c.balance) : 0);
+  const refresh = (form) => {
+    const c = search.picked();
+    const amount = Number(form.elements.amount.value) || 0;
+    oldBox.hidden = !c || amount <= known(c) + 0.001;
+    owes.textContent = !c ? '' : !c.id ? 'Nouveau client : il sera créé avec ce règlement.' : c.balance > 0 ? `Doit ${fmt.money(c.balance)} dans l’application` : 'Aucune dette dans l’application.';
+  };
   const search = customerSearch(customers, {
     allowNew: true,
     onPick: (form, c) => {
-      owes.textContent = !c ? '' : !c.id ? 'Nouveau client : il sera créé avec ce règlement.' : c.balance > 0 ? `Doit ${fmt.money(c.balance)}` : 'Ne doit rien : le montant sera une avance.';
-      if (c && !form.elements.amount.value && c.balance > 0) form.elements.amount.value = c.balance.toFixed(2);
+      if (c?.id && !form.elements.amount.value && c.balance > 0) form.elements.amount.value = c.balance.toFixed(2);
+      refresh(form);
     },
   });
   const ok = await formDialog({
     title: 'Règlement client',
     submitLabel: 'Encaisser',
-    intro: 'Un client vient payer : l’argent est ajouté à votre caisse. S’il n’existe pas encore, touchez « Nouveau client ».',
+    intro: 'Un client vient payer, même une dette d’avant l’application : l’argent est ajouté à votre caisse. S’il n’existe pas encore, touchez « Nouveau client ».',
     grid: false,
     autofocus: true,
     fields: [
       { name: 'customer', label: 'Client (nom, plaque ou téléphone)', required: true, placeholder: 'Tapez quelques lettres…', onInput: search.onInput },
       { name: 'customerChips', type: 'node', node: h('div', {}, search.chips, owes) },
-      { name: 'amount', label: 'Montant reçu ($)', type: 'number', step: '0.01', min: '0.01', required: true, hint: 'Si le client doit de l’argent, son solde est proposé : changez-le s’il paie une partie.' },
+      { name: 'amount', label: 'Montant reçu ($)', type: 'number', step: '0.01', min: '0.01', required: true, hint: 'Si le client doit de l’argent, son solde est proposé : changez-le s’il paie une partie.', onInput: (e) => refresh(e.target.form) },
+      { name: 'oldDebtBox', type: 'node', node: oldBox },
       { name: 'method', label: 'Mode', type: 'segment', options: [['espèces', 'Espèces'], ['mobile money', 'Mobile money']] },
       { name: 'reference', label: 'Référence', placeholder: 'Facultatif (n° de transaction…)' },
     ],
@@ -543,7 +557,10 @@ async function addPayment(shift, reload) {
         forgetCustomers();
         form.elements.customer.value = customer.name;
       }
-      return api.post(`/shifts/${shift.id}/payments`, { amount: d.amount, method: d.method, reference: d.reference, customerId: customer.id, clientRef });
+      // What the app does not know is a debt from before it (never an advance by mistake).
+      const excess = Math.round((Number(d.amount) - known(choice)) * 100) / 100;
+      const oldDebt = excess > 0 ? Number(form.elements.oldDebt.value) || excess : 0;
+      return api.post(`/shifts/${shift.id}/payments`, { amount: d.amount, method: d.method, reference: d.reference, customerId: customer.id, oldDebt, clientRef });
     },
   });
   if (ok) {

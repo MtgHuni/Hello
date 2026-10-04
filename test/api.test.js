@@ -324,12 +324,22 @@ test('pompiste : client rapide (particulier), crédit accordé, règlement et d�
   const exp = await pompiste('POST', `/api/shifts/${shift.id}/expenses`, { category: 'Fournitures', amount: 15, description: 'Eau et savon' });
   assert.strictEqual(exp.status, 201);
 
-  // A customer not known yet comes to pay: created on the spot, the payment is an advance. No card.
+  // A customer from before the app pays part of the notebook debt: created on the spot, the old debt declared. No card.
   const payer = await pompiste('POST', '/api/customers/quick', { name: 'Kambale Transport' });
   assert.strictEqual((await pompiste('POST', `/api/shifts/${shift.id}/payments`, { customerId: payer.data.id, amount: 20, method: 'carte' })).status, 400, 'pas de carte');
-  const advance = await pompiste('POST', `/api/shifts/${shift.id}/payments`, { customerId: payer.data.id, amount: 20, method: 'mobile money' });
-  assert.strictEqual(advance.status, 201);
-  assert.strictEqual(advance.data.balance, -20);
+  const paid = await pompiste('POST', `/api/shifts/${shift.id}/payments`, { customerId: payer.data.id, amount: 20, method: 'mobile money', oldDebt: 50 });
+  assert.strictEqual(paid.status, 201);
+  assert.strictEqual(paid.data.balance, 30, 'reste 30 $ de l’ancienne dette');
+  const kambale = await customer(payer.data.id);
+  assert.ok(kambale.movements.some((m) => m.type === 'old_debt' && m.debit === 50));
+  assert.strictEqual(kambale.customer.old_debt, 50);
+  assert.strictEqual((await gerant('GET', '/api/customers/receivables')).data.rows.find((r) => r.id === payer.data.id).old, 30, 'ancienne dette : plus de 30 jours');
+  // The manager adds another notebook debt, then removes it.
+  assert.strictEqual((await pompiste('POST', `/api/customers/${payer.data.id}/old-debts`, { amount: 10 })).status, 403);
+  assert.strictEqual((await gerant('POST', `/api/customers/${payer.data.id}/old-debts`, { amount: 15, note: 'cahier 2025' })).data.balance, 45);
+  const added = (await customer(payer.data.id)).movements.find((m) => m.type === 'old_debt' && m.debit === 15);
+  assert.strictEqual((await gerant('DELETE', `/api/customers/${payer.data.id}/old-debts/${added.id}`)).data.balance, 30);
+  assert.ok((await gerant('GET', '/api/audit?category=clients')).data.some((a) => a.action === 'old_debt_removed'));
 
   const dash = (await gerant('GET', '/api/dashboard')).data;
   assert.ok(dash.alerts.some((a) => a.text.includes('hors plafond')));

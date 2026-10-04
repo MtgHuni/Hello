@@ -233,7 +233,14 @@ module.exports = function shiftRoutes(db) {
     const amount = round(num(req.body?.amount, 'Le montant', { min: 0.01, max: 1e8 }));
     const method = oneOf(req.body?.method ?? 'espèces', 'Le mode de règlement', ['espèces', 'mobile money']);
     const reference = str(req.body?.reference, 'La référence', { required: false, max: 100 });
+    // Debt from before the app (the notebook), declared with the payment; the manager checks the record.
+    const oldDebt = req.body?.oldDebt ? round(num(req.body.oldDebt, 'L’ancienne dette', { min: 0.01, max: 1e8 })) : 0;
     const id = transaction(db, () => {
+      if (oldDebt) {
+        db.prepare('INSERT INTO old_debts (customer_id, amount, shift_id, user_id) VALUES (?, ?, ?, ?)').run(customer.id, oldDebt, shift.id, req.user.id);
+        db.prepare('UPDATE customers SET needs_review = 1 WHERE id = ?').run(customer.id);
+        audit(db, req, { category: 'clients', action: 'old_debt_declared', entity: 'customers', id: customer.id, summary: `Ancienne dette de ${customer.name} déclarée à la pompe : ${money(oldDebt)} (poste n°${shift.id})` });
+      }
       const r = db
         .prepare('INSERT INTO payments (customer_id, amount, method, reference, user_id, shift_id, client_ref) VALUES (?, ?, ?, ?, ?, ?, ?)')
         .run(customer.id, amount, method, reference, req.user.id, shift.id, ref);

@@ -2,7 +2,7 @@ const express = require('express');
 const { getSettings } = require('../db');
 const { round, dateParam, fail, csvCell } = require('../util');
 const { requireRole } = require('../auth');
-const { subscriberDues, creditAllocation } = require('../loyalty');
+const { balanceSql, subscriberDues, creditAllocation } = require('../loyalty');
 const { periodReportPdf } = require('../periodReport');
 
 const manager = requireRole('manager');
@@ -77,8 +77,7 @@ module.exports = function reportRoutes(db) {
     const customers = db
       .prepare(
         `SELECT c.id, c.name, c.credit_limit,
-           ROUND((SELECT COALESCE(SUM(amount), 0) FROM sales WHERE customer_id = c.id AND kind = 'credit') -
-                 (SELECT COALESCE(SUM(amount), 0) FROM payments WHERE customer_id = c.id), 2) AS balance
+           ROUND(${balanceSql('c.id')}, 2) AS balance
          FROM customers c WHERE c.active = 1`,
       )
       .all();
@@ -188,7 +187,7 @@ module.exports = function reportRoutes(db) {
         customers
           .filter((c) => c.balance > 0)
           .flatMap((c) => creditAllocation(db, c.id))
-          .filter((s) => s.unpaid > 0 && s.day < db.prepare("SELECT date('now', 'localtime', '-30 days') AS d").get().d)
+          .filter((s) => s.unpaid > 0 && (s.old || s.day < db.prepare("SELECT date('now', 'localtime', '-30 days') AS d").get().d))
           .reduce((t, s) => t + s.unpaid, 0),
       ),
       todayExpenses,
