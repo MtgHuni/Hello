@@ -399,7 +399,9 @@ function backupBeforeMigration(db, file) {
   const hasData = db.prepare('SELECT EXISTS (SELECT 1 FROM users) OR EXISTS (SELECT 1 FROM sales) AS v').get().v;
   if (!outdated || !hasData) return null;
   const stamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
-  const copy = `${file}.avant-migration-${stamp}`;
+  // Two updates in the same second (a restart loop) must not collide: VACUUM INTO never overwrites.
+  let copy = `${file}.avant-migration-${stamp}`;
+  for (let n = 2; fs.existsSync(copy); n++) copy = `${file}.avant-migration-${stamp}-${n}`;
   db.exec(`VACUUM INTO '${copy.replace(/'/g, "''")}'`);
   console.log(`Base sauvegardée avant mise à jour : ${copy}`);
   return copy;
