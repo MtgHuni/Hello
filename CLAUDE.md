@@ -59,6 +59,7 @@ Requires Node ≥ 22.13 (built-in `node:sqlite`, hence `--disable-warning=Experi
   - the manager decides: `DELETE` cancels it, `POST …/keep` keeps it;
   - `reconcile()` recomputes a closed shift after a cancellation;
   - validating a shift is refused while a cancellation is pending.
+- The manager's remark on a closed shift (`POST /shifts/:id/remark`, or at validation) is read by the attendant: an unread remark shows on their home screen (`GET /shifts/remarks/unread`) and is marked read when they open the shift (`comment_seen_at`).
 - Customer purchase requests (`src/routes/requests.js`): pending for 30 min. Attendants poll `/requests/pending` (every 4 s on the client); a request becomes a sale only when confirmed.
 
 **Frontend** (`public/`, no framework, native ES modules):

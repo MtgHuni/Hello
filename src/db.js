@@ -260,10 +260,14 @@ const MIGRATIONS = [
   ['sales', 'client_ref', 'TEXT'],
   ['payments', 'client_ref', 'TEXT'],
   ['expenses', 'client_ref', 'TEXT'],
+  // Manager's remark on a closed shift, read by the attendant in their history.
+  ['shifts', 'manager_comment_at', 'TEXT'],
+  ['shifts', 'manager_comment_by', 'INTEGER REFERENCES users(id)'],
+  ['shifts', 'comment_seen_at', 'TEXT'],
 ];
 
 // Bumped with every schema change; recorded in PRAGMA user_version.
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 7;
 
 function missingColumns(db) {
   return MIGRATIONS.filter(([table, column]) => {

@@ -124,7 +124,8 @@ function shiftReportPdf(shift, { stationName, combosEnabled, cashTolerance = 0, 
   // ---- Remarks ----
   const remarks = [
     shift.notes ? ['Remarque du pompiste', shift.notes] : null,
-    shift.status === 'validated' ? [`Validé par ${shift.validated_by_name} le ${dateTime(shift.validated_at)}`, shift.manager_comment || ''] : null,
+    shift.manager_comment ? [`Remarque du gérant${shift.manager_comment_by_name ? ` (${shift.manager_comment_by_name})` : ''}`, shift.manager_comment] : null,
+    shift.status === 'validated' ? [`Validé par ${shift.validated_by_name} le ${dateTime(shift.validated_at)}`, ''] : null,
   ].filter(Boolean);
   if (remarks.length) {
     report.section('Remarques');

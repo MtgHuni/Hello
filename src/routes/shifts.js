@@ -20,8 +20,9 @@ module.exports = function shiftRoutes(db) {
   function shiftDetail(id) {
     const shift = db
       .prepare(
-        `SELECT s.*, u.name AS attendant_name, v.name AS validated_by_name
+        `SELECT s.*, u.name AS attendant_name, v.name AS validated_by_name, m.name AS manager_comment_by_name
          FROM shifts s JOIN users u ON u.id = s.attendant_id LEFT JOIN users v ON v.id = s.validated_by
+         LEFT JOIN users m ON m.id = s.manager_comment_by
          WHERE s.id = ?`,
       )
       .get(id);
@@ -76,6 +77,7 @@ module.exports = function shiftRoutes(db) {
         .prepare(
           `SELECT s.id, s.status, s.opened_at, s.closed_at, s.total_liters, s.total_amount, s.credit_amount,
              s.expected_amount, s.payments_amount, s.expenses_amount, s.cash, s.card, s.variance, u.name AS attendant_name,
+             s.manager_comment IS NOT NULL AS has_remark, (s.manager_comment IS NOT NULL AND s.comment_seen_at IS NULL) AS remark_unread,
              (SELECT COUNT(*) FROM sales sa WHERE sa.shift_id = s.id AND sa.over_limit = 1) AS over_limit_count,
              (SELECT group_concat(DISTINCT pu.name) FROM shift_readings r JOIN nozzles n ON n.id = r.nozzle_id
               JOIN pumps pu ON pu.id = n.pump_id WHERE r.shift_id = s.id) AS pumps
@@ -95,10 +97,60 @@ module.exports = function shiftRoutes(db) {
     res.json(row ? shiftDetail(row.id) : null);
   });
 
+  // The manager's remarks the attendant has not read yet (shown on their home screen).
+  router.get('/shifts/remarks/unread', staff, (req, res) => {
+    res.json(
+      db
+        .prepare(
+          `SELECT s.id, s.closed_at, s.manager_comment, s.manager_comment_at, m.name AS manager_comment_by_name
+           FROM shifts s LEFT JOIN users m ON m.id = s.manager_comment_by
+           WHERE s.attendant_id = ? AND s.manager_comment IS NOT NULL AND s.comment_seen_at IS NULL ORDER BY s.id DESC`,
+        )
+        .all(req.user.id),
+    );
+  });
+
   router.get('/shifts/:id', staff, (req, res) => {
-    getOwnShift(req, { open: false });
+    const shift = getOwnShift(req, { open: false });
+    // The attendant opening their shift reads the manager's remark.
+    if (shift.attendant_id === req.user.id && shift.manager_comment && !shift.comment_seen_at) markRemarkRead(shift.id);
     res.json(shiftDetail(req.params.id));
   });
+
+  const markRemarkRead = (id) => db.prepare("UPDATE shifts SET comment_seen_at = datetime('now') WHERE id = ?").run(id);
+
+  router.post('/shifts/:id/remark/seen', staff, (req, res) => {
+    const shift = getOwnShift(req, { open: false });
+    if (shift.attendant_id === req.user.id && shift.manager_comment) markRemarkRead(shift.id);
+    res.json({ ok: true });
+  });
+
+  // Manager: a remark for the attendant on a closed shift, before or after validation. Empty removes it.
+  router.post('/shifts/:id/remark', requireRole('manager'), (req, res) => {
+    const shift = db.prepare('SELECT * FROM shifts WHERE id = ?').get(req.params.id);
+    if (!shift) fail(404, 'Poste introuvable.');
+    if (shift.status === 'open') fail(409, 'Le poste est encore ouvert : la remarque se fait après la clôture.');
+    const comment = str(req.body?.comment, 'La remarque', { required: false, max: 1000 });
+    transaction(db, () => {
+      setRemark(shift.id, comment, req.user.id);
+      audit(db, req, {
+        category: 'postes',
+        action: 'shift_remark',
+        entity: 'shifts',
+        id: shift.id,
+        summary: comment ? `Remarque au pompiste sur le poste n°${shift.id} : ${comment}` : `Remarque retirée du poste n°${shift.id}`,
+        before: shift.manager_comment ? { remark: shift.manager_comment } : null,
+      });
+    });
+    res.json(shiftDetail(shift.id));
+  });
+
+  function setRemark(id, comment, userId) {
+    db.prepare(
+      `UPDATE shifts SET manager_comment = ?, manager_comment_at = CASE WHEN ? IS NULL THEN NULL ELSE datetime('now') END,
+         manager_comment_by = ?, comment_seen_at = NULL WHERE id = ?`,
+    ).run(comment, comment, comment ? userId : null, id);
+  }
 
   // End-of-shift report (PDF): cash, sales from the indexes, credits, expenses, payments.
   router.get('/shifts/:id/report.pdf', staff, (req, res) => {
@@ -423,10 +475,12 @@ module.exports = function shiftRoutes(db) {
     if (shift.status !== 'closed') fail(409, 'Seul un poste clôturé peut être validé.');
     const pending = pendingCancellations(shift.id);
     if (pending) fail(409, `Décidez d’abord ${pending > 1 ? `des ${pending} annulations demandées` : 'de l’annulation demandée'} sur ce poste.`);
-    const comment = str(req.body?.comment, 'Le commentaire', { required: false, max: 500 });
-    db.prepare(
-      "UPDATE shifts SET status = 'validated', validated_by = ?, validated_at = datetime('now'), manager_comment = ? WHERE id = ?",
-    ).run(req.user.id, comment, shift.id);
+    const comment = str(req.body?.comment, 'La remarque', { required: false, max: 1000 });
+    transaction(db, () => {
+      db.prepare("UPDATE shifts SET status = 'validated', validated_by = ?, validated_at = datetime('now') WHERE id = ?").run(req.user.id, shift.id);
+      // A remark given at validation replaces the previous one; none keeps it.
+      if (comment && comment !== shift.manager_comment) setRemark(shift.id, comment, req.user.id);
+    });
     res.json(shiftDetail(shift.id));
   });
 

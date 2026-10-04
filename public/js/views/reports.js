@@ -176,7 +176,6 @@ export async function renderReports(page, ctx) {
           { label: 'Écart jaugeage', align: 'right', render: (x) => (x.dips ? h('span', { class: x.dip_variance < 0 ? 'variance-neg' : '' }, fmt.liters(x.dip_variance)) : '—') },
           { label: 'Perte', align: 'right', render: (x) => (x.dips && x.loss_pct != null ? `${fmt.number(x.loss_pct)} %` : '—') },
           { label: 'Stock', align: 'right', render: (x) => fmt.liters(x.book_stock) },
-          { label: 'Jours restants', align: 'right', render: (x) => (x.days_left == null ? '—' : `≈ ${x.days_left}`) },
         ],
         r.stock,
         { empty: 'Aucune cuve.' },

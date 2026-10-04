@@ -27,7 +27,6 @@ const NAV = {
     ['depenses', 'Dépenses', 'wallet', renderExpenses],
     ['cuves', 'Cuves', 'tank', renderTanks],
     ['rapports', 'Rapports', 'chart', renderReports],
-    ['pompe', 'Mon poste', 'pump', renderAttendant],
     ['reglages', 'Réglages', 'settings', renderSettings],
   ],
   attendant: [
@@ -100,7 +99,6 @@ try {
 
 function accountMenu() {
   const actions = [{ label: document.documentElement.dataset.theme === 'light' ? 'Passer en mode nuit' : 'Passer en mode jour (plein soleil)', onClick: toggleTheme }, { label: 'Changer le mot de passe', onClick: changePassword }];
-  if (state.user.role === 'manager') actions.push({ label: 'Mon poste (pompe)', onClick: () => navigate('pompe') });
   actions.push({ label: 'Se déconnecter', destructive: true, onClick: logout });
   actionSheet({ title: `${state.user.name} · ${state.settings.stationName}`, actions });
 }

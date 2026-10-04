@@ -12,7 +12,8 @@ export async function renderAttendant(page, ctx) {
 
 // ---------- 1. Opening a shift ----------
 async function renderStart(page, ctx) {
-  const pumps = (await api.get('/pumps')).filter((p) => p.active);
+  const [allPumps, remarks] = await Promise.all([api.get('/pumps'), api.get('/shifts/remarks/unread').catch(() => [])]);
+  const pumps = allPumps.filter((p) => p.active);
   const submit = button('Ouvrir mon poste', null, { variant: 'large block', type: 'submit', disabled: true });
   const form = h(
     'form',
@@ -59,7 +60,32 @@ async function renderStart(page, ctx) {
 
   setContent(page, 
     pageHeader('Ouvrir mon poste', 'Choisissez la ou les pompes dont vous êtes responsable. Les index de départ sont relevés automatiquement.'),
+    remarks.map((r) => unreadRemark(r, ctx, () => renderStart(page, ctx))),
     card(form),
+  );
+}
+
+// The manager's remark on a closed shift, until the attendant has read it.
+function unreadRemark(r, ctx, reload) {
+  const seen = async () => {
+    try {
+      await api.post(`/shifts/${r.id}/remark/seen`);
+    } catch {
+      /* stays shown: it will be marked next time */
+    }
+    reload();
+  };
+  return h(
+    'section',
+    { class: 'card remark-card' },
+    cardHeader('Remarque du gérant', `Poste n°${r.id} du ${fmt.dateTime(r.closed_at)}${r.manager_comment_by_name ? ` · ${r.manager_comment_by_name}` : ''}`),
+    h('p', { class: 'remark-text' }, r.manager_comment),
+    h(
+      'div',
+      { class: 'grid grid-2' },
+      button('Voir le poste', () => ctx.navigate(`historique/${r.id}`), { variant: 'secondary' }),
+      button('C’est noté', seen, { iconName: 'check' }),
+    ),
   );
 }
 
@@ -735,10 +761,18 @@ export async function renderMyShifts(page, ctx) {
       { class: 'card flush' },
       table(
         [
-          { label: 'Date', render: (s) => fmt.dateTime(s.opened_at) },
-          { label: 'Ventes', align: 'right', render: (s) => (s.total_amount == null ? '—' : fmt.money(s.total_amount)) },
+          // Status and remark under the date, sales in the detail: two columns fit a phone.
+          {
+            label: 'Poste',
+            render: (s) =>
+              h(
+                'div',
+                {},
+                h('div', {}, fmt.dateTime(s.opened_at)),
+                h('span', { class: 'row', style: 'gap:6px;margin-top:6px' }, shiftBadge(s.status), s.remark_unread ? badge('Nouvelle remarque', 'info') : s.has_remark ? badge('Remarque') : null),
+              ),
+          },
           { label: 'Écart', align: 'right', render: (s) => varianceCell(s.variance, tol) },
-          { label: 'Statut', render: (s) => shiftBadge(s.status) },
         ],
         shifts,
         { onRowClick: (s) => ctx.navigate(`historique/${s.id}`), empty: 'Aucun poste pour le moment.' },

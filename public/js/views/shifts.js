@@ -93,13 +93,14 @@ export async function renderShiftDetail(page, ctx) {
       shift.status !== 'open' ? reportLink(shift.id) : null,
       isManager && shift.status === 'open' ? button('Clôturer à la place du pompiste', closingBy('manager'), { variant: 'secondary', iconName: 'shifts' }) : null,
       isManager && shift.status === 'closed' ? button('Corriger la clôture', closingBy('correct'), { variant: 'secondary', iconName: 'edit' }) : null,
+      isManager && shift.status !== 'open' ? button(shift.manager_comment ? 'Modifier la remarque' : 'Remarque au pompiste', () => remarkDialog(shift, reload), { variant: 'secondary', iconName: 'message' }) : null,
       isManager && shift.status === 'closed'
         ? button('Valider le poste', async () => {
             const ok = await formDialog({
               title: `Valider le poste n°${shift.id}`,
-              intro: `Écart de caisse : ${fmt.signedMoney(shift.variance)}. Ajoutez un commentaire si nécessaire (explication de l'écart, retenue…).`,
+              intro: `Écart de caisse : ${fmt.signedMoney(shift.variance)}. Pour changer un index ou le comptage, utilisez d’abord « Corriger la clôture ».`,
               grid: false,
-              fields: [{ name: 'comment', label: 'Commentaire', type: 'textarea' }],
+              fields: [{ name: 'comment', label: 'Remarque pour le pompiste (facultatif)', type: 'textarea', value: shift.manager_comment || undefined, hint: 'Explication de l’écart, retenue, consigne… Le pompiste la lit dans son historique.' }],
               submitLabel: 'Valider',
               onSubmit: (d) => api.post(`/shifts/${shift.id}/validate`, d),
             });
@@ -111,9 +112,39 @@ export async function renderShiftDetail(page, ctx) {
         : null,
     ),
     shiftLine(shift.status),
+    remarkCard(shift, isManager),
     isManager ? cancellationRequests(shift, () => renderShiftDetail(page, ctx)) : null,
     shiftSummary(shift, ctx.state.settings.cashTolerance),
   );
+}
+
+// The manager's remark, read by the attendant; the manager sees whether it was read.
+function remarkCard(shift, isManager) {
+  if (!shift.manager_comment) return null;
+  const read = shift.comment_seen_at ? `Lue par le pompiste le ${fmt.dateTime(shift.comment_seen_at)}` : 'Pas encore lue par le pompiste';
+  return h(
+    'section',
+    { class: 'card remark-card' },
+    cardHeader('Remarque du gérant', [shift.manager_comment_by_name, shift.manager_comment_at ? fmt.dateTime(shift.manager_comment_at) : null].filter(Boolean).join(' · ')),
+    h('p', { class: 'remark-text' }, shift.manager_comment),
+    isManager ? h('p', { class: 'muted small' }, read) : null,
+  );
+}
+
+async function remarkDialog(shift, reload) {
+  const saved = await formDialog({
+    title: `Remarque · poste n°${shift.id}`,
+    intro: `Le pompiste ${shift.attendant_name} la lira dans son historique. Laissez vide pour la retirer.`,
+    grid: false,
+    autofocus: true,
+    fields: [{ name: 'comment', label: 'Remarque', type: 'textarea', value: shift.manager_comment || undefined }],
+    submitLabel: 'Enregistrer',
+    onSubmit: (d) => api.post(`/shifts/${shift.id}/remark`, d),
+  });
+  if (saved) {
+    toast(saved.manager_comment ? 'Remarque enregistrée.' : 'Remarque retirée.');
+    reload();
+  }
 }
 
 // Operations the attendant asked to cancel: they stay counted until the manager decides.
@@ -264,7 +295,7 @@ export function shiftSummary(shift, tolerance) {
           h('div', { class: 'summary-line total' }, h('span', {}, 'Total déclaré'), h('span', {}, fmt.money(declared(shift)))),
           shift.notes ? h('p', { class: 'muted', style: 'margin-top:12px' }, `Remarque du pompiste : ${shift.notes}`) : null,
           shift.status === 'validated'
-            ? h('p', { class: 'muted', style: 'margin-top:8px' }, `Validé par ${shift.validated_by_name} le ${fmt.dateTime(shift.validated_at)}${shift.manager_comment ? ` — ${shift.manager_comment}` : ''}`)
+            ? h('p', { class: 'muted', style: 'margin-top:8px' }, `Validé par ${shift.validated_by_name} le ${fmt.dateTime(shift.validated_at)}`)
             : null,
         )
       : null,

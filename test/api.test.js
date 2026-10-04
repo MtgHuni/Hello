@@ -164,7 +164,17 @@ test('poste : prix abonné, crédit sans combos, plafond, rapprochement', async 
   assert.strictEqual(dash.todayTotal.amount, 610, 'ventes selon les index + supplément abonnés, comme le poste');
   assert.strictEqual(dash.last7.at(-1).amount, 610, 'même chiffre que le graphique');
   assert.ok(dash.alerts.some((a) => a.text.includes('écart de caisse')));
+  // A remark for the attendant: kept by a validation without one, read in the history.
+  assert.strictEqual((await pompiste('POST', `/api/shifts/${shift.id}/remark`, { comment: 'x' })).status, 403);
+  assert.strictEqual((await gerant('POST', `/api/shifts/${shift.id}/remark`, { comment: 'Expliquez l’écart, svp.' })).data.manager_comment, 'Expliquez l’écart, svp.');
+  assert.strictEqual((await pompiste('GET', '/api/shifts')).data.find((s) => s.id === shift.id).remark_unread, 1);
+  assert.deepStrictEqual((await pompiste('GET', '/api/shifts/remarks/unread')).data.map((r) => r.id), [shift.id]);
   assert.strictEqual((await gerant('POST', `/api/shifts/${shift.id}/validate`, {})).data.status, 'validated');
+  assert.strictEqual((await gerant('GET', `/api/shifts/${shift.id}`)).data.comment_seen_at, null, 'le gérant ne la marque pas lue');
+  assert.strictEqual((await pompiste('GET', `/api/shifts/${shift.id}`)).data.manager_comment, 'Expliquez l’écart, svp.');
+  assert.deepStrictEqual((await pompiste('GET', '/api/shifts/remarks/unread')).data, []);
+  assert.ok((await gerant('GET', `/api/shifts/${shift.id}`)).data.comment_seen_at, 'lue par le pompiste');
+  assert.strictEqual((await gerant('POST', `/api/shifts/${shift.id}/remark`, { comment: '' })).data.manager_comment, null, 'remarque retirée');
 
   ctx.shift = (await pompiste('POST', '/api/shifts', { pumpIds: [ctx.dieselPump.id] })).data;
   assert.strictEqual(ctx.shift.readings[0].start_meter, 500);

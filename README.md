@@ -6,8 +6,8 @@ Trois espaces, selon le rôle :
 
 | Rôle | Ce qu'il fait |
 |------|---------------|
-| **Gérant** | Tableau de bord et alertes, validation des postes (clôture à la place d'un pompiste, correction d'une clôture), cuves (livraisons, jaugeages, jours de stock), clients (crédit, règlements, créances par ancienneté avec relance WhatsApp, relevés PDF), dépenses, rapports (marge, écarts par pompiste) en PDF et Excel, réglages (prix, prix programmés, pompes, équipe), sauvegarde et journal |
-| **Pompiste** | Sur téléphone : ouvre son poste, saisit les **crédits** (et crée un client avec son seul nom), encaisse un règlement, note une dépense payée en caisse, clôture avec les index de fin et le comptage en dollars (espèces, mobile money, carte). L'écart s'affiche immédiatement ; le rapport PDF du poste se télécharge ou se partage |
+| **Gérant** | Tableau de bord et alertes, validation des postes (clôture à la place d'un pompiste, correction d'une clôture, remarque au pompiste), cuves (livraisons, jaugeages, jours de stock), clients (crédit, règlements, créances par ancienneté avec relance WhatsApp, relevés PDF), dépenses, rapports (marge, écarts par pompiste) en PDF et Excel, réglages (prix, prix programmés, pompes, équipe), sauvegarde et journal |
+| **Pompiste** | Sur téléphone : ouvre son poste, saisit les **crédits** (et crée un client avec son seul nom), encaisse un règlement, note une dépense payée en caisse, clôture avec les index de fin et le comptage en dollars (espèces, mobile money, carte). L'écart s'affiche immédiatement ; le rapport PDF du poste se télécharge ou se partage. Lit les remarques du gérant sur ses postes (accueil et historique) |
 | **Client** | Crée son compte avec son téléphone, prépare un achat à crédit pendant qu'il attend (le pompiste confirme d'un geste), suit son solde et télécharge son relevé du mois |
 
 ## Principes de gestion

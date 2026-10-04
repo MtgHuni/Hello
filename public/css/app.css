@@ -1376,6 +1376,10 @@ input:focus, select:focus, textarea:focus { border-color: var(--text); }
   .circle-btn { min-width: 44px; min-height: 44px; }
 }
 
+/* The manager's remark to the attendant: set apart, read as written. */
+.remark-card { margin-bottom: 20px; border-left: 4px solid var(--accent); }
+.remark-text { margin: 0 0 12px; font-size: 17px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+
 /* ---------- Print (statements, reports) ---------- */
 @media print {
   :root { --bg: #fff; --surface: #fff; }

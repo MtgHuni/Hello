@@ -103,18 +103,17 @@ function periodReportPdf(r, { stationName, cashTolerance = 0, combosEnabled, now
   );
 
   // ---- Tanks ----
-  report.section('Cuves', 'Perte = écarts de jaugeage négatifs rapportés aux litres vendus. Jours : au rythme des 14 derniers jours.');
+  report.section('Cuves', 'Perte = écarts de jaugeage négatifs rapportés aux litres vendus.');
   report.table(
     [
-      { label: 'CUVE', width: 110 },
-      { label: 'LIVRÉ', width: 70, align: 'right' },
-      { label: 'VENDU', width: 70, align: 'right' },
-      { label: 'ÉCART JAUGEAGE', width: 82, align: 'right' },
-      { label: 'PERTE', width: 50, align: 'right' },
-      { label: 'STOCK', width: 70, align: 'right' },
-      { label: 'JOURS', align: 'right' },
+      { label: 'CUVE', width: 130 },
+      { label: 'LIVRÉ', width: 80, align: 'right' },
+      { label: 'VENDU', width: 80, align: 'right' },
+      { label: 'ÉCART JAUGEAGE', width: 90, align: 'right' },
+      { label: 'PERTE', width: 60, align: 'right' },
+      { label: 'STOCK', align: 'right' },
     ],
-    r.stock.map((s) => [s.name, liters(s.delivered), liters(s.sold), s.dips ? liters(s.dip_variance) : '—', s.loss_pct == null || !s.dips ? '—' : `${number(s.loss_pct)} %`, liters(s.book_stock), s.days_left == null ? '—' : `≈ ${s.days_left}`]),
+    r.stock.map((s) => [s.name, liters(s.delivered), liters(s.sold), s.dips ? liters(s.dip_variance) : '—', s.loss_pct == null || !s.dips ? '—' : `${number(s.loss_pct)} %`, liters(s.book_stock)]),
     { empty: 'Aucune cuve.' },
   );
 
