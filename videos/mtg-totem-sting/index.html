@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=1080, height=1080">
+    <title>MTG Station — totem de nuit</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      @font-face {
+        font-family: 'Barlow Condensed';
+        font-weight: 600;
+        src: url('assets/fonts/barlow-condensed-600.woff2') format('woff2');
+      }
+      @font-face {
+        font-family: 'Barlow Condensed';
+        font-weight: 700;
+        src: url('assets/fonts/barlow-condensed-700.woff2') format('woff2');
+      }
+      @font-face {
+        font-family: 'Inter';
+        font-weight: 100 900;
+        src: url('assets/fonts/inter-latin.woff2') format('woff2');
+      }
+
+      /* Palette : la même que l'application (totem de prix de nuit). */
+      :root {
+        --night: #0a0a0b;
+        --porcelain: #f5f4ef;
+        --porcelain-2: rgba(245, 244, 239, 0.62);
+        --porcelain-3: rgba(245, 244, 239, 0.38);
+        --gasoil: #ffc414;
+        --essence: #23c46b;
+        --ink: #0a0a0b;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 1080px;
+        height: 1080px;
+        overflow: hidden;
+        background: var(--night);
+      }
+      #root {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: var(--night);
+        color: var(--porcelain);
+        font-family: 'Barlow Condensed', 'Inter', sans-serif;
+      }
+
+      /* Le totem : tout est dans une colonne centrale de 560 px (zone sûre pour les recadrages). */
+      #totem {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0;
+        padding: 120px 0;
+      }
+      .mask {
+        display: block;
+        overflow: hidden;
+        width: 560px;
+      }
+      #word-mtg {
+        display: block;
+        font-size: 300px;
+        font-weight: 700;
+        line-height: 0.82;
+        letter-spacing: -0.01em;
+        text-align: center;
+        padding-top: 18px;
+      }
+      #word-station {
+        display: block;
+        margin-top: 10px;
+        font-size: 74px;
+        font-weight: 600;
+        line-height: 1;
+        letter-spacing: 0.14em;
+        text-align: center;
+        color: var(--porcelain-2);
+        padding-left: 0.14em;
+      }
+
+      /* Les deux panneaux de carburant : ils se remplissent comme des cuves. */
+      #panels {
+        display: flex;
+        gap: 20px;
+        width: 560px;
+        height: 250px;
+        margin-top: 54px;
+      }
+      .panel {
+        position: relative;
+        flex: 1 1 0;
+        height: 100%;
+        border-radius: 14px;
+        overflow: hidden;
+        background: rgba(245, 244, 239, 0.06);
+      }
+      .fill {
+        position: absolute;
+        inset: 0;
+        transform-origin: 50% 100%;
+      }
+      #fill-gasoil {
+        background: var(--gasoil);
+      }
+      #fill-essence {
+        background: var(--essence);
+      }
+      .label {
+        position: absolute;
+        left: 22px;
+        bottom: 18px;
+        font-size: 46px;
+        font-weight: 700;
+        line-height: 1;
+        letter-spacing: 0.02em;
+        color: var(--ink);
+      }
+      .sheen {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        width: 46%;
+        background: linear-gradient(100deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.5) 50%, rgba(255, 255, 255, 0) 100%);
+      }
+
+      #place {
+        display: block;
+        margin-top: 34px;
+        font-family: 'Inter', sans-serif;
+        font-size: 26px;
+        font-weight: 600;
+        letter-spacing: 0.3em;
+        padding-left: 0.3em;
+        color: var(--porcelain-3);
+      }
+    </style>
+  </head>
+  <body>
+    <div data-hf-id="hf-ph1f" id="root" data-composition-id="main" data-start="0" data-duration="6" data-width="1080" data-height="1080">
+      <section data-hf-id="hf-b8xp" id="totem" class="clip" data-start="0" data-duration="6" data-track-index="0">
+        <span data-hf-id="hf-gczb" class="mask" id="mask-mtg" data-layout-allow-overflow="true"><span data-hf-id="hf-bxoj" id="word-mtg">MTG</span></span>
+        <span data-hf-id="hf-r2j9" class="mask" id="mask-station" data-layout-allow-overflow="true"><span data-hf-id="hf-8by3" id="word-station">STATION</span></span>
+        <div data-hf-id="hf-2o58" id="panels">
+          <div data-hf-id="hf-f0e2" class="panel" id="panel-gasoil">
+            <div data-hf-id="hf-8hde" class="fill" id="fill-gasoil"></div>
+            <span data-hf-id="hf-6sue" class="label" id="label-gasoil">GASOIL</span>
+            <div data-hf-id="hf-hde9" class="sheen" id="sheen-gasoil" data-layout-allow-overflow="true"></div>
+          </div>
+          <div data-hf-id="hf-d8k3" class="panel" id="panel-essence">
+            <div data-hf-id="hf-0vjv" class="fill" id="fill-essence"></div>
+            <span data-hf-id="hf-qzho" class="label" id="label-essence">ESSENCE</span>
+            <div data-hf-id="hf-zx5y" class="sheen" id="sheen-essence" data-layout-allow-overflow="true"></div>
+          </div>
+        </div>
+        <span data-hf-id="hf-7877" id="place">GOMA</span>
+      </section>
+    </div>
+    <script>
+      const tl = gsap.timeline({ paused: true });
+
+      // Ouverture : les cuves se remplissent, l'essence juste après le gasoil.
+      tl.fromTo('#panel-gasoil', { opacity: 0 }, { opacity: 1, duration: 0.3, ease: 'power2.out' }, 0);
+      tl.fromTo('#panel-essence', { opacity: 0 }, { opacity: 1, duration: 0.3, ease: 'power2.out' }, 0.1);
+      tl.fromTo('#fill-gasoil', { scaleY: 0 }, { scaleY: 1, duration: 1.1, ease: 'power3.inOut' }, 0.15);
+      tl.fromTo('#fill-essence', { scaleY: 0 }, { scaleY: 1, duration: 1.1, ease: 'power3.inOut' }, 0.3);
+      tl.fromTo('#label-gasoil', { autoAlpha: 0, y: 16 }, { autoAlpha: 1, y: 0, duration: 0.5, ease: 'power3.out' }, 1.05);
+      tl.fromTo('#label-essence', { autoAlpha: 0, y: 16 }, { autoAlpha: 1, y: 0, duration: 0.5, ease: 'power3.out' }, 1.15);
+
+      // La marque monte de sous sa ligne, comme un chiffre de totem qui change.
+      tl.fromTo('#word-mtg', { yPercent: 105 }, { yPercent: 0, duration: 0.9, ease: 'expo.out' }, 0.7);
+      tl.fromTo('#word-station', { yPercent: 110 }, { yPercent: 0, duration: 0.8, ease: 'expo.out' }, 0.95);
+      tl.fromTo('#place', { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.6, ease: 'power2.out' }, 1.4);
+
+      // Un reflet traverse les deux panneaux, une seule fois.
+      tl.fromTo('#sheen-gasoil', { xPercent: -120 }, { xPercent: 240, duration: 0.9, ease: 'power2.inOut' }, 1.9);
+      tl.fromTo('#sheen-essence', { xPercent: -120 }, { xPercent: 240, duration: 0.9, ease: 'power2.inOut' }, 2.05);
+
+      // Sortie : les cuves se vident, la marque redescend, retour au noir (boucle sans couture).
+      tl.to('#place', { autoAlpha: 0, duration: 0.4, ease: 'power2.in' }, 4.6);
+      tl.to('#word-station', { yPercent: 110, duration: 0.55, ease: 'power3.in' }, 4.7);
+      tl.to('#word-mtg', { yPercent: 105, duration: 0.6, ease: 'power3.in' }, 4.8);
+      tl.to(['#label-gasoil', '#label-essence'], { autoAlpha: 0, duration: 0.3, ease: 'power2.in' }, 4.7);
+      tl.to('#fill-gasoil', { scaleY: 0, duration: 0.7, ease: 'power3.in' }, 4.85);
+      tl.to('#fill-essence', { scaleY: 0, duration: 0.7, ease: 'power3.in' }, 4.95);
+      tl.to(['#panel-gasoil', '#panel-essence'], { opacity: 0, duration: 0.3, ease: 'power2.in' }, 5.5);
+
+      window.__timelines['main'] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>

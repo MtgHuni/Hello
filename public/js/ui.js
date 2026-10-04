@@ -79,6 +79,26 @@ export function productColor(productId) {
   return `var(--series-${((Number(productId) - 1) % 4) + 1})`;
 }
 
+// Signature « Totem » : les prix du jour comme sur le totem de la station,
+// un champ de couleur par carburant, les chiffres en grand.
+// items : [{ id, name, price, subscriberPrice }]
+export function priceTotem(items) {
+  if (!items.length) return null;
+  return h(
+    'section',
+    { class: 'totem', 'aria-label': 'Prix du jour' },
+    items.map((p) =>
+      h(
+        'div',
+        { class: 'totem-panel', style: `--product:${productColor(p.id)}` },
+        h('span', { class: 'totem-name' }, p.name),
+        h('span', { class: 'totem-price' }, priceFmt.format(Number(p.price) || 0), h('small', {}, '$/L')),
+        p.subscriberPrice != null && Number(p.subscriberPrice) !== Number(p.price) ? h('span', { class: 'totem-sub' }, `Abonnés ${fmt.price(p.subscriberPrice)}`) : null,
+      ),
+    ),
+  );
+}
+
 // ---------- Feedback ----------
 export function toast(message, type = 'info') {
   const el = h(

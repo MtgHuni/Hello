@@ -1,6 +1,6 @@
 import { flags } from './ui.js';
 import { api } from './api.js';
-import { h, errorState, toast, formDialog, actionSheet, spinner } from './ui.js';
+import { h, errorState, toast, formDialog, actionSheet, spinner, initials } from './ui.js';
 import { icon, brandMark } from './icons.js';
 import { enhance } from './motion.js';
 import { renderLogin, renderSetup } from './views/auth.js';
@@ -94,7 +94,7 @@ async function changePassword() {
 function applyTheme(theme) {
   if (theme === 'light') document.documentElement.dataset.theme = 'light';
   else delete document.documentElement.dataset.theme;
-  const color = theme === 'light' ? '#ffffff' : '#08101e';
+  const color = theme === 'light' ? '#ffffff' : '#0a0a0b';
   document.querySelector('meta[name=theme-color]')?.setAttribute('content', color);
 }
 try {
@@ -119,117 +119,74 @@ function accountMenu() {
   actionSheet({ title: `${state.user.name} · ${state.settings.stationName}`, actions });
 }
 
-// ---------- Persistent shell (apple.com): global nav, local nav, full-screen menu ----------
+// ---------- Persistent shell: side rail on wide screens, top bar + bottom tabs on phones ----------
+
+const ROLE_LABEL = { manager: 'Gérant', attendant: 'Pompiste', customer: 'Client' };
+// On phones the tab bar keeps four destinations; the others sit behind « Plus ».
+const TAB_MAX = 4;
 
 function buildShell() {
   const role = state.user.role;
   const nav = NAV[role];
   const slot = h('div', { class: 'page-slot' });
-  const links = () => nav.map(([path, label, , , short]) => h('a', { href: `#/${path}`, 'data-path': path }, short || label));
+  const link = ([path, label, iconName, , short], useShort) =>
+    h('a', { href: `#/${path}`, 'data-path': path }, icon(iconName), h('span', {}, useShort ? short || label : label));
 
-  // Full-screen menu on phones: large links that cascade in, like apple.com.
-  const menu = h(
-    'div',
-    { class: 'menu', id: 'menu', hidden: true },
-    h('nav', { class: 'menu-links', 'aria-label': 'Navigation' }, nav.map(([path, label], i) => h('a', { href: `#/${path}`, 'data-path': path, style: `--i:${i}`, onClick: () => toggleMenu(false) }, label))),
+  const side = h(
+    'aside',
+    { class: 'side' },
+    h('a', { class: 'side-brand', href: '#/', 'aria-label': `${state.settings.stationName}, accueil` }, brandMark(), h('span', {}, state.settings.stationName)),
+    nav.length > 1 ? h('nav', { class: 'side-nav', 'aria-label': 'Navigation' }, nav.map((n) => link(n, false))) : h('div', { class: 'spacer' }),
     h(
-      'div',
-      { class: 'menu-account', style: `--i:${nav.length}` },
-      h('p', {}, `${state.user.name} · ${state.settings.stationName}`),
-      h('button', { type: 'button', onClick: () => { toggleMenu(false); changePassword(); } }, 'Changer le mot de passe'),
-      h('button', { type: 'button', onClick: () => { toggleMenu(false); logout(); } }, 'Se déconnecter'),
+      'button',
+      { class: 'side-foot', type: 'button', 'aria-label': 'Mon compte', onClick: accountMenu },
+      h('span', { class: 'avatar' }, initials(state.user.name)),
+      h('span', { class: 'who' }, h('strong', {}, state.user.name), h('span', {}, ROLE_LABEL[role])),
+      icon('more'),
     ),
   );
-  const menuButton =
-    nav.length > 1
-      ? h('button', { class: 'gnav-menu', type: 'button', 'aria-label': 'Menu', 'aria-expanded': 'false', 'aria-controls': 'menu', onClick: () => toggleMenu() }, h('span'), h('span'))
-      : null;
 
-  const gnav = h(
+  const topTitle = h('span', { class: 'topbar-title' }, state.settings.stationName);
+  const topbar = h(
     'header',
-    { class: 'gnav' },
-    h(
-      'div',
-      { class: 'gnav-inner' },
-      h('a', { class: 'gnav-mark', href: '#/', 'aria-label': `${state.settings.stationName}, accueil` }, brandMark(), h('span', {}, state.settings.stationName)),
-      nav.length > 1 ? h('nav', { class: 'gnav-links', 'aria-label': 'Navigation' }, links()) : h('span', { class: 'spacer' }),
-      h(
-        'div',
-        { class: 'gnav-end' },
-        h('button', { class: 'gnav-account', type: 'button', 'aria-label': 'Mon compte', title: 'Mon compte', onClick: accountMenu }, icon('user')),
-        menuButton,
-      ),
-    ),
+    { class: 'topbar' },
+    h('a', { class: 'topbar-brand', href: '#/', 'aria-label': `${state.settings.stationName}, accueil` }, brandMark()),
+    topTitle,
+    h('button', { class: 'topbar-account', type: 'button', 'aria-label': 'Mon compte', onClick: accountMenu }, h('span', { class: 'avatar' }, initials(state.user.name))),
   );
 
-  // Local nav: appears once the large title has scrolled away,
-  // keeping the page name and its main action one tap away.
-  const lnavTitle = h('span', { class: 'lnav-title' });
-  const lnavAction = h('button', { class: 'btn sm lnav-action', type: 'button', hidden: true, tabindex: '-1', onClick: () => primaryAction()?.click() });
-  const lnav = h('div', { class: 'lnav', 'aria-hidden': 'true' }, h('div', { class: 'lnav-inner' }, lnavTitle, lnavAction));
+  const overflow = nav.length > TAB_MAX + 1;
+  const tabs = overflow ? nav.slice(0, TAB_MAX) : nav;
+  const rest = overflow ? nav.slice(TAB_MAX) : [];
+  const more = rest.length
+    ? h(
+        'button',
+        {
+          class: 'tab-more',
+          type: 'button',
+          onClick: () => actionSheet({ title: 'Plus', actions: rest.map(([path, label]) => ({ label, onClick: () => navigate(path) })) }),
+        },
+        icon('more'),
+        h('span', {}, 'Plus'),
+      )
+    : null;
+  const tabbar = nav.length > 1 ? h('nav', { class: 'tabbar', 'aria-label': 'Navigation', style: `--n:${tabs.length + (more ? 1 : 0)}` }, tabs.map((n) => link(n, true)), more) : null;
 
-  const el = h('div', { class: `shell ${role}` }, gnav, lnav, h('main', { class: 'main' }, slot), menu);
-  shell = { role, el, slot, menu, menuButton, lnav, lnavTitle, lnavAction };
+  const el = h('div', { class: `shell ${role} ${tabbar ? 'has-tabs' : ''}` }, side, h('div', { class: 'shell-main' }, topbar, h('main', { class: 'main' }, slot)), tabbar);
+  shell = { role, el, slot, topTitle, more, rest: rest.map(([path]) => path) };
   return shell;
 }
 
-function toggleMenu(open = shell.menu.hidden) {
-  if (!shell.menuButton) return;
-  shell.menuButton.setAttribute('aria-expanded', String(open));
-  document.documentElement.classList.toggle('menu-open', open);
-  if (open) {
-    shell.menu.hidden = false;
-    requestAnimationFrame(() => shell.menu.classList.add('open'));
-  } else if (!shell.menu.hidden) {
-    shell.menu.classList.remove('open');
-    setTimeout(() => {
-      if (!shell.menu.classList.contains('open')) shell.menu.hidden = true;
-    }, reducedMotion() ? 0 : 320);
-  }
-}
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && shell && !shell.menu.hidden) toggleMenu(false);
-});
-
-function setActive(path) {
+function setActive(path, label) {
   shell.el.querySelectorAll('a[data-path]').forEach((a) => {
     const on = a.dataset.path === path;
     a.classList.toggle('active', on);
     if (on) a.setAttribute('aria-current', 'page');
     else a.removeAttribute('aria-current');
   });
+  shell.more?.classList.toggle('active', shell.rest.includes(path));
+  shell.topTitle.textContent = NAV[shell.role].length > 1 ? label : state.settings.stationName;
 }
-
-// The page's main action: marked with data-lnav, or the header's filled button.
-function primaryAction() {
-  return shell.slot.querySelector('[data-lnav]') || shell.slot.querySelector('.page-header .btn:not(.secondary):not(.ghost)');
-}
-
-function updateLnav() {
-  if (!shell) return;
-  const h1 = shell.slot.querySelector('.page-header h1');
-  const shown = !!h1 && h1.getBoundingClientRect().bottom < 0;
-  shell.lnav.classList.toggle('shown', shown);
-  shell.lnav.setAttribute('aria-hidden', String(!shown));
-  if (h1 && shell.lnavTitle.textContent !== h1.textContent) shell.lnavTitle.textContent = h1.textContent;
-  const action = primaryAction();
-  shell.lnavAction.hidden = !action;
-  shell.lnavAction.tabIndex = shown ? 0 : -1;
-  if (action) shell.lnavAction.textContent = action.dataset.lnav || action.textContent;
-}
-let ticking = false;
-window.addEventListener(
-  'scroll',
-  () => {
-    if (ticking) return;
-    ticking = true;
-    requestAnimationFrame(() => {
-      ticking = false;
-      updateLnav();
-    });
-  },
-  { passive: true },
-);
 
 // Swap page content with a navigation transition: push / pop / cross-fade.
 function swap(update, direction) {
@@ -277,7 +234,7 @@ async function route() {
     else direction = 'fade';
   }
   lastRoute = { section: entry[0], depth };
-  setActive(entry[0]);
+  setActive(entry[0], entry[1]);
 
   const token = ++routeToken;
   const page = h('div', { class: `page ${role === 'manager' ? '' : 'narrow'}` });
@@ -295,7 +252,6 @@ async function route() {
   swap(() => {
     shell.slot.replaceChildren(page);
     window.scrollTo(0, 0);
-    updateLnav();
     enhance(page);
   }, direction);
 }

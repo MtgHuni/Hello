@@ -3,6 +3,23 @@ import { api } from '../api.js';
 import { h, field, readForm, setContent } from '../ui.js';
 import { brandMark } from '../icons.js';
 
+// Le film de la marque (rendu avec HyperFrames) : en boucle, sans son ;
+// image fixe si l'appareil demande moins d'animations ou si la vidéo ne se charge pas.
+function filmPanel() {
+  const video = h(
+    'video',
+    { class: 'auth-video', muted: true, playsinline: true, loop: true, preload: 'metadata', poster: '/media/mtg-totem-poster.jpg', 'aria-hidden': 'true', tabindex: '-1' },
+    h('source', { src: '/media/mtg-totem.webm', type: 'video/webm' }),
+    h('source', { src: '/media/mtg-totem.mp4', type: 'video/mp4' }),
+  );
+  video.muted = true;
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    video.autoplay = true;
+    video.play?.().catch(() => {});
+  }
+  return h('div', { class: 'auth-film' }, video);
+}
+
 function authForm({ title, lead, fields, submitLabel, onSubmit, wide, footer }) {
   const error = h('p', { class: 'form-error', hidden: true, role: 'alert' });
   const submit = h('button', { class: 'btn large block', type: 'submit' }, submitLabel);
@@ -28,7 +45,12 @@ function authForm({ title, lead, fields, submitLabel, onSubmit, wide, footer }) 
   return h(
     'div',
     { class: 'auth' },
-    h('div', { class: `auth-card ${wide ? 'wide' : ''}` }, brandMark(), h('h1', {}, title), h('p', { class: 'lead' }, lead), form, footer ? h('p', { class: 'auth-footer' }, footer) : null),
+    filmPanel(),
+    h(
+      'div',
+      { class: 'auth-pane' },
+      h('div', { class: `auth-card ${wide ? 'wide' : ''}` }, brandMark(), h('h1', {}, title), h('p', { class: 'lead' }, lead), form, footer ? h('p', { class: 'auth-footer' }, footer) : null),
+    ),
   );
 }
 

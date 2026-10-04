@@ -1,12 +1,12 @@
 import { flags } from '../ui.js';
 import { api } from '../api.js';
-import { h, fmt, kpi, card, cardHeader, tankGauge, pageHeader, button, setContent } from '../ui.js';
+import { h, fmt, kpi, card, cardHeader, tankGauge, pageHeader, button, setContent, priceTotem } from '../ui.js';
 import { icon } from '../icons.js';
 
 const ALERT_ICON = { critical: 'alert', serious: 'alert', warning: 'info' };
 
 export async function renderDashboard(page, { state, navigate }) {
-  const d = await api.get('/dashboard');
+  const [d, products] = await Promise.all([api.get('/dashboard'), api.get('/products')]);
   const hour = new Date().getHours();
   const hello = hour < 18 ? 'Bonjour' : 'Bonsoir';
 
@@ -16,6 +16,8 @@ export async function renderDashboard(page, { state, navigate }) {
       fmt.longDay(d.today),
       button('Nouvelle livraison', () => navigate('cuves'), { variant: 'secondary', iconName: 'truck' }),
     ),
+
+    priceTotem(products.filter((p) => p.active).map((p) => ({ id: p.id, name: p.name, price: p.price, subscriberPrice: p.subscriber_price }))),
 
     h(
       'div',

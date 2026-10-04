@@ -1,3 +1,9 @@
 node_modules/
 data/
 .impeccable/review/
+
+# HyperFrames: sources versionnées, rendus et captures non
+videos/*/node_modules/
+videos/*/renders/
+videos/*/snapshots/
+videos/*/.hyperframes/

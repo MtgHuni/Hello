@@ -4,7 +4,7 @@
 
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 const NUMBER = /[-−+]?\d+(?:[   ]\d{3})*(?:,\d+)?/;
-const SELECTOR = '.kpi .value, .tank-pct, .big-result .value, .status-figure';
+const SELECTOR = '.totem-price, .kpi .value, .tank-pct, .big-result .value, .status-figure';
 const DURATION = 750;
 const MAX = 12;
 
