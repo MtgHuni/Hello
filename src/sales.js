@@ -29,7 +29,7 @@ function createSale(db, shift, input) {
 
   const subscriber = customer.type === 'account';
   const unitPrice = subscriber ? reading.subscriber_price ?? reading.unit_price : reading.unit_price;
-  const payment = oneOf(input.payment ?? 'paid', 'Le mode de paiement', ['paid', 'credit', 'combo']);
+  const payment = oneOf(input.payment ?? 'credit', 'Le mode de paiement', ['paid', 'credit', 'combo']);
   let liters;
   let amount;
   if (input.liters !== undefined && input.liters !== null && input.liters !== '') {

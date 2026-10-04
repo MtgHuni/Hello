@@ -66,4 +66,11 @@ function transaction(db, fn) {
   }
 }
 
-module.exports = { HttpError, fail, round, num, str, oneOf, bool, dateParam, transaction };
+// CSV cell for Excel: quoted, and text starting with = + - @ is prefixed with ' so it never runs as a formula.
+function csvCell(value) {
+  let s = String(value ?? '');
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  return `"${s.replace(/"/g, '""')}"`;
+}
+
+module.exports = { HttpError, fail, round, num, str, oneOf, bool, dateParam, transaction, csvCell };

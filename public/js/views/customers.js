@@ -44,7 +44,7 @@ export async function renderCustomers(page, ctx) {
     draw();
   });
 
-  const receivables = customers.filter((c) => c.type === 'account').reduce((t, c) => t + Math.max(0, c.balance), 0);
+  const receivables = customers.reduce((t, c) => t + Math.max(0, c.balance), 0);
   const toReview = customers.filter((c) => c.needs_review && c.active).length;
   if (typeFilter === 'review' && !toReview) typeFilter = 'all';
   setContent(page, 
@@ -117,7 +117,7 @@ export async function renderCustomerDetail(page, ctx) {
       pageHeader(
         c.name,
         [TYPE_LABEL[c.type], c.phone, c.email, c.plate].filter(Boolean).join(' · '),
-        c.type === 'account' ? button('Règlement', () => paymentDialog(c, reload), { iconName: 'card' }) : null,
+        c.type === 'account' || acc.balance > 0 ? button('Règlement', () => paymentDialog(c, reload), { iconName: 'card' }) : null,
         button('Modifier', () => customerDialog(c, ctx, reload), { variant: 'secondary', iconName: 'edit' }),
         button(c.login ? 'Accès client' : 'Créer un accès', () => loginDialog(c, reload), { variant: 'secondary', iconName: 'user' }),
       ),

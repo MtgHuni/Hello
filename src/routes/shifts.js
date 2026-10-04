@@ -155,10 +155,13 @@ module.exports = function shiftRoutes(db) {
     res.status(201).json(shiftDetail(id));
   });
 
-  // Customer sale entered by the attendant (paid or on credit; always earns points).
+  // Credit entered by the attendant (or fuel exchanged for combos). Paid sales are never
+  // entered: the meter indexes count them at closing.
   router.post('/shifts/:id/sales', staff, (req, res) => {
     const shift = getOwnShift(req);
-    res.status(201).json(createSale(db, shift, { ...(req.body || {}), source: 'attendant' }));
+    const payment = req.body?.payment ?? 'credit';
+    if (payment === 'paid') fail(400, 'Les ventes payées ne se saisissent pas : les index les comptent.', 'paid');
+    res.status(201).json(createSale(db, shift, { ...(req.body || {}), payment, source: 'attendant' }));
   });
 
   // A customer settling their account at the pump: the money goes into the shift's cash.
@@ -204,8 +207,8 @@ module.exports = function shiftRoutes(db) {
   };
 
   function cancellable(req, shift) {
+    if (!Object.hasOwn(CANCELLABLE, req.params.kind)) fail(404, 'Opération introuvable.');
     const k = CANCELLABLE[req.params.kind];
-    if (!k) fail(404, 'Opération introuvable.');
     const item = db.prepare(`SELECT * FROM ${k.table} WHERE id = ? AND shift_id = ?`).get(req.params.itemId, shift.id);
     if (!item) fail(404, k.missing);
     return { table: k.table, item };
@@ -232,6 +235,8 @@ module.exports = function shiftRoutes(db) {
     if (shift.status === 'validated') fail(409, 'Ce poste est déjà validé : il ne peut plus être modifié.');
     const { table, item } = cancellable(req, shift);
     transaction(db, () => {
+      // A sale confirmed from a customer's request: the request is cancelled with it.
+      if (table === 'sales') db.prepare("UPDATE purchase_requests SET sale_id = NULL, status = 'cancelled' WHERE sale_id = ?").run(item.id);
       db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(item.id);
       if (item.customer_id) refreshCustomer(db, item.customer_id);
       if (shift.status === 'closed') reconcile(shift.id);

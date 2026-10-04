@@ -1,6 +1,6 @@
 const express = require('express');
 const { EXPENSE_CATEGORIES } = require('../db');
-const { fail, num, str, oneOf, round, dateParam } = require('../util');
+const { fail, num, str, oneOf, round, dateParam, csvCell } = require('../util');
 const { requireRole } = require('../auth');
 
 const manager = requireRole('manager');
@@ -38,7 +38,7 @@ module.exports = function expenseRoutes(db) {
       .all(from, from, to, to);
 
     if (req.query.format === 'csv') {
-      const cell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+      const cell = csvCell;
       const lines = ['Date;Catégorie;Description;Bénéficiaire;Mode;Référence;Poste;Saisi par;Montant (USD)'];
       for (const e of rows) {
         lines.push(

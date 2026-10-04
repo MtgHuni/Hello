@@ -100,6 +100,7 @@ function customerRoutes(db) {
     const settings = getSettings(db);
     return {
       customer,
+      balance: customerBalance(db, customer.id), // today, whatever the period shown
       dues: customer.type === 'account' ? subscriberDues(db, customer.id, settings.subscriberGraceDays) : null,
       combos: {
         balance: customer.loyalty_points,
@@ -209,11 +210,11 @@ function customerRoutes(db) {
   });
 
   // Creates (or resets) the customer's own login to the client space.
-  router.post('/customers/:id/login', manager, (req, res) => {
+  router.post('/customers/:id/login', manager, async (req, res) => {
     const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(req.params.id);
     if (!customer) fail(404, 'Client introuvable.');
     const login = str(req.body?.login, "L'identifiant", { max: 100 });
-    const hash = hashPassword(checkPasswordStrength(req.body?.password));
+    const hash = await hashPassword(checkPasswordStrength(req.body?.password));
     const existing = db.prepare('SELECT id FROM users WHERE customer_id = ?').get(customer.id);
     const taken = db.prepare('SELECT id FROM users WHERE login = ?').get(login);
     if (taken && taken.id !== existing?.id) fail(409, 'Cet identifiant est déjà utilisé.');

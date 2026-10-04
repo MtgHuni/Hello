@@ -1,3 +1,6 @@
+// Every "today" and every report day is the station's: Goma (UTC+2), whatever the host's zone.
+process.env.TZ = process.env.TZ || 'Africa/Lubumbashi';
+
 const path = require('node:path');
 const { createApp } = require('./src/app');
 const { seedTestData } = require('./src/seed');

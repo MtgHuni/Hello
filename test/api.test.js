@@ -57,6 +57,8 @@ test('premier lancement : configuration de la station', async () => {
   });
   assert.strictEqual(res.status, 201);
   assert.strictEqual((await gerant('POST', '/api/setup', {})).status, 400);
+  const again = { stationName: 'Autre', name: 'Intrus', login: 'intrus', password: 'motdepasse2', dieselPrice: 1, petrolPrice: 1 };
+  assert.strictEqual((await gerant('POST', '/api/setup', again)).status, 409, 'déjà configurée');
 
   const me = (await gerant('GET', '/api/auth/me')).data;
   assert.strictEqual(me.user.role, 'manager');
@@ -113,10 +115,10 @@ test('poste : prix abonné, crédit sans combos, plafond, rapprochement', async 
   assert.strictEqual(fleetCredit.data.points, 0);
   assert.strictEqual(fleetCredit.data.points_due, 50);
 
-  // Particulier paid: 20,5 L × 1,20 = 24,60 $, 20 combos at once.
+  // Paid sales are not entered: the indexes count them.
   const paid = await sell({ customerId: ctx.person.id, liters: 20.5, payment: 'paid' });
-  assert.strictEqual(paid.data.amount, 24.6);
-  assert.strictEqual(paid.data.points, 20);
+  assert.strictEqual(paid.status, 400);
+  assert.strictEqual(paid.data.code, 'paid');
 
   // Particulier credit: 40 L = 48 $ fits in 50 $; 5 L more does not.
   assert.strictEqual((await sell({ customerId: ctx.person.id, liters: 40, payment: 'credit' })).status, 201);
@@ -124,12 +126,12 @@ test('poste : prix abonné, crédit sans combos, plafond, rapprochement', async 
   assert.strictEqual(over.status, 409);
   assert.strictEqual(over.data.code, 'over_limit');
 
-  // 20 combos < 100: no exchange yet.
+  // No combos yet (< 100): no exchange.
   const tooFew = await sell({ customerId: ctx.person.id, amount: 1, payment: 'combo' });
   assert.strictEqual(tooFew.status, 409);
   assert.strictEqual(tooFew.data.code, 'combos');
 
-  assert.strictEqual((await customer(ctx.person.id)).customer.loyalty_points, 20);
+  assert.strictEqual((await customer(ctx.person.id)).customer.loyalty_points, 0, 'crédit : combos seulement une fois payé');
 
   // 500 L at 1,20 = 600 $ + subscriber surcharge 50 × 0,20 = 10 $ → 610 $;
   // credit 70 + 48 = 118 $ → 492 $ to hand over; 490 $ declared.
@@ -155,7 +157,8 @@ test('poste : prix abonné, crédit sans combos, plafond, rapprochement', async 
   assert.ok(pdfText.includes('(Cr\\351dits accord\\351s)'));
 
   const dash = (await gerant('GET', '/api/dashboard')).data;
-  assert.strictEqual(dash.todayTotal.amount, 600, 'ventes par produit selon les index');
+  assert.strictEqual(dash.todayTotal.amount, 610, 'ventes selon les index + supplément abonnés, comme le poste');
+  assert.strictEqual(dash.last7.at(-1).amount, 610, 'même chiffre que le graphique');
   assert.ok(dash.alerts.some((a) => a.text.includes('écart de caisse')));
   assert.strictEqual((await gerant('POST', `/api/shifts/${shift.id}/validate`, {})).data.status, 'validated');
 
@@ -170,14 +173,15 @@ test('les combos d’une vente à crédit arrivent quand elle est entièrement p
 
   await gerant('POST', `/api/customers/${ctx.person.id}/payments`, { amount: 20, method: 'espèces' });
   let marie = await customer(ctx.person.id);
-  assert.strictEqual(marie.customer.loyalty_points, 20, 'paiement partiel : pas encore de combos');
+  assert.strictEqual(marie.customer.loyalty_points, 0, 'paiement partiel : pas encore de combos');
   assert.strictEqual(marie.combos.pending, 40);
+  assert.strictEqual(marie.balance, 28);
 
   // Paid at the pump, during the open shift.
   const pay = await pompiste('POST', `/api/shifts/${ctx.shift.id}/payments`, { customerId: ctx.person.id, amount: 28 });
   assert.strictEqual(pay.data.balance, 0);
   marie = await customer(ctx.person.id);
-  assert.strictEqual(marie.customer.loyalty_points, 60);
+  assert.strictEqual(marie.customer.loyalty_points, 40);
   assert.strictEqual(marie.combos.pending, 0);
 
   // Cancelling: the attendant only asks, the manager decides.
@@ -185,7 +189,7 @@ test('les combos d’une vente à crédit arrivent quand elle est entièrement p
   assert.strictEqual((await pompiste('DELETE', url)).status, 403);
   assert.strictEqual((await pompiste('POST', `${url}/cancel`, { reason: 'Erreur de montant' })).status, 202);
   assert.strictEqual((await pompiste('POST', `${url}/cancel`)).status, 409, 'déjà demandée');
-  assert.strictEqual((await customer(ctx.person.id)).customer.loyalty_points, 60, 'toujours compté en attendant le gérant');
+  assert.strictEqual((await customer(ctx.person.id)).customer.loyalty_points, 40, 'toujours compté en attendant le gérant');
   let detail = (await gerant('GET', `/api/shifts/${ctx.shift.id}`)).data;
   assert.strictEqual(detail.pending_cancellations, 1);
   assert.strictEqual(detail.payments.find((p) => p.id === pay.data.id).cancel_reason, 'Erreur de montant');
@@ -196,16 +200,16 @@ test('les combos d’une vente à crédit arrivent quand elle est entièrement p
   assert.strictEqual((await gerant('GET', `/api/shifts/${ctx.shift.id}`)).data.pending_cancellations, 0);
   await pompiste('POST', `${url}/cancel`);
   assert.strictEqual((await gerant('DELETE', url)).status, 204);
-  assert.strictEqual((await customer(ctx.person.id)).customer.loyalty_points, 20);
+  assert.strictEqual((await customer(ctx.person.id)).customer.loyalty_points, 0);
   await pompiste('POST', `/api/shifts/${ctx.shift.id}/payments`, { customerId: ctx.person.id, amount: 28 });
 });
 
 test('échange de combos contre du carburant, déduit de la caisse', async () => {
-  await gerant('PUT', '/api/settings', { comboThreshold: 50, comboValue: 0.05 });
+  await gerant('PUT', '/api/settings', { comboThreshold: 40, comboValue: 0.05 });
   const nozzle = ctx.shift.readings[0];
   const sell = (body) => pompiste('POST', `/api/shifts/${ctx.shift.id}/sales`, { nozzleId: nozzle.nozzle_id, customerId: ctx.person.id, payment: 'combo', ...body });
 
-  const tooMuch = await sell({ amount: 5 }); // 100 combos needed, 60 available
+  const tooMuch = await sell({ amount: 5 }); // 100 combos needed, 40 available
   assert.strictEqual(tooMuch.status, 409);
 
   // 2 $ = 40 combos → 1,67 L at 1,20 $/L.
@@ -215,38 +219,37 @@ test('échange de combos contre du carburant, déduit de la caisse', async () =>
   assert.strictEqual(exchange.data.combos_used, 40);
   assert.strictEqual(exchange.data.liters, 1.67);
   assert.strictEqual(exchange.data.points, 0);
-  assert.strictEqual((await customer(ctx.person.id)).customer.loyalty_points, 20);
+  assert.strictEqual((await customer(ctx.person.id)).customer.loyalty_points, 0);
 
   // Combos désactivés : rien n'est gagné et l'échange est refusé ; réactivés, tout revient.
   assert.strictEqual((await gerant('PUT', '/api/settings', { combosEnabled: false })).data.combosEnabled, false);
   assert.strictEqual((await pompiste('GET', '/api/setup')).data.combosEnabled, false);
-  const noEarn = await sell({ amount: 1, payment: 'paid' });
+  const noEarn = await sell({ amount: 1, payment: 'credit' });
   assert.strictEqual(noEarn.status, 201);
   assert.strictEqual(noEarn.data.points, 0);
   assert.strictEqual(noEarn.data.points_due, 0);
   assert.strictEqual((await sell({ amount: 1 })).status, 409, 'échange refusé');
-  assert.strictEqual((await customer(ctx.person.id)).customer.loyalty_points, 20, 'les combos acquis sont conservés');
   assert.strictEqual((await gerant('PUT', '/api/settings', { combosEnabled: true })).data.combosEnabled, true);
 
   // An expense entered by mistake: its cancellation is asked, still pending at closing time.
   const expense = await pompiste('POST', `/api/shifts/${ctx.shift.id}/expenses`, { category: 'Autre', amount: 3, description: 'Erreur' });
   await pompiste('POST', `/api/shifts/${ctx.shift.id}/expenses/${expense.data.id}/cancel`);
 
-  // 10 L at 1,20 = 12 $ + 28 $ received − 2 $ in combos − 3 $ expense = 35 $.
+  // 10 L at 1,20 = 12 $ + 28 $ received − 2 $ in combos − 1 $ credit − 3 $ expense = 34 $.
   const closed = await pompiste('POST', `/api/shifts/${ctx.shift.id}/close`, {
     readings: [{ nozzleId: nozzle.nozzle_id, endMeter: 510 }],
-    cash: 38,
+    cash: 37,
   });
   assert.strictEqual(closed.data.combo_amount, 2);
   assert.strictEqual(closed.data.payments_amount, 28);
-  assert.strictEqual(closed.data.expected_amount, 35);
+  assert.strictEqual(closed.data.expected_amount, 34);
   assert.strictEqual(closed.data.variance, 3);
 
   // The manager decides before validating; accepting it redoes the reconciliation.
   assert.strictEqual((await gerant('POST', `/api/shifts/${ctx.shift.id}/validate`, {})).status, 409);
   assert.strictEqual((await gerant('DELETE', `/api/shifts/${ctx.shift.id}/expenses/${expense.data.id}`)).status, 204);
   const after = (await gerant('GET', `/api/shifts/${ctx.shift.id}`)).data;
-  assert.strictEqual(after.expected_amount, 38);
+  assert.strictEqual(after.expected_amount, 37);
   assert.strictEqual(after.variance, 0);
   assert.strictEqual(after.total_amount, 12);
   await gerant('PUT', '/api/settings', { comboThreshold: 100 });
@@ -317,18 +320,26 @@ test('client : inscription, demande d’achat confirmée en un geste', async () 
   assert.strictEqual((await moi('POST', '/api/register', { name: 'X', phone: '+243990111222', password: 'jeanbahati' })).status, 409);
 
   assert.strictEqual((await moi('POST', '/api/me/requests', { productId: ctx.diesel.id, amount: 5, payment: 'combo' })).status, 400, 'pas assez de combos');
+  assert.strictEqual((await moi('POST', '/api/me/requests', { productId: ctx.diesel.id, amount: 5, payment: 'paid' })).status, 400, 'le comptant se paie à la pompe');
 
+  // On credit by default.
   const created = await moi('POST', '/api/me/requests', { productId: ctx.diesel.id, amount: 24, plate: 'GM-123' });
   assert.strictEqual(created.data.status, 'pending');
+  assert.strictEqual(created.data.payment, 'credit');
   const mine = (await pompiste('GET', '/api/requests/pending')).data.find((r) => r.id === created.data.id);
   assert.strictEqual(mine.customer_name, 'Jean Bahati');
 
   const confirmed = await pompiste('POST', `/api/requests/${mine.id}/confirm`, {});
   assert.strictEqual(confirmed.data.liters, 20);
-  assert.strictEqual(confirmed.data.points, 20);
+  assert.strictEqual(confirmed.data.kind, 'credit');
+  assert.strictEqual(confirmed.data.points_due, 20);
   assert.strictEqual(confirmed.data.source, 'customer');
   assert.strictEqual((await pompiste('POST', `/api/requests/${mine.id}/confirm`, {})).status, 409);
   assert.strictEqual((await moi('GET', '/api/me/requests/current')).data.status, 'confirmed');
+
+  // The manager cancels a sale that came from a request: the request goes with it (no 500).
+  assert.strictEqual((await gerant('DELETE', `/api/shifts/${ctx.shift.id}/sales/${confirmed.data.id}`)).status, 204);
+  assert.strictEqual(db.prepare('SELECT status FROM purchase_requests WHERE id = ?').get(mine.id).status, 'cancelled');
 
   const again = (await moi('POST', '/api/me/requests', { productId: ctx.diesel.id, liters: 5 })).data;
   assert.strictEqual((await pompiste('POST', `/api/requests/${again.id}/reject`, { note: 'Client parti' })).status, 204);
@@ -336,9 +347,42 @@ test('client : inscription, demande d’achat confirmée en un geste', async () 
   assert.strictEqual((await moi('DELETE', `/api/me/requests/${third.id}`)).status, 204);
 
   const account = (await moi('GET', '/api/me/account')).data;
-  assert.strictEqual(account.customer.loyalty_points, 20);
+  assert.strictEqual(account.customer.loyalty_points, 0);
   assert.strictEqual(account.combos.threshold, 100);
   assert.strictEqual((await moi('GET', `/api/customers/${ctx.person.id}`)).status, 403);
+});
+
+test('accès : un pompiste ne voit pas le poste d’un autre ; mot de passe changé, autres sessions fermées', async () => {
+  await gerant('POST', '/api/users', { name: 'Luc', login: 'luc', password: 'pompiste2', role: 'attendant' });
+  const luc = client();
+  const lucPhone = client();
+  await luc('POST', '/api/auth/login', { login: 'luc', password: 'pompiste2' });
+  await lucPhone('POST', '/api/auth/login', { login: 'luc', password: 'pompiste2' });
+  assert.strictEqual((await luc('GET', `/api/shifts/${ctx.shift.id}`)).status, 403);
+  assert.strictEqual((await luc('GET', `/api/shifts/${ctx.shift.id}/report.pdf`)).status, 403);
+  assert.strictEqual((await gerant('POST', `/api/shifts/${ctx.shift.id}/constructor/1/keep`)).status, 404, 'type d’opération inconnu');
+
+  assert.strictEqual((await luc('POST', '/api/auth/password', { current: 'pompiste2', password: 'pompiste3' })).status, 200);
+  assert.strictEqual((await lucPhone('GET', '/api/auth/me')).status, 401, 'l’autre téléphone est déconnecté');
+  assert.strictEqual((await luc('GET', '/api/auth/me')).status, 200, 'la session en cours reste ouverte');
+});
+
+test('installation neuve : pas d’inscription client avant le gérant ; origine étrangère refusée', async () => {
+  const fresh = createApp({ dbFile: ':memory:' });
+  const srv = await new Promise((resolve) => {
+    const s = fresh.listen(0, () => resolve(s));
+  });
+  const url = `http://localhost:${srv.address().port}`;
+  const post = (path, body, headers = {}) =>
+    fetch(url + path, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) });
+  try {
+    assert.strictEqual((await post('/api/register', { name: 'Trop Tôt', phone: '+243990000001', password: 'motdepasse' })).status, 409);
+    assert.strictEqual((await (await fetch(`${url}/api/setup`)).json()).needsSetup, true, 'la station reste à configurer');
+    assert.strictEqual((await post('/api/auth/login', { login: 'a', password: 'b' }, { Origin: 'https://ailleurs.example' })).status, 403);
+    assert.strictEqual((await fetch(`${url}/api/health`)).status, 200);
+  } finally {
+    srv.close();
+  }
 });
 
 test('dépenses et rapport avec marge', async () => {
@@ -357,6 +401,7 @@ test('dépenses et rapport avec marge', async () => {
   assert.strictEqual(rep.totals.combos, 2);
   const diesel = rep.byProduct.find((p) => p.product === 'Gasoil');
   assert.strictEqual(diesel.avg_cost, 1);
+  assert.strictEqual(typeof diesel.margin_per_liter, 'number');
 
   const res = await fetch(`${baseUrl}/api/reports/sales?from=${today()}&to=${today()}&format=csv`);
   assert.strictEqual(res.status, 401);

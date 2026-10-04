@@ -37,7 +37,9 @@ module.exports = function requestRoutes(db) {
     if (!customer) fail(403, 'Compte client désactivé.');
     const product = db.prepare('SELECT * FROM products WHERE id = ? AND active = 1').get(Number(b.productId));
     if (!product) fail(400, 'Choisissez un produit.');
-    const payment = oneOf(b.payment ?? 'paid', 'Le mode de paiement', ['paid', 'credit', 'combo']);
+    // Paying cash needs no request: the pump's indexes count it. Requests are on credit (or combos).
+    if (b.payment === 'paid') fail(400, 'Préparez votre achat à crédit : un achat comptant se paie directement à la pompe.');
+    const payment = oneOf(b.payment ?? 'credit', 'Le mode de paiement', ['credit', 'combo']);
     if (payment === 'credit' && customer.credit_limit <= 0) {
       fail(400, "Le crédit n'est pas ouvert sur votre compte. Adressez-vous au gérant.");
     }

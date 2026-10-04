@@ -48,7 +48,7 @@ export async function renderAccount(page) {
           spinner(),
           h('div', { class: 'muted' }, 'En attente de confirmation par le pompiste'),
           h('div', { class: 'big' }, r.amount ? fmt.money(r.amount) : fmt.liters(r.liters)),
-          h('div', {}, `${r.product_name} · ${{ credit: 'à crédit', combo: 'avec mes combos', paid: 'payé' }[r.payment]}${r.plate ? ` · ${r.plate}` : ''}`),
+          h('div', {}, `${r.product_name} · ${{ credit: 'à crédit', combo: 'avec mes combos', paid: 'payé' }[r.payment] ?? ''}${r.plate ? ` · ${r.plate}` : ''}`),
           h('p', { class: 'muted small', style: 'margin-top:10px' }, `Donnez votre nom au pompiste : ${r.customer_name}`),
           h(
             'div',
@@ -113,6 +113,8 @@ export async function renderAccount(page) {
     const c = acc.customer;
     const canCredit = c.credit_limit > 0;
     const canCombo = flags.combos && acc.combos.balance >= acc.combos.threshold;
+    // Paying cash needs no request: the pump's indexes count it.
+    if (!canCredit && !canCombo) return toast('Le crédit n’est pas ouvert sur votre compte : payez directement à la pompe.', 'error');
     const priceOf = (p) => (c.type === 'account' ? p.subscriber_price : p.price);
     const estimate = h('div', { class: 'summary-line total' }, h('span', {}, 'Estimation'), h('span', {}, '—'));
     const update = (e) => {
@@ -132,13 +134,13 @@ export async function renderAccount(page) {
         { name: 'productId', label: 'Carburant', type: 'segment', options: products.map((p) => [p.id, `${p.name} · ${fmt.price(priceOf(p))}`]), onInput: update },
         { name: 'unit', label: 'Je veux', type: 'segment', options: [['amount', 'Un montant ($)'], ['liters', 'Des litres']], onInput: update },
         { name: 'qty', label: 'Quantité', type: 'number', step: '0.01', min: '0.5', required: true, onInput: update, inputmode: 'decimal' },
-        ...(canCredit || canCombo
+        ...(canCredit && canCombo
           ? [
               {
                 name: 'payment',
                 label: 'Paiement',
                 type: 'segment',
-                options: [['paid', 'Je paie'], ...(canCredit ? [['credit', 'À crédit']] : []), ...(canCombo ? [['combo', `Mes combos (${fmt.money(acc.combos.value)})`]] : [])],
+                options: [['credit', 'À crédit'], ['combo', `Mes combos (${fmt.money(acc.combos.value)})`]],
                 onInput: update,
               },
             ]
@@ -150,7 +152,7 @@ export async function renderAccount(page) {
         api.post('/me/requests', {
           productId: Number(d.productId),
           [d.unit === 'amount' ? 'amount' : 'liters']: d.qty,
-          payment: d.payment || 'paid',
+          payment: d.payment || (canCredit ? 'credit' : 'combo'),
           plate: d.plate,
         }),
     });

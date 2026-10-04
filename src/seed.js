@@ -10,6 +10,8 @@ const FALLBACK_PRICE = 1.4;
 function seedTestData(db, { force = false, fill = 0.9 } = {}) {
   const manager = db.prepare("SELECT id FROM users WHERE role = 'manager' ORDER BY id LIMIT 1").get();
   if (!manager) return { skipped: 'Station non configurée : créez d’abord le compte gérant.' };
+  // Une station qui a déjà des postes travaille avec de vraies données : on n'y touche plus.
+  if (!force && db.prepare('SELECT 1 FROM shifts LIMIT 1').get()) return { skipped: 'Des postes existent déjà : rien n’est ajouté.' };
 
   return transaction(db, () => {
     const result = { tanks: [], prices: [] };
@@ -32,8 +34,8 @@ function seedTestData(db, { force = false, fill = 0.9 } = {}) {
       if (!force && history > 1) continue;
       const price = TEST_PRICES[product.name] ?? FALLBACK_PRICE;
       if (price === product.price) continue;
-      // Prix abonné : 5 cents sous le prix public.
-      db.prepare('UPDATE products SET price = ?, subscriber_price = ? WHERE id = ?').run(price, round(price - 0.05, 2), product.id);
+      // Prix abonné : 5 cents au-dessus du prix public, comme le veut la règle des abonnés.
+      db.prepare('UPDATE products SET price = ?, subscriber_price = ? WHERE id = ?').run(price, round(price + 0.05, 2), product.id);
       db.prepare('INSERT INTO price_history (product_id, price, user_id) VALUES (?, ?, ?)').run(product.id, price, manager.id);
       result.prices.push({ name: product.name, price });
     }

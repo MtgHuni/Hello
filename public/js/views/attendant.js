@@ -257,7 +257,7 @@ function requestQueue(shift, reload) {
               ? badge(overLimit ? 'Crédit · dépasse le plafond' : 'Crédit', overLimit ? 'serious' : 'info')
               : r.payment === 'combo'
                 ? badge(`Avec ses combos (${r.loyalty_points})`, 'warning')
-                : badge('Payé', 'good'),
+                : null,
             r.customer_type === 'account' ? badge('Abonné') : null,
             r.plate ? badge(r.plate) : null,
           ),

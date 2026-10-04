@@ -91,6 +91,7 @@ export async function renderReports(page, ctx) {
             { label: 'Montant', align: 'right', render: (x) => fmt.money(x.amount) },
             { label: 'Coût moyen', align: 'right', render: (x) => (x.avg_cost == null ? '—' : fmt.price(x.avg_cost)) },
             { label: 'Marge', align: 'right', render: (x) => (x.margin == null ? '—' : fmt.money(x.margin)) },
+            { label: 'Marge / L', align: 'right', render: (x) => (x.margin_per_liter == null ? '—' : fmt.price(x.margin_per_liter)) },
           ],
           r.byProduct,
           { empty: 'Aucune vente sur la période.' },

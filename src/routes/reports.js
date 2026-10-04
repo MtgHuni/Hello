@@ -1,6 +1,6 @@
 const express = require('express');
 const { getSettings } = require('../db');
-const { round, dateParam, fail } = require('../util');
+const { round, dateParam, fail, csvCell } = require('../util');
 const { requireRole } = require('../auth');
 const { subscriberDues } = require('../loyalty');
 
@@ -11,6 +11,17 @@ const DAY = "date(s.closed_at, 'localtime')";
 
 module.exports = function reportRoutes(db) {
   const router = express.Router();
+
+  // Subscribers pay their own price: the gap with the pump price, per closing day and product.
+  // The meter amounts are at the pump price, so this is added to get the real sales.
+  const surchargeStmt = db.prepare(
+    `SELECT ${DAY} AS date, sa.product_id, SUM(sa.amount - sa.liters * r.unit_price) AS surcharge
+     FROM sales sa JOIN shifts s ON s.id = sa.shift_id
+     JOIN shift_readings r ON r.shift_id = sa.shift_id AND r.nozzle_id = sa.nozzle_id
+     WHERE s.status != 'open' AND ${DAY} BETWEEN ? AND ?
+     GROUP BY 1, sa.product_id`,
+  );
+  const surcharges = (from, to) => new Map(surchargeStmt.all(from, to).map((r) => [`${r.date}|${r.product_id}`, r.surcharge]));
 
   router.get('/dashboard', manager, (req, res) => {
     const settings = getSettings(db);
@@ -24,8 +35,12 @@ module.exports = function reportRoutes(db) {
                     WHERE s.status != 'open' AND ${DAY} = ?) r ON r.product_id = p.id
          WHERE p.active = 1 GROUP BY p.id ORDER BY p.id`,
       )
-      .all(today)
-      .map((r) => ({ ...r, liters: round(r.liters), amount: round(r.amount) }));
+      .all(today);
+    const todaySurcharge = surcharges(today, today);
+    for (const r of todayByProduct) {
+      r.liters = round(r.liters);
+      r.amount = round(r.amount + (todaySurcharge.get(`${today}|${r.id}`) || 0));
+    }
 
     const last7 = db
       .prepare(
@@ -182,12 +197,14 @@ module.exports = function reportRoutes(db) {
 
     const byDay = db
       .prepare(
-        `SELECT ${DAY} AS date, p.name AS product, ROUND(SUM(r.liters), 2) AS liters, ROUND(SUM(r.amount), 2) AS amount
+        `SELECT ${DAY} AS date, p.id AS product_id, p.name AS product, ROUND(SUM(r.liters), 2) AS liters, ROUND(SUM(r.amount), 2) AS amount
          FROM shift_readings r JOIN shifts s ON s.id = r.shift_id JOIN products p ON p.id = r.product_id
          WHERE s.status != 'open' AND ${DAY} BETWEEN ? AND ?
          GROUP BY 1, p.id ORDER BY 1, p.id`,
       )
       .all(from, to);
+    const surcharge = surcharges(from, to);
+    for (const r of byDay) r.amount = round(r.amount + (surcharge.get(`${r.date}|${r.product_id}`) || 0));
 
     const byProduct = db
       .prepare(
@@ -197,6 +214,10 @@ module.exports = function reportRoutes(db) {
          GROUP BY p.id ORDER BY p.id`,
       )
       .all(from, to);
+    for (const p of byProduct) {
+      for (const [key, value] of surcharge) if (key.endsWith(`|${p.product_id}`)) p.amount += value;
+      p.amount = round(p.amount);
+    }
 
     const byAttendant = db
       .prepare(
@@ -237,7 +258,7 @@ module.exports = function reportRoutes(db) {
 
     if (req.query.format === 'csv') {
       const lines = ['Date;Produit;Litres;Montant (USD)'];
-      for (const r of byDay) lines.push([r.date, r.product, String(r.liters).replace('.', ','), String(r.amount).replace('.', ',')].join(';'));
+      for (const r of byDay) lines.push([r.date, csvCell(r.product), String(r.liters).replace('.', ','), String(r.amount).replace('.', ',')].join(';'));
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="ventes_${from}_${to}.csv"`);
       return res.send(`﻿${lines.join('\r\n')}\r\n`);
@@ -264,6 +285,7 @@ module.exports = function reportRoutes(db) {
       const cost = avgCost.get(p.product_id, to).cost;
       p.avg_cost = cost == null ? null : round(cost, 3);
       p.margin = cost == null ? null : round(p.amount - p.liters * cost);
+      p.margin_per_liter = cost == null || !p.liters ? null : round(p.margin / p.liters, 3);
       if (cost == null) costKnown = false;
       else costOfSales += p.liters * cost;
     }

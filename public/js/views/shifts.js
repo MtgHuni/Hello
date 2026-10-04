@@ -90,7 +90,7 @@ export async function renderShiftDetail(page, ctx) {
 // Operations the attendant asked to cancel: they stay counted until the manager decides.
 function cancellationRequests(shift, reload) {
   const items = [
-    ...shift.sales.map((x) => ({ x, kind: 'sales', title: `Vente · ${x.customer_name}`, detail: `${x.product_name} · ${fmt.liters(x.liters)}`, amount: x.amount })),
+    ...shift.sales.map((x) => ({ x, kind: 'sales', title: `${x.kind === 'credit' ? 'Crédit' : x.kind === 'combo' ? 'Combos' : 'Vente'} · ${x.customer_name}`, detail: `${x.product_name} · ${fmt.liters(x.liters)}`, amount: x.amount })),
     ...shift.payments.map((x) => ({ x, kind: 'payments', title: `Règlement · ${x.customer_name}`, detail: x.method, amount: x.amount })),
     ...shift.expenses.map((x) => ({ x, kind: 'expenses', title: `Dépense · ${x.category}`, detail: x.description, amount: x.amount })),
   ].filter((i) => i.x.cancel_requested_at);
@@ -168,7 +168,7 @@ export function shiftSummary(shift, tolerance) {
     h(
       'section',
       { class: 'card flush' },
-      h('div', { class: 'card-header' }, h('h2', {}, 'Ventes clients'), h('p', {}, `${shift.sales.length} vente${shift.sales.length > 1 ? 's' : ''}`)),
+      h('div', { class: 'card-header' }, h('h2', {}, 'Crédits et demandes clients'), h('p', {}, `${shift.sales.length} opération${shift.sales.length > 1 ? 's' : ''}`)),
       table(
         [
           { label: 'Heure', render: (s) => fmt.time(s.created_at) },
@@ -190,7 +190,7 @@ export function shiftSummary(shift, tolerance) {
           { label: 'Montant', align: 'right', render: (s) => fmt.money(s.amount) },
         ],
         shift.sales,
-        { empty: 'Aucune vente client sur ce poste.' },
+        { empty: 'Aucun crédit sur ce poste.' },
       ),
     ),
     shift.payments.length
