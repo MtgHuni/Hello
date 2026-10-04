@@ -1052,16 +1052,15 @@ dialog.action-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; 
   transition: box-shadow 0.3s var(--ease), background-color 0.2s, transform 0.2s var(--ease);
 }
 .quick-action:hover { box-shadow: var(--shadow-lift); }
-/* Each action is its own sign: the main one solid yellow, the others tinted sky, violet, orange. */
+/* Each action is its own sign, all built alike: a tinted tile and a solid icon square, yellow for
+   the main one (Crédit), then sky, violet, orange. */
 .quick-action { --hue: var(--sign-sky); --hue-ink: var(--sign-sky-ink); background: color-mix(in oklab, var(--hue) var(--sign-tint), var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--hue) 45%, transparent); color: var(--hue-ink); }
 .quick-action:nth-child(4n + 3) { --hue: var(--sign-violet); --hue-ink: var(--sign-violet-ink); }
 .quick-action:nth-child(4n + 4) { --hue: var(--sign-orange); --hue-ink: var(--sign-orange-ink); }
-.quick-action:hover { background: color-mix(in oklab, var(--hue) calc(var(--sign-tint) + 10%), var(--surface)); }
+.quick-action:hover { background: color-mix(in oklab, var(--hue) calc(var(--sign-tint) + 10%), var(--surface)); box-shadow: inset 0 0 0 1px var(--hue), var(--shadow-lift); }
 .quick-action .qa-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--radius-md); background: var(--hue); color: var(--on-sign); }
 .quick-action .qa-icon svg { width: 21px; height: 21px; }
-.quick-action.primary { background: var(--sign-yellow); box-shadow: none; color: var(--on-sign); }
-.quick-action.primary:hover { background: var(--sign-yellow-hover); }
-.quick-action.primary .qa-icon { background: color-mix(in srgb, var(--on-sign) 14%, transparent); color: var(--on-sign); }
+.quick-action.primary { --hue: var(--sign-yellow); --hue-ink: var(--sign-yellow-ink); }
 .kpi-row { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .kpi-row .card { padding: 18px; }
 .kpi-row .kpi .label { font-size: 13px; }
