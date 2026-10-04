@@ -38,18 +38,18 @@ module.exports = function shiftRoutes(db) {
       .all(id);
     shift.sales = db
       .prepare(
-        `SELECT sa.*, c.name AS customer_name, c.type AS customer_type, p.name AS product_name
-         FROM sales sa JOIN customers c ON c.id = sa.customer_id JOIN products p ON p.id = sa.product_id
+        `SELECT sa.*, c.name AS customer_name, c.type AS customer_type, p.name AS product_name, us.name AS user_name
+         FROM sales sa JOIN customers c ON c.id = sa.customer_id JOIN products p ON p.id = sa.product_id LEFT JOIN users us ON us.id = sa.user_id
          WHERE sa.shift_id = ? ORDER BY sa.id`,
       )
       .all(id);
     shift.payments = db
       .prepare(
-        `SELECT pa.*, c.name AS customer_name FROM payments pa JOIN customers c ON c.id = pa.customer_id
+        `SELECT pa.*, c.name AS customer_name, us.name AS user_name FROM payments pa JOIN customers c ON c.id = pa.customer_id LEFT JOIN users us ON us.id = pa.user_id
          WHERE pa.shift_id = ? ORDER BY pa.id`,
       )
       .all(id);
-    shift.expenses = db.prepare('SELECT * FROM expenses WHERE shift_id = ? ORDER BY id').all(id);
+    shift.expenses = db.prepare('SELECT e.*, us.name AS user_name FROM expenses e LEFT JOIN users us ON us.id = e.user_id WHERE e.shift_id = ? ORDER BY e.id').all(id);
     shift.pending_cancellations = pendingCancellations(id);
     shift.attendants = db
       .prepare('SELECT a.user_id, u.name, a.joined_at, a.left_at FROM shift_attendants a JOIN users u ON u.id = a.user_id WHERE a.shift_id = ? ORDER BY a.id')

@@ -200,7 +200,7 @@ function swap(update, direction) {
 
 async function route() {
   if (!state.user) return;
-  const [section = '', id] = location.hash.replace(/^#\/?/, '').split('/');
+  const [section = '', id, sub] = location.hash.replace(/^#\/?/, '').split('/');
   const role = state.user.role;
   const nav = NAV[role];
   const entry = nav.find(([path]) => path === section) || nav[0];
@@ -228,7 +228,7 @@ async function route() {
     if (token === routeToken) shell.slot.replaceChildren(h('div', { class: 'loading' }, spinner()));
   }, 300);
   try {
-    await view(page, { id, state, navigate, refresh: route });
+    await view(page, { id, sub, state, navigate, refresh: route });
   } catch (err) {
     page.replaceChildren(errorState(err, () => route()));
   }

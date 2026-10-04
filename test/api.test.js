@@ -682,6 +682,13 @@ test('relève, fermeture du soir et ouverture du matin : le poste continue', asy
   const next = (await pompiste('GET', '/api/shifts/state')).data;
   assert.strictEqual(next.shift.id, done.data.next_shift_id);
   assert.strictEqual(next.onDuty, true);
+  assert.strictEqual((await pompiste('POST', `/api/shifts/${next.shift.id}/close`, {})).status, 403, 'le pompiste ne clôture jamais');
+  // The manager's state of the shift: who entered what, and a reading of the meters without saving it.
+  const live = await gerant('POST', `/api/shifts/${next.shift.id}/checkpoints/preview`, { readings: next.shift.readings.map((r) => ({ nozzleId: r.nozzle_id, meter: r.start_meter + 5 })) });
+  assert.strictEqual(live.status, 200);
+  assert.strictEqual(live.data.liters, 5 * next.shift.readings.length);
+  assert.strictEqual((await gerant('GET', `/api/shifts/${next.shift.id}`)).data.checkpoints.length, 0, 'le contrôle n’enregistre rien');
+  assert.strictEqual((await gerant('GET', `/api/shifts/${shift.id}`)).data.sales.find((s) => s.id === credit.id).user_name, 'Paul');
   assert.strictEqual(dieselOf(next.shift).start_meter, diesel.start_meter + 30);
 });
 

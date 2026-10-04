@@ -4,6 +4,7 @@ import { shiftLine, h, fmt, pageHeader, card, cardHeader, table, segmented, shif
 import { icon } from '../icons.js';
 import { renderClosing } from './attendant.js';
 import { reportCard } from './relay.js';
+import { renderShiftStatus } from './shiftStatus.js';
 
 // Money handed over, in dollars.
 const declared = (s) => (s.cash || 0) + (s.mobile_money || 0);
@@ -79,6 +80,7 @@ export async function renderShifts(page, ctx) {
 }
 
 export async function renderShiftDetail(page, ctx) {
+  if (ctx.sub === 'etat' && ctx.state.user.role === 'manager') return renderShiftStatus(page, ctx);
   const shift = await api.get(`/shifts/${ctx.id}`);
   const isManager = ctx.state.user.role === 'manager';
   const backPath = isManager ? 'postes' : 'historique';
@@ -92,6 +94,7 @@ export async function renderShiftDetail(page, ctx) {
       `${shift.attendant_name} · ${fmt.dateTime(shift.opened_at)} → ${shift.closed_at ? fmt.dateTime(shift.closed_at) : 'en cours'}`,
       shiftBadge(shift.status),
       shift.status !== 'open' ? reportLink(shift.id) : null,
+      isManager && shift.status === 'open' ? button('État du poste', () => ctx.navigate(`postes/${shift.id}/etat`), { variant: 'secondary', iconName: 'chart' }) : null,
       isManager && shift.status === 'open' ? button('Clôturer le poste', closingBy('manager'), { variant: shift.closing_due ? '' : 'secondary', iconName: 'shifts' }) : null,
       isManager && shift.status === 'closed' ? button('Corriger la clôture', closingBy('correct'), { variant: 'secondary', iconName: 'edit' }) : null,
       isManager && shift.status !== 'open' ? button(shift.manager_comment ? 'Modifier la remarque' : 'Remarque au pompiste', () => remarkDialog(shift, reload), { variant: 'secondary', iconName: 'message' }) : null,

@@ -14,6 +14,7 @@ export async function renderDashboard(page, { state, navigate }) {
     pageHeader(
       `${hello}, ${state.user.name.split(' ')[0]}`,
       fmt.longDay(d.today),
+      d.openShifts[0] ? button('État du poste', () => navigate(`postes/${d.openShifts[0].id}/etat`), { iconName: 'chart' }) : null,
       button('Nouvelle livraison', () => navigate('cuves'), { variant: 'secondary', iconName: 'truck' }),
     ),
 
@@ -72,7 +73,7 @@ function shiftKpi(s, toValidate) {
   const pending = toValidate ? ` · ${toValidate} à valider` : '';
   return h(
     'a',
-    { class: 'card kpi kpi-link', href: s ? `#/postes/${s.id}` : '#/postes' },
+    { class: 'card kpi kpi-link', href: s ? `#/postes/${s.id}/etat` : '#/postes' },
     h('div', { class: 'label' }, 'Poste en cours'),
     h('div', { class: 'value sm' }, !s ? 'Aucun' : s.station_closed_at ? 'Station fermée' : s.on_duty || 'Personne'),
     h('div', { class: 'sub' }, s ? `Poste n°${s.id} depuis le ${fmt.dateTime(s.opened_at)} · crédits ${fmt.money(s.credit_so_far)}${pending}` : `Aucun poste ouvert${pending}`),
