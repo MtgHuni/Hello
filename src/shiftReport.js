@@ -1,125 +1,19 @@
 // End-of-shift report as a PDF: cash reconciliation, sales computed from the
 // meter indexes (not every sale is entered), credits, expenses and payments.
-const { Pdf, fit, wrap } = require('./pdf');
+const { Report, fmt, COLORS } = require('./pdfReport');
 const { round } = require('./util');
 
-const TZ = 'Africa/Lubumbashi';
-const INK = [10, 10, 11];
-const GREY = [105, 105, 99];
-const RULE = [214, 214, 208];
-const GASOIL = [35, 196, 107];
-const ESSENCE = [240, 49, 58];
-const GOOD = [18, 128, 66];
-const BAD = [196, 28, 38];
-
-const money = (n) => `${(Number(n) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $`;
-const signed = (n) => `${n > 0 ? '+' : ''}${money(n)}`;
-const number = (n) => (n == null ? '—' : Number(n).toLocaleString('fr-FR', { maximumFractionDigits: 2 }));
-const liters = (n) => `${number(n || 0)} L`;
-const price = (n) => (Number(n) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
-// SQLite timestamps are UTC 'YYYY-MM-DD HH:MM:SS'.
-const toDate = (s) => (s instanceof Date ? s : new Date(`${String(s).replace(' ', 'T')}Z`));
-const dateTime = (s) => (s ? toDate(s).toLocaleString('fr-FR', { timeZone: TZ, dateStyle: 'short', timeStyle: 'short' }) : '—');
-const time = (s) => (s ? toDate(s).toLocaleTimeString('fr-FR', { timeZone: TZ, hour: '2-digit', minute: '2-digit' }) : '—');
+const { money, signed, number, liters, price, dateTime, time } = fmt;
 
 function shiftReportPdf(shift, { stationName, combosEnabled, cashTolerance = 0, now = new Date() }) {
-  const pdf = new Pdf({ title: `Rapport du poste n°${shift.id} — ${stationName}` });
-  const L = 42;
-  const R = pdf.width - 42;
-  const TOP = 50;
-  const BOTTOM = pdf.height - 60;
-  let y = TOP;
-  let onBreak = null; // redraws a table's column heads on a new page
-
-  const room = (h) => {
-    if (y + h <= BOTTOM) return;
-    pdf.addPage();
-    y = TOP;
-    if (onBreak) onBreak();
-  };
-
-  // ---- Header ----
-  pdf.rect(L, y, 13, 13, GASOIL).rect(L + 16, y, 13, 13, ESSENCE);
-  pdf.text(L + 38, y + 11, stationName.toUpperCase(), { size: 11, bold: true });
-  const status = shift.status === 'validated' ? `Validé par ${shift.validated_by_name}` : 'Clôturé, à valider';
-  pdf.text(R, y + 11, status, { size: 9.5, bold: true, color: GREY, align: 'right' });
-  y += 50;
-  pdf.text(L, y, `Rapport du poste n°${shift.id}`, { size: 24, bold: true });
-  y += 20;
-  pdf.text(L, y, `${shift.attendant_name}  ·  ouvert le ${dateTime(shift.opened_at)}  ·  clôturé le ${dateTime(shift.closed_at)}`, { size: 10, color: GREY });
-  y += 8;
-
-  const section = (title, note) => {
-    onBreak = null;
-    room(120); // a title never sits alone at the foot of a page
-    y += 30;
-    pdf.text(L, y, title, { size: 13, bold: true });
-    y += 8;
-    pdf.line(L, y, R, y, { color: INK, width: 1 });
-    if (note) {
-      y += 14;
-      pdf.text(L, y, note, { size: 8.5, color: GREY });
-      y += 2;
-    }
-  };
-
-  // Key/value line of the cash summary.
-  const line = (label, value, { bold = false, color = INK } = {}) => {
-    room(20);
-    y += 15;
-    pdf.text(L, y, label, { size: 10, bold });
-    pdf.text(R, y, value, { size: 10, bold, color, align: 'right' });
-    y += 6;
-    pdf.line(L, y, R, y, { color: RULE });
-  };
-
-  // columns: [{ label, width, align: 'left' | 'right', indent }]; the last column takes the rest.
-  const table = (columns, rows, { totals = [], empty } = {}) => {
-    const widths = columns.map((c) => c.width || 0);
-    widths[widths.length - 1] = R - L - widths.slice(0, -1).reduce((a, b) => a + b, 0);
-    const cells = (values, style) => {
-      let x = L;
-      values.forEach((v, i) => {
-        const c = columns[i];
-        const w = widths[i];
-        if (v !== '' && v != null) {
-          if (c.align === 'right') pdf.text(x + w, y, fit(v, w - 8, style.size, style.bold), { ...style, align: 'right' });
-          else pdf.text(x + (c.indent || 0), y, fit(v, w - 10 - (c.indent || 0), style.size, style.bold), style);
-        }
-        x += w;
-      });
-    };
-    const heads = () => {
-      y += 15;
-      cells(columns.map((c) => c.label), { size: 7.5, bold: true, color: GREY });
-      y += 6;
-      pdf.line(L, y, R, y, { color: RULE });
-    };
-    if (!rows.length) {
-      room(22);
-      y += 16;
-      pdf.text(L, y, empty, { size: 9.5, color: GREY });
-      return;
-    }
-    room(40);
-    heads();
-    onBreak = heads;
-    for (const row of rows) {
-      room(20);
-      y += 14;
-      cells(row, { size: 9 });
-      y += 6;
-      pdf.line(L, y, R, y, { color: RULE });
-    }
-    onBreak = null;
-    totals.forEach((row, i) => {
-      room(20);
-      if (i === 0) pdf.line(L, y, R, y, { color: INK, width: 0.8 });
-      y += 15;
-      cells(row, { size: 9.5, bold: true });
-      y += 6;
-    });
-  };
+  const report = new Report({
+    title: `Rapport du poste n°${shift.id}`,
+    stationName,
+    heading: `Rapport du poste n°${shift.id}`,
+    subtitle: `${shift.attendant_name}  ·  ouvert le ${dateTime(shift.opened_at)}  ·  clôturé le ${dateTime(shift.closed_at)}`,
+    status: shift.status === 'validated' ? `Validé par ${shift.validated_by_name}` : 'Clôturé, à valider',
+    now,
+  });
 
   const readings = shift.readings;
   const indexAmount = round(readings.reduce((t, r) => t + (r.amount || 0), 0));
@@ -127,25 +21,30 @@ function shiftReportPdf(shift, { stationName, combosEnabled, cashTolerance = 0, 
   const credits = shift.sales.filter((s) => s.kind === 'credit');
   const combos = shift.sales.filter((s) => s.kind === 'combo');
   const pendingNote = (item) => (item.cancel_requested_at ? 'Annulation demandée' : '');
+  const cdf = shift.cash_cdf && shift.cdf_rate ? round(shift.cash_cdf / shift.cdf_rate) : 0;
+  const handedOver = round((shift.cash || 0) + (shift.card || 0) + (shift.mobile_money || 0) + cdf);
 
   // ---- Cash ----
-  section('Caisse', 'À remettre = ventes par les index − crédits − combos + règlements reçus − dépenses.');
-  line('Ventes calculées par les index', money(shift.total_amount));
-  line('− Ventes à crédit', money(shift.credit_amount));
-  if (combosEnabled || shift.combo_amount) line('− Carburant échangé contre des combos', money(shift.combo_amount));
-  line('+ Règlements de clients reçus', money(shift.payments_amount));
-  line('− Dépenses payées par la caisse', money(shift.expenses_amount));
-  line('À remettre', money(shift.expected_amount), { bold: true });
-  line(`Remis : espèces ${money(shift.cash)} · carte ${money(shift.card)}`, money(round(shift.cash + shift.card)));
+  report.section('Caisse', 'À remettre = ventes par les index − crédits − combos + règlements reçus − dépenses.');
+  report.line('Ventes calculées par les index', money(shift.total_amount));
+  report.line('− Ventes à crédit', money(shift.credit_amount));
+  if (combosEnabled || shift.combo_amount) report.line('− Carburant échangé contre des combos', money(shift.combo_amount));
+  report.line('+ Règlements de clients reçus', money(shift.payments_amount));
+  report.line('− Dépenses payées par la caisse', money(shift.expenses_amount));
+  report.line('À remettre', money(shift.expected_amount), { bold: true });
+  report.line('Remis : espèces en dollars', money(shift.cash));
+  if (shift.cash_cdf) report.line(`Remis : espèces en francs, ${number(shift.cash_cdf)} FC à ${number(shift.cdf_rate)} FC/$`, money(cdf));
+  if (shift.mobile_money) report.line('Remis : mobile money', money(shift.mobile_money));
+  if (shift.card) report.line('Remis : carte', money(shift.card));
+  report.line('Total remis', money(handedOver), { bold: true });
   const ok = Math.abs(shift.variance) <= cashTolerance;
-  line(ok ? 'Écart de caisse (dans la tolérance)' : 'Écart de caisse (hors tolérance)', signed(shift.variance), { bold: true, color: ok ? GOOD : BAD });
+  report.line(ok ? 'Écart de caisse (dans la tolérance)' : 'Écart de caisse (hors tolérance)', signed(shift.variance), { bold: true, color: ok ? COLORS.GOOD : COLORS.BAD });
   if (shift.pending_cancellations) {
-    y += 16;
-    pdf.text(L, y, `${shift.pending_cancellations} annulation${shift.pending_cancellations > 1 ? 's' : ''} en attente de la décision du gérant.`, { size: 9, bold: true, color: BAD });
+    report.note(`${shift.pending_cancellations} annulation${shift.pending_cancellations > 1 ? 's' : ''} en attente de la décision du gérant.`, { bold: true, color: COLORS.BAD });
   }
 
   // ---- Sales from the meters ----
-  section('Ventes calculées par les index', 'Toutes les ventes ne sont pas saisies : litres = index de fin − index de début, au prix figé à l’ouverture.');
+  report.section('Ventes calculées par les index', 'Toutes les ventes ne sont pas saisies : litres = index de fin − index de début, au prix figé à l’ouverture.');
   const byProduct = new Map();
   for (const r of readings) {
     const p = byProduct.get(r.product_name) || { liters: 0, amount: 0 };
@@ -156,7 +55,7 @@ function shiftReportPdf(shift, { stationName, combosEnabled, cashTolerance = 0, 
   const totals = byProduct.size > 1 ? [...byProduct].map(([name, p]) => [`Total ${name}`, '', '', '', liters(round(p.liters)), '', money(round(p.amount))]) : [];
   totals.push(['Total des index', '', '', '', liters(shift.total_liters), '', money(indexAmount)]);
   if (surcharge) totals.push([surcharge > 0 ? 'Supplément abonnés' : 'Remise abonnés', '', '', '', '', '', money(surcharge)], ['Total des ventes', '', '', '', '', '', money(shift.total_amount)]);
-  table(
+  report.table(
     [
       { label: 'POMPE · PISTOLET', width: 146 },
       { label: 'PRODUIT', width: 62 },
@@ -171,40 +70,34 @@ function shiftReportPdf(shift, { stationName, combosEnabled, cashTolerance = 0, 
   );
 
   // ---- Credits ----
-  section('Crédits accordés', credits.length ? `${credits.length} vente${credits.length > 1 ? 's' : ''} à crédit` : null);
-  table(
-    [
-      { label: 'HEURE', width: 44 },
-      { label: 'CLIENT', width: 178 },
-      { label: 'PRODUIT', width: 64 },
-      { label: 'LITRES', width: 64, align: 'right' },
-      { label: 'MONTANT', width: 80, align: 'right' },
-      { label: 'REMARQUE', indent: 14 },
-    ],
+  const saleColumns = [
+    { label: 'HEURE', width: 44 },
+    { label: 'CLIENT', width: 178 },
+    { label: 'PRODUIT', width: 64 },
+    { label: 'LITRES', width: 64, align: 'right' },
+    { label: 'MONTANT', width: 80, align: 'right' },
+    { label: 'REMARQUE', indent: 14 },
+  ];
+  report.section('Crédits accordés', credits.length ? `${credits.length} vente${credits.length > 1 ? 's' : ''} à crédit` : null);
+  report.table(
+    saleColumns,
     credits.map((s) => [time(s.created_at), s.customer_name, s.product_name, liters(s.liters), money(s.amount), [s.over_limit ? 'Hors plafond' : '', pendingNote(s)].filter(Boolean).join(' · ')]),
     { totals: [['Total', '', '', liters(round(credits.reduce((t, s) => t + s.liters, 0))), money(shift.credit_amount), '']], empty: 'Aucun crédit sur ce poste.' },
   );
 
   // ---- Combos (only when some were exchanged) ----
   if (combos.length) {
-    section('Combos échangés');
-    table(
-      [
-        { label: 'HEURE', width: 44 },
-        { label: 'CLIENT', width: 178 },
-        { label: 'PRODUIT', width: 64 },
-        { label: 'LITRES', width: 64, align: 'right' },
-        { label: 'MONTANT', width: 80, align: 'right' },
-        { label: 'REMARQUE', indent: 14 },
-      ],
+    report.section('Combos échangés');
+    report.table(
+      saleColumns,
       combos.map((s) => [time(s.created_at), s.customer_name, s.product_name, liters(s.liters), money(s.amount), pendingNote(s)]),
       { totals: [['Total', '', '', '', money(shift.combo_amount), '']] },
     );
   }
 
   // ---- Expenses ----
-  section('Dépenses', shift.expenses.length ? 'Payées avec l’argent de la caisse du poste' : null);
-  table(
+  report.section('Dépenses', shift.expenses.length ? 'Payées avec l’argent de la caisse du poste' : null);
+  report.table(
     [
       { label: 'HEURE', width: 44 },
       { label: 'CATÉGORIE', width: 92 },
@@ -217,8 +110,8 @@ function shiftReportPdf(shift, { stationName, combosEnabled, cashTolerance = 0, 
   );
 
   // ---- Payments received ----
-  section('Règlements de clients reçus');
-  table(
+  report.section('Règlements de clients reçus');
+  report.table(
     [
       { label: 'HEURE', width: 44 },
       { label: 'CLIENT', width: 178 },
@@ -236,29 +129,11 @@ function shiftReportPdf(shift, { stationName, combosEnabled, cashTolerance = 0, 
     shift.status === 'validated' ? [`Validé par ${shift.validated_by_name} le ${dateTime(shift.validated_at)}`, shift.manager_comment || ''] : null,
   ].filter(Boolean);
   if (remarks.length) {
-    section('Remarques');
-    for (const [label, text] of remarks) {
-      room(36);
-      y += 15;
-      pdf.text(L, y, label, { size: 9.5, bold: true });
-      for (const l of wrap(text, R - L, 9.5)) {
-        room(16);
-        y += 13;
-        pdf.text(L, y, l, { size: 9.5 });
-      }
-    }
+    report.section('Remarques');
+    for (const [label, text] of remarks) report.paragraph(label, text);
   }
 
-  // ---- Footers, once the page count is known ----
-  const count = pdf.pages.length;
-  for (let i = 0; i < count; i++) {
-    pdf.usePage(i);
-    const fy = pdf.height - 34;
-    pdf.line(L, fy - 12, R, fy - 12, { color: RULE });
-    pdf.text(L, fy, `${stationName} · Rapport du poste n°${shift.id}`, { size: 8, color: GREY });
-    pdf.text(R, fy, `Édité le ${dateTime(now)} · page ${i + 1}/${count}`, { size: 8, color: GREY, align: 'right' });
-  }
-  return pdf.toBuffer();
+  return report.finish();
 }
 
 module.exports = { shiftReportPdf };

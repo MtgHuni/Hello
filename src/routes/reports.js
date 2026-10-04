@@ -3,6 +3,7 @@ const { getSettings } = require('../db');
 const { round, dateParam, fail, csvCell } = require('../util');
 const { requireRole } = require('../auth');
 const { subscriberDues } = require('../loyalty');
+const { periodReportPdf } = require('../periodReport');
 
 const manager = requireRole('manager');
 
@@ -189,11 +190,46 @@ module.exports = function reportRoutes(db) {
     });
   });
 
-  router.get('/reports/sales', manager, (req, res) => {
+  const period = (req) => {
     const from = dateParam(req.query.from, 'La date de début');
     const to = dateParam(req.query.to, 'La date de fin');
     if (!from || !to) fail(400, 'Choisissez une période.');
     if (from > to) fail(400, 'La date de début doit précéder la date de fin.');
+    return { from, to };
+  };
+
+  // Per tank over a period: deliveries, litres sold (meters), dip variances, loss as a share of
+  // the litres sold, and the days of stock left at the pace of the last 14 days.
+  function stockMovements(from, to) {
+    return db
+      .prepare(
+        `SELECT t.id, t.name, p.name AS product, t.capacity, t.low_level, t.book_stock,
+           (SELECT COALESCE(SUM(d.liters_received), 0) FROM deliveries d
+             WHERE d.tank_id = t.id AND date(d.created_at, 'localtime') BETWEEN ? AND ?) AS delivered,
+           (SELECT COALESCE(SUM(r.liters), 0) FROM shift_readings r JOIN shifts s ON s.id = r.shift_id
+             WHERE r.tank_id = t.id AND s.status != 'open' AND ${DAY} BETWEEN ? AND ?) AS sold,
+           (SELECT COALESCE(SUM(d.variance), 0) FROM dips d
+             WHERE d.tank_id = t.id AND date(d.created_at, 'localtime') BETWEEN ? AND ?) AS dip_variance,
+           (SELECT COUNT(*) FROM dips d WHERE d.tank_id = t.id AND date(d.created_at, 'localtime') BETWEEN ? AND ?) AS dips,
+           (SELECT COALESCE(SUM(r.liters), 0) FROM shift_readings r JOIN shifts s ON s.id = r.shift_id
+             WHERE r.tank_id = t.id AND s.status != 'open' AND s.closed_at >= datetime('now', '-14 days')) AS sold14
+         FROM tanks t JOIN products p ON p.id = t.product_id WHERE t.active = 1 ORDER BY t.id`,
+      )
+      .all(from, to, from, to, from, to, from, to)
+      .map((t) => ({
+        ...t,
+        delivered: round(t.delivered),
+        sold: round(t.sold),
+        dip_variance: round(t.dip_variance),
+        // A negative dip variance is fuel missing from the tank: shown as a positive loss.
+        loss_pct: t.sold ? round((-t.dip_variance / t.sold) * 100, 2) : null,
+        days_left: t.sold14 > 0 ? Math.floor(t.book_stock / (t.sold14 / 14)) : null,
+      }));
+  }
+
+  // One period's figures: the Reports screen, its CSV export and the period PDF.
+  function salesReport(from, to) {
+    const settings = getSettings(db);
 
     const byDay = db
       .prepare(
@@ -221,19 +257,26 @@ module.exports = function reportRoutes(db) {
 
     const byAttendant = db
       .prepare(
-        `SELECT u.name AS attendant, COUNT(*) AS shifts, ROUND(SUM(s.total_liters), 2) AS liters,
-           ROUND(SUM(s.total_amount), 2) AS amount, ROUND(SUM(s.variance), 2) AS variance
+        // Shortages and surpluses are counted apart: summed together they would cancel out.
+        `SELECT u.id AS attendant_id, u.name AS attendant, COUNT(*) AS shifts, ROUND(SUM(s.total_liters), 2) AS liters,
+           ROUND(SUM(s.total_amount), 2) AS amount, ROUND(SUM(s.variance), 2) AS variance,
+           SUM(ABS(s.variance) > ? + 0.001) AS outside,
+           ROUND(SUM(CASE WHEN s.variance < 0 THEN s.variance ELSE 0 END), 2) AS shortages,
+           ROUND(SUM(CASE WHEN s.variance > 0 THEN s.variance ELSE 0 END), 2) AS surpluses,
+           MIN(s.variance) AS worst
          FROM shifts s JOIN users u ON u.id = s.attendant_id
          WHERE s.status != 'open' AND ${DAY} BETWEEN ? AND ?
          GROUP BY u.id ORDER BY amount DESC`,
       )
-      .all(from, to);
+      .all(settings.cashTolerance, from, to);
 
     const money = db
       .prepare(
         `SELECT ROUND(COALESCE(SUM(cash), 0), 2) AS cash, ROUND(COALESCE(SUM(card), 0), 2) AS card,
            ROUND(COALESCE(SUM(credit_amount), 0), 2) AS credit, ROUND(COALESCE(SUM(variance), 0), 2) AS variance,
            ROUND(COALESCE(SUM(combo_amount), 0), 2) AS combos,
+           ROUND(COALESCE(SUM(mobile_money), 0), 2) AS mobileMoney, ROUND(COALESCE(SUM(cash_cdf), 0), 2) AS cashCdf,
+           ROUND(COALESCE(SUM(cash_cdf / cdf_rate), 0), 2) AS cdfUsd,
            ROUND(COALESCE(SUM(total_amount), 0), 2) AS amount, ROUND(COALESCE(SUM(total_liters), 0), 2) AS liters
          FROM shifts s WHERE s.status != 'open' AND ${DAY} BETWEEN ? AND ?`,
       )
@@ -256,13 +299,6 @@ module.exports = function reportRoutes(db) {
       )
       .get(from, to).total;
 
-    if (req.query.format === 'csv') {
-      const lines = ['Date;Produit;Litres;Montant (USD)'];
-      for (const r of byDay) lines.push([r.date, csvCell(r.product), String(r.liters).replace('.', ','), String(r.amount).replace('.', ',')].join(';'));
-      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="ventes_${from}_${to}.csv"`);
-      return res.send(`﻿${lines.join('\r\n')}\r\n`);
-    }
 
     const expensesByCategory = db
       .prepare(
@@ -291,7 +327,16 @@ module.exports = function reportRoutes(db) {
     }
     const grossMargin = round(byProduct.reduce((t, p) => t + (p.margin ?? 0), 0));
 
-    res.json({
+    const shifts = db
+      .prepare(
+        `SELECT s.id, s.status, s.closed_at, s.total_liters, s.total_amount, s.credit_amount, s.payments_amount, s.expenses_amount,
+           s.expected_amount, s.cash, s.card, s.mobile_money, s.cash_cdf, s.cdf_rate, s.variance, u.name AS attendant
+         FROM shifts s JOIN users u ON u.id = s.attendant_id
+         WHERE s.status != 'open' AND ${DAY} BETWEEN ? AND ? ORDER BY s.closed_at`,
+      )
+      .all(from, to);
+
+    return {
       from,
       to,
       totals: { ...money, payments, expenses, grossMargin, net: round(grossMargin - expenses), costKnown, costOfSales: round(costOfSales) },
@@ -300,7 +345,41 @@ module.exports = function reportRoutes(db) {
       byAttendant,
       deliveries,
       expensesByCategory,
+      shifts,
+      stock: stockMovements(from, to),
+    };
+  }
+
+  router.get('/reports/sales', manager, (req, res) => {
+    const { from, to } = period(req);
+    const report = salesReport(from, to);
+    if (req.query.format === 'csv') {
+      const lines = ['Date;Produit;Litres;Montant (USD)'];
+      for (const r of report.byDay) lines.push([r.date, csvCell(r.product), String(r.liters).replace('.', ','), String(r.amount).replace('.', ',')].join(';'));
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="ventes_${from}_${to}.csv"`);
+      return res.send(`﻿${lines.join('\r\n')}\r\n`);
+    }
+    res.json(report);
+  });
+
+  // The period's report as a PDF: summary, shifts, products, tanks, expenses, attendants.
+  router.get('/reports/period.pdf', manager, (req, res) => {
+    const { from, to } = period(req);
+    const settings = getSettings(db);
+    const pdf = periodReportPdf(salesReport(from, to), {
+      stationName: settings.stationName,
+      cashTolerance: settings.cashTolerance,
+      combosEnabled: settings.combosEnabled,
     });
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', `attachment; filename="rapport-${from}${from === to ? '' : `_${to}`}.pdf"`);
+    res.send(pdf);
+  });
+
+  router.get('/reports/stock', manager, (req, res) => {
+    const { from, to } = period(req);
+    res.json(stockMovements(from, to));
   });
 
   return router;

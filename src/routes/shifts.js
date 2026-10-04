@@ -1,5 +1,8 @@
 const express = require('express');
 const { EXPENSE_CATEGORIES, getSettings } = require('../db');
+
+// Money handed over, in dollars: francs congolais are converted at the rate frozen at closing.
+const declared = (s) => round((s.cash || 0) + (s.card || 0) + (s.mobile_money || 0) + (s.cdf_rate ? (s.cash_cdf || 0) / s.cdf_rate : 0));
 const { fail, num, str, oneOf, round, dateParam, transaction, money } = require('../util');
 const { requireRole } = require('../auth');
 const { customerBalance } = require('./customers');
@@ -66,7 +69,7 @@ module.exports = function shiftRoutes(db) {
     const from = dateParam(req.query.from, 'La date de début');
     const to = dateParam(req.query.to, 'La date de fin');
     const status = ['open', 'closed', 'validated'].includes(req.query.status) ? req.query.status : null;
-    const attendant = req.user.role === 'manager' ? null : req.user.id;
+    const attendant = req.user.role === 'manager' ? (Number(req.query.attendant) || null) : req.user.id;
     res.json(
       db
         .prepare(
@@ -297,7 +300,7 @@ module.exports = function shiftRoutes(db) {
     db.prepare(
       `UPDATE shifts SET total_amount = ?, credit_amount = ?, combo_amount = ?, payments_amount = ?, expenses_amount = ?, expected_amount = ?, variance = ?
        WHERE id = ?`,
-    ).run(totalAmount, creditAmount, comboAmount, paymentsAmount, expensesAmount, expected, round(shift.cash + shift.card - expected), shiftId);
+    ).run(totalAmount, creditAmount, comboAmount, paymentsAmount, expensesAmount, expected, round(declared(shift) - expected), shiftId);
   }
 
   const pendingCancellations = (shiftId) =>
@@ -307,16 +310,16 @@ module.exports = function shiftRoutes(db) {
     );
 
   // Closing = reconciliation: litres from meters, expected money vs declared money,
-  // then meters and tank book stocks move forward.
-  router.post('/shifts/:id/close', staff, (req, res) => {
-    const shift = getOwnShift(req);
-    const b = req.body || {};
-    const cash = round(num(b.cash, 'Le montant en espèces', { max: 1e8 }));
+  // then meters and tank book stocks move forward. Runs inside the caller's transaction;
+  // a correction calls it again after undoing the first closing (closed_at is kept).
+  function applyClosing(shift, b, rate) {
+    const cash = round(num(b.cash, 'Le montant en espèces ($)', { max: 1e8 }));
     const card = round(num(b.card ?? 0, 'Le montant par carte', { max: 1e8 }));
+    const mobileMoney = round(num(b.mobileMoney ?? 0, 'Le montant en mobile money', { max: 1e8 }));
+    const cashCdf = round(num(b.cashCdf ?? 0, 'Les espèces en francs congolais', { max: 1e13 }));
     const notes = str(b.notes, 'La remarque', { required: false, max: 500 });
     const ends = new Map((Array.isArray(b.readings) ? b.readings : []).map((r) => [Number(r.nozzleId), r.endMeter]));
-
-    transaction(db, () => {
+    {
       const readings = db
         .prepare(
           `SELECT r.*, n.name AS nozzle_name FROM shift_readings r JOIN nozzles n ON n.id = r.nozzle_id
@@ -342,9 +345,67 @@ module.exports = function shiftRoutes(db) {
         db.prepare('UPDATE tanks SET book_stock = ROUND(book_stock - ?, 2) WHERE id = ?').run(liters, r.tank_id);
       }
       db.prepare(
-        "UPDATE shifts SET status = 'closed', closed_at = datetime('now'), cash = ?, card = ?, total_liters = ?, notes = ? WHERE id = ?",
-      ).run(cash, card, round(totalLiters), notes, shift.id);
+        `UPDATE shifts SET status = 'closed', closed_at = COALESCE(closed_at, datetime('now')), cash = ?, card = ?, mobile_money = ?,
+           cash_cdf = ?, cdf_rate = ?, total_liters = ?, notes = ? WHERE id = ?`,
+      ).run(cash, card, mobileMoney, cashCdf, rate, round(totalLiters), notes, shift.id);
       reconcile(shift.id);
+    }
+  }
+
+  // Closed by the attendant, or by the manager in their place (an abandoned shift blocks its pumps).
+  router.post('/shifts/:id/close', staff, (req, res) => {
+    const shift = getOwnShift(req);
+    transaction(db, () => {
+      applyClosing(shift, req.body || {}, getSettings(db).cdfRate);
+      if (shift.attendant_id !== req.user.id) {
+        const attendant = db.prepare('SELECT name FROM users WHERE id = ?').get(shift.attendant_id).name;
+        const s = db.prepare('SELECT * FROM shifts WHERE id = ?').get(shift.id);
+        audit(db, req, {
+          category: 'postes',
+          action: 'shift_closed_by_manager',
+          entity: 'shifts',
+          id: shift.id,
+          summary: `Poste n°${shift.id} clôturé par le gérant à la place de ${attendant} (à remettre ${money(s.expected_amount)}, écart ${money(s.variance)})`,
+        });
+      }
+    });
+    res.json(shiftDetail(shift.id));
+  });
+
+  // Manager: corrects a closing before validation (wrong index, miscounted cash). The first
+  // closing is undone (nozzle meters back, tank stock back), then applied again with the new figures.
+  router.post('/shifts/:id/correct', requireRole('manager'), (req, res) => {
+    const shift = db.prepare('SELECT * FROM shifts WHERE id = ?').get(req.params.id);
+    if (!shift) fail(404, 'Poste introuvable.');
+    if (shift.status !== 'closed') fail(409, 'Seul un poste clôturé et pas encore validé peut être corrigé.');
+    const reason = str(req.body?.reason, 'Le motif de la correction', { max: 300 });
+    transaction(db, () => {
+      const readings = db
+        .prepare('SELECT r.*, n.name AS nozzle_name FROM shift_readings r JOIN nozzles n ON n.id = r.nozzle_id WHERE r.shift_id = ?')
+        .all(shift.id);
+      for (const r of readings) {
+        // A later shift already started from this end index: correcting here would break the chain.
+        if (db.prepare('SELECT 1 FROM shift_readings WHERE nozzle_id = ? AND shift_id > ?').get(r.nozzle_id, shift.id)) {
+          fail(409, `${r.nozzle_name} a déjà servi dans un poste suivant : la clôture ne peut plus être corrigée ici.`);
+        }
+      }
+      for (const r of readings) {
+        db.prepare('UPDATE nozzles SET meter = ? WHERE id = ?').run(r.start_meter, r.nozzle_id);
+        db.prepare('UPDATE tanks SET book_stock = ROUND(book_stock + ?, 2) WHERE id = ?').run(r.liters || 0, r.tank_id);
+      }
+      applyClosing(shift, req.body || {}, shift.cdf_rate ?? getSettings(db).cdfRate);
+      const after = db.prepare('SELECT * FROM shifts WHERE id = ?').get(shift.id);
+      const pick = (s) => ({ total_liters: s.total_liters, total_amount: s.total_amount, expected_amount: s.expected_amount, declared: declared(s), variance: s.variance });
+      audit(db, req, {
+        category: 'postes',
+        action: 'shift_corrected',
+        entity: 'shifts',
+        id: shift.id,
+        summary: `Clôture du poste n°${shift.id} corrigée : à remettre ${money(shift.expected_amount)} → ${money(after.expected_amount)}, écart ${money(shift.variance)} → ${money(after.variance)}`,
+        before: { ...pick(shift), readings: readings.map((r) => ({ nozzle: r.nozzle_name, end: r.end_meter })) },
+        after: pick(after),
+        reason,
+      });
     });
     res.json(shiftDetail(shift.id));
   });

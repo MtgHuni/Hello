@@ -367,6 +367,36 @@ test('accès : un pompiste ne voit pas le poste d’un autre ; mot de passe chan
   assert.strictEqual((await luc('GET', '/api/auth/me')).status, 200, 'la session en cours reste ouverte');
 });
 
+test('le gérant clôture à la place du pompiste (francs congolais, mobile money), puis corrige la clôture', async () => {
+  await gerant('PUT', '/api/settings', { cdfRate: 2500 });
+  const shift = (await gerant('GET', `/api/shifts/${ctx.shift.id}`)).data;
+  const nozzle = shift.readings[0];
+  const start = nozzle.start_meter;
+  const stock = () => db.prepare('SELECT book_stock FROM tanks WHERE id = ?').get(nozzle.tank_id).book_stock;
+  const meter = () => db.prepare('SELECT meter FROM nozzles WHERE id = ?').get(nozzle.nozzle_id).meter;
+  const stockBefore = stock();
+  const count = { cash: 5, cashCdf: 25000, mobileMoney: 2 }; // 25 000 FC = 10 $ at 2 500 FC/$
+
+  const closed = await gerant('POST', `/api/shifts/${shift.id}/close`, { readings: [{ nozzleId: nozzle.nozzle_id, endMeter: start + 200 }], ...count });
+  assert.strictEqual(closed.status, 200);
+  assert.strictEqual(closed.data.cdf_rate, 2500, 'taux figé à la clôture');
+  assert.strictEqual(closed.data.variance, Math.round((5 + 10 + 2 - closed.data.expected_amount) * 100) / 100);
+  assert.strictEqual(stock(), stockBefore - 200);
+  assert.ok((await gerant('GET', '/api/audit?category=postes')).data.some((a) => a.action === 'shift_closed_by_manager'));
+
+  // The real end index was 250 L further: tank and meter follow the correction, closing time stays.
+  const correction = { readings: [{ nozzleId: nozzle.nozzle_id, endMeter: start + 250 }], ...count };
+  assert.strictEqual((await gerant('POST', `/api/shifts/${shift.id}/correct`, correction)).status, 400, 'motif obligatoire');
+  assert.strictEqual((await pompiste('POST', `/api/shifts/${shift.id}/correct`, { ...correction, reason: 'x' })).status, 403);
+  const fixed = await gerant('POST', `/api/shifts/${shift.id}/correct`, { ...correction, reason: 'Index mal lu' });
+  assert.strictEqual(fixed.status, 200);
+  assert.strictEqual(fixed.data.total_liters, 250);
+  assert.strictEqual(fixed.data.closed_at, closed.data.closed_at);
+  assert.strictEqual(stock(), stockBefore - 250);
+  assert.strictEqual(meter(), start + 250);
+  assert.ok((await gerant('GET', '/api/audit?category=postes')).data.some((a) => a.action === 'shift_corrected' && a.reason === 'Index mal lu'));
+});
+
 test('installation neuve : pas d’inscription client avant le gérant ; origine étrangère refusée', async () => {
   const fresh = createApp({ dbFile: ':memory:' });
   const srv = await new Promise((resolve) => {
@@ -403,6 +433,27 @@ test('dépenses et rapport avec marge', async () => {
   assert.strictEqual(diesel.avg_cost, 1);
   assert.strictEqual(typeof diesel.margin_per_liter, 'number');
 
+  // Variances per attendant: shortages and surpluses apart, shifts beyond the 1 $ tolerance counted.
+  const paul = rep.byAttendant.find((a) => a.attendant === 'Paul');
+  const variances = rep.shifts.filter((s) => s.attendant === 'Paul').map((s) => s.variance);
+  const sum = (list) => Math.round(list.reduce((a, b) => a + b, 0) * 100) / 100;
+  assert.ok(variances.includes(-2), 'le premier poste : −2 $');
+  assert.strictEqual(paul.shifts, variances.length);
+  assert.strictEqual(paul.outside, variances.filter((v) => Math.abs(v) > 1).length);
+  assert.strictEqual(paul.shortages, sum(variances.filter((v) => v < 0)));
+  assert.strictEqual(paul.surpluses, sum(variances.filter((v) => v > 0)));
+  assert.strictEqual(paul.worst, Math.min(...variances));
+  assert.ok(rep.stock.some((s) => s.name === 'Cuve Gasoil' && s.delivered >= 1000));
+  const theirs = (await gerant('GET', `/api/shifts?attendant=${paul.attendant_id}`)).data;
+  assert.ok(theirs.length && theirs.every((s) => s.attendant_name === 'Paul'));
+
+  // The period as a PDF.
+  const pdf = await gerant('GET', `/api/reports/period.pdf?from=${today()}&to=${today()}`);
+  assert.strictEqual(pdf.status, 200);
+  assert.strictEqual(pdf.raw.subarray(0, 5).toString(), '%PDF-');
+  assert.ok(pdf.raw.toString('latin1').includes('(\\311carts par pompiste)'));
+  assert.strictEqual((await pompiste('GET', `/api/reports/period.pdf?from=${today()}&to=${today()}`)).status, 403);
+
   const res = await fetch(`${baseUrl}/api/reports/sales?from=${today()}&to=${today()}&format=csv`);
   assert.strictEqual(res.status, 401);
 });
@@ -434,7 +485,7 @@ test('migration : une base ancienne est convertie (loyalty → paid, combos)', (
   const os = require('node:os');
   const path = require('node:path');
   const { DatabaseSync } = require('node:sqlite');
-  const { openDb } = require('../src/db');
+  const { openDb, SCHEMA_VERSION } = require('../src/db');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'station-'));
   const file = path.join(dir, 'old.db');
   const old = new DatabaseSync(file);
@@ -451,7 +502,7 @@ test('migration : une base ancienne est convertie (loyalty → paid, combos)', (
   assert.deepStrictEqual(migrated.prepare('SELECT kind FROM sales ORDER BY id').all().map((r) => r.kind), ['paid', 'credit']);
   assert.strictEqual(migrated.prepare('SELECT loyalty_points FROM customers').get().loyalty_points, 10, 'le crédit non payé ne rapporte plus');
   assert.strictEqual(migrated.prepare('SELECT credit_limit FROM customers').get().credit_limit, 50);
-  assert.strictEqual(migrated.prepare('PRAGMA user_version').get().user_version, 2);
+  assert.strictEqual(migrated.prepare('PRAGMA user_version').get().user_version, SCHEMA_VERSION);
   assert.ok(fs.readdirSync(dir).some((f) => f.startsWith('old.db.avant-migration-')), 'copie gardée avant la mise à jour');
   migrated.close();
   fs.rmSync(dir, { recursive: true, force: true });

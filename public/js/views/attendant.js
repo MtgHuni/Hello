@@ -439,8 +439,13 @@ async function addExpense(ctx, shift, reload) {
 }
 
 // ---------- 3. Closing: end meters + cash count, live reconciliation ----------
-function renderClosing(page, ctx, shift) {
+// mode 'attendant': own shift. 'manager': closing an abandoned shift in the attendant's place.
+// 'correct': the manager fixes a closed shift before validation, starting from the first closing.
+export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, onDone } = {}) {
   const tol = ctx.state.settings.cashTolerance;
+  const correcting = mode === 'correct';
+  const rate = shift.cdf_rate || ctx.state.settings.cdfRate;
+  const first = (value, fallback) => (correcting ? value ?? fallback : fallback);
   const credit = shift.credit_amount || 0;
   const payments = shift.payments_amount || 0;
   const expenses = shift.expenses_amount || 0;
@@ -451,7 +456,9 @@ function renderClosing(page, ctx, shift) {
     expected: h('span', { class: 'num' }),
     declared: h('span', { class: 'num' }),
     variance: h('span', { class: 'num' }),
+    cdf: h('span', { class: 'num' }),
   };
+  const cdfLine = h('div', { class: 'summary-line', hidden: true }, h('span', {}, `dont francs congolais (${fmt.number(rate)} FC = 1 $)`), lines.cdf);
   const perNozzle = new Map();
 
   const form = h('form', { class: 'stack' });
@@ -475,7 +482,11 @@ function renderClosing(page, ctx, shift) {
     const surcharge = shift.sales.reduce((t, x) => t + (x.amount - x.liters * (shift.readings.find((r) => r.nozzle_id === x.nozzle_id)?.unit_price ?? 0)), 0);
     total += surcharge;
     const expected = total - credit - combos + payments - expenses;
-    const declared = (Number(form.elements.cash.value) || 0) + (Number(form.elements.card.value) || 0);
+    const value = (name) => Number(form.elements[name].value) || 0;
+    const cdf = value('cashCdf');
+    const declared = value('cash') + value('card') + value('mobileMoney') + cdf / rate;
+    cdfLine.hidden = !cdf;
+    lines.cdf.textContent = `${fmt.number(cdf)} FC ≈ ${fmt.money(cdf / rate)}`;
     lines.total.textContent = complete ? fmt.money(total) : '—';
     lines.expected.textContent = complete ? fmt.money(expected) : '—';
     lines.declared.textContent = fmt.money(declared);
@@ -494,7 +505,7 @@ function renderClosing(page, ctx, shift) {
           return h(
             'div',
             {},
-            field({ name: `end_${r.nozzle_id}`, label: `${r.pump_name} · ${r.nozzle_name} (début : ${fmt.number(r.start_meter)})`, type: 'number', step: '0.01', min: String(r.start_meter), required: true, onInput: recompute }),
+            field({ name: `end_${r.nozzle_id}`, label: `${r.pump_name} · ${r.nozzle_name} (début : ${fmt.number(r.start_meter)})`, type: 'number', step: '0.01', min: String(r.start_meter), required: true, value: first(r.end_meter, undefined), onInput: recompute }),
             out,
           );
         }),
@@ -505,9 +516,12 @@ function renderClosing(page, ctx, shift) {
       h(
         'div',
         { class: 'form-grid' },
-        field({ name: 'cash', label: 'Espèces', type: 'number', step: '0.01', min: '0', required: true, onInput: recompute }),
-        field({ name: 'card', label: 'Cartes / paiements électroniques', type: 'number', step: '0.01', min: '0', value: '0', onInput: recompute }),
-        field({ name: 'notes', label: 'Remarque (facultatif)', type: 'textarea', full: true }),
+        field({ name: 'cash', label: 'Espèces en dollars ($)', type: 'number', step: '0.01', min: '0', required: true, value: first(shift.cash, undefined), onInput: recompute }),
+        field({ name: 'cashCdf', label: 'Espèces en francs (FC)', type: 'number', step: '1', min: '0', value: first(shift.cash_cdf, 0), onInput: recompute }),
+        field({ name: 'mobileMoney', label: 'Mobile money ($)', type: 'number', step: '0.01', min: '0', value: first(shift.mobile_money, 0), onInput: recompute }),
+        field({ name: 'card', label: 'Carte ($)', type: 'number', step: '0.01', min: '0', value: first(shift.card, 0), onInput: recompute }),
+        field({ name: 'notes', label: 'Remarque (facultatif)', type: 'textarea', full: true, value: first(shift.notes, undefined) }),
+        correcting ? field({ name: 'reason', label: 'Motif de la correction', required: true, full: true, placeholder: 'Ex. : index mal lu, billets oubliés' }) : null,
       ),
     ),
     card(
@@ -519,28 +533,45 @@ function renderClosing(page, ctx, shift) {
       expenses ? h('div', { class: 'summary-line' }, h('span', {}, 'Dépenses payées'), h('span', { class: 'num' }, `− ${fmt.money(expenses)}`)) : null,
       h('div', { class: 'summary-line' }, h('span', {}, 'À remettre'), lines.expected),
       h('div', { class: 'summary-line' }, h('span', {}, 'Déclaré'), lines.declared),
+      cdfLine,
       h('div', { class: 'summary-line total' }, h('span', {}, 'Écart'), lines.variance),
     ),
-    h('div', { class: 'grid grid-2' }, button('Retour', () => renderAttendant(page, ctx), { variant: 'large secondary' }), button('Clôturer le poste', null, { variant: 'large', type: 'submit' })),
+    h(
+      'div',
+      { class: 'grid grid-2' },
+      button('Retour', () => (onBack ? onBack() : renderAttendant(page, ctx)), { variant: 'large secondary' }),
+      button(correcting ? 'Corriger la clôture' : 'Clôturer le poste', null, { variant: 'large', type: 'submit' }),
+    ),
   );
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (!(await confirmDialog('Clôturer le poste ?', 'Les index et montants ne pourront plus être modifiés.', { confirmLabel: 'Clôturer' }))) return;
+    const ask = correcting
+      ? ['Corriger la clôture ?', 'Les index, le stock des cuves et l’écart seront recalculés. La correction est gardée au journal.', 'Corriger']
+      : ['Clôturer le poste ?', mode === 'manager' ? `Vous clôturez à la place de ${shift.attendant_name}. Ce sera noté au journal.` : 'Les index et montants ne pourront plus être modifiés.', 'Clôturer'];
+    if (!(await confirmDialog(ask[0], ask[1], { confirmLabel: ask[2] }))) return;
+    const submit = form.querySelector('button[type=submit]');
+    submit.disabled = true;
     try {
-      const closed = await api.post(`/shifts/${shift.id}/close`, {
+      const closed = await api.post(`/shifts/${shift.id}/${correcting ? 'correct' : 'close'}`, {
         readings: shift.readings.map((r) => ({ nozzleId: r.nozzle_id, endMeter: Number(form.elements[`end_${r.nozzle_id}`].value) })),
         cash: Number(form.elements.cash.value),
+        cashCdf: Number(form.elements.cashCdf.value) || 0,
+        mobileMoney: Number(form.elements.mobileMoney.value) || 0,
         card: Number(form.elements.card.value) || 0,
         notes: form.elements.notes.value,
+        reason: form.elements.reason?.value,
       });
-      renderClosed(page, ctx, closed);
+      if (onDone) onDone(closed);
+      else renderClosed(page, ctx, closed);
     } catch (err) {
+      submit.disabled = false;
       toast(err.message, 'error');
     }
   });
 
-  setContent(page, pageHeader('Clôturer mon poste', `Poste ouvert à ${fmt.time(shift.opened_at)}`), form);
+  const title = correcting ? `Corriger la clôture du poste n°${shift.id}` : mode === 'manager' ? `Clôturer le poste de ${shift.attendant_name}` : 'Clôturer mon poste';
+  setContent(page, pageHeader(title, `Poste n°${shift.id} ouvert le ${fmt.dateTime(shift.opened_at)}`), form);
   recompute();
 }
 

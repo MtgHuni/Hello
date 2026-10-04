@@ -107,6 +107,7 @@ export async function renderSettings(page, ctx) {
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Nom'), h('span', {}, settings.stationName)),
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Tolérance d’écart de caisse'), h('span', {}, `± ${fmt.money(settings.cashTolerance)}`)),
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Tolérance d’écart de jaugeage'), h('span', {}, `± ${fmt.liters(settings.stockTolerance)}`)),
+        h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Taux du franc congolais'), h('span', {}, `${fmt.number(settings.cdfRate)} FC = 1 $`)),
       ),
 
       // ---- Data: backup and journal ----
@@ -152,6 +153,7 @@ async function stationDialog(s) {
       { name: 'stationName', label: 'Nom de la station', value: s.stationName, required: true, full: true },
       { name: 'cashTolerance', label: 'Tolérance de caisse ($)', type: 'number', step: '0.01', min: '0', value: s.cashTolerance, hint: 'Écart toléré à la clôture d’un poste' },
       { name: 'stockTolerance', label: 'Tolérance de jaugeage (L)', type: 'number', step: '0.01', min: '0', value: s.stockTolerance, hint: 'Écart toléré entre stock théorique et mesuré' },
+      { name: 'cdfRate', label: 'Taux du franc congolais (FC pour 1 $)', type: 'number', step: '1', min: '1', value: s.cdfRate, required: true, hint: 'Pour compter les espèces en francs à la clôture. Le taux est figé avec chaque poste.' },
     ],
     onSubmit: (d) => api.put('/settings', d),
   });

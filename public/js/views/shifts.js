@@ -2,11 +2,35 @@ import { flags } from '../ui.js';
 import { api } from '../api.js';
 import { shiftLine, h, fmt, pageHeader, card, cardHeader, table, segmented, shiftBadge, varianceCell, kpi, formDialog, confirmDialog, toast, button, badge, setContent, reportLink } from '../ui.js';
 import { icon } from '../icons.js';
+import { renderClosing } from './attendant.js';
+
+// Money handed over, in dollars (francs congolais at the rate frozen at closing).
+const declared = (s) => (s.cash || 0) + (s.card || 0) + (s.mobile_money || 0) + (s.cdf_rate ? (s.cash_cdf || 0) / s.cdf_rate : 0);
 
 let filter = 'closed';
+let attendantFilter = '';
+
+// From the Reports screen: every shift of one attendant.
+export function showShiftsOf(attendantId) {
+  attendantFilter = String(attendantId);
+  filter = 'all';
+}
 
 export async function renderShifts(page, ctx) {
-  const shifts = await api.get(`/shifts${filter === 'all' ? '' : `?status=${filter}`}`);
+  const params = new URLSearchParams();
+  if (filter !== 'all') params.set('status', filter);
+  if (attendantFilter) params.set('attendant', attendantFilter);
+  const [shifts, users] = await Promise.all([api.get(`/shifts?${params}`), api.get('/users')]);
+  const who = h(
+    'select',
+    { class: 'header-select', 'aria-label': 'Pompiste' },
+    h('option', { value: '' }, 'Tous les pompistes'),
+    users.map((u) => h('option', { value: String(u.id), selected: String(u.id) === attendantFilter }, u.name)),
+  );
+  who.addEventListener('change', () => {
+    attendantFilter = who.value;
+    renderShifts(page, ctx);
+  });
   const tol = ctx.state.settings.cashTolerance;
 
   setContent(page, 
@@ -30,6 +54,7 @@ export async function renderShifts(page, ctx) {
             renderShifts(page, ctx);
           },
         ),
+        who,
       ),
       table(
         [
@@ -57,6 +82,8 @@ export async function renderShiftDetail(page, ctx) {
   const shift = await api.get(`/shifts/${ctx.id}`);
   const isManager = ctx.state.user.role === 'manager';
   const backPath = isManager ? 'postes' : 'historique';
+  const reload = () => renderShiftDetail(page, ctx);
+  const closingBy = (mode) => () => renderClosing(page, ctx, shift, { mode, onBack: reload, onDone: () => (toast(mode === 'correct' ? 'Clôture corrigée.' : 'Poste clôturé.'), reload()) });
   setContent(page, 
     h('a', { class: 'back no-print', href: `#/${backPath}` }, icon('back'), isManager ? 'Postes' : 'Historique'),
     pageHeader(
@@ -64,6 +91,8 @@ export async function renderShiftDetail(page, ctx) {
       `${shift.attendant_name} · ${fmt.dateTime(shift.opened_at)} → ${shift.closed_at ? fmt.dateTime(shift.closed_at) : 'en cours'}`,
       shiftBadge(shift.status),
       shift.status !== 'open' ? reportLink(shift.id) : null,
+      isManager && shift.status === 'open' ? button('Clôturer à la place du pompiste', closingBy('manager'), { variant: 'secondary', iconName: 'shifts' }) : null,
+      isManager && shift.status === 'closed' ? button('Corriger la clôture', closingBy('correct'), { variant: 'secondary', iconName: 'edit' }) : null,
       isManager && shift.status === 'closed'
         ? button('Valider le poste', async () => {
             const ok = await formDialog({
@@ -144,7 +173,7 @@ export function shiftSummary(shift, tolerance) {
           { class: 'grid grid-4' },
           kpi('Ventes totales', fmt.money(shift.total_amount), fmt.liters(shift.total_liters)),
           kpi('Crédit clients', fmt.money(shift.credit_amount), shift.combo_amount ? `+ ${fmt.money(shift.combo_amount)} échangés en combos` : 'Non encaissé'),
-          kpi('À remettre', fmt.money(shift.expected_amount), [shift.payments_amount ? `+ ${fmt.money(shift.payments_amount)} règlements` : null, shift.expenses_amount ? `− ${fmt.money(shift.expenses_amount)} dépenses` : null].filter(Boolean).join(' · ') || `Déclaré : ${fmt.money(shift.cash + shift.card)}`),
+          kpi('À remettre', fmt.money(shift.expected_amount), [shift.payments_amount ? `+ ${fmt.money(shift.payments_amount)} règlements` : null, shift.expenses_amount ? `− ${fmt.money(shift.expenses_amount)} dépenses` : null].filter(Boolean).join(' · ') || `Déclaré : ${fmt.money(declared(shift))}`),
           kpi('Écart de caisse', varianceCell(shift.variance, tolerance), Math.abs(shift.variance) <= tolerance ? 'Dans la tolérance' : `Tolérance : ± ${fmt.money(tolerance)}`),
         )
       : null,
@@ -229,9 +258,13 @@ export function shiftSummary(shift, tolerance) {
     closed
       ? card(
           cardHeader('Caisse'),
-          h('div', { class: 'summary-line' }, h('span', {}, 'Espèces'), h('span', {}, fmt.money(shift.cash))),
-          h('div', { class: 'summary-line' }, h('span', {}, 'Cartes'), h('span', {}, fmt.money(shift.card))),
-          h('div', { class: 'summary-line total' }, h('span', {}, 'Total déclaré'), h('span', {}, fmt.money(shift.cash + shift.card))),
+          h('div', { class: 'summary-line' }, h('span', {}, 'Espèces en dollars'), h('span', {}, fmt.money(shift.cash))),
+          shift.cash_cdf
+            ? h('div', { class: 'summary-line' }, h('span', {}, `Espèces en francs (${fmt.number(shift.cdf_rate)} FC = 1 $)`), h('span', {}, `${fmt.number(shift.cash_cdf)} FC ≈ ${fmt.money(shift.cash_cdf / shift.cdf_rate)}`))
+            : null,
+          shift.mobile_money ? h('div', { class: 'summary-line' }, h('span', {}, 'Mobile money'), h('span', {}, fmt.money(shift.mobile_money))) : null,
+          h('div', { class: 'summary-line' }, h('span', {}, 'Carte'), h('span', {}, fmt.money(shift.card))),
+          h('div', { class: 'summary-line total' }, h('span', {}, 'Total déclaré'), h('span', {}, fmt.money(declared(shift)))),
           shift.notes ? h('p', { class: 'muted', style: 'margin-top:12px' }, `Remarque du pompiste : ${shift.notes}`) : null,
           shift.status === 'validated'
             ? h('p', { class: 'muted', style: 'margin-top:8px' }, `Validé par ${shift.validated_by_name} le ${fmt.dateTime(shift.validated_at)}${shift.manager_comment ? ` — ${shift.manager_comment}` : ''}`)

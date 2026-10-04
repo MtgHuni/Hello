@@ -249,10 +249,14 @@ const MIGRATIONS = [
   ['expenses', 'cancel_requested_by', 'INTEGER REFERENCES users(id)'],
   ['expenses', 'cancel_reason', 'TEXT'],
   ['price_history', 'subscriber_price', 'REAL'],
+  // Money handed over at closing besides dollars and cards (francs congolais at the frozen rate).
+  ['shifts', 'mobile_money', 'REAL'],
+  ['shifts', 'cash_cdf', 'REAL'],
+  ['shifts', 'cdf_rate', 'REAL'],
 ];
 
 // Bumped with every schema change; recorded in PRAGMA user_version.
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 function missingColumns(db) {
   return MIGRATIONS.filter(([table, column]) => {
@@ -316,6 +320,7 @@ const DEFAULT_SETTINGS = {
   individual_credit_limit: '50',
   subscriber_credit_limit: '500',
   subscriber_grace_days: '5', // days after month end for subscribers to pay
+  cdf_rate: '2800', // francs congolais for one dollar, used to count FC cash at closing
 };
 
 // Rebuilds the sales table when its kind constraint is from an older release
@@ -427,8 +432,9 @@ function getSettings(db) {
     individualCreditLimit: Number(s.individual_credit_limit),
     subscriberCreditLimit: Number(s.subscriber_credit_limit),
     subscriberGraceDays: Number(s.subscriber_grace_days),
+    cdfRate: Number(s.cdf_rate),
     expenseCategories: EXPENSE_CATEGORIES,
   };
 }
 
-module.exports = { openDb, getSettings, syncCreditLimits, EXPENSE_CATEGORIES };
+module.exports = { openDb, getSettings, syncCreditLimits, EXPENSE_CATEGORIES, SCHEMA_VERSION };
