@@ -265,6 +265,24 @@ CREATE TABLE IF NOT EXISTS shift_checkpoints (
   note         TEXT,
   created_at   TEXT NOT NULL DEFAULT (datetime('now'))
 );
+-- Fuel paid by mobile money, entered as it is paid (litres of one product at the shift's price):
+-- the shift's mobile money is their total, plus the payments received by mobile money.
+CREATE TABLE IF NOT EXISTS momo_sales (
+  id                  INTEGER PRIMARY KEY,
+  shift_id            INTEGER NOT NULL REFERENCES shifts(id),
+  product_id          INTEGER NOT NULL REFERENCES products(id),
+  liters              REAL NOT NULL CHECK (liters > 0),
+  unit_price          REAL NOT NULL,
+  amount              REAL NOT NULL,
+  user_id             INTEGER REFERENCES users(id),
+  client_ref          TEXT,
+  cancel_requested_at TEXT,
+  cancel_requested_by INTEGER REFERENCES users(id),
+  cancel_reason       TEXT,
+  created_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_momo_sales_shift ON momo_sales(shift_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_momo_sales_ref ON momo_sales(client_ref) WHERE client_ref IS NOT NULL;
 CREATE TABLE IF NOT EXISTS checkpoint_readings (
   checkpoint_id INTEGER NOT NULL REFERENCES shift_checkpoints(id),
   nozzle_id     INTEGER NOT NULL REFERENCES nozzles(id),
@@ -347,7 +365,7 @@ const MIGRATIONS = [
 ];
 
 // Bumped with every schema change; recorded in PRAGMA user_version.
-const SCHEMA_VERSION = 10;
+const SCHEMA_VERSION = 11;
 
 function missingColumns(db) {
   return MIGRATIONS.filter(([table, column]) => {
@@ -510,6 +528,10 @@ function openDb(file) {
     // Credit sales only earn their combos once paid: recompute every balance.
     const { refreshCustomer } = require('./loyalty');
     for (const { id } of db.prepare('SELECT id FROM customers').all()) refreshCustomer(db, id);
+  }
+  if (version < 11) {
+    // Version 11: the manager's closing is final, there is no validation step any more.
+    db.exec("UPDATE shifts SET status = 'closed' WHERE status = 'validated'");
   }
   if (version < 10) {
     // Version 10: a shift has attendants; the one who opened each existing shift worked on it.

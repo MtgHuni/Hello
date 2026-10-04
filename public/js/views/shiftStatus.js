@@ -91,6 +91,7 @@ export async function renderShiftStatus(page, ctx) {
         h('div', { class: 'summary-line' }, h('span', {}, `Crédits ${last ? 'depuis' : 'du poste'}`), h('span', { class: 'num' }, `− ${fmt.money(sum(since(credits), 'amount'))}`)),
         h('div', { class: 'summary-line' }, h('span', {}, `Règlements ${last ? 'depuis' : 'du poste'}`), h('span', { class: 'num' }, `+ ${fmt.money(sum(since(shift.payments), 'amount'))}`)),
         h('div', { class: 'summary-line' }, h('span', {}, `Dépenses ${last ? 'depuis' : 'du poste'}`), h('span', { class: 'num' }, `− ${fmt.money(sum(since(shift.expenses), 'amount'))}`)),
+        h('div', { class: 'summary-line' }, h('span', {}, 'Mobile money reçu (tout le poste)'), h('span', { class: 'num' }, fmt.money(shift.momo_total))),
         h('p', { class: 'muted small', style: 'margin-top:10px' }, 'Les ventes depuis le dernier relevé ne se connaissent qu’avec les index : relevez-les avec « Relever les index maintenant » pour voir l’argent qui devrait être en caisse.'),
       ),
       open && !shift.station_closed_at ? card(cardHeader('Relever les index maintenant', 'Rien n’est enregistré : c’est un contrôle'), meters) : null,
@@ -130,6 +131,22 @@ export async function renderShiftStatus(page, ctx) {
         ],
         [...credits].reverse(),
         { empty: 'Aucun crédit pour le moment.' },
+      ),
+    ),
+    h(
+      'section',
+      { class: 'card flush section' },
+      cardHeader('Payé en mobile money', fmt.money(sum(shift.momo, 'amount'))),
+      table(
+        [
+          { label: 'Heure', render: (m) => fmt.time(m.created_at) },
+          { label: 'Carburant', key: 'product_name' },
+          { label: 'Litres', align: 'right', render: (m) => fmt.liters(m.liters) },
+          { label: 'Par', render: person },
+          { label: 'Montant', align: 'right', render: (m) => fmt.money(m.amount) },
+        ],
+        [...shift.momo].reverse(),
+        { empty: 'Aucun paiement mobile money.' },
       ),
     ),
     h(

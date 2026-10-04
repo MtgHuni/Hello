@@ -6,7 +6,7 @@ const { round } = require('./util');
 const { attendantNamesSql } = require('./checkpoints');
 
 const ACCOUNTS = { cash: 'Espèces', momo: 'Mobile money' };
-// Payment methods that move one of the two balances (bank, cheque… do not).
+// Payment methods that move one of the two balances.
 const ACCOUNT_OF_METHOD = { espèces: 'cash', 'mobile money': 'momo' };
 
 // Manual movements: label, sign, and which balance they may touch.
@@ -14,8 +14,9 @@ const KINDS = {
   opening: { label: 'Solde de départ (comptage)', sign: 1, accounts: ['cash', 'momo'] },
   apport: { label: 'Apport du propriétaire', sign: 1, accounts: ['cash', 'momo'] },
   retrait_proprio: { label: 'Retrait du propriétaire', sign: -1, accounts: ['cash', 'momo'] },
-  versement_banque: { label: 'Versement à la banque', sign: -1, accounts: ['cash'] },
-  retrait_banque: { label: 'Retrait à la banque', sign: 1, accounts: ['cash'] },
+  // No bank any more: kept only to read movements entered before.
+  versement_banque: { label: 'Versement à la banque', sign: -1, accounts: ['cash'], old: true },
+  retrait_banque: { label: 'Retrait à la banque', sign: 1, accounts: ['cash'], old: true },
   retrait_momo: { label: 'Retrait du mobile money vers la caisse', sign: 0, accounts: ['momo'] }, // transfer
   frais_momo: { label: 'Frais mobile money', sign: -1, accounts: ['momo'] },
   autre_entree: { label: 'Autre entrée', sign: 1, accounts: ['cash', 'momo'] },

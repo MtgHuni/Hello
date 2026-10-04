@@ -8,6 +8,13 @@ const { round } = require('./util');
 const attendantNamesSql = `(SELECT group_concat(name, ', ') FROM (SELECT u2.name FROM shift_attendants a JOIN users u2 ON u2.id = a.user_id
   WHERE a.shift_id = s.id GROUP BY u2.id ORDER BY MIN(a.id)))`;
 
+// Mobile money of a shift: fuel paid by mobile money and payments received by mobile money.
+function momoTotal(db, shiftId) {
+  const fuel = db.prepare('SELECT COALESCE(SUM(amount), 0) AS v FROM momo_sales WHERE shift_id = ?').get(shiftId).v;
+  const paid = db.prepare("SELECT COALESCE(SUM(amount), 0) AS v FROM payments WHERE shift_id = ? AND method = 'mobile money'").get(shiftId).v;
+  return round(fuel + paid);
+}
+
 const KIND_LABEL = { releve: 'Relève', fermeture: 'Fermeture du soir', ouverture: 'Ouverture du matin' };
 
 function listCheckpoints(db, shiftId) {
@@ -21,7 +28,7 @@ function listCheckpoints(db, shiftId) {
 // The period that ends at `end` ({ at, meters: Map, cash, mobile_money, kind, user_name }),
 // starting at the previous checkpoint, or at the shift's opening (its start indexes, no money).
 function periodReport(db, shift, readings, previous, end) {
-  const from = previous || { at: shift.opened_at, meters: new Map(readings.map((r) => [r.nozzle_id, r.start_meter])), cash: 0, mobile_money: 0 };
+  const from = previous || { at: shift.opened_at, meters: new Map(readings.map((r) => [r.nozzle_id, r.start_meter])), cash: 0 };
   // From the shift's opening, what was entered in its first second counts too.
   const after = previous ? '>' : '>=';
   const inPeriod = (table) => db.prepare(`SELECT * FROM ${table} WHERE shift_id = ? AND created_at ${after} ? AND created_at <= ? ORDER BY id`).all(shift.id, from.at, end.at);
@@ -37,6 +44,8 @@ function periodReport(db, shift, readings, previous, end) {
   const sales = inPeriod('sales');
   const payments = inPeriod('payments');
   const expenses = inPeriod('expenses');
+  const momo = inPeriod('momo_sales');
+  const productName = new Map(readings.map((r) => [r.product_id, r.product_name]));
   // Subscribers pay more than the pump price used for the indexes.
   const surcharge = round(sales.reduce((t, s) => t + (s.amount - s.liters * (unitPrices.get(s.nozzle_id) ?? s.unit_price)), 0));
   const sold = round(nozzles.reduce((t, n) => t + n.amount, 0) + surcharge);
@@ -44,10 +53,12 @@ function periodReport(db, shift, readings, previous, end) {
   const combos = round(sales.filter((s) => s.kind === 'combo').reduce((t, s) => t + s.amount, 0));
   const paid = round(payments.reduce((t, p) => t + p.amount, 0));
   const spent = round(expenses.reduce((t, e) => t + e.amount, 0));
-  const received = round((from.cash || 0) + (from.mobile_money || 0));
+  // The cash is passed on; mobile money stays on the station's account.
+  const received = round(from.cash || 0);
+  const mobileMoney = round(momo.reduce((t, m) => t + m.amount, 0) + payments.filter((p) => p.method === 'mobile money').reduce((t, p) => t + p.amount, 0));
   // Money on the attendant = what they received + sales − credits − combos + payments − expenses.
   const expected = round(received + sold - credits - combos + paid - spent);
-  const handed = round((end.cash || 0) + (end.mobile_money || 0));
+  const handed = round((end.cash || 0) + mobileMoney);
   return {
     kind: end.kind,
     label: KIND_LABEL[end.kind] || 'Clôture',
@@ -65,14 +76,16 @@ function periodReport(db, shift, readings, previous, end) {
     expenses: spent,
     received,
     expected,
+    expected_cash: round(expected - mobileMoney),
     cash: end.cash || 0,
-    mobile_money: end.mobile_money || 0,
+    mobile_money: mobileMoney,
     handed,
     variance: round(handed - expected),
     operations: [
       ...sales.map((s) => ({ at: s.created_at, type: s.kind === 'combo' ? 'Combos' : 'Crédit', label: customerName.get(s.customer_id) || '', amount: s.amount })),
       ...payments.map((p) => ({ at: p.created_at, type: 'Règlement', label: customerName.get(p.customer_id) || '', amount: p.amount })),
       ...expenses.map((e) => ({ at: e.created_at, type: 'Dépense', label: e.description, amount: e.amount })),
+      ...momo.map((m) => ({ at: m.created_at, type: 'Mobile money', label: `${productName.get(m.product_id) || ''} · ${String(m.liters).replace('.', ',')} L`, amount: m.amount })),
     ].sort((a, b) => a.at.localeCompare(b.at)),
   };
 }
@@ -88,7 +101,7 @@ function currentPeriod(db, shift, readings, meters, money = {}) {
   const list = listCheckpoints(db, shift.id);
   const last = list.at(-1);
   const at = db.prepare("SELECT datetime('now') AS t").get().t;
-  return periodReport(db, shift, readings, last || null, { kind: money.kind, at, meters, cash: money.cash, mobile_money: money.mobileMoney, user_name: money.userName });
+  return periodReport(db, shift, readings, last || null, { kind: money.kind, at, meters, cash: money.cash, user_name: money.userName });
 }
 
 // The last daily closing time that has passed (UTC timestamp), e.g. today 15:30 after 15:30.
@@ -107,4 +120,4 @@ const lastMeters = (db, shiftId) => {
   return last ? last.meters : null;
 };
 
-module.exports = { closingCutoff, attendantNamesSql, KIND_LABEL, listCheckpoints, checkpointReports, currentPeriod, lastMeters };
+module.exports = { momoTotal, closingCutoff, attendantNamesSql, KIND_LABEL, listCheckpoints, checkpointReports, currentPeriod, lastMeters };

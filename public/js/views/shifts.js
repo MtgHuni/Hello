@@ -9,7 +9,7 @@ import { renderShiftStatus } from './shiftStatus.js';
 // Money handed over, in dollars.
 const declared = (s) => (s.cash || 0) + (s.mobile_money || 0);
 
-let filter = 'closed';
+let filter = 'all';
 let attendantFilter = '';
 
 // From the Reports screen: every shift of one attendant.
@@ -34,6 +34,12 @@ export async function renderShifts(page, ctx) {
     renderShifts(page, ctx);
   });
   const tol = ctx.state.settings.cashTolerance;
+  // One column of litres per fuel (gasoil, essence), from the closed shifts' indexes.
+  const fuels = [...new Map(shifts.flatMap((s) => s.liters_by_product).map((p) => [p.product_id, p.name])).entries()];
+  const litersOf = (s, id) => {
+    const p = s.liters_by_product.find((x) => x.product_id === id);
+    return p ? fmt.liters(p.liters) : '—';
+  };
 
   setContent(page, 
     pageHeader('Postes', 'Rapprochement des index et de la caisse, pompiste par pompiste.'),
@@ -45,10 +51,9 @@ export async function renderShifts(page, ctx) {
         { class: 'card-header' },
         segmented(
           [
-            ['closed', 'À valider'],
-            ['open', 'En cours'],
-            ['validated', 'Validés'],
             ['all', 'Tous'],
+            ['open', 'En cours'],
+            ['closed', 'Clôturés'],
           ],
           filter,
           (v) => {
@@ -64,7 +69,9 @@ export async function renderShifts(page, ctx) {
           { label: 'Pompiste', key: 'attendant_name' },
           { label: 'Ouverture', render: (s) => fmt.dateTime(s.opened_at) },
           { label: 'Clôture', render: (s) => fmt.dateTime(s.closed_at) },
-          { label: 'Litres', align: 'right', render: (s) => (s.total_liters == null ? '—' : fmt.liters(s.total_liters)) },
+          ...(fuels.length
+            ? fuels.map(([id, name]) => ({ label: name, align: 'right', render: (s) => litersOf(s, id) }))
+            : [{ label: 'Litres', align: 'right', render: (s) => (s.total_liters == null ? '—' : fmt.liters(s.total_liters)) }]),
           { label: 'Ventes', align: 'right', render: (s) => (s.total_amount == null ? '—' : fmt.money(s.total_amount)) },
           { label: 'Écart caisse', align: 'right', render: (s) => varianceCell(s.variance, tol) },
           { label: 'Statut', render: (s) => h('span', { class: 'row', style: 'gap:6px;flex-wrap:nowrap' }, shiftBadge(s.status), s.over_limit_count ? badge('Crédit hors plafond', 'serious') : null) },
@@ -72,7 +79,7 @@ export async function renderShifts(page, ctx) {
         shifts,
         {
           onRowClick: (s) => ctx.navigate(`postes/${s.id}`),
-          empty: filter === 'closed' ? 'Aucun poste en attente de validation.' : 'Aucun poste.',
+          empty: 'Aucun poste.',
         },
       ),
     ),
@@ -98,22 +105,6 @@ export async function renderShiftDetail(page, ctx) {
       isManager && shift.status === 'open' ? button('Clôturer le poste', closingBy('manager'), { variant: shift.closing_due ? '' : 'secondary', iconName: 'shifts' }) : null,
       isManager && shift.status === 'closed' ? button('Corriger la clôture', closingBy('correct'), { variant: 'secondary', iconName: 'edit' }) : null,
       isManager && shift.status !== 'open' ? button(shift.manager_comment ? 'Modifier la remarque' : 'Remarque au pompiste', () => remarkDialog(shift, reload), { variant: 'secondary', iconName: 'message' }) : null,
-      isManager && shift.status === 'closed'
-        ? button('Valider le poste', async () => {
-            const ok = await formDialog({
-              title: `Valider le poste n°${shift.id}`,
-              intro: `Écart de caisse : ${fmt.signedMoney(shift.variance)}. Pour changer un index ou le comptage, utilisez d’abord « Corriger la clôture ».`,
-              grid: false,
-              fields: [{ name: 'comment', label: 'Remarque pour le pompiste (facultatif)', type: 'textarea', value: shift.manager_comment || undefined, hint: 'Explication de l’écart, retenue, consigne… Le pompiste la lit dans son historique.' }],
-              submitLabel: 'Valider',
-              onSubmit: (d) => api.post(`/shifts/${shift.id}/validate`, d),
-            });
-            if (ok) {
-              toast('Poste validé.');
-              renderShiftDetail(page, ctx);
-            }
-          }, { iconName: 'check' })
-        : null,
     ),
     shiftLine(shift.status),
     remarkCard(shift, isManager),
@@ -186,6 +177,7 @@ function cancellationRequests(shift, reload) {
   const items = [
     ...shift.sales.map((x) => ({ x, kind: 'sales', title: `${x.kind === 'credit' ? 'Crédit' : x.kind === 'combo' ? 'Combos' : 'Vente'} · ${x.customer_name}`, detail: `${x.product_name} · ${fmt.liters(x.liters)}`, amount: x.amount })),
     ...shift.payments.map((x) => ({ x, kind: 'payments', title: `Règlement · ${x.customer_name}`, detail: x.method, amount: x.amount })),
+    ...shift.momo.map((x) => ({ x, kind: 'momo', title: 'Payé en mobile money', detail: `${x.product_name} · ${fmt.liters(x.liters)}`, amount: x.amount })),
     ...shift.expenses.map((x) => ({ x, kind: 'expenses', title: `Dépense · ${x.category}`, detail: x.description, amount: x.amount })),
   ].filter((i) => i.x.cancel_requested_at);
   if (!items.length) return null;
@@ -202,7 +194,7 @@ function cancellationRequests(shift, reload) {
     }
   };
   return card(
-    cardHeader('Annulations à valider', `${items.length > 1 ? `${items.length} opérations comptent` : 'Cette opération compte'} encore dans le poste tant que vous n’avez pas décidé.`),
+    cardHeader('Annulations demandées', `${items.length > 1 ? `${items.length} opérations comptent` : 'Cette opération compte'} encore dans le poste tant que vous n’avez pas décidé.`),
     items.map((i) =>
       h(
         'div',
@@ -236,7 +228,7 @@ export function shiftSummary(shift, tolerance) {
       ? h(
           'div',
           { class: 'grid grid-4' },
-          kpi('Ventes totales', fmt.money(shift.total_amount), fmt.liters(shift.total_liters)),
+          kpi('Ventes totales', fmt.money(shift.total_amount), shift.liters_by_product.length ? shift.liters_by_product.map((p) => `${p.name} ${fmt.liters(p.liters)}`).join(' · ') : fmt.liters(shift.total_liters)),
           kpi('Crédit clients', fmt.money(shift.credit_amount), shift.combo_amount ? `+ ${fmt.money(shift.combo_amount)} échangés en combos` : 'Non encaissé'),
           kpi('À remettre', fmt.money(shift.expected_amount), [shift.payments_amount ? `+ ${fmt.money(shift.payments_amount)} règlements` : null, shift.expenses_amount ? `− ${fmt.money(shift.expenses_amount)} dépenses` : null].filter(Boolean).join(' · ') || `Déclaré : ${fmt.money(declared(shift))}`),
           kpi('Écart de caisse', varianceCell(shift.variance, tolerance), Math.abs(shift.variance) <= tolerance ? 'Dans la tolérance' : `Tolérance : ± ${fmt.money(tolerance)}`),
@@ -287,6 +279,23 @@ export function shiftSummary(shift, tolerance) {
         { empty: 'Aucun crédit sur ce poste.' },
       ),
     ),
+    shift.momo.length
+      ? h(
+          'section',
+          { class: 'card flush' },
+          h('div', { class: 'card-header' }, h('h2', {}, 'Payé en mobile money'), h('p', {}, `${shift.momo.length} paiement${shift.momo.length > 1 ? 's' : ''} · ${fmt.money(shift.momo.reduce((t, m) => t + m.amount, 0))}`)),
+          table(
+            [
+              { label: 'Heure', render: (m) => fmt.time(m.created_at) },
+              { label: 'Carburant', key: 'product_name' },
+              { label: 'Litres', align: 'right', render: (m) => fmt.liters(m.liters) },
+              { label: 'Par', render: (m) => m.user_name || '—' },
+              { label: 'Montant', align: 'right', render: (m) => fmt.money(m.amount) },
+            ],
+            shift.momo,
+          ),
+        )
+      : null,
     shift.payments.length
       ? h(
           'section',
@@ -324,12 +333,9 @@ export function shiftSummary(shift, tolerance) {
       ? card(
           cardHeader('Caisse'),
           h('div', { class: 'summary-line' }, h('span', {}, 'Espèces'), h('span', {}, fmt.money(shift.cash))),
-          shift.mobile_money ? h('div', { class: 'summary-line' }, h('span', {}, 'Mobile money'), h('span', {}, fmt.money(shift.mobile_money))) : null,
+          shift.mobile_money ? h('div', { class: 'summary-line' }, h('span', {}, 'Mobile money (saisi au fil du poste)'), h('span', {}, fmt.money(shift.mobile_money))) : null,
           h('div', { class: 'summary-line total' }, h('span', {}, 'Total déclaré'), h('span', {}, fmt.money(declared(shift)))),
-          shift.notes ? h('p', { class: 'muted', style: 'margin-top:12px' }, `Remarque du pompiste : ${shift.notes}`) : null,
-          shift.status === 'validated'
-            ? h('p', { class: 'muted', style: 'margin-top:8px' }, `Validé par ${shift.validated_by_name} le ${fmt.dateTime(shift.validated_at)}`)
-            : null,
+          shift.notes ? h('p', { class: 'muted', style: 'margin-top:12px' }, `Remarque : ${shift.notes}`) : null,
         )
       : null,
   );

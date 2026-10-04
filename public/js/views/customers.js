@@ -312,8 +312,8 @@ async function paymentDialog(c, reload) {
     intro: `${c.balance < 0 ? `Avance actuelle : ${fmt.money(-c.balance)}` : `Solde dû actuel : ${fmt.money(c.balance)}`}. Un montant au-delà du solde devient une avance ; une dette d’avant l’application s’ajoute avec « Ancienne dette ».`,
     fields: [
       { name: 'amount', label: 'Montant ($)', type: 'number', step: '0.01', min: '0.01', required: true, value: c.balance > 0 ? c.balance : '' },
-      { name: 'method', label: 'Mode', type: 'select', options: ['espèces', 'virement', 'chèque', 'mobile money'].map((m) => [m, m[0].toUpperCase() + m.slice(1)]) },
-      { name: 'reference', label: 'Référence', full: true, placeholder: 'N° de chèque, de virement…' },
+      { name: 'method', label: 'Mode', type: 'select', options: ['espèces', 'mobile money'].map((m) => [m, m[0].toUpperCase() + m.slice(1)]) },
+      { name: 'reference', label: 'Référence', full: true, placeholder: 'N° de transaction mobile money…' },
     ],
     onSubmit: (d) => api.post(`/customers/${c.id}/payments`, d),
   });

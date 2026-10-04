@@ -267,7 +267,7 @@ function customerRoutes(db) {
     const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(req.params.id);
     if (!customer) fail(404, 'Client introuvable.');
     const amount = round(num(req.body?.amount, 'Le montant', { min: 0.01, max: 1e8 }));
-    const method = oneOf(req.body?.method, 'Le mode de règlement', ['espèces', 'virement', 'chèque', 'mobile money']);
+    const method = oneOf(req.body?.method, 'Le mode de règlement', ['espèces', 'mobile money']);
     const reference = str(req.body?.reference, 'La référence', { required: false, max: 100 });
     transaction(db, () => {
       db.prepare('INSERT INTO payments (customer_id, amount, method, reference, user_id) VALUES (?, ?, ?, ?, ?)').run(customer.id, amount, method, reference, req.user.id);

@@ -5,7 +5,7 @@ const { audit } = require('../audit');
 const { requireRole } = require('../auth');
 
 const manager = requireRole('manager');
-const METHODS = ['espèces', 'banque', 'mobile money', 'chèque'];
+const METHODS = ['espèces', 'mobile money'];
 
 module.exports = function expenseRoutes(db) {
   const router = express.Router();

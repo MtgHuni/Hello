@@ -39,7 +39,7 @@ module.exports = function stockRoutes(db) {
     const reference = str(b.reference, 'La référence', { required: false, max: 100 });
     // Paid on the spot (out of the cash book) or taken on credit (a debt to the supplier).
     const payment = oneOf(b.payment || 'cash', 'Le paiement', ['cash', 'credit']);
-    const payMethod = payment === 'cash' ? oneOf(b.payMethod || 'espèces', 'Le mode de paiement', ['espèces', 'mobile money', 'banque']) : null;
+    const payMethod = payment === 'cash' ? oneOf(b.payMethod || 'espèces', 'Le mode de paiement', ['espèces', 'mobile money']) : null;
     const computed = unitCost ? round(unitCost * received) : null;
     const amount = b.amount === undefined || b.amount === '' || b.amount === null ? computed : round(num(b.amount, 'Le montant de la facture', { min: 0.01, max: 1e9 }));
     if (payment === 'credit') {

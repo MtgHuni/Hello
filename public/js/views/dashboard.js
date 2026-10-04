@@ -24,7 +24,7 @@ export async function renderDashboard(page, { state, navigate }) {
       'div',
       { class: 'grid grid-4' },
       kpi("Ventes aujourd'hui", fmt.money(d.todayTotal.amount), [d.openShifts.length ? `${d.openShifts.length} poste${d.openShifts.length > 1 ? 's' : ''} en cours, compté${d.openShifts.length > 1 ? 's' : ''} à la clôture` : 'Postes clôturés', `Dépenses : ${fmt.money(d.todayExpenses)}`].join(' · ')),
-      shiftKpi(d.openShifts[0], d.toValidate),
+      shiftKpi(d.openShifts[0]),
       h(
         'a',
         { class: 'card kpi kpi-link', href: '#/caisse' },
@@ -69,14 +69,13 @@ function facts(rows) {
 }
 
 // The station runs one shift at a time: who holds it, since when, or that none is open.
-function shiftKpi(s, toValidate) {
-  const pending = toValidate ? ` · ${toValidate} à valider` : '';
+function shiftKpi(s) {
   return h(
     'a',
     { class: 'card kpi kpi-link', href: s ? `#/postes/${s.id}/etat` : '#/postes' },
     h('div', { class: 'label' }, 'Poste en cours'),
     h('div', { class: 'value sm' }, !s ? 'Aucun' : s.station_closed_at ? 'Station fermée' : s.on_duty || 'Personne'),
-    h('div', { class: 'sub' }, s ? `Poste n°${s.id} depuis le ${fmt.dateTime(s.opened_at)} · crédits ${fmt.money(s.credit_so_far)}${pending}` : `Aucun poste ouvert${pending}`),
+    h('div', { class: 'sub' }, s ? `Poste n°${s.id} depuis le ${fmt.dateTime(s.opened_at)} · crédits ${fmt.money(s.credit_so_far)}` : 'Aucun poste ouvert'),
   );
 }
 

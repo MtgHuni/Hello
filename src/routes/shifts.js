@@ -11,7 +11,7 @@ const { refreshCustomer } = require('../loyalty');
 const { shiftReportPdf } = require('../shiftReport');
 const { applyScheduledPrices } = require('../prices');
 const { audit } = require('../audit');
-const { closingCutoff, attendantNamesSql, checkpointReports, currentPeriod, lastMeters } = require('../checkpoints');
+const { momoTotal, closingCutoff, attendantNamesSql, checkpointReports, currentPeriod, lastMeters } = require('../checkpoints');
 
 const staff = requireRole('manager', 'attendant');
 
@@ -21,9 +21,8 @@ module.exports = function shiftRoutes(db) {
   function shiftDetail(id) {
     const shift = db
       .prepare(
-        `SELECT s.*, COALESCE(${attendantNamesSql}, u.name) AS attendant_name, v.name AS validated_by_name, m.name AS manager_comment_by_name
-         FROM shifts s JOIN users u ON u.id = s.attendant_id LEFT JOIN users v ON v.id = s.validated_by
-         LEFT JOIN users m ON m.id = s.manager_comment_by
+        `SELECT s.*, COALESCE(${attendantNamesSql}, u.name) AS attendant_name, m.name AS manager_comment_by_name
+         FROM shifts s JOIN users u ON u.id = s.attendant_id LEFT JOIN users m ON m.id = s.manager_comment_by
          WHERE s.id = ?`,
       )
       .get(id);
@@ -50,6 +49,14 @@ module.exports = function shiftRoutes(db) {
       )
       .all(id);
     shift.expenses = db.prepare('SELECT e.*, us.name AS user_name FROM expenses e LEFT JOIN users us ON us.id = e.user_id WHERE e.shift_id = ? ORDER BY e.id').all(id);
+    shift.momo = db
+      .prepare(
+        `SELECT ms.*, p.name AS product_name, us.name AS user_name FROM momo_sales ms JOIN products p ON p.id = ms.product_id LEFT JOIN users us ON us.id = ms.user_id
+         WHERE ms.shift_id = ? ORDER BY ms.id`,
+      )
+      .all(id);
+    shift.momo_total = momoTotal(db, id);
+    shift.liters_by_product = litersByProduct([id]).get(Number(id)) || [];
     shift.pending_cancellations = pendingCancellations(id);
     shift.attendants = db
       .prepare('SELECT a.user_id, u.name, a.joined_at, a.left_at FROM shift_attendants a JOIN users u ON u.id = a.user_id WHERE a.shift_id = ? ORDER BY a.id')
@@ -64,6 +71,23 @@ module.exports = function shiftRoutes(db) {
       shift.expenses_amount = round(shift.expenses.reduce((t, e) => t + e.amount, 0));
     }
     return shift;
+  }
+
+  // Litres sold per product (gasoil, essence) of closed shifts: Map shift id → [{ product_id, name, liters }].
+  function litersByProduct(ids) {
+    const out = new Map();
+    if (!ids.length) return out;
+    const rows = db
+      .prepare(
+        `SELECT r.shift_id, r.product_id, p.name, ROUND(SUM(r.liters), 2) AS liters FROM shift_readings r JOIN products p ON p.id = r.product_id
+         WHERE r.shift_id IN (${ids.map(() => '?').join(',')}) AND r.liters IS NOT NULL GROUP BY r.shift_id, r.product_id ORDER BY r.product_id`,
+      )
+      .all(...ids);
+    for (const r of rows) {
+      if (!out.has(r.shift_id)) out.set(r.shift_id, []);
+      out.get(r.shift_id).push({ product_id: r.product_id, name: r.name, liters: r.liters });
+    }
+    return out;
   }
 
   const onDuty = (shiftId, userId) => !!db.prepare('SELECT 1 FROM shift_attendants WHERE shift_id = ? AND user_id = ? AND left_at IS NULL').get(shiftId, userId);
@@ -92,17 +116,14 @@ module.exports = function shiftRoutes(db) {
   router.get('/shifts', staff, (req, res) => {
     const from = dateParam(req.query.from, 'La date de début');
     const to = dateParam(req.query.to, 'La date de fin');
-    const status = ['open', 'closed', 'validated'].includes(req.query.status) ? req.query.status : null;
+    const status = ['open', 'closed'].includes(req.query.status) ? req.query.status : null;
     const attendant = req.user.role === 'manager' ? (Number(req.query.attendant) || null) : req.user.id;
-    res.json(
-      db
+    const shifts = db
         .prepare(
           `SELECT s.id, s.status, s.opened_at, s.closed_at, s.total_liters, s.total_amount, s.credit_amount,
              s.expected_amount, s.payments_amount, s.expenses_amount, s.cash, s.mobile_money, s.variance, COALESCE(${attendantNamesSql}, u.name) AS attendant_name,
              s.manager_comment IS NOT NULL AS has_remark, (s.manager_comment IS NOT NULL AND s.comment_seen_at IS NULL) AS remark_unread,
-             (SELECT COUNT(*) FROM sales sa WHERE sa.shift_id = s.id AND sa.over_limit = 1) AS over_limit_count,
-             (SELECT group_concat(DISTINCT pu.name) FROM shift_readings r JOIN nozzles n ON n.id = r.nozzle_id
-              JOIN pumps pu ON pu.id = n.pump_id WHERE r.shift_id = s.id) AS pumps
+             (SELECT COUNT(*) FROM sales sa WHERE sa.shift_id = s.id AND sa.over_limit = 1) AS over_limit_count
            FROM shifts s JOIN users u ON u.id = s.attendant_id
            WHERE (? IS NULL OR s.status = ?)
              AND (? IS NULL OR s.attendant_id = ? OR EXISTS (SELECT 1 FROM shift_attendants a WHERE a.shift_id = s.id AND a.user_id = ?))
@@ -110,8 +131,9 @@ module.exports = function shiftRoutes(db) {
              AND (? IS NULL OR date(s.opened_at, 'localtime') <= ?)
            ORDER BY s.id DESC LIMIT 300`,
         )
-        .all(status, status, attendant, attendant, attendant, from, from, to, to),
-    );
+        .all(status, status, attendant, attendant, attendant, from, from, to, to);
+    const liters = litersByProduct(shifts.map((s) => s.id));
+    res.json(shifts.map((s) => ({ ...s, liters_by_product: liters.get(s.id) || [] })));
   });
 
   const openShiftId = () => db.prepare("SELECT id FROM shifts WHERE status = 'open' ORDER BY id LIMIT 1").get()?.id;
@@ -165,7 +187,7 @@ module.exports = function shiftRoutes(db) {
     res.json({ ok: true });
   });
 
-  // Manager: a remark for the attendant on a closed shift, before or after validation. Empty removes it.
+  // Manager: a remark for the attendant on a closed shift. Empty removes it.
   router.post('/shifts/:id/remark', requireRole('manager'), (req, res) => {
     const shift = db.prepare('SELECT * FROM shifts WHERE id = ?').get(req.params.id);
     if (!shift) fail(404, 'Poste introuvable.');
@@ -277,7 +299,7 @@ module.exports = function shiftRoutes(db) {
     const shift = db.prepare('SELECT * FROM shifts WHERE id = ?').get(req.params.id);
     if (!shift || shift.status !== 'open') fail(409, 'Ce poste n’est plus ouvert.');
     const meters = checkpointMeters(shift, req.body?.readings);
-    res.json(currentPeriod(db, shift, detailReadings(shift.id), meters, { kind: req.body?.kind, cash: Number(req.body?.cash) || 0, mobileMoney: Number(req.body?.mobileMoney) || 0, userName: req.user.name }));
+    res.json(currentPeriod(db, shift, detailReadings(shift.id), meters, { kind: req.body?.kind, cash: Number(req.body?.cash) || 0, userName: req.user.name }));
   });
 
   // Relief (the attendant hands over), evening closing (19:00), morning opening (6:30).
@@ -291,12 +313,11 @@ module.exports = function shiftRoutes(db) {
       if (req.user.role !== 'manager' && !onDuty(shift.id, req.user.id)) fail(403, 'Prenez d’abord le poste.', 'not_on_duty');
     }
     const cash = round(num(req.body?.cash ?? 0, 'L’argent remis', { max: 1e8 }));
-    const mobileMoney = round(num(req.body?.mobileMoney ?? 0, 'Le mobile money', { max: 1e8 }));
     const note = str(req.body?.note, 'La remarque', { required: false, max: 300 });
     const id = transaction(db, () => {
       const meters = checkpointMeters(shift, req.body?.readings);
       const cp = Number(
-        db.prepare('INSERT INTO shift_checkpoints (shift_id, kind, user_id, cash, mobile_money, note) VALUES (?, ?, ?, ?, ?, ?)').run(shift.id, kind, req.user.id, cash, mobileMoney, note).lastInsertRowid,
+        db.prepare('INSERT INTO shift_checkpoints (shift_id, kind, user_id, cash, note) VALUES (?, ?, ?, ?, ?)').run(shift.id, kind, req.user.id, cash, note).lastInsertRowid,
       );
       const insert = db.prepare('INSERT INTO checkpoint_readings (checkpoint_id, nozzle_id, meter) VALUES (?, ?, ?)');
       for (const [nozzleId, meter] of meters) insert.run(cp, nozzleId, meter);
@@ -352,6 +373,22 @@ module.exports = function shiftRoutes(db) {
     res.status(201).json({ id: Number(id), balance: customerBalance(db, customer.id) });
   });
 
+  // Fuel paid by mobile money: only the product and the litres, at the shift's price. The shift's
+  // mobile money is the total of these (plus payments by mobile money): nothing to type at closing.
+  router.post('/shifts/:id/momo', staff, (req, res) => {
+    const shift = getOwnShift(req);
+    const ref = clientRef(req.body?.clientRef);
+    const done = ref && db.prepare('SELECT * FROM momo_sales WHERE client_ref = ?').get(ref);
+    if (done) return res.status(201).json(done);
+    const reading = db.prepare('SELECT unit_price FROM shift_readings WHERE shift_id = ? AND product_id = ? LIMIT 1').get(shift.id, Number(req.body?.productId));
+    if (!reading) fail(400, 'Choisissez le carburant.');
+    const liters = round(num(req.body?.liters, 'Le nombre de litres', { min: 0.01, max: 1e5 }));
+    const id = db
+      .prepare('INSERT INTO momo_sales (shift_id, product_id, liters, unit_price, amount, user_id, client_ref) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(shift.id, Number(req.body.productId), liters, reading.unit_price, round(liters * reading.unit_price), req.user.id, ref).lastInsertRowid;
+    res.status(201).json(db.prepare('SELECT * FROM momo_sales WHERE id = ?').get(id));
+  });
+
   // Small expense paid from the shift's cash (deducted from the amount to hand over).
   router.post('/shifts/:id/expenses', staff, (req, res) => {
     const shift = getOwnShift(req);
@@ -377,6 +414,7 @@ module.exports = function shiftRoutes(db) {
     sales: { table: 'sales', missing: 'Vente introuvable.' },
     payments: { table: 'payments', missing: 'Règlement introuvable.' },
     expenses: { table: 'expenses', missing: 'Dépense introuvable.' },
+    momo: { table: 'momo_sales', missing: 'Paiement mobile money introuvable.' },
   };
   // How an operation reads in the journal.
   const describe = (table, item) =>
@@ -384,6 +422,8 @@ module.exports = function shiftRoutes(db) {
       ? `${item.kind === 'credit' ? 'crédit' : item.kind === 'combo' ? 'échange de combos' : 'vente'} de ${money(item.amount)}`
       : table === 'payments'
         ? `règlement de ${money(item.amount)}`
+        : table === 'momo_sales'
+          ? `paiement mobile money de ${money(item.amount)} (${item.liters} L)`
         : `dépense de ${money(item.amount)} (${item.category})`;
 
   function cancellable(req, shift) {
@@ -394,7 +434,7 @@ module.exports = function shiftRoutes(db) {
     return { table: k.table, item };
   }
 
-  // The operation stays counted until the manager validates its cancellation.
+  // The operation stays counted until the manager accepts its cancellation.
   router.post('/shifts/:id/:kind/:itemId/cancel', staff, (req, res) => {
     const shift = getOwnShift(req);
     const { table, item } = cancellable(req, shift);
@@ -412,7 +452,6 @@ module.exports = function shiftRoutes(db) {
   router.delete('/shifts/:id/:kind/:itemId', requireRole('manager'), (req, res) => {
     const shift = db.prepare('SELECT * FROM shifts WHERE id = ?').get(req.params.id);
     if (!shift) fail(404, 'Poste introuvable.');
-    if (shift.status === 'validated') fail(409, 'Ce poste est déjà validé : il ne peut plus être modifié.');
     const { table, item } = cancellable(req, shift);
     transaction(db, () => {
       // A sale confirmed from a customer's request: the request is cancelled with it.
@@ -466,14 +505,16 @@ module.exports = function shiftRoutes(db) {
     // To hand over = fuel sold − sold on credit − exchanged for combos
     //               + account payments received − expenses paid from the till.
     const expected = round(totalAmount - creditAmount - comboAmount + paymentsAmount - expensesAmount);
+    // Mobile money is not counted: it is the total of what was entered as paid by mobile money.
+    const mobileMoney = momoTotal(db, shiftId);
     db.prepare(
-      `UPDATE shifts SET total_amount = ?, credit_amount = ?, combo_amount = ?, payments_amount = ?, expenses_amount = ?, expected_amount = ?, variance = ?
+      `UPDATE shifts SET total_amount = ?, credit_amount = ?, combo_amount = ?, payments_amount = ?, expenses_amount = ?, expected_amount = ?, mobile_money = ?, variance = ?
        WHERE id = ?`,
-    ).run(totalAmount, creditAmount, comboAmount, paymentsAmount, expensesAmount, expected, round(declared(shift) - expected), shiftId);
+    ).run(totalAmount, creditAmount, comboAmount, paymentsAmount, expensesAmount, expected, mobileMoney, round(declared({ ...shift, mobile_money: mobileMoney }) - expected), shiftId);
   }
 
   const pendingCancellations = (shiftId) =>
-    ['sales', 'payments', 'expenses'].reduce(
+    ['sales', 'payments', 'expenses', 'momo_sales'].reduce(
       (n, table) => n + db.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE shift_id = ? AND cancel_requested_at IS NOT NULL`).get(shiftId).n,
       0,
     );
@@ -483,7 +524,6 @@ module.exports = function shiftRoutes(db) {
   // a correction calls it again after undoing the first closing (closed_at is kept).
   function applyClosing(shift, b) {
     const cash = round(num(b.cash, 'Le montant en espèces ($)', { max: 1e8 }));
-    const mobileMoney = round(num(b.mobileMoney ?? 0, 'Le montant en mobile money', { max: 1e8 }));
     const notes = str(b.notes, 'La remarque', { required: false, max: 500 });
     const ends = new Map((Array.isArray(b.readings) ? b.readings : []).map((r) => [Number(r.nozzleId), r.endMeter]));
     const last = lastMeters(db, shift.id);
@@ -515,9 +555,9 @@ module.exports = function shiftRoutes(db) {
         db.prepare('UPDATE tanks SET book_stock = ROUND(book_stock - ?, 2) WHERE id = ?').run(liters, r.tank_id);
       }
       db.prepare(
-        `UPDATE shifts SET status = 'closed', closed_at = COALESCE(closed_at, datetime('now')), cash = ?, mobile_money = ?,
+        `UPDATE shifts SET status = 'closed', closed_at = COALESCE(closed_at, datetime('now')), cash = ?,
            total_liters = ?, notes = ? WHERE id = ?`,
-      ).run(cash, mobileMoney, round(totalLiters), notes, shift.id);
+      ).run(cash, round(totalLiters), notes, shift.id);
       reconcile(shift.id);
     }
   }
@@ -548,12 +588,12 @@ module.exports = function shiftRoutes(db) {
     res.json({ ...shiftDetail(shift.id), next_shift_id: nextId });
   });
 
-  // Manager: corrects a closing before validation (wrong index, miscounted cash). The first
+  // Manager: corrects a closing (wrong index, miscounted cash). The first
   // closing is undone (nozzle meters back, tank stock back), then applied again with the new figures.
   router.post('/shifts/:id/correct', requireRole('manager'), (req, res) => {
     const shift = db.prepare('SELECT * FROM shifts WHERE id = ?').get(req.params.id);
     if (!shift) fail(404, 'Poste introuvable.');
-    if (shift.status !== 'closed') fail(409, 'Seul un poste clôturé et pas encore validé peut être corrigé.');
+    if (shift.status !== 'closed') fail(409, 'Seul un poste clôturé peut être corrigé.');
     const reason = str(req.body?.reason, 'Le motif de la correction', { max: 300 });
     transaction(db, () => {
       const readings = db
@@ -592,21 +632,6 @@ module.exports = function shiftRoutes(db) {
         after: pick(after),
         reason,
       });
-    });
-    res.json(shiftDetail(shift.id));
-  });
-
-  router.post('/shifts/:id/validate', requireRole('manager'), (req, res) => {
-    const shift = db.prepare('SELECT * FROM shifts WHERE id = ?').get(req.params.id);
-    if (!shift) fail(404, 'Poste introuvable.');
-    if (shift.status !== 'closed') fail(409, 'Seul un poste clôturé peut être validé.');
-    const pending = pendingCancellations(shift.id);
-    if (pending) fail(409, `Décidez d’abord ${pending > 1 ? `des ${pending} annulations demandées` : 'de l’annulation demandée'} sur ce poste.`);
-    const comment = str(req.body?.comment, 'La remarque', { required: false, max: 1000 });
-    transaction(db, () => {
-      db.prepare("UPDATE shifts SET status = 'validated', validated_by = ?, validated_at = datetime('now') WHERE id = ?").run(req.user.id, shift.id);
-      // A remark given at validation replaces the previous one; none keeps it.
-      if (comment && comment !== shift.manager_comment) setRemark(shift.id, comment, req.user.id);
     });
     res.json(shiftDetail(shift.id));
   });

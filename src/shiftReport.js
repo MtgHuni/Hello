@@ -11,7 +11,7 @@ function shiftReportPdf(shift, { stationName, combosEnabled, cashTolerance = 0, 
     stationName,
     heading: `Rapport du poste n°${shift.id}`,
     subtitle: `${shift.attendant_name}  ·  ouvert le ${dateTime(shift.opened_at)}  ·  clôturé le ${dateTime(shift.closed_at)}`,
-    status: shift.status === 'validated' ? `Validé par ${shift.validated_by_name}` : 'Clôturé, à valider',
+    status: 'Clôturé',
     now,
   });
 
@@ -32,7 +32,7 @@ function shiftReportPdf(shift, { stationName, combosEnabled, cashTolerance = 0, 
   report.line('− Dépenses payées par la caisse', money(shift.expenses_amount));
   report.line('À remettre', money(shift.expected_amount), { bold: true });
   report.line('Remis : espèces', money(shift.cash));
-  if (shift.mobile_money) report.line('Remis : mobile money', money(shift.mobile_money));
+  if (shift.mobile_money) report.line('Mobile money reçu (saisi au fil du poste)', money(shift.mobile_money));
   report.line('Total remis', money(handedOver), { bold: true });
   const ok = Math.abs(shift.variance) <= cashTolerance;
   report.line(ok ? 'Écart de caisse (dans la tolérance)' : 'Écart de caisse (hors tolérance)', signed(shift.variance), { bold: true, color: ok ? COLORS.GOOD : COLORS.BAD });
@@ -124,7 +124,6 @@ function shiftReportPdf(shift, { stationName, combosEnabled, cashTolerance = 0, 
   const remarks = [
     shift.notes ? ['Remarque du pompiste', shift.notes] : null,
     shift.manager_comment ? [`Remarque du gérant${shift.manager_comment_by_name ? ` (${shift.manager_comment_by_name})` : ''}`, shift.manager_comment] : null,
-    shift.status === 'validated' ? [`Validé par ${shift.validated_by_name} le ${dateTime(shift.validated_at)}`, ''] : null,
   ].filter(Boolean);
   if (remarks.length) {
     report.section('Remarques');

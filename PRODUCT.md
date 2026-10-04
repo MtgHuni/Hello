@@ -8,7 +8,7 @@ web
 
 ## Users
 
-- **Pompiste** (attendant): works outside at the pump, often in full sun, often alone while a queue of customers waits. Uses a phone, often an entry-level Android, often one-handed. Job: record the credits (paid sales are not entered: the meter readings count them), confirm the purchases customers prepared from their phones, collect payments, note cash expenses, close the shift with the meter readings and the cash count (in dollars: cash and mobile money; no card).
+- **Pompiste** (attendant): works outside at the pump, often in full sun, often alone while a queue of customers waits. Uses a phone, often an entry-level Android, often one-handed. Job: record the credits (paid sales are not entered: the meter readings count them), confirm the purchases customers prepared from their phones, collect payments, note cash expenses, close the shift with the meter readings and the cash count (in dollars: the cash counted; mobile money is entered as it is paid, litres of one fuel, and its total shows at closing; no card, no bank).
 - **Client** (customer): a driver waiting in the queue, on their own phone. Jobs: sign up with their phone number, prepare a purchase on credit (fuel, amount or litres) so the attendant only has to confirm it, and follow their balance, combos and statement.
 - **Gérant** (manager): runs the station. Validates shifts, follows tanks, deliveries and dips, manages customers (credit, payments, records to complete), expenses, reports and settings. Also mostly on a phone.
 
@@ -35,7 +35,7 @@ Everything is in US dollars and French, on the Africa/Lubumbashi timezone.
 ## Operating Context
 
 - **Outdoors and devices**: the attendant uses the app outdoors in bright sunlight, on modest Android phones that are often slow, over mobile networks that can be weak. The customer uses it in the queue on their own phone.
-- **Shift cycle**: one shift, always open, for the whole station and every pump. It runs from one 15:30 closing to the next, across the night (the station closes at 19:00 and opens at 6:30). Attendants take it (two can work on it at once); a relief records every index and the money passed to the next attendant, who gets a mini report; the evening closing and the morning opening are checkpoints, not closings. At 15:30 the manager closes (end readings, cash count) and the next shift opens at once from the same indexes; the manager then validates, after correcting the closing if needed.
+- **Shift cycle**: one shift, always open, for the whole station and every pump. It runs from one 15:30 closing to the next, across the night (the station closes at 19:00 and opens at 6:30). Attendants take it (two can work on it at once); a relief records every index and the money passed to the next attendant, who gets a mini report; the evening closing and the morning opening are checkpoints, not closings. At 15:30 the manager closes (end readings, cash count) and the next shift opens at once from the same indexes. The closing is final (no validation step); the manager can still correct it.
 - **Customer purchases**: the attendant's screen checks for new customer requests every 4 seconds and vibrates when one arrives. Requests expire after 30 minutes.
 
 ## Capabilities and Constraints

@@ -15,8 +15,6 @@ const KINDS = {
   cash: [
     ['apport', 'Apport du propriétaire'],
     ['retrait_proprio', 'Retrait du propriétaire'],
-    ['versement_banque', 'Versement à la banque'],
-    ['retrait_banque', 'Retrait à la banque'],
     ['autre_entree', 'Autre entrée'],
     ['autre_sortie', 'Autre sortie'],
   ],

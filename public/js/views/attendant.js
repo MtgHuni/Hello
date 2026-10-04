@@ -95,7 +95,7 @@ async function cancelEntry(ctx, x, reload) {
     } else {
       const ok = await formDialog({
         title: 'Demander l’annulation',
-        intro: `${x.title} · ${x.amount}. Le gérant doit valider l’annulation : l’opération reste comptée jusque-là.`,
+        intro: `${x.title} · ${x.amount}. Le gérant doit accepter l’annulation : l’opération reste comptée jusque-là.`,
         grid: false,
         fields: [{ name: 'reason', label: 'Raison', placeholder: 'Erreur de saisie, client parti…' }],
         submitLabel: 'Envoyer au gérant',
@@ -136,6 +136,14 @@ function renderOpenShift(page, ctx, shift) {
       amount: `+${fmt.money(p.amount)}`,
       remove: { url: `/shifts/${shift.id}/payments/${p.id}`, label: 'Annuler ce règlement', pending: !!p.cancel_requested_at },
     })),
+    ...shift.momo.map((m) => ({
+      at: m.created_at,
+      title: 'Payé en mobile money',
+      detail: `${m.product_name} · ${fmt.liters(m.liters)}`,
+      tag: badge('Mobile money', 'info'),
+      amount: fmt.money(m.amount),
+      remove: { url: `/shifts/${shift.id}/momo/${m.id}`, label: 'Annuler ce paiement mobile money', pending: !!m.cancel_requested_at },
+    })),
     ...shift.expenses.map((e) => ({
       at: e.created_at,
       title: e.description,
@@ -172,6 +180,7 @@ function renderOpenShift(page, ctx, shift) {
         'div',
         { class: 'quick-actions' },
         quick('Crédit', 'plus', () => addCredit(ctx, shift, reload), true),
+        quick('Mobile money', 'phone', () => addMomo(shift, reload)),
         quick('Règlement', 'cash', () => addPayment(shift, reload)),
         quick('Dépense', 'wallet', () => addExpense(ctx, shift, reload)),
       ),
@@ -180,11 +189,12 @@ function renderOpenShift(page, ctx, shift) {
         'div',
         { class: 'grid kpi-row' },
         kpi('Crédit', fmt.money(shift.credit_amount)),
+        kpi('Mobile money', fmt.money(shift.momo_total)),
         kpi('Règlements', fmt.money(shift.payments_amount)),
         kpi('Dépenses', fmt.money(shift.expenses_amount)),
       ),
       card(
-        cardHeader('Opérations du poste', 'Seuls les crédits sont saisis : les ventes sont calculées par les index.'),
+        cardHeader('Opérations du poste', 'Crédits, mobile money, règlements et dépenses : les ventes sont calculées par les index.'),
         entries.length
           ? entries.map((x) =>
               h(
@@ -604,6 +614,37 @@ async function addPayment(shift, reload) {
   }
 }
 
+// Fuel paid by mobile money: only the litres and the fuel; the amount is at the shift's price.
+// At closing, the shift's mobile money is the total of these entries.
+async function addMomo(shift, reload) {
+  const clientRef = newRef();
+  const products = [...new Map(shift.readings.map((r) => [r.product_id, { id: r.product_id, name: r.product_name, price: r.unit_price }])).values()];
+  const amount = h('span', { class: 'num' }, '—');
+  const update = (e) => {
+    const form = e.target.form;
+    const product = products.find((p) => String(p.id) === form.querySelector('input[name=productId]:checked')?.value);
+    const liters = Number(form.elements.liters.value);
+    amount.textContent = product && liters > 0 ? fmt.money(Math.round(liters * product.price * 100) / 100) : '—';
+  };
+  const ok = await formDialog({
+    autofocus: true,
+    title: 'Payé en mobile money',
+    submitLabel: 'Enregistrer',
+    intro: 'Les litres servis et le carburant : le montant se calcule au prix du poste. À la clôture, le total s’affiche tout seul.',
+    grid: false,
+    fields: [
+      { name: 'liters', label: 'Litres', type: 'number', step: '0.01', min: '0.01', required: true, onInput: update },
+      { name: 'productId', label: 'Carburant', type: 'segment', options: products.map((p) => [String(p.id), p.name]), value: String(products[0]?.id), onInput: update },
+    ],
+    extra: () => h('div', { class: 'summary-line total' }, h('span', {}, 'Montant reçu'), amount),
+    onSubmit: (d) => api.post(`/shifts/${shift.id}/momo`, { productId: Number(d.productId), liters: Number(d.liters), clientRef }),
+  });
+  if (ok) {
+    toast(`Mobile money : ${fmt.liters(ok.liters)} · ${fmt.money(ok.amount)}`);
+    reload();
+  }
+}
+
 async function addExpense(ctx, shift, reload) {
   const clientRef = newRef();
   const ok = await formDialog({
@@ -628,7 +669,7 @@ async function addExpense(ctx, shift, reload) {
 
 // ---------- 3. Closing: end meters + cash count, live reconciliation ----------
 // mode 'attendant': own shift. 'manager': closing an abandoned shift in the attendant's place.
-// 'correct': the manager fixes a closed shift before validation, starting from the first closing.
+// 'correct': the manager fixes a closed shift, starting from the first closing.
 export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, onDone } = {}) {
   const tol = ctx.state.settings.cashTolerance;
   const correcting = mode === 'correct';
@@ -639,10 +680,13 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
   const payments = shift.payments_amount || 0;
   const expenses = shift.expenses_amount || 0;
   const combos = shift.combo_amount || 0;
+  // Mobile money is not counted: it is the total entered as it was paid.
+  const momo = shift.momo_total || 0;
   const lines = {
     total: h('span', { class: 'num' }),
     credit: h('span', { class: 'num' }, fmt.money(credit)),
     expected: h('span', { class: 'num' }),
+    expectedCash: h('span', { class: 'num' }),
     declared: h('span', { class: 'num' }),
     variance: h('span', { class: 'num' }),
   };
@@ -670,10 +714,11 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
     total += surcharge;
     const expected = total - credit - combos + payments - expenses;
     const value = (name) => Number(form.elements[name].value) || 0;
-    const declared = value('cash') + value('mobileMoney');
+    const declared = value('cash') + momo;
     lines.total.textContent = complete ? fmt.money(total) : '—';
     lines.expected.textContent = complete ? fmt.money(expected) : '—';
-    lines.declared.textContent = fmt.money(declared);
+    lines.expectedCash.textContent = complete ? fmt.money(expected - momo) : '—';
+    lines.declared.textContent = fmt.money(value('cash'));
     setContent(lines.variance, complete && form.elements.cash.value !== '' ? varianceCell(Math.round((declared - expected) * 100) / 100, tol) : '—');
   };
 
@@ -696,12 +741,12 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
       ),
     ),
     card(
-      cardHeader('2. Caisse', 'Comptez l’argent encaissé pendant le poste'),
+      cardHeader('2. Caisse', 'Comptez les espèces : le mobile money est le total saisi pendant le poste'),
+      h('div', { class: 'summary-line', style: 'margin-bottom:12px' }, h('span', {}, 'Mobile money reçu'), h('span', { class: 'num' }, fmt.money(momo))),
       h(
         'div',
         { class: 'form-grid' },
         field({ name: 'cash', label: 'Espèces ($)', type: 'number', step: '0.01', min: '0', required: true, value: first(shift.cash, undefined), onInput: recompute }),
-        field({ name: 'mobileMoney', label: 'Mobile money ($)', type: 'number', step: '0.01', min: '0', value: first(shift.mobile_money || undefined, undefined), placeholder: 'Vide = 0', onInput: recompute }),
         field({ name: 'notes', label: 'Remarque (facultatif)', type: 'textarea', full: true, value: first(shift.notes, undefined) }),
         correcting ? field({ name: 'reason', label: 'Motif de la correction', required: true, full: true, placeholder: 'Ex. : index mal lu, billets oubliés' }) : null,
       ),
@@ -714,7 +759,9 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
       payments ? h('div', { class: 'summary-line' }, h('span', {}, 'Règlements reçus'), h('span', { class: 'num' }, `+ ${fmt.money(payments)}`)) : null,
       expenses ? h('div', { class: 'summary-line' }, h('span', {}, 'Dépenses payées'), h('span', { class: 'num' }, `− ${fmt.money(expenses)}`)) : null,
       h('div', { class: 'summary-line' }, h('span', {}, 'À remettre'), lines.expected),
-      h('div', { class: 'summary-line' }, h('span', {}, 'Déclaré'), lines.declared),
+      momo ? h('div', { class: 'summary-line' }, h('span', {}, 'Reçu en mobile money'), h('span', { class: 'num' }, `− ${fmt.money(momo)}`)) : null,
+      h('div', { class: 'summary-line' }, h('span', {}, 'Espèces à remettre'), lines.expectedCash),
+      h('div', { class: 'summary-line' }, h('span', {}, 'Espèces comptées'), lines.declared),
       h('div', { class: 'summary-line total' }, h('span', {}, 'Écart'), lines.variance),
     ),
     h(
@@ -759,7 +806,6 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
       const closed = await api.post(`/shifts/${shift.id}/${correcting ? 'correct' : 'close'}`, {
         readings: shift.readings.map((r) => ({ nozzleId: r.nozzle_id, endMeter: Number(form.elements[`end_${r.nozzle_id}`].value) })),
         cash: Number(form.elements.cash.value),
-        mobileMoney: Number(form.elements.mobileMoney.value) || 0,
         notes: form.elements.notes.value,
         reason: form.elements.reason?.value,
       });

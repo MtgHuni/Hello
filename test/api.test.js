@@ -146,14 +146,29 @@ test('poste : prix abonné, crédit sans combos, plafond, rapprochement', async 
 
   // 500 L at 1,20 = 600 $ + subscriber surcharge 50 × 0,20 = 10 $ → 610 $;
   // credit 70 + 48 = 118 $ → 492 $ to hand over; 490 $ declared.
+  // 50 L paid by mobile money as they are sold: 60 $ of mobile money, nothing typed at closing.
+  const momoRef = 'momo-test-1';
+  const momo = await pompiste('POST', `/api/shifts/${shift.id}/momo`, { productId: ctx.diesel.id, liters: 50, clientRef: momoRef });
+  assert.strictEqual(momo.status, 201);
+  assert.strictEqual(momo.data.amount, 60);
+  assert.strictEqual((await pompiste('POST', `/api/shifts/${shift.id}/momo`, { productId: ctx.diesel.id, liters: 50, clientRef: momoRef })).data.id, momo.data.id, 'pas de doublon');
+  assert.strictEqual((await pompiste('POST', `/api/shifts/${shift.id}/momo`, { productId: 999, liters: 5 })).status, 400);
+  assert.strictEqual((await pompiste('GET', `/api/shifts/${shift.id}`)).data.momo_total, 60);
   assert.strictEqual((await pompiste('POST', `/api/shifts/${shift.id}/close`, {})).status, 403, 'la clôture est celle du gérant');
-  const closed = await closeShift(shift, { [nozzle.nozzle_id]: 500 }, { cash: 390, mobileMoney: 100 });
+  const closed = await closeShift(shift, { [nozzle.nozzle_id]: 500 }, { cash: 430, mobileMoney: 999 });
   assert.strictEqual(closed.status, 200);
   assert.ok(closed.data.next_shift_id > shift.id, 'le poste suivant s’ouvre aussitôt');
   assert.strictEqual(closed.data.total_amount, 610);
   assert.strictEqual(closed.data.credit_amount, 118);
   assert.strictEqual(closed.data.expected_amount, 492);
+  assert.strictEqual(closed.data.mobile_money, 60, 'le total saisi, pas un montant tapé');
   assert.strictEqual(closed.data.variance, -2);
+  assert.strictEqual(closed.data.status, 'closed');
+  assert.deepStrictEqual(
+    (await gerant('GET', '/api/shifts?status=closed')).data.find((s) => s.id === shift.id).liters_by_product.map((p) => [p.product_id, p.liters]),
+    [[ctx.diesel.id, 500], [ctx.products.find((p) => p.id !== ctx.diesel.id).id, 0]],
+    'litres séparés par carburant',
+  );
 
   // End-of-shift PDF report: sales from the indexes, credits, expenses.
   const report = await pompiste('GET', `/api/shifts/${shift.id}/report.pdf`);
@@ -169,12 +184,12 @@ test('poste : prix abonné, crédit sans combos, plafond, rapprochement', async 
   assert.strictEqual(dash.todayTotal.amount, 610, 'ventes selon les index + supplément abonnés, comme le poste');
   assert.strictEqual(dash.last7.at(-1).amount, 610, 'même chiffre que le graphique');
   assert.ok(dash.alerts.some((a) => a.text.includes('écart de caisse')));
-  // A remark for the attendant: kept by a validation without one, read in the history.
+  // A remark for the attendant, read in the history. There is no validation step.
   assert.strictEqual((await pompiste('POST', `/api/shifts/${shift.id}/remark`, { comment: 'x' })).status, 403);
   assert.strictEqual((await gerant('POST', `/api/shifts/${shift.id}/remark`, { comment: 'Expliquez l’écart, svp.' })).data.manager_comment, 'Expliquez l’écart, svp.');
   assert.strictEqual((await pompiste('GET', '/api/shifts')).data.find((s) => s.id === shift.id).remark_unread, 1);
   assert.deepStrictEqual((await pompiste('GET', '/api/shifts/remarks/unread')).data.map((r) => r.id), [shift.id]);
-  assert.strictEqual((await gerant('POST', `/api/shifts/${shift.id}/validate`, {})).data.status, 'validated');
+  assert.strictEqual((await gerant('POST', `/api/shifts/${shift.id}/validate`, {})).status, 404);
   assert.strictEqual((await gerant('GET', `/api/shifts/${shift.id}`)).data.comment_seen_at, null, 'le gérant ne la marque pas lue');
   assert.strictEqual((await pompiste('GET', `/api/shifts/${shift.id}`)).data.manager_comment, 'Expliquez l’écart, svp.');
   assert.deepStrictEqual((await pompiste('GET', '/api/shifts/remarks/unread')).data, []);
@@ -190,7 +205,7 @@ test('poste : prix abonné, crédit sans combos, plafond, rapprochement', async 
 });
 
 test('les combos d’une vente à crédit arrivent quand elle est entièrement payée', async () => {
-  await gerant('POST', `/api/customers/${ctx.fleet.id}/payments`, { amount: 70, method: 'virement' });
+  await gerant('POST', `/api/customers/${ctx.fleet.id}/payments`, { amount: 70, method: 'espèces' });
   assert.strictEqual((await customer(ctx.fleet.id)).customer.loyalty_points, 50);
 
   await gerant('POST', `/api/customers/${ctx.person.id}/payments`, { amount: 20, method: 'espèces' });
@@ -264,8 +279,7 @@ test('échange de combos contre du carburant, déduit de la caisse', async () =>
   assert.strictEqual(closed.data.expected_amount, 34);
   assert.strictEqual(closed.data.variance, 3);
 
-  // The manager decides before validating; accepting it redoes the reconciliation.
-  assert.strictEqual((await gerant('POST', `/api/shifts/${ctx.shift.id}/validate`, {})).status, 409);
+  // The manager decides after the closing; accepting it redoes the reconciliation.
   assert.strictEqual((await gerant('DELETE', `/api/shifts/${ctx.shift.id}/expenses/${expense.data.id}`)).status, 204);
   const after = (await gerant('GET', `/api/shifts/${ctx.shift.id}`)).data;
   assert.strictEqual(after.expected_amount, 37);
@@ -298,7 +312,7 @@ test('abonnés : le mois précédent doit être payé après le délai', async (
   } else {
     assert.strictEqual(next.status, 201);
   }
-  await gerant('POST', `/api/customers/${ctx.fleet.id}/payments`, { amount: 100, method: 'virement' });
+  await gerant('POST', `/api/customers/${ctx.fleet.id}/payments`, { amount: 100, method: 'espèces' });
   assert.strictEqual((await customer(ctx.fleet.id)).dues.overdue, 0);
   await gerant('PUT', '/api/settings', { subscriberGraceDays: 5 });
 });
@@ -425,7 +439,7 @@ test('le gérant clôture à la place du pompiste (mobile money), puis corrige l
 
   const closed = await closeShift(shift, { [nozzle.nozzle_id]: start + 200 }, count);
   assert.strictEqual(closed.status, 200);
-  assert.strictEqual(closed.data.variance, Math.round((15 + 2 - closed.data.expected_amount) * 100) / 100);
+  assert.strictEqual(closed.data.variance, Math.round((15 + closed.data.mobile_money - closed.data.expected_amount) * 100) / 100);
   assert.strictEqual(stock(), stockBefore - 200);
   assert.ok((await gerant('GET', '/api/audit?category=postes')).data.some((a) => a.action === 'shift_closed'));
 
@@ -586,16 +600,17 @@ test('un seul poste à la fois, livre de caisse (espèces et mobile money), livr
 
   // Cash handed over goes into the till, mobile money into its own balance.
   const running = (await gerant('GET', `/api/shifts/${open.id}`)).data;
-  await closeShift(running, Object.fromEntries(running.readings.map((r) => [r.nozzle_id, r.start_meter + 100])), { cash: 50, mobileMoney: 20 });
+  await bea('POST', `/api/shifts/${open.id}/momo`, { productId: ctx.diesel.id, liters: 25 }); // 25 L at 1,20 = 30 $
+  await closeShift(running, Object.fromEntries(running.readings.map((r) => [r.nozzle_id, r.start_meter + 100])), { cash: 50 });
   let b = await cash();
   assert.strictEqual(b.cash.balance, 150);
-  assert.strictEqual(b.momo.balance, 20);
+  assert.strictEqual(b.momo.balance, 30);
   // Mobile money only reaches the till when withdrawn.
   await gerant('POST', '/api/cashbook/movements', { kind: 'retrait_momo', amount: 15 });
   assert.strictEqual((await gerant('POST', '/api/cashbook/movements', { kind: 'versement_banque', account: 'momo', amount: 1 })).status, 400);
   b = await cash();
   assert.strictEqual(b.cash.balance, 165);
-  assert.strictEqual(b.momo.balance, 5);
+  assert.strictEqual(b.momo.balance, 15);
   // The manager's cash expense and a payment received by the manager.
   await gerant('POST', '/api/expenses', { category: 'Fournitures', amount: 10, description: 'Ampoules', method: 'espèces' });
   await gerant('POST', `/api/customers/${ctx.person.id}/payments`, { amount: 5, method: 'espèces' });
@@ -655,9 +670,13 @@ test('relève, fermeture du soir et ouverture du matin : le poste continue', asy
 
   // Béa carries on with the money Paul passed on, then closes the station at 19:00.
   assert.strictEqual((await bea('POST', `/api/shifts/${shift.id}/checkpoints`, { kind: 'fermeture', readings: at(10) })).status, 400, 'index plus bas que le dernier relevé');
-  const evening = await bea('POST', `/api/shifts/${shift.id}/checkpoints`, { kind: 'fermeture', readings: at(30), cash: preview.expected + 10 * diesel.unit_price });
+  // 5 L paid by mobile money: they stay on the station's account, the cash counted is the rest.
+  const momo = (await bea('POST', `/api/shifts/${shift.id}/momo`, { productId: diesel.product_id, liters: 5 })).data.amount;
+  const evening = await bea('POST', `/api/shifts/${shift.id}/checkpoints`, { kind: 'fermeture', readings: at(30), cash: Math.round((preview.expected + 10 * diesel.unit_price - momo) * 100) / 100 });
   assert.strictEqual(evening.status, 201);
   assert.strictEqual(evening.data.report.received, preview.expected);
+  assert.strictEqual(evening.data.report.mobile_money, momo);
+  assert.strictEqual(evening.data.report.expected_cash, evening.data.report.cash);
   assert.strictEqual(evening.data.report.variance, 0);
   assert.ok(evening.data.shift.station_closed_at);
   assert.strictEqual(evening.data.shift.status, 'open', 'la fermeture ne clôture pas le poste');
@@ -667,7 +686,7 @@ test('relève, fermeture du soir et ouverture du matin : le poste continue', asy
   // Paul opens in the morning: same indexes, same money; the shift continues.
   const state = (await pompiste('GET', '/api/shifts/state')).data;
   assert.strictEqual(state.lastReport.kind, 'fermeture');
-  const morning = await pompiste('POST', `/api/shifts/${shift.id}/checkpoints`, { kind: 'ouverture', readings: at(30), cash: evening.data.report.handed });
+  const morning = await pompiste('POST', `/api/shifts/${shift.id}/checkpoints`, { kind: 'ouverture', readings: at(30), cash: evening.data.report.cash });
   assert.strictEqual(morning.status, 201);
   assert.strictEqual(morning.data.report.liters, 0);
   assert.strictEqual(morning.data.report.variance, 0);
@@ -720,7 +739,12 @@ test('migration : une base ancienne est convertie (loyalty → paid, combos)', (
   const setting = (key) => migrated.prepare('SELECT value FROM settings WHERE key = ?').get(key)?.value;
   assert.strictEqual(setting('combos_enabled'), '0', 'version 6 : combos coupés');
   assert.strictEqual(setting('cdf_rate'), undefined, 'version 6 : tout en dollars');
-  assert.ok(fs.readdirSync(dir).some((f) => f.startsWith('old.db.avant-migration-')), 'copie gardée avant la mise à jour');
+  // Version 11: a validated shift is simply closed.
+  migrated.exec("INSERT INTO users (name, login, password_hash, role) VALUES ('P', 'p', 'x', 'attendant'); INSERT INTO shifts (attendant_id, status) VALUES (1, 'validated'); PRAGMA user_version = 10");
   migrated.close();
+  const reopened = openDb(file);
+  assert.strictEqual(reopened.prepare('SELECT status FROM shifts').get().status, 'closed', 'version 11 : plus de validation');
+  reopened.close();
+  assert.ok(fs.readdirSync(dir).some((f) => f.startsWith('old.db.avant-migration-')), 'copie gardée avant la mise à jour');
   fs.rmSync(dir, { recursive: true, force: true });
 });

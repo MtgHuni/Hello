@@ -72,10 +72,11 @@ module.exports = function reportRoutes(db) {
       )
       .all();
 
-    const toValidate = db
+    // Shifts closed in the last three days (their cash gap shows in the alerts).
+    const recentlyClosed = db
       .prepare(
         `SELECT s.id, s.closed_at, s.variance, s.total_amount, COALESCE(${attendantNamesSql}, u.name) AS attendant_name
-         FROM shifts s JOIN users u ON u.id = s.attendant_id WHERE s.status = 'closed' ORDER BY s.id`,
+         FROM shifts s JOIN users u ON u.id = s.attendant_id WHERE s.status = 'closed' AND s.closed_at >= datetime('now', '-3 days') ORDER BY s.id`,
       )
       .all();
 
@@ -100,7 +101,7 @@ module.exports = function reportRoutes(db) {
         alerts.push({ level: 'critical', text: `${t.name} : stock bas (${round(t.book_stock)} L, seuil ${t.low_level} L)`, link: '#/cuves' });
       }
     }
-    for (const s of toValidate) {
+    for (const s of recentlyClosed) {
       if (Math.abs(s.variance) > settings.cashTolerance) {
         alerts.push({
           level: 'serious',
@@ -112,13 +113,13 @@ module.exports = function reportRoutes(db) {
     for (const d of recentDips) {
       alerts.push({ level: 'serious', text: `${d.tank_name} : écart de jaugeage de ${String(d.variance).replace('.', ',')} L`, link: '#/cuves' });
     }
-    // Credits granted by attendants beyond the limit, on shifts not yet validated.
+    // Credits granted by attendants beyond the limit, on the open shift or one closed in the last three days.
     const overLimit = db
       .prepare(
         `SELECT sa.amount, sa.shift_id, c.id AS customer_id, c.name AS customer_name, u.name AS attendant_name
          FROM sales sa JOIN shifts s ON s.id = sa.shift_id JOIN customers c ON c.id = sa.customer_id
          JOIN users u ON u.id = COALESCE(sa.user_id, s.attendant_id)
-         WHERE sa.over_limit = 1 AND s.status != 'validated' ORDER BY sa.id DESC`,
+         WHERE sa.over_limit = 1 AND (s.status = 'open' OR s.closed_at >= datetime('now', '-3 days')) ORDER BY sa.id DESC`,
       )
       .all();
     for (const o of overLimit) {
@@ -191,7 +192,6 @@ module.exports = function reportRoutes(db) {
       openShifts,
       cash: balances(db),
       supplierDebt,
-      toValidate: toValidate.length,
       receivables: round(customers.reduce((t, c) => t + Math.max(0, c.balance), 0)),
       // Unpaid credit older than 30 days (payments settle the oldest credit first).
       receivablesOld: round(

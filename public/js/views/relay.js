@@ -9,24 +9,24 @@ import { renderAttendant } from './attendant.js';
 const KIND = {
   releve: {
     title: 'Relève',
-    intro: 'Relevez les index de tous les pistolets et comptez l’argent : le pompiste qui vous remplace recevra ce rapport.',
-    money: 'Argent remis au pompiste suivant ($)',
+    intro: 'Relevez les index de tous les pistolets et comptez les espèces : le pompiste qui vous remplace recevra ce rapport.',
+    money: 'Espèces remises au pompiste suivant ($)',
     submit: 'Passer le relais',
     confirm: 'Vous quittez le poste : le suivant le continuera avec ces index et cet argent.',
     done: 'Relais passé',
   },
   fermeture: {
     title: 'Fermeture du soir',
-    intro: 'La station ferme, le poste continue demain à l’ouverture. Relevez les index, comptez l’argent et vérifiez vos ventes.',
-    money: 'Argent en caisse à la fermeture ($)',
+    intro: 'La station ferme, le poste continue demain à l’ouverture. Relevez les index, comptez les espèces et vérifiez vos ventes.',
+    money: 'Espèces en caisse à la fermeture ($)',
     submit: 'Fermer la station',
     confirm: 'Plus rien ne pourra être saisi avant l’ouverture de demain matin.',
     done: 'Station fermée',
   },
   ouverture: {
     title: 'Ouverture du matin',
-    intro: 'Vérifiez que les index et l’argent sont ceux laissés à la fermeture, puis ouvrez : le poste continue.',
-    money: 'Argent repris de la fermeture, mobile money compris ($)',
+    intro: 'Vérifiez que les index et les espèces sont ceux laissés à la fermeture, puis ouvrez : le poste continue.',
+    money: 'Espèces reprises de la fermeture ($)',
     submit: 'Ouvrir la station',
     confirm: 'Le poste reprend avec ces index et cet argent.',
     done: 'Station ouverte',
@@ -55,9 +55,11 @@ export function reportCard(r, tol, { title, preview = false } = {}) {
     r.combos ? line('Échangé contre des combos', `− ${fmt.money(r.combos)}`) : null,
     r.payments ? line('Règlements reçus', `+ ${fmt.money(r.payments)}`) : null,
     r.expenses ? line('Dépenses payées', `− ${fmt.money(r.expenses)}`) : null,
-    r.received ? line('Argent reçu au début', `+ ${fmt.money(r.received)}`) : null,
+    r.received ? line('Espèces reçues au début', `+ ${fmt.money(r.received)}`) : null,
     line('Argent à avoir', fmt.money(r.expected), 'total'),
-    preview ? null : line(r.mobile_money ? `Argent remis (dont mobile money ${fmt.money(r.mobile_money)})` : 'Argent remis', fmt.money(r.handed)),
+    r.mobile_money ? line('Reçu en mobile money', `− ${fmt.money(r.mobile_money)}`) : null,
+    r.mobile_money ? line('Espèces à avoir', fmt.money(r.expected_cash), 'total') : null,
+    preview ? null : line('Espèces remises', fmt.money(r.cash)),
     preview ? null : h('div', { class: 'summary-line' }, h('span', {}, 'Écart'), varianceCell(r.variance, tol)),
     r.operations.length
       ? h(
@@ -148,8 +150,7 @@ export function renderCheckpoint(page, ctx, shift, kind, { report } = {}) {
       h(
         'div',
         { class: 'form-grid' },
-        field({ name: 'cash', label: k.money, type: 'number', step: '0.01', min: '0', required: true, value: morning && report ? report.handed : undefined }),
-        morning ? null : field({ name: 'mobileMoney', label: 'Dont reçu en mobile money ($)', type: 'number', step: '0.01', min: '0', placeholder: 'Vide = 0' }),
+        field({ name: 'cash', label: k.money, type: 'number', step: '0.01', min: '0', required: true, value: morning && report ? report.cash : undefined }),
         field({ name: 'note', label: 'Remarque (facultatif)', full: true }),
       ),
     ),
@@ -171,7 +172,6 @@ export function renderCheckpoint(page, ctx, shift, kind, { report } = {}) {
         kind,
         readings: readings().map((x) => ({ nozzleId: x.nozzleId, meter: Number(x.meter) })),
         cash: Number(form.elements.cash.value) || 0,
-        mobileMoney: Number(form.elements.mobileMoney?.value) || 0,
         note: form.elements.note.value,
       });
       if (morning) {

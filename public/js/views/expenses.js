@@ -4,9 +4,7 @@ import { PRESETS, presetRange } from './reports.js';
 
 const METHODS = [
   ['espèces', 'Espèces'],
-  ['banque', 'Banque / virement'],
   ['mobile money', 'Mobile money'],
-  ['chèque', 'Chèque'],
 ];
 
 let preset = 'month';
@@ -56,7 +54,7 @@ export async function renderExpenses(page, ctx) {
       kpi('Total des dépenses', fmt.money(data.total), `${data.expenses.length} dépense${data.expenses.length > 1 ? 's' : ''}`),
       kpi('Premier poste', top ? top.category : '—', top ? fmt.money(top.amount) : 'Aucune dépense', { small: true }),
       kpi('Payées avec la caisse', fmt.money(tillTotal), 'Par les pompistes, pendant leur poste'),
-      kpi('Payées par le gérant', fmt.money(data.total - tillTotal), 'Banque, mobile money, espèces'),
+      kpi('Payées par le gérant', fmt.money(data.total - tillTotal), 'Espèces, mobile money'),
     ),
     data.byCategory.length
       ? h('section', { class: 'card section' }, h('div', { class: 'card-header' }, h('div', {}, h('h2', {}, 'Par catégorie'), h('p', {}, 'Montant dépensé sur la période'))), categoryBars(data.byCategory))

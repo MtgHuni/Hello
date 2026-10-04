@@ -125,8 +125,7 @@ export function badge(text, level = '') {
 
 export const SHIFT_STATUS = {
   open: ['En cours', 'info'],
-  closed: ['À valider', 'warning'],
-  validated: ['Validé', 'good'],
+  closed: ['Clôturé', 'good'],
 };
 
 export function shiftBadge(status) {
@@ -145,11 +144,11 @@ export function varianceCell(value, tolerance) {
 }
 
 // ---------- Layout pieces ----------
-// Ligne de poste : le cycle d'un poste en quatre arrêts, l'arrêt en cours éclairé en jaune.
+// Ligne de poste : le cycle d'un poste en trois arrêts, l'arrêt en cours éclairé en jaune.
 // L'arrêt courant brûle, les arrêts passés sont pleins, les suivants sont des cercles creux.
-const LINE_STOPS = ['Ouverture', 'Ventes', 'Clôture', 'Validation'];
+const LINE_STOPS = ['Ouverture', 'Ventes', 'Clôture'];
 export function shiftLine(status) {
-  const current = status === 'open' ? 1 : status === 'closed' ? 3 : 4; // 4 = tout est passé
+  const current = status === 'open' ? 1 : 3; // 3 = tout est passé
   return h(
     'ol',
     { class: 'shift-line', 'aria-label': 'Avancement du poste' },

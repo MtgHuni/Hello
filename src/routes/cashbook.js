@@ -7,7 +7,7 @@ const { ACCOUNTS, KINDS, cashbook, balances, supplierBalances } = require('../ca
 const { cashbookPdf } = require('../cashbookReport');
 
 const manager = requireRole('manager');
-const SUPPLIER_METHODS = ['espèces', 'mobile money', 'banque'];
+const SUPPLIER_METHODS = ['espèces', 'mobile money'];
 
 module.exports = function cashbookRoutes(db) {
   const router = express.Router();
@@ -33,10 +33,10 @@ module.exports = function cashbookRoutes(db) {
     res.send(pdf);
   });
 
-  // A movement entered by hand: owner's contribution or withdrawal, bank, mobile money withdrawal…
+  // A movement entered by hand: owner's contribution or withdrawal, mobile money withdrawal…
   router.post('/cashbook/movements', manager, (req, res) => {
     const b = req.body || {};
-    const kind = oneOf(b.kind, 'Le type de mouvement', Object.keys(KINDS));
+    const kind = oneOf(b.kind, 'Le type de mouvement', Object.keys(KINDS).filter((k) => !KINDS[k].old));
     const account = oneOf(b.account || KINDS[kind].accounts[0], 'Le compte', KINDS[kind].accounts);
     const amount = round(num(b.amount, 'Le montant', { min: kind === 'opening' ? 0 : 0.01, max: 1e9 }));
     const note = str(b.note, 'La remarque', { required: false, max: 200 });

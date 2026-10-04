@@ -134,7 +134,7 @@ async function deliveryDialog(tanks, supplierNames, reload) {
       { name: 'unitCost', label: 'Prix d’achat ($/L)', type: 'number', step: '0.001', min: '0', onInput: update },
       { name: 'names', type: 'node', node: h('datalist', { id: 'supplier-names' }, supplierNames.map((n) => h('option', { value: n }))) },
       { name: 'payment', label: 'Paiement', type: 'segment', full: true, options: [['cash', 'Payée comptant'], ['credit', 'À crédit']], onInput: update },
-      { name: 'payMethod', label: 'Payée avec', type: 'segment', full: true, options: [['espèces', 'Espèces'], ['mobile money', 'Mobile money'], ['banque', 'Banque']] },
+      { name: 'payMethod', label: 'Payée avec', type: 'segment', full: true, options: [['espèces', 'Espèces'], ['mobile money', 'Mobile money']] },
       { name: 'total', type: 'node', node: total },
     ],
     onSubmit: (d) => {
@@ -196,8 +196,8 @@ async function supplierPaymentDialog(suppliers, s, reload) {
     fields: [
       { name: 'supplier', label: 'Fournisseur', type: 'select', options: suppliers.filter((x) => x.balance > 0).map((x) => [x.name, `${x.name} · reste ${fmt.money(x.balance)}`]), value: s?.name, required: true },
       { name: 'amount', label: 'Montant ($)', type: 'number', step: '0.01', min: '0.01', required: true, value: s ? s.balance.toFixed(2) : '' },
-      { name: 'method', label: 'Payé avec', type: 'segment', options: [['espèces', 'Espèces'], ['mobile money', 'Mobile money'], ['banque', 'Banque']] },
-      { name: 'reference', label: 'Référence', placeholder: 'Facultatif (reçu, virement…)' },
+      { name: 'method', label: 'Payé avec', type: 'segment', options: [['espèces', 'Espèces'], ['mobile money', 'Mobile money']] },
+      { name: 'reference', label: 'Référence', placeholder: 'Facultatif (reçu, n° de transaction…)' },
     ],
     submitLabel: 'Enregistrer le paiement',
     onSubmit: (d) => api.post('/suppliers/payments', d),
