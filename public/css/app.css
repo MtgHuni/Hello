@@ -894,6 +894,9 @@ dialog {
 dialog::backdrop { background: var(--backdrop); animation: fade-in 0.3s var(--ease-out); }
 dialog.closing::backdrop { animation: fade-out 0.25s var(--ease-out) forwards; }
 dialog:focus { outline: none; }
+/* A sheet is open: the page behind does not scroll. */
+html.dialog-open, html.dialog-open body { overflow: hidden; overscroll-behavior: none; }
+dialog { overscroll-behavior: contain; }
 
 .sheet {
   width: min(560px, calc(100vw - 32px));

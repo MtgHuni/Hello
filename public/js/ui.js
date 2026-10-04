@@ -335,10 +335,32 @@ export function tankGauge(tank) {
 
 // ---------- Dialogs ----------
 // kind: 'sheet' (forms), 'alert' (confirmations), 'action' (action sheet).
+// While a sheet or an alert is open, the page behind it stays still: a finger moving on the
+// sheet scrolls only the sheet's own content, never the screen underneath.
+let openDialogs = 0;
+function lockPage(on) {
+  openDialogs += on ? 1 : -1;
+  document.documentElement.classList.toggle('dialog-open', openDialogs > 0);
+}
+// Inside the sheet, a touch may scroll an element that can scroll (the form, a table);
+// anywhere else (header, footer, backdrop, a form that fits) it would move the page.
+function scrollsInside(el, stop) {
+  for (; el && el !== stop; el = el.parentElement) {
+    const s = getComputedStyle(el);
+    if (/(auto|scroll)/.test(s.overflowY) && el.scrollHeight > el.clientHeight + 1) return true;
+    if (/(auto|scroll)/.test(s.overflowX) && el.scrollWidth > el.clientWidth + 1) return true;
+  }
+  return false;
+}
+
 export function openDialog(build, { kind = 'sheet' } = {}) {
   const dialog = h('dialog', { class: `${kind}-dialog` });
   document.body.append(dialog);
   let closing = false;
+  lockPage(true);
+  dialog.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 1 && !scrollsInside(e.target, dialog)) e.preventDefault();
+  }, { passive: false });
   const close = () => {
     if (closing) return;
     closing = true;
@@ -346,8 +368,10 @@ export function openDialog(build, { kind = 'sheet' } = {}) {
     dialog.classList.add('closing');
     panel?.classList.add('closing');
     const done = () => {
+      if (!dialog.isConnected) return;
       dialog.close();
       dialog.remove();
+      lockPage(false);
     };
     if (!panel || matchMedia('(prefers-reduced-motion: reduce)').matches) return done();
     panel.addEventListener('animationend', done, { once: true });
