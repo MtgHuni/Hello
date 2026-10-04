@@ -55,14 +55,10 @@ module.exports = function reportRoutes(db) {
 
     const tanks = db
       .prepare(
-        `SELECT t.id, t.name, t.capacity, t.low_level, t.book_stock, p.id AS product_id, p.name AS product_name,
-           (SELECT COALESCE(SUM(r.liters), 0) FROM shift_readings r JOIN shifts s ON s.id = r.shift_id
-             WHERE r.tank_id = t.id AND s.status != 'open' AND s.closed_at >= datetime('now', '-14 days')) AS sold14
+        `SELECT t.id, t.name, t.capacity, t.low_level, t.book_stock, p.id AS product_id, p.name AS product_name
          FROM tanks t JOIN products p ON p.id = t.product_id WHERE t.active = 1 ORDER BY t.id`,
       )
-      .all()
-      // Days of stock left at the pace of the last 14 days.
-      .map((t) => ({ ...t, days_left: t.sold14 > 0 ? Math.floor(t.book_stock / (t.sold14 / 14)) : null }));
+      .all();
 
     const openShifts = db
       .prepare(
@@ -211,7 +207,7 @@ module.exports = function reportRoutes(db) {
   };
 
   // Per tank over a period: deliveries, litres sold (meters), dip variances, loss as a share of
-  // the litres sold, and the days of stock left at the pace of the last 14 days.
+  // the litres sold.
   function stockMovements(from, to) {
     return db
       .prepare(
@@ -222,9 +218,7 @@ module.exports = function reportRoutes(db) {
              WHERE r.tank_id = t.id AND s.status != 'open' AND ${DAY} BETWEEN ? AND ?) AS sold,
            (SELECT COALESCE(SUM(d.variance), 0) FROM dips d
              WHERE d.tank_id = t.id AND date(d.created_at, 'localtime') BETWEEN ? AND ?) AS dip_variance,
-           (SELECT COUNT(*) FROM dips d WHERE d.tank_id = t.id AND date(d.created_at, 'localtime') BETWEEN ? AND ?) AS dips,
-           (SELECT COALESCE(SUM(r.liters), 0) FROM shift_readings r JOIN shifts s ON s.id = r.shift_id
-             WHERE r.tank_id = t.id AND s.status != 'open' AND s.closed_at >= datetime('now', '-14 days')) AS sold14
+           (SELECT COUNT(*) FROM dips d WHERE d.tank_id = t.id AND date(d.created_at, 'localtime') BETWEEN ? AND ?) AS dips
          FROM tanks t JOIN products p ON p.id = t.product_id WHERE t.active = 1 ORDER BY t.id`,
       )
       .all(from, to, from, to, from, to, from, to)
@@ -235,7 +229,6 @@ module.exports = function reportRoutes(db) {
         dip_variance: round(t.dip_variance),
         // A negative dip variance is fuel missing from the tank: shown as a positive loss.
         loss_pct: t.sold ? round((-t.dip_variance / t.sold) * 100, 2) : null,
-        days_left: t.sold14 > 0 ? Math.floor(t.book_stock / (t.sold14 / 14)) : null,
       }));
   }
 

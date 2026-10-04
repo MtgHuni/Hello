@@ -328,7 +328,7 @@ export function tankGauge(tank) {
     h(
       'div',
       { class: 'tank-foot' },
-      h('span', { class: 'num' }, `${fmt.liters(tank.book_stock)} / ${fmt.liters(tank.capacity)}${tank.days_left != null ? ` · ≈ ${tank.days_left} jour${tank.days_left > 1 ? 's' : ''}` : ''}`),
+      h('span', { class: 'num' }, `${fmt.liters(tank.book_stock)} / ${fmt.liters(tank.capacity)}`),
       low ? badge('Stock bas', 'critical') : badge('Niveau correct', 'good'),
     ),
   );

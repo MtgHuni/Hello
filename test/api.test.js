@@ -499,7 +499,7 @@ test('sauvegarde téléchargeable et journal des changements', async () => {
   assert.strictEqual(history[0].subscriber_price, 1.4, 'le prix abonné est gardé dans l’historique');
 });
 
-test('créances par ancienneté, relevé PDF, prix programmé, jours de stock', async () => {
+test('créances par ancienneté, relevé PDF, prix programmé', async () => {
   // Garage Mwami's credit is 40 days old: the first to chase.
   const garage = (await gerant('GET', '/api/customers')).data.find((c) => c.name === 'Garage Mwami');
   db.prepare("UPDATE sales SET created_at = datetime('now', '-40 days') WHERE customer_id = ? AND kind = 'credit'").run(garage.id);
@@ -531,9 +531,6 @@ test('créances par ancienneté, relevé PDF, prix programmé, jours de stock', 
   assert.strictEqual(now.subscriber_price, 1.7);
   assert.strictEqual(now.next_price, null);
   assert.ok((await gerant('GET', '/api/audit?category=prix')).data.some((a) => a.action === 'price_applied'));
-
-  const gasoil = (await gerant('GET', '/api/dashboard')).data.tanks.find((t) => t.name === 'Cuve Gasoil');
-  assert.strictEqual(typeof gasoil.days_left, 'number', 'jours de stock au rythme des 14 derniers jours');
 });
 
 test('migration : une base ancienne est convertie (loyalty → paid, combos)', () => {
