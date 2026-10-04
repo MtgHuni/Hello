@@ -243,6 +243,35 @@ CREATE TABLE IF NOT EXISTS supplier_payments (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- One shift runs from the 15:30 closing to the next, across the night (station closed 19:00–6:30).
+-- Several attendants can be on it at once; they come and go (left_at: relief or evening closing).
+CREATE TABLE IF NOT EXISTS shift_attendants (
+  id        INTEGER PRIMARY KEY,
+  shift_id  INTEGER NOT NULL REFERENCES shifts(id),
+  user_id   INTEGER NOT NULL REFERENCES users(id),
+  joined_at TEXT NOT NULL DEFAULT (datetime('now')),
+  left_at   TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_shift_attendants ON shift_attendants(shift_id, user_id);
+-- Checkpoints inside a shift (src/checkpoints.js): relief, evening closing, morning opening,
+-- each with every nozzle's index and the money passed on.
+CREATE TABLE IF NOT EXISTS shift_checkpoints (
+  id           INTEGER PRIMARY KEY,
+  shift_id     INTEGER NOT NULL REFERENCES shifts(id),
+  kind         TEXT NOT NULL CHECK (kind IN ('releve', 'fermeture', 'ouverture')),
+  user_id      INTEGER REFERENCES users(id),
+  cash         REAL NOT NULL DEFAULT 0,
+  mobile_money REAL NOT NULL DEFAULT 0,
+  note         TEXT,
+  created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS checkpoint_readings (
+  checkpoint_id INTEGER NOT NULL REFERENCES shift_checkpoints(id),
+  nozzle_id     INTEGER NOT NULL REFERENCES nozzles(id),
+  meter         REAL NOT NULL,
+  PRIMARY KEY (checkpoint_id, nozzle_id)
+);
+
 -- Journal: who changed what (see src/audit.js).
 CREATE TABLE IF NOT EXISTS audit_log (
   id         INTEGER PRIMARY KEY,
@@ -311,10 +340,14 @@ const MIGRATIONS = [
   ['deliveries', 'payment', 'TEXT'],
   ['deliveries', 'amount', 'REAL'],
   ['deliveries', 'pay_method', 'TEXT'],
+  // Evening closing: the shift stays open, nothing is entered until the morning opening.
+  ['shifts', 'station_closed_at', 'TEXT'],
+  // Who entered the credit (several attendants share a shift).
+  ['sales', 'user_id', 'INTEGER REFERENCES users(id)'],
 ];
 
 // Bumped with every schema change; recorded in PRAGMA user_version.
-const SCHEMA_VERSION = 9;
+const SCHEMA_VERSION = 10;
 
 function missingColumns(db) {
   return MIGRATIONS.filter(([table, column]) => {
@@ -379,6 +412,7 @@ const DEFAULT_SETTINGS = {
   individual_credit_limit: '50',
   subscriber_credit_limit: '500',
   subscriber_grace_days: '5', // days after month end for subscribers to pay
+  closing_time: '15:30', // the manager closes the shift every day at this time
 };
 
 // Rebuilds the sales table when its kind constraint is from an older release
@@ -477,6 +511,12 @@ function openDb(file) {
     const { refreshCustomer } = require('./loyalty');
     for (const { id } of db.prepare('SELECT id FROM customers').all()) refreshCustomer(db, id);
   }
+  if (version < 10) {
+    // Version 10: a shift has attendants; the one who opened each existing shift worked on it.
+    db.exec(`INSERT INTO shift_attendants (shift_id, user_id, joined_at, left_at)
+      SELECT s.id, s.attendant_id, s.opened_at, s.closed_at FROM shifts s
+      WHERE NOT EXISTS (SELECT 1 FROM shift_attendants a WHERE a.shift_id = s.id)`);
+  }
   if (version < 6) {
     // Version 6: everything is counted in dollars and the combo programme starts switched off.
     db.exec("UPDATE settings SET value = '0' WHERE key = 'combos_enabled'; DELETE FROM settings WHERE key = 'cdf_rate';");
@@ -499,6 +539,7 @@ function getSettings(db) {
     individualCreditLimit: Number(s.individual_credit_limit),
     subscriberCreditLimit: Number(s.subscriber_credit_limit),
     subscriberGraceDays: Number(s.subscriber_grace_days),
+    closingTime: s.closing_time,
     expenseCategories: EXPENSE_CATEGORIES,
   };
 }

@@ -72,7 +72,14 @@ module.exports = function requestRoutes(db) {
 
   // ---- Attendant side ----------------------------------------------------
 
-  const openShiftOf = (userId) => db.prepare("SELECT * FROM shifts WHERE attendant_id = ? AND status = 'open'").get(userId);
+  // The station's shift, if this attendant is on it and the station is open.
+  const openShiftOf = (userId) =>
+    db
+      .prepare(
+        `SELECT s.* FROM shifts s JOIN shift_attendants a ON a.shift_id = s.id AND a.user_id = ? AND a.left_at IS NULL
+         WHERE s.status = 'open' AND s.station_closed_at IS NULL`,
+      )
+      .get(userId);
 
   // Pending requests for the products served in the attendant's open shift.
   router.get('/requests/pending', staff, (req, res) => {
@@ -103,7 +110,7 @@ module.exports = function requestRoutes(db) {
   router.post('/requests/:id/confirm', staff, (req, res) => {
     const request = getPending(req.params.id);
     const shift = openShiftOf(req.user.id);
-    if (!shift) fail(409, "Ouvrez d'abord votre poste.");
+    if (!shift) fail(409, 'Prenez d’abord le poste.');
     const b = req.body || {};
     const adjusted = b.liters !== undefined || b.amount !== undefined;
     const sale = createSale(db, shift, {
@@ -113,6 +120,7 @@ module.exports = function requestRoutes(db) {
       liters: adjusted ? b.liters : request.liters,
       amount: adjusted ? b.amount : request.amount,
       payment: request.payment,
+      userId: req.user.id,
       plate: request.plate,
       grantCredit: b.grantCredit === true,
       source: 'customer',

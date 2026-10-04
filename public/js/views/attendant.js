@@ -3,25 +3,30 @@ import { api } from '../api.js';
 import { priceTotem, shiftLine, h, fmt, pageHeader, card, cardHeader, table, shiftBadge, varianceCell, button, formDialog, confirmDialog, toast, field, productColor, badge, kpi, parseServerDate, setContent, reportLink, busy, newRef, toggleTheme } from '../ui.js';
 import { icon } from '../icons.js';
 import { shiftSummary } from './shifts.js';
+import { renderJoin, renderCheckpoint } from './relay.js';
 
+// One shift for the station, always open: the attendant takes it (or continues it after a relief),
+// opens the station in the morning, or, the very first time, opens the first shift.
 export async function renderAttendant(page, ctx) {
-  const current = await api.get('/shifts/current');
-  if (current) return renderOpenShift(page, ctx, current);
-  return renderStart(page, ctx);
+  const [state, remarks] = await Promise.all([api.get('/shifts/state'), api.get('/shifts/remarks/unread').catch(() => [])]);
+  const reload = () => renderAttendant(page, ctx);
+  const remarkCards = remarks.map((r) => unreadRemark(r, ctx, reload));
+  if (!state.shift) return renderStart(page, ctx, remarkCards);
+  if (state.shift.station_closed_at) return renderCheckpoint(page, ctx, state.shift, 'ouverture', { report: state.lastReport });
+  if (!state.onDuty) return renderJoin(page, ctx, state, remarkCards);
+  return renderOpenShift(page, ctx, state.shift);
 }
 
 // ---------- 1. Opening a shift ----------
-async function renderStart(page, ctx) {
-  const [allPumps, remarks, open] = await Promise.all([api.get('/pumps'), api.get('/shifts/remarks/unread').catch(() => []), api.get('/shifts/open')]);
-  // One shift at a time for the whole station: it takes every active pump.
+// The very first shift (afterwards, each 15:30 closing opens the next one).
+async function renderStart(page, ctx, remarkCards = []) {
+  const allPumps = await api.get('/pumps');
   const nozzles = allPumps.filter((p) => p.active).flatMap((p) => p.nozzles.filter((n) => n.active).map((n) => ({ ...n, pump: p.name })));
-  const submit = button('Ouvrir le poste', null, { variant: 'large block', type: 'submit', disabled: !!open || !nozzles.length });
+  const submit = button('Ouvrir le poste', null, { variant: 'large block', type: 'submit', disabled: !nozzles.length });
   const form = h(
     'form',
     { class: 'stack' },
-    open
-      ? h('div', { class: 'empty' }, `Le poste est ouvert par ${open.attendant_name} depuis ${fmt.time(open.opened_at)}. Il doit le clôturer avant que vous preniez le relais.`)
-      : nozzles.length
+    nozzles.length
         ? h(
             'div',
             { class: 'stack', style: 'gap:10px' },
@@ -30,8 +35,8 @@ async function renderStart(page, ctx) {
               h('div', { class: 'summary-line' }, h('span', {}, h('span', { class: 'swatch', style: `background:${productColor(n.product_id)}` }), `${n.pump} · ${n.name}`), h('span', { class: 'num' }, fmt.number(n.meter))),
             ),
           )
-        : h('div', { class: 'empty' }, "Aucune pompe n'est configurée. Demandez au gérant."),
-    open ? null : submit,
+      : h('div', { class: 'empty' }, "Aucune pompe n'est configurée. Demandez au gérant."),
+    submit,
   );
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -47,8 +52,8 @@ async function renderStart(page, ctx) {
   });
 
   setContent(page, 
-    pageHeader('Ouvrir le poste', open ? 'Un seul poste à la fois pour toute la station.' : 'Toutes les pompes de la station, avec les prix du moment.'),
-    remarks.map((r) => unreadRemark(r, ctx, () => renderStart(page, ctx))),
+    pageHeader('Ouvrir le poste', 'Le premier poste de la station : il couvre toutes les pompes. Ensuite, chaque clôture ouvre le suivant.'),
+    remarkCards,
     card(form),
   );
 }
@@ -105,7 +110,6 @@ async function cancelEntry(ctx, x, reload) {
   }
 }
 function renderOpenShift(page, ctx, shift) {
-  const pumps = [...new Set(shift.readings.map((r) => r.pump_name))].join(', ');
   const reload = () => renderAttendant(page, ctx);
 
   // One list of everything recorded during the shift, newest first.
@@ -149,12 +153,15 @@ function renderOpenShift(page, ctx, shift) {
   setContent(page, 
     pageHeader(
       'Poste en cours',
-      `Ouvert à ${fmt.time(shift.opened_at)} · ${pumps}`,
+      `Poste n°${shift.id} · depuis le ${fmt.dateTime(shift.opened_at)} · en service : ${shift.on_duty.join(', ')}`,
       shiftBadge('open'),
       // Full sun at the pump: day mode in one tap.
       h('button', { type: 'button', class: 'btn secondary sm theme-toggle', onClick: toggleTheme, 'aria-label': 'Changer de mode : jour ou nuit' }, 'Jour / nuit'),
     ),
     shiftLine('open'),
+    shift.closing_due
+      ? h('p', { class: 'offline-strip', role: 'status', style: 'margin-bottom:16px' }, `L’heure de clôture (${ctx.state.settings.closingTime || '15:30'}) est passée : le gérant doit clôturer le poste.`)
+      : null,
     // Les prix figés à l'ouverture du poste, un par produit.
     priceTotem([...new Map(shift.readings.map((r) => [r.product_id, { id: r.product_id, name: r.product_name, price: r.unit_price, subscriberPrice: r.subscriber_price }])).values()]),
     h(
@@ -199,18 +206,29 @@ function renderOpenShift(page, ctx, shift) {
           : h('p', { class: 'muted' }, 'Aucune opération pour le moment.'),
       ),
       card(
-        cardHeader('Mes pistolets', 'Index et prix relevés à l’ouverture'),
+        cardHeader('Les pistolets', shift.checkpoints.length ? 'Prix du poste et dernier index relevé' : 'Prix et index relevés à l’ouverture du poste'),
         shift.readings.map((r) =>
           h(
             'div',
             { class: 'nozzle-row' },
             h('span', { class: 'swatch', style: `background:${productColor(r.product_id)};width:12px;height:12px` }),
             h('div', { class: 'grow' }, h('div', { style: 'font-weight:600' }, `${r.pump_name} · ${r.nozzle_name}`), h('div', { class: 'muted small' }, `${r.product_name} · ${fmt.price(r.unit_price)}`)),
-            h('div', { class: 'right' }, h('div', { class: 'muted small' }, 'Index début'), h('div', { class: 'num', style: 'font-weight:600' }, fmt.number(r.start_meter))),
+            h(
+              'div',
+              { class: 'right' },
+              h('div', { class: 'muted small' }, shift.checkpoints.length ? 'Dernier relevé' : 'Index début'),
+              h('div', { class: 'num', style: 'font-weight:600' }, fmt.number(shift.checkpoints.at(-1)?.nozzles.find((n) => n.nozzle_id === r.nozzle_id)?.to ?? r.start_meter)),
+            ),
           ),
         ),
       ),
-      button('Clôturer mon poste', () => renderClosing(page, ctx, shift), { variant: 'large block secondary' }),
+      // The 15:30 closing is the manager's; the attendant hands over or closes the station for the night.
+      h(
+        'div',
+        { class: 'grid grid-2' },
+        button('Relève (pause)', () => renderCheckpoint(page, ctx, shift, 'releve'), { variant: 'large secondary' }),
+        button('Fermeture du soir', () => renderCheckpoint(page, ctx, shift, 'fermeture'), { variant: 'large secondary' }),
+      ),
     ),
   );
 }
@@ -614,6 +632,8 @@ async function addExpense(ctx, shift, reload) {
 export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, onDone } = {}) {
   const tol = ctx.state.settings.cashTolerance;
   const correcting = mode === 'correct';
+  // The last index taken during the shift (relief, evening closing, morning opening).
+  const lastTaken = (r) => shift.checkpoints?.at(-1)?.nozzles.find((n) => n.nozzle_id === r.nozzle_id)?.to ?? r.start_meter;
   const first = (value, fallback) => (correcting ? value ?? fallback : fallback);
   const credit = shift.credit_amount || 0;
   const payments = shift.payments_amount || 0;
@@ -669,7 +689,7 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
           return h(
             'div',
             {},
-            field({ name: `end_${r.nozzle_id}`, label: `${r.pump_name} · ${r.nozzle_name} (début : ${fmt.number(r.start_meter)})`, type: 'number', step: '0.01', min: String(r.start_meter), required: true, value: first(r.end_meter, undefined), onInput: recompute }),
+            field({ name: `end_${r.nozzle_id}`, label: `${r.pump_name} · ${r.nozzle_name} (début : ${fmt.number(r.start_meter)}${lastTaken(r) !== r.start_meter ? `, dernier relevé : ${fmt.number(lastTaken(r))}` : ''})`, type: 'number', step: '0.01', min: String(lastTaken(r)), required: true, value: first(r.end_meter, undefined), onInput: recompute }),
             out,
           );
         }),
@@ -731,7 +751,7 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
     e.preventDefault();
     const ask = correcting
       ? ['Corriger la clôture ?', 'Les index, le stock des cuves et l’écart seront recalculés. La correction est gardée au journal.', 'Corriger']
-      : ['Clôturer le poste ?', mode === 'manager' ? `Vous clôturez à la place de ${shift.attendant_name}. Ce sera noté au journal.` : 'Les index et montants ne pourront plus être modifiés.', 'Clôturer'];
+      : ['Clôturer le poste ?', 'Le poste est rapproché et le suivant s’ouvre aussitôt avec les mêmes index et les pompistes en service.', 'Clôturer'];
     if (!(await confirmDialog(ask[0], ask[1], { confirmLabel: ask[2] }))) return;
     const submit = form.querySelector('button[type=submit]');
     submit.disabled = true;
@@ -756,7 +776,7 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
     }
   });
 
-  const title = correcting ? `Corriger la clôture du poste n°${shift.id}` : mode === 'manager' ? `Clôturer le poste de ${shift.attendant_name}` : 'Clôturer mon poste';
+  const title = correcting ? `Corriger la clôture du poste n°${shift.id}` : `Clôturer le poste n°${shift.id}`;
   setContent(page, pageHeader(title, `Poste n°${shift.id} ouvert le ${fmt.dateTime(shift.opened_at)}`), form);
   restoreDraft();
   recompute();

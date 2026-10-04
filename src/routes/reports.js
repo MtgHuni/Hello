@@ -4,6 +4,7 @@ const { round, dateParam, fail, csvCell, money } = require('../util');
 const { requireRole } = require('../auth');
 const { balanceSql, subscriberDues, creditAllocation } = require('../loyalty');
 const { balances, supplierBalances } = require('../cashbook');
+const { attendantNamesSql, closingCutoff } = require('../checkpoints');
 const { periodReportPdf } = require('../periodReport');
 
 const manager = requireRole('manager');
@@ -63,7 +64,8 @@ module.exports = function reportRoutes(db) {
 
     const openShifts = db
       .prepare(
-        `SELECT s.id, s.opened_at, u.name AS attendant_name,
+        `SELECT s.id, s.opened_at, s.station_closed_at, COALESCE(${attendantNamesSql}, u.name) AS attendant_name,
+           (SELECT group_concat(u2.name, ', ') FROM shift_attendants a JOIN users u2 ON u2.id = a.user_id WHERE a.shift_id = s.id AND a.left_at IS NULL) AS on_duty,
            (SELECT COALESCE(SUM(amount), 0) FROM sales WHERE shift_id = s.id AND kind = 'credit') AS credit_so_far
          FROM shifts s JOIN users u ON u.id = s.attendant_id
          WHERE s.status = 'open' ORDER BY s.id`,
@@ -72,7 +74,7 @@ module.exports = function reportRoutes(db) {
 
     const toValidate = db
       .prepare(
-        `SELECT s.id, s.closed_at, s.variance, s.total_amount, u.name AS attendant_name
+        `SELECT s.id, s.closed_at, s.variance, s.total_amount, COALESCE(${attendantNamesSql}, u.name) AS attendant_name
          FROM shifts s JOIN users u ON u.id = s.attendant_id WHERE s.status = 'closed' ORDER BY s.id`,
       )
       .all();
@@ -115,7 +117,7 @@ module.exports = function reportRoutes(db) {
       .prepare(
         `SELECT sa.amount, sa.shift_id, c.id AS customer_id, c.name AS customer_name, u.name AS attendant_name
          FROM sales sa JOIN shifts s ON s.id = sa.shift_id JOIN customers c ON c.id = sa.customer_id
-         JOIN users u ON u.id = s.attendant_id
+         JOIN users u ON u.id = COALESCE(sa.user_id, s.attendant_id)
          WHERE sa.over_limit = 1 AND s.status != 'validated' ORDER BY sa.id DESC`,
       )
       .all();
@@ -170,6 +172,8 @@ module.exports = function reportRoutes(db) {
         link: '#/clients',
       });
     }
+    const due = openShifts.find((s) => s.opened_at < closingCutoff(db, settings.closingTime || '15:30'));
+    if (due) alerts.push({ level: 'serious', text: `Poste n°${due.id} : la clôture de ${settings.closingTime || '15:30'} est à faire`, link: `#/postes/${due.id}` });
     const supplierDebt = round(supplierBalances(db).reduce((t, s) => t + Math.max(0, s.balance), 0));
     if (supplierDebt > 0) alerts.push({ level: 'warning', text: `${money(supplierDebt)} dus aux fournisseurs (livraisons à crédit)`, link: '#/cuves' });
     const todayExpenses = round(db.prepare('SELECT COALESCE(SUM(amount), 0) AS v FROM expenses WHERE expense_date = ?').get(today).v);
@@ -340,7 +344,7 @@ module.exports = function reportRoutes(db) {
     const shifts = db
       .prepare(
         `SELECT s.id, s.status, s.closed_at, s.total_liters, s.total_amount, s.credit_amount, s.payments_amount, s.expenses_amount,
-           s.expected_amount, s.cash, s.mobile_money, s.variance, u.name AS attendant
+           s.expected_amount, s.cash, s.mobile_money, s.variance, COALESCE(${attendantNamesSql}, u.name) AS attendant
          FROM shifts s JOIN users u ON u.id = s.attendant_id
          WHERE s.status != 'open' AND ${DAY} BETWEEN ? AND ? ORDER BY s.closed_at`,
       )

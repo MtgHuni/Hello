@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { shiftLine, h, fmt, pageHeader, card, cardHeader, table, segmented, shiftBadge, varianceCell, kpi, formDialog, confirmDialog, toast, button, badge, setContent, reportLink } from '../ui.js';
 import { icon } from '../icons.js';
 import { renderClosing } from './attendant.js';
+import { reportCard } from './relay.js';
 
 // Money handed over, in dollars.
 const declared = (s) => (s.cash || 0) + (s.mobile_money || 0);
@@ -82,7 +83,8 @@ export async function renderShiftDetail(page, ctx) {
   const isManager = ctx.state.user.role === 'manager';
   const backPath = isManager ? 'postes' : 'historique';
   const reload = () => renderShiftDetail(page, ctx);
-  const closingBy = (mode) => () => renderClosing(page, ctx, shift, { mode, onBack: reload, onDone: () => (toast(mode === 'correct' ? 'Clôture corrigée.' : 'Poste clôturé.'), reload()) });
+  const closingBy = (mode) => () =>
+    renderClosing(page, ctx, shift, { mode, onBack: reload, onDone: (closed) => (toast(mode === 'correct' ? 'Clôture corrigée.' : `Poste clôturé · poste n°${closed.next_shift_id} ouvert`), reload()) });
   setContent(page, 
     h('a', { class: 'back no-print', href: `#/${backPath}` }, icon('back'), isManager ? 'Postes' : 'Historique'),
     pageHeader(
@@ -90,7 +92,7 @@ export async function renderShiftDetail(page, ctx) {
       `${shift.attendant_name} · ${fmt.dateTime(shift.opened_at)} → ${shift.closed_at ? fmt.dateTime(shift.closed_at) : 'en cours'}`,
       shiftBadge(shift.status),
       shift.status !== 'open' ? reportLink(shift.id) : null,
-      isManager && shift.status === 'open' ? button('Clôturer à la place du pompiste', closingBy('manager'), { variant: 'secondary', iconName: 'shifts' }) : null,
+      isManager && shift.status === 'open' ? button('Clôturer le poste', closingBy('manager'), { variant: shift.closing_due ? '' : 'secondary', iconName: 'shifts' }) : null,
       isManager && shift.status === 'closed' ? button('Corriger la clôture', closingBy('correct'), { variant: 'secondary', iconName: 'edit' }) : null,
       isManager && shift.status !== 'open' ? button(shift.manager_comment ? 'Modifier la remarque' : 'Remarque au pompiste', () => remarkDialog(shift, reload), { variant: 'secondary', iconName: 'message' }) : null,
       isManager && shift.status === 'closed'
@@ -112,8 +114,38 @@ export async function renderShiftDetail(page, ctx) {
     ),
     shiftLine(shift.status),
     remarkCard(shift, isManager),
+    relaysCard(shift, ctx.state.settings.cashTolerance),
     isManager ? cancellationRequests(shift, () => renderShiftDetail(page, ctx)) : null,
     shiftSummary(shift, ctx.state.settings.cashTolerance),
+  );
+}
+
+// Who worked on the shift, and each relief, evening closing and morning opening with its report.
+function relaysCard(shift, tol) {
+  if (!shift.attendants?.length && !shift.checkpoints?.length) return null;
+  const times = (a) => `${fmt.dateTime(a.joined_at)} → ${a.left_at ? fmt.dateTime(a.left_at) : 'en service'}`;
+  return h(
+    'section',
+    { class: 'card section', style: 'margin-bottom:20px' },
+    cardHeader(
+      'Pompistes et relèves',
+      [shift.station_closed_at ? `Station fermée depuis ${fmt.time(shift.station_closed_at)}` : null, shift.on_duty?.length ? `En service : ${shift.on_duty.join(', ')}` : null].filter(Boolean).join(' · ') || null,
+    ),
+    shift.attendants.map((a) => h('div', { class: 'summary-line' }, h('span', {}, a.name), h('span', { class: 'muted small' }, times(a)))),
+    shift.checkpoints.length
+      ? h(
+          'div',
+          { class: 'report-list' },
+          shift.checkpoints.map((c) =>
+            h(
+              'details',
+              { class: 'report-ops' },
+              h('summary', {}, `${c.label} · ${c.by || ''} · ${fmt.dateTime(c.at)} · écart ${fmt.signedMoney(c.variance)}`),
+              reportCard(c, tol),
+            ),
+          ),
+        )
+      : null,
   );
 }
 

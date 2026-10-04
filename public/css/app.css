@@ -1380,6 +1380,13 @@ input:focus, select:focus, textarea:focus { border-color: var(--text); }
 .remark-card { margin-bottom: 20px; border-left: 4px solid var(--accent); }
 .remark-text { margin: 0 0 12px; font-size: 17px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 
+/* Operations and checkpoint reports folded inside a card. */
+.nowrap { white-space: nowrap; }
+.report-list { margin-top: 12px; }
+.report-list > .report-ops { margin-top: 0; border-top: 1px solid var(--hairline); }
+.report-ops { margin-top: 12px; }
+.report-ops > summary { padding: 10px 0; color: var(--text-2); font-size: 14px; font-weight: 600; cursor: pointer; }
+.report-ops > .card { margin-top: 8px; box-shadow: none; background: var(--surface-2); }
 /* A short history folded under a table (e.g. the last supplier payments). */
 .card-details { border-top: 1px solid var(--hairline); }
 .card-details > summary { padding: 14px 24px; color: var(--text-2); font-size: 14px; font-weight: 600; cursor: pointer; }

@@ -1,6 +1,7 @@
 const express = require('express');
 const { getSettings, syncCreditLimits } = require('../db');
 const { fail, num, str, bool, transaction } = require('../util');
+const { attendantNamesSql } = require('../checkpoints');
 const { requireRole } = require('../auth');
 const { audit } = require('../audit');
 const { applyScheduledPrices } = require('../prices');
@@ -19,6 +20,7 @@ const SETTING_LABELS = {
   individual_credit_limit: 'plafond particuliers',
   subscriber_credit_limit: 'plafond abonnés',
   subscriber_grace_days: 'délai des abonnés',
+  closing_time: 'heure de clôture',
 };
 
 const manager = requireRole('manager');
@@ -55,6 +57,8 @@ module.exports = function configRoutes(db) {
       subscriber_grace_days: pick(b.subscriberGraceDays, cur.subscriberGraceDays, 'Le délai de paiement des abonnés', { min: 1, max: 28, integer: true }),
     };
     values.combos_enabled = bool(b.combosEnabled, cur.combosEnabled) ? 1 : 0;
+    values.closing_time = b.closingTime === undefined ? cur.closingTime : str(b.closingTime, 'L’heure de clôture', { max: 5 });
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(values.closing_time)) fail(400, 'L’heure de clôture doit être au format HH:MM (ex. : 15:30).');
     const stored = Object.fromEntries(db.prepare('SELECT key, value FROM settings').all().map((r) => [r.key, r.value]));
     const changed = Object.keys(values).filter((key) => String(values[key]) !== stored[key]);
     transaction(db, () => {
@@ -231,7 +235,7 @@ module.exports = function configRoutes(db) {
     const nozzles = db
       .prepare(
         `SELECT n.*, t.name AS tank_name, t.product_id, p.name AS product_name, p.price,
-           (SELECT u.name FROM shift_readings r JOIN shifts s ON s.id = r.shift_id JOIN users u ON u.id = s.attendant_id
+           (SELECT COALESCE(${attendantNamesSql}, 'poste ouvert') FROM shift_readings r JOIN shifts s ON s.id = r.shift_id
             WHERE s.status = 'open' AND r.nozzle_id = n.id) AS busy_with
          FROM nozzles n JOIN tanks t ON t.id = n.tank_id JOIN products p ON p.id = t.product_id
          ORDER BY n.id`,

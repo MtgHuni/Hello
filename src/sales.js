@@ -78,10 +78,10 @@ function createSale(db, shift, input) {
     }
     const r = db
       .prepare(
-        `INSERT INTO sales (shift_id, customer_id, nozzle_id, product_id, kind, liters, unit_price, amount, points, points_due, combos_used, plate, over_limit, source, client_ref)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO sales (shift_id, customer_id, nozzle_id, product_id, kind, liters, unit_price, amount, points, points_due, combos_used, plate, over_limit, source, client_ref, user_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(shift.id, customer.id, reading.nozzle_id, reading.product_id, payment, liters, unitPrice, amount, payment === 'paid' ? pointsDue : 0, pointsDue, combosUsed, plate, overLimit, input.source || 'attendant', ref);
+      .run(shift.id, customer.id, reading.nozzle_id, reading.product_id, payment, liters, unitPrice, amount, payment === 'paid' ? pointsDue : 0, pointsDue, combosUsed, plate, overLimit, input.source || 'attendant', ref, input.userId ?? null);
     refreshCustomer(db, customer.id);
     if (input.afterInsert) input.afterInsert(Number(r.lastInsertRowid));
     return r.lastInsertRowid;

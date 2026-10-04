@@ -3,6 +3,7 @@
 // already records (closed shifts, payments and expenses outside a shift, deliveries paid on
 // the spot, supplier payments); the manager adds the rest by hand (cash_movements).
 const { round } = require('./util');
+const { attendantNamesSql } = require('./checkpoints');
 
 const ACCOUNTS = { cash: 'Espèces', momo: 'Mobile money' };
 // Payment methods that move one of the two balances (bank, cheque… do not).
@@ -33,12 +34,12 @@ function allEntries(db) {
 
   for (const s of db
     .prepare(
-      `SELECT s.id, s.closed_at AS at, date(s.closed_at, 'localtime') AS day, s.cash, s.mobile_money, u.name AS attendant
+      `SELECT s.id, s.closed_at AS at, date(s.closed_at, 'localtime') AS day, s.cash, s.mobile_money, COALESCE(${attendantNamesSql}, u.name) AS attendant
        FROM shifts s JOIN users u ON u.id = s.attendant_id WHERE s.status != 'open'`,
     )
     .all()) {
     const base = { at: s.at, day: s.day, source: 'shift', id: s.id, link: `#/postes/${s.id}` };
-    push({ ...base, account: 'cash', in: s.cash, label: `Remis par ${s.attendant}, poste n°${s.id}` });
+    push({ ...base, account: 'cash', in: s.cash, label: `Clôture du poste n°${s.id} (${s.attendant})` });
     push({ ...base, account: 'momo', in: s.mobile_money, label: `Mobile money du poste n°${s.id} (${s.attendant})` });
   }
 

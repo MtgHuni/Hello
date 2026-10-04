@@ -42,6 +42,12 @@ const pompiste = client();
 const ctx = {};
 const today = () => new Date().toLocaleDateString('sv-SE');
 const customer = async (id) => (await gerant('GET', `/api/customers/${id}`)).data;
+// The manager's daily closing, with every nozzle: those given move, the others keep their start index.
+const closeShift = (shift, ends, money) =>
+  gerant('POST', `/api/shifts/${shift.id}/close`, { readings: shift.readings.map((r) => ({ nozzleId: r.nozzle_id, endMeter: ends[r.nozzle_id] ?? r.start_meter })), ...money });
+const dieselOf = (shift) => shift.readings.find((r) => r.product_id === ctx.diesel.id);
+// Timestamps are to the second: steps that must not share one are spaced.
+const nextSecond = () => new Promise((r) => setTimeout(r, 1100));
 
 test('premier lancement : configuration de la station', async () => {
   assert.strictEqual((await gerant('GET', '/api/setup')).data.needsSetup, true);
@@ -103,13 +109,14 @@ test('catégories de clients : plafonds et prix abonnés réglés dans les param
 });
 
 test('poste : prix abonné, crédit sans combos, plafond, rapprochement', async () => {
-  const opened = await pompiste('POST', '/api/shifts', { pumpIds: [ctx.dieselPump.id] });
+  const opened = await pompiste('POST', '/api/shifts', {});
   assert.strictEqual(opened.status, 201);
   const shift = opened.data;
-  const nozzle = shift.readings[0];
+  const nozzle = dieselOf(shift);
+  assert.strictEqual(shift.readings.length, ctx.pumps.flatMap((p) => p.nozzles).length, 'le poste couvre toutes les pompes');
   assert.strictEqual(nozzle.unit_price, 1.2);
   assert.strictEqual(nozzle.subscriber_price, 1.4);
-  assert.strictEqual((await pompiste('POST', '/api/shifts', { pumpIds: [ctx.dieselPump.id] })).status, 409);
+  assert.strictEqual((await pompiste('POST', '/api/shifts', {})).status, 409);
 
   const sell = (body) => pompiste('POST', `/api/shifts/${shift.id}/sales`, { nozzleId: nozzle.nozzle_id, ...body });
 
@@ -139,12 +146,10 @@ test('poste : prix abonné, crédit sans combos, plafond, rapprochement', async 
 
   // 500 L at 1,20 = 600 $ + subscriber surcharge 50 × 0,20 = 10 $ → 610 $;
   // credit 70 + 48 = 118 $ → 492 $ to hand over; 490 $ declared.
-  const closed = await pompiste('POST', `/api/shifts/${shift.id}/close`, {
-    readings: [{ nozzleId: nozzle.nozzle_id, endMeter: 500 }],
-    cash: 390,
-    mobileMoney: 100,
-  });
+  assert.strictEqual((await pompiste('POST', `/api/shifts/${shift.id}/close`, {})).status, 403, 'la clôture est celle du gérant');
+  const closed = await closeShift(shift, { [nozzle.nozzle_id]: 500 }, { cash: 390, mobileMoney: 100 });
   assert.strictEqual(closed.status, 200);
+  assert.ok(closed.data.next_shift_id > shift.id, 'le poste suivant s’ouvre aussitôt');
   assert.strictEqual(closed.data.total_amount, 610);
   assert.strictEqual(closed.data.credit_amount, 118);
   assert.strictEqual(closed.data.expected_amount, 492);
@@ -176,8 +181,11 @@ test('poste : prix abonné, crédit sans combos, plafond, rapprochement', async 
   assert.ok((await gerant('GET', `/api/shifts/${shift.id}`)).data.comment_seen_at, 'lue par le pompiste');
   assert.strictEqual((await gerant('POST', `/api/shifts/${shift.id}/remark`, { comment: '' })).data.manager_comment, null, 'remarque retirée');
 
-  ctx.shift = (await pompiste('POST', '/api/shifts', { pumpIds: [ctx.dieselPump.id] })).data;
-  assert.strictEqual(ctx.shift.readings[0].start_meter, 500);
+  const state = (await pompiste('GET', '/api/shifts/state')).data;
+  assert.strictEqual(state.shift.id, closed.data.next_shift_id);
+  assert.strictEqual(state.onDuty, true, 'le pompiste présent continue sur le poste suivant');
+  ctx.shift = state.shift;
+  assert.strictEqual(dieselOf(ctx.shift).start_meter, 500);
   assert.strictEqual((await pompiste('GET', `/api/shifts/${ctx.shift.id}/report.pdf`)).status, 409, 'pas de rapport avant la clôture');
 });
 
@@ -220,7 +228,7 @@ test('les combos d’une vente à crédit arrivent quand elle est entièrement p
 
 test('échange de combos contre du carburant, déduit de la caisse', async () => {
   await gerant('PUT', '/api/settings', { comboThreshold: 40, comboValue: 0.05 });
-  const nozzle = ctx.shift.readings[0];
+  const nozzle = dieselOf(ctx.shift);
   const sell = (body) => pompiste('POST', `/api/shifts/${ctx.shift.id}/sales`, { nozzleId: nozzle.nozzle_id, customerId: ctx.person.id, payment: 'combo', ...body });
 
   const tooMuch = await sell({ amount: 5 }); // 100 combos needed, 40 available
@@ -250,10 +258,7 @@ test('échange de combos contre du carburant, déduit de la caisse', async () =>
   await pompiste('POST', `/api/shifts/${ctx.shift.id}/expenses/${expense.data.id}/cancel`);
 
   // 10 L at 1,20 = 12 $ + 28 $ received − 2 $ in combos − 1 $ credit − 3 $ expense = 34 $.
-  const closed = await pompiste('POST', `/api/shifts/${ctx.shift.id}/close`, {
-    readings: [{ nozzleId: nozzle.nozzle_id, endMeter: 510 }],
-    cash: 37,
-  });
+  const closed = await closeShift(ctx.shift, { [nozzle.nozzle_id]: 510 }, { cash: 37 });
   assert.strictEqual(closed.data.combo_amount, 2);
   assert.strictEqual(closed.data.payments_amount, 28);
   assert.strictEqual(closed.data.expected_amount, 34);
@@ -270,8 +275,8 @@ test('échange de combos contre du carburant, déduit de la caisse', async () =>
 });
 
 test('abonnés : le mois précédent doit être payé après le délai', async () => {
-  ctx.shift = (await pompiste('POST', '/api/shifts', { pumpIds: [ctx.dieselPump.id] })).data;
-  const nozzle = ctx.shift.readings[0];
+  ctx.shift = (await pompiste('GET', '/api/shifts/current')).data;
+  const nozzle = dieselOf(ctx.shift);
   const sale = (await pompiste('POST', `/api/shifts/${ctx.shift.id}/sales`, { nozzleId: nozzle.nozzle_id, customerId: ctx.fleet.id, liters: 10, payment: 'credit' })).data;
   // Last month: this sale; earlier still: the subscriber's first credit (already paid).
   db.prepare("UPDATE sales SET created_at = datetime('now', 'start of month', '-40 days') WHERE customer_id = ? AND id != ?").run(ctx.fleet.id, sale.id);
@@ -300,7 +305,7 @@ test('abonnés : le mois précédent doit être payé après le délai', async (
 
 test('pompiste : client rapide (particulier), crédit accordé, règlement et dépense', async () => {
   const shift = ctx.shift;
-  const nozzle = shift.readings[0];
+  const nozzle = dieselOf(shift);
 
   const quick = await pompiste('POST', '/api/customers/quick', { name: 'Garage Mwami' });
   assert.strictEqual(quick.status, 201);
@@ -411,21 +416,21 @@ test('accès : un pompiste ne voit pas le poste d’un autre ; mot de passe chan
 
 test('le gérant clôture à la place du pompiste (mobile money), puis corrige la clôture', async () => {
   const shift = (await gerant('GET', `/api/shifts/${ctx.shift.id}`)).data;
-  const nozzle = shift.readings[0];
+  const nozzle = dieselOf(shift);
   const start = nozzle.start_meter;
   const stock = () => db.prepare('SELECT book_stock FROM tanks WHERE id = ?').get(nozzle.tank_id).book_stock;
   const meter = () => db.prepare('SELECT meter FROM nozzles WHERE id = ?').get(nozzle.nozzle_id).meter;
   const stockBefore = stock();
   const count = { cash: 15, mobileMoney: 2 };
 
-  const closed = await gerant('POST', `/api/shifts/${shift.id}/close`, { readings: [{ nozzleId: nozzle.nozzle_id, endMeter: start + 200 }], ...count });
+  const closed = await closeShift(shift, { [nozzle.nozzle_id]: start + 200 }, count);
   assert.strictEqual(closed.status, 200);
   assert.strictEqual(closed.data.variance, Math.round((15 + 2 - closed.data.expected_amount) * 100) / 100);
   assert.strictEqual(stock(), stockBefore - 200);
-  assert.ok((await gerant('GET', '/api/audit?category=postes')).data.some((a) => a.action === 'shift_closed_by_manager'));
+  assert.ok((await gerant('GET', '/api/audit?category=postes')).data.some((a) => a.action === 'shift_closed'));
 
   // The real end index was 250 L further: tank and meter follow the correction, closing time stays.
-  const correction = { readings: [{ nozzleId: nozzle.nozzle_id, endMeter: start + 250 }], ...count };
+  const correction = { readings: shift.readings.map((r) => ({ nozzleId: r.nozzle_id, endMeter: r.nozzle_id === nozzle.nozzle_id ? start + 250 : r.start_meter })), ...count };
   assert.strictEqual((await gerant('POST', `/api/shifts/${shift.id}/correct`, correction)).status, 400, 'motif obligatoire');
   assert.strictEqual((await pompiste('POST', `/api/shifts/${shift.id}/correct`, { ...correction, reason: 'x' })).status, 403);
   const fixed = await gerant('POST', `/api/shifts/${shift.id}/correct`, { ...correction, reason: 'Index mal lu' });
@@ -434,6 +439,8 @@ test('le gérant clôture à la place du pompiste (mobile money), puis corrige l
   assert.strictEqual(fixed.data.closed_at, closed.data.closed_at);
   assert.strictEqual(stock(), stockBefore - 250);
   assert.strictEqual(meter(), start + 250);
+  const next = (await gerant('GET', `/api/shifts/${closed.data.next_shift_id}`)).data;
+  assert.strictEqual(dieselOf(next).start_meter, start + 250, 'le poste suivant repart de l’index corrigé');
   assert.ok((await gerant('GET', '/api/audit?category=postes')).data.some((a) => a.action === 'shift_corrected' && a.reason === 'Index mal lu'));
 });
 
@@ -557,29 +564,29 @@ test('créances par ancienneté, relevé PDF, prix programmé', async () => {
 test('un seul poste à la fois, livre de caisse (espèces et mobile money), livraisons à crédit', async () => {
   const cash = async () => (await gerant('GET', '/api/cashbook')).data.balances;
   // Timestamps are to the second: the count is taken apart from what came before and after.
-  const nextSecond = () => new Promise((r) => setTimeout(r, 1100));
   await nextSecond();
   assert.strictEqual((await gerant('POST', '/api/cashbook/movements', { kind: 'opening', account: 'cash', amount: 100 })).status, 201);
   await gerant('POST', '/api/cashbook/movements', { kind: 'opening', account: 'momo', amount: 0 });
   await nextSecond();
   assert.strictEqual((await cash()).cash.balance, 100, 'le livre part du comptage');
 
-  // One shift for the whole station: every active nozzle, and nobody else can open one.
-  assert.strictEqual((await gerant('GET', '/api/shifts/open')).data, null);
-  const opened = await pompiste('POST', '/api/shifts', {});
-  assert.strictEqual(opened.status, 201);
-  const nozzles = (await gerant('GET', '/api/pumps')).data.filter((p) => p.active).flatMap((p) => p.nozzles.filter((n) => n.active));
-  assert.strictEqual(opened.data.readings.length, nozzles.length);
+  // One shift for the whole station, always open: a second attendant joins it, nobody opens another.
+  const open = (await gerant('GET', '/api/shifts/open')).data;
+  assert.ok(open, 'toujours un poste ouvert');
   await gerant('POST', '/api/users', { name: 'Béa', login: 'bea', password: 'pompiste9', role: 'attendant' });
   const bea = client();
   await bea('POST', '/api/auth/login', { login: 'bea', password: 'pompiste9' });
   const refused = await bea('POST', '/api/shifts', {});
   assert.strictEqual(refused.status, 409);
   assert.strictEqual(refused.data.code, 'shift_open');
-  assert.strictEqual((await bea('GET', '/api/shifts/open')).data.attendant_name, opened.data.attendant_name);
+  assert.strictEqual((await bea('POST', `/api/shifts/${open.id}/sales`, {})).data.code, 'not_on_duty');
+  await bea('POST', `/api/shifts/${open.id}/join`);
+  assert.ok((await gerant('GET', '/api/shifts/open')).data.on_duty.includes('Béa'));
+  ctx.bea = bea;
 
   // Cash handed over goes into the till, mobile money into its own balance.
-  await gerant('POST', `/api/shifts/${opened.data.id}/close`, { readings: opened.data.readings.map((r) => ({ nozzleId: r.nozzle_id, endMeter: r.start_meter })), cash: 50, mobileMoney: 20 });
+  const running = (await gerant('GET', `/api/shifts/${open.id}`)).data;
+  await closeShift(running, Object.fromEntries(running.readings.map((r) => [r.nozzle_id, r.start_meter + 100])), { cash: 50, mobileMoney: 20 });
   let b = await cash();
   assert.strictEqual(b.cash.balance, 150);
   assert.strictEqual(b.momo.balance, 20);
@@ -619,6 +626,63 @@ test('un seul poste à la fois, livre de caisse (espèces et mobile money), livr
   assert.strictEqual(pdf.raw.subarray(0, 5).toString(), '%PDF-');
   assert.strictEqual((await pompiste('GET', '/api/cashbook')).status, 403);
   assert.ok((await gerant('GET', '/api/audit?category=caisse')).data.some((a) => a.action === 'supplier_payment'));
+});
+
+test('relève, fermeture du soir et ouverture du matin : le poste continue', async () => {
+  const bea = ctx.bea;
+  const shift = (await pompiste('GET', '/api/shifts/state')).data.shift;
+  await pompiste('POST', `/api/shifts/${shift.id}/join`);
+  await bea('POST', `/api/shifts/${shift.id}/join`);
+  assert.deepStrictEqual((await gerant('GET', `/api/shifts/${shift.id}`)).data.on_duty.sort(), ['Béa', 'Paul'], 'deux pompistes sur le même poste');
+  const diesel = dieselOf(shift);
+  const at = (dieselLiters) => shift.readings.map((r) => ({ nozzleId: r.nozzle_id, meter: r.start_meter + (r.nozzle_id === diesel.nozzle_id ? dieselLiters : 0) }));
+  await nextSecond();
+
+  // Paul enters a credit, then hands over: the mini report says what he should pass on.
+  const kambale = (await pompiste('POST', '/api/customers/quick', { name: 'Client Relève' })).data;
+  const credit = (await pompiste('POST', `/api/shifts/${shift.id}/sales`, { customerId: kambale.id, nozzleId: diesel.nozzle_id, amount: 6 })).data;
+  assert.ok(credit.user_id, 'le crédit garde le nom du pompiste');
+  const preview = (await pompiste('POST', `/api/shifts/${shift.id}/checkpoints/preview`, { kind: 'releve', readings: at(20) })).data;
+  assert.strictEqual(preview.liters, 20);
+  assert.strictEqual(preview.credits, 6);
+  assert.strictEqual(preview.expected, Math.round((20 * diesel.unit_price - 6) * 100) / 100);
+  const relief = await pompiste('POST', `/api/shifts/${shift.id}/checkpoints`, { kind: 'releve', readings: at(20), cash: preview.expected });
+  assert.strictEqual(relief.status, 201);
+  assert.strictEqual(relief.data.report.variance, 0);
+  assert.strictEqual((await pompiste('POST', `/api/shifts/${shift.id}/sales`, { customerId: kambale.id, nozzleId: diesel.nozzle_id, amount: 1 })).data.code, 'not_on_duty', 'parti en pause');
+  assert.strictEqual((await pompiste('POST', `/api/shifts/${shift.id}/checkpoints`, { kind: 'releve', readings: at(10) })).status, 403);
+  await nextSecond();
+
+  // Béa carries on with the money Paul passed on, then closes the station at 19:00.
+  assert.strictEqual((await bea('POST', `/api/shifts/${shift.id}/checkpoints`, { kind: 'fermeture', readings: at(10) })).status, 400, 'index plus bas que le dernier relevé');
+  const evening = await bea('POST', `/api/shifts/${shift.id}/checkpoints`, { kind: 'fermeture', readings: at(30), cash: preview.expected + 10 * diesel.unit_price });
+  assert.strictEqual(evening.status, 201);
+  assert.strictEqual(evening.data.report.received, preview.expected);
+  assert.strictEqual(evening.data.report.variance, 0);
+  assert.ok(evening.data.shift.station_closed_at);
+  assert.strictEqual(evening.data.shift.status, 'open', 'la fermeture ne clôture pas le poste');
+  assert.strictEqual((await bea('POST', `/api/shifts/${shift.id}/join`)).data.code, 'station_closed');
+  await nextSecond();
+
+  // Paul opens in the morning: same indexes, same money; the shift continues.
+  const state = (await pompiste('GET', '/api/shifts/state')).data;
+  assert.strictEqual(state.lastReport.kind, 'fermeture');
+  const morning = await pompiste('POST', `/api/shifts/${shift.id}/checkpoints`, { kind: 'ouverture', readings: at(30), cash: evening.data.report.handed });
+  assert.strictEqual(morning.status, 201);
+  assert.strictEqual(morning.data.report.liters, 0);
+  assert.strictEqual(morning.data.report.variance, 0);
+  assert.strictEqual(morning.data.shift.station_closed_at, null);
+  assert.deepStrictEqual(morning.data.shift.on_duty, ['Paul']);
+  assert.strictEqual(morning.data.shift.checkpoints.length, 3);
+
+  // 15:30: the manager closes; the next shift opens with Paul on it.
+  const done = await closeShift(morning.data.shift, Object.fromEntries(at(30).map((r) => [r.nozzleId, r.meter])), { cash: 0 });
+  assert.strictEqual(done.status, 200);
+  assert.strictEqual(done.data.total_liters, 30);
+  const next = (await pompiste('GET', '/api/shifts/state')).data;
+  assert.strictEqual(next.shift.id, done.data.next_shift_id);
+  assert.strictEqual(next.onDuty, true);
+  assert.strictEqual(dieselOf(next.shift).start_meter, diesel.start_meter + 30);
 });
 
 test('migration : une base ancienne est convertie (loyalty → paid, combos)', () => {

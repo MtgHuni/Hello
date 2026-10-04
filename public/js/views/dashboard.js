@@ -74,8 +74,8 @@ function shiftKpi(s, toValidate) {
     'a',
     { class: 'card kpi kpi-link', href: s ? `#/postes/${s.id}` : '#/postes' },
     h('div', { class: 'label' }, 'Poste en cours'),
-    h('div', { class: 'value sm' }, s ? s.attendant_name : 'Aucun'),
-    h('div', { class: 'sub' }, s ? `Ouvert à ${fmt.time(s.opened_at)} · crédits ${fmt.money(s.credit_so_far)}${pending}` : `Personne en service${pending}`),
+    h('div', { class: 'value sm' }, !s ? 'Aucun' : s.station_closed_at ? 'Station fermée' : s.on_duty || 'Personne'),
+    h('div', { class: 'sub' }, s ? `Poste n°${s.id} depuis le ${fmt.dateTime(s.opened_at)} · crédits ${fmt.money(s.credit_so_far)}${pending}` : `Aucun poste ouvert${pending}`),
   );
 }
 

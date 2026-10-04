@@ -44,7 +44,9 @@ Requires Node ≥ 22.13 (built-in `node:sqlite`, hence `--disable-warning=Experi
   - `refreshCustomer` recomputes this and `customers.loyalty_points`, so call it after any change to a customer's sales or payments;
   - `subscriberDues` computes what a subscriber owes for previous months.
 - Shifts (`src/routes/shifts.js`):
-  - one shift at a time for the whole station: opening takes every active pump and is refused (`shift_open`) while another shift is open (`GET /shifts/open` says who holds it);
+  - one shift, always open, for the whole station and every active pump: `POST /shifts` only opens the very first one; the manager's 15:30 closing (`POST /shifts/:id/close`, manager only) opens the next at once (`openShift()`), carrying the attendants on duty. `closing_time` (setting) drives the reminder (`closingCutoff()` in `src/checkpoints.js`);
+  - attendants are in `shift_attendants` (several at once; `left_at` on relief or evening closing). To enter anything an attendant must be on duty (`not_on_duty`) and the station open (`station_closed`); `GET /shifts/state` drives the attendant's screen;
+  - checkpoints (`shift_checkpoints` + `checkpoint_readings`): `releve` (relief, money passed to the next), `fermeture` (19:00, sets `station_closed_at`, the shift stays open), `ouverture` (6:30). `src/checkpoints.js` builds the mini report of each period (litres, sales, credits, money expected vs handed); sales, payments and expenses fall in a period by `created_at`;
   - opening snapshots meter indexes and prices into `shift_readings` (prices are frozen for the shift);
   - closing reconciles litres from the indexes against cash: `expected = sold + subscriber surcharge − credit − combos + payments collected − cash expenses`.
   - not every sale is entered: the shift's sales come from the indexes, and entered sales only record credits, combos and subscriber prices;
