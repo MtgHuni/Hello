@@ -277,7 +277,7 @@ module.exports = function reportRoutes(db) {
 
     const money = db
       .prepare(
-        `SELECT ROUND(COALESCE(SUM(cash), 0), 2) AS cash, ROUND(COALESCE(SUM(card), 0), 2) AS card,
+        `SELECT ROUND(COALESCE(SUM(cash), 0), 2) AS cash,
            ROUND(COALESCE(SUM(credit_amount), 0), 2) AS credit, ROUND(COALESCE(SUM(variance), 0), 2) AS variance,
            ROUND(COALESCE(SUM(combo_amount), 0), 2) AS combos,
            ROUND(COALESCE(SUM(mobile_money), 0), 2) AS mobileMoney,
@@ -334,7 +334,7 @@ module.exports = function reportRoutes(db) {
     const shifts = db
       .prepare(
         `SELECT s.id, s.status, s.closed_at, s.total_liters, s.total_amount, s.credit_amount, s.payments_amount, s.expenses_amount,
-           s.expected_amount, s.cash, s.card, s.mobile_money, s.variance, u.name AS attendant
+           s.expected_amount, s.cash, s.mobile_money, s.variance, u.name AS attendant
          FROM shifts s JOIN users u ON u.id = s.attendant_id
          WHERE s.status != 'open' AND ${DAY} BETWEEN ? AND ? ORDER BY s.closed_at`,
       )

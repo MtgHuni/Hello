@@ -8,7 +8,7 @@ web
 
 ## Users
 
-- **Pompiste** (attendant): works outside at the pump, often in full sun, often alone while a queue of customers waits. Uses a phone, often an entry-level Android, often one-handed. Job: record the credits (paid sales are not entered: the meter readings count them), confirm the purchases customers prepared from their phones, collect payments, note cash expenses, close the shift with the meter readings and the cash count (in dollars: cash, mobile money, card).
+- **Pompiste** (attendant): works outside at the pump, often in full sun, often alone while a queue of customers waits. Uses a phone, often an entry-level Android, often one-handed. Job: record the credits (paid sales are not entered: the meter readings count them), confirm the purchases customers prepared from their phones, collect payments, note cash expenses, close the shift with the meter readings and the cash count (in dollars: cash and mobile money; no card).
 - **Client** (customer): a driver waiting in the queue, on their own phone. Jobs: sign up with their phone number, prepare a purchase on credit (fuel, amount or litres) so the attendant only has to confirm it, and follow their balance, combos and statement.
 - **Gérant** (manager): runs the station. Validates shifts, follows tanks, deliveries and dips, manages customers (credit, payments, records to complete), expenses, reports and settings. Also mostly on a phone.
 

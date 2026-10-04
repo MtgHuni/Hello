@@ -25,7 +25,6 @@ function periodReportPdf(r, { stationName, cashTolerance = 0, combosEnabled, now
   report.line('Règlements de clients reçus', money(t.payments));
   report.line('Encaissé : espèces', money(t.cash));
   if (t.mobileMoney) report.line('Encaissé : mobile money', money(t.mobileMoney));
-  if (t.card) report.line('Encaissé : carte', money(t.card));
   report.line('Écarts de caisse cumulés', signed(t.variance), { bold: true, color: varianceColor(t.variance) });
   report.line('Dépenses', money(t.expenses));
   if (t.costKnown) {
@@ -36,8 +35,8 @@ function periodReportPdf(r, { stationName, cashTolerance = 0, combosEnabled, now
   }
 
   // ---- Shifts ----
-  report.section('Postes', 'Remis = espèces + mobile money + carte, en dollars.');
-  const handedOver = (s) => round((s.cash || 0) + (s.card || 0) + (s.mobile_money || 0));
+  report.section('Postes', 'Remis = espèces + mobile money, en dollars.');
+  const handedOver = (s) => round((s.cash || 0) + (s.mobile_money || 0));
   const sum = (key) => round(r.shifts.reduce((a, s) => a + (s[key] || 0), 0));
   report.table(
     [

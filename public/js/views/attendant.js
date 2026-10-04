@@ -510,33 +510,40 @@ async function addCredit(ctx, shift, reload) {
 }
 
 async function addPayment(shift, reload) {
-  const customers = (await customersList()).filter((c) => c.balance > 0 || c.type === 'account');
-  if (!customers.length) return toast('Aucun client ne doit d’argent.', 'error');
+  const customers = await customersList();
   const clientRef = newRef();
   const owes = h('p', { class: 'hint-line' });
   const search = customerSearch(customers, {
+    allowNew: true,
     onPick: (form, c) => {
-      owes.textContent = c ? `Doit ${fmt.money(Math.max(0, c.balance))}` : '';
+      owes.textContent = !c ? '' : !c.id ? 'Nouveau client : il sera créé avec ce règlement.' : c.balance > 0 ? `Doit ${fmt.money(c.balance)}` : 'Ne doit rien : le montant sera une avance.';
       if (c && !form.elements.amount.value && c.balance > 0) form.elements.amount.value = c.balance.toFixed(2);
     },
   });
   const ok = await formDialog({
     title: 'Règlement client',
     submitLabel: 'Encaisser',
-    intro: 'Un client vient payer sa dette : l’argent est ajouté à votre caisse.',
+    intro: 'Un client vient payer : l’argent est ajouté à votre caisse. S’il n’existe pas encore, touchez « Nouveau client ».',
     grid: false,
     autofocus: true,
     fields: [
       { name: 'customer', label: 'Client (nom, plaque ou téléphone)', required: true, placeholder: 'Tapez quelques lettres…', onInput: search.onInput },
       { name: 'customerChips', type: 'node', node: h('div', {}, search.chips, owes) },
-      { name: 'amount', label: 'Montant reçu ($)', type: 'number', step: '0.01', min: '0.01', required: true, hint: 'Rempli avec le solde dû : changez-le si le client paie une partie.' },
-      { name: 'method', label: 'Mode', type: 'segment', options: [['espèces', 'Espèces'], ['mobile money', 'Mobile money'], ['carte', 'Carte']] },
+      { name: 'amount', label: 'Montant reçu ($)', type: 'number', step: '0.01', min: '0.01', required: true, hint: 'Si le client doit de l’argent, son solde est proposé : changez-le s’il paie une partie.' },
+      { name: 'method', label: 'Mode', type: 'segment', options: [['espèces', 'Espèces'], ['mobile money', 'Mobile money']] },
       { name: 'reference', label: 'Référence', placeholder: 'Facultatif (n° de transaction…)' },
     ],
-    onSubmit: (d) => {
-      const c = search.picked();
-      if (!c?.id) throw new Error('Touchez le client dans la liste proposée.');
-      return api.post(`/shifts/${shift.id}/payments`, { amount: d.amount, method: d.method, reference: d.reference, customerId: c.id, clientRef });
+    onSubmit: async (d, form) => {
+      const choice = search.picked();
+      if (!choice) throw new Error('Touchez un client proposé, ou « Nouveau client » pour le créer.');
+      let customer = choice.id ? choice : null;
+      if (!customer) {
+        customer = await api.post('/customers/quick', { name: choice.name });
+        customers.push(customer);
+        forgetCustomers();
+        form.elements.customer.value = customer.name;
+      }
+      return api.post(`/shifts/${shift.id}/payments`, { amount: d.amount, method: d.method, reference: d.reference, customerId: customer.id, clientRef });
     },
   });
   if (ok) {
@@ -610,7 +617,7 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
     total += surcharge;
     const expected = total - credit - combos + payments - expenses;
     const value = (name) => Number(form.elements[name].value) || 0;
-    const declared = value('cash') + value('card') + value('mobileMoney');
+    const declared = value('cash') + value('mobileMoney');
     lines.total.textContent = complete ? fmt.money(total) : '—';
     lines.expected.textContent = complete ? fmt.money(expected) : '—';
     lines.declared.textContent = fmt.money(declared);
@@ -642,7 +649,6 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
         { class: 'form-grid' },
         field({ name: 'cash', label: 'Espèces ($)', type: 'number', step: '0.01', min: '0', required: true, value: first(shift.cash, undefined), onInput: recompute }),
         field({ name: 'mobileMoney', label: 'Mobile money ($)', type: 'number', step: '0.01', min: '0', value: first(shift.mobile_money || undefined, undefined), placeholder: 'Vide = 0', onInput: recompute }),
-        field({ name: 'card', label: 'Carte ($)', type: 'number', step: '0.01', min: '0', value: first(shift.card || undefined, undefined), placeholder: 'Vide = 0', onInput: recompute }),
         field({ name: 'notes', label: 'Remarque (facultatif)', type: 'textarea', full: true, value: first(shift.notes, undefined) }),
         correcting ? field({ name: 'reason', label: 'Motif de la correction', required: true, full: true, placeholder: 'Ex. : index mal lu, billets oubliés' }) : null,
       ),
@@ -701,7 +707,6 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
         readings: shift.readings.map((r) => ({ nozzleId: r.nozzle_id, endMeter: Number(form.elements[`end_${r.nozzle_id}`].value) })),
         cash: Number(form.elements.cash.value),
         mobileMoney: Number(form.elements.mobileMoney.value) || 0,
-        card: Number(form.elements.card.value) || 0,
         notes: form.elements.notes.value,
         reason: form.elements.reason?.value,
       });

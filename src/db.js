@@ -249,7 +249,7 @@ const MIGRATIONS = [
   ['expenses', 'cancel_requested_by', 'INTEGER REFERENCES users(id)'],
   ['expenses', 'cancel_reason', 'TEXT'],
   ['price_history', 'subscriber_price', 'REAL'],
-  // Money handed over at closing besides cash and cards, in dollars.
+  // Money handed over at closing besides cash, in dollars.
   ['shifts', 'mobile_money', 'REAL'],
   // Price change scheduled for a date (src/prices.js).
   ['products', 'next_price', 'REAL'],

@@ -70,11 +70,10 @@ export async function renderReports(page, ctx) {
       kpi("Chiffre d'affaires", fmt.money(t.amount), fmt.liters(t.liters)),
       kpi(
         'Encaissé',
-        fmt.money(t.cash + t.card + t.mobileMoney),
+        fmt.money(t.cash + t.mobileMoney),
         [
           `Espèces ${fmt.money(t.cash)}`,
           t.mobileMoney ? `Mobile money ${fmt.money(t.mobileMoney)}` : null,
-          t.card ? `Carte ${fmt.money(t.card)}` : null,
         ]
           .filter(Boolean)
           .join(' · '),
@@ -167,7 +166,7 @@ export async function renderReports(page, ctx) {
     h(
       'section',
       { class: 'card flush section' },
-      h('div', { class: 'card-header' }, h('div', {}, h('h2', {}, 'Cuves'), h('p', {}, 'Perte = écarts de jaugeage négatifs rapportés aux litres vendus · jours au rythme des 14 derniers jours'))),
+      h('div', { class: 'card-header' }, h('div', {}, h('h2', {}, 'Cuves'), h('p', {}, 'Perte = écarts de jaugeage négatifs rapportés aux litres vendus'))),
       table(
         [
           { label: 'Cuve', key: 'name' },

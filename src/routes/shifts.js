@@ -2,7 +2,7 @@ const express = require('express');
 const { EXPENSE_CATEGORIES, getSettings } = require('../db');
 
 // Money handed over, in dollars.
-const declared = (s) => round((s.cash || 0) + (s.card || 0) + (s.mobile_money || 0));
+const declared = (s) => round((s.cash || 0) + (s.mobile_money || 0));
 const { fail, num, str, oneOf, round, dateParam, transaction, money, clientRef } = require('../util');
 const { requireRole } = require('../auth');
 const { customerBalance } = require('./customers');
@@ -76,7 +76,7 @@ module.exports = function shiftRoutes(db) {
       db
         .prepare(
           `SELECT s.id, s.status, s.opened_at, s.closed_at, s.total_liters, s.total_amount, s.credit_amount,
-             s.expected_amount, s.payments_amount, s.expenses_amount, s.cash, s.card, s.variance, u.name AS attendant_name,
+             s.expected_amount, s.payments_amount, s.expenses_amount, s.cash, s.mobile_money, s.variance, u.name AS attendant_name,
              s.manager_comment IS NOT NULL AS has_remark, (s.manager_comment IS NOT NULL AND s.comment_seen_at IS NULL) AS remark_unread,
              (SELECT COUNT(*) FROM sales sa WHERE sa.shift_id = s.id AND sa.over_limit = 1) AS over_limit_count,
              (SELECT group_concat(DISTINCT pu.name) FROM shift_readings r JOIN nozzles n ON n.id = r.nozzle_id
@@ -231,7 +231,7 @@ module.exports = function shiftRoutes(db) {
     const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(Number(req.body?.customerId));
     if (!customer) fail(400, 'Choisissez un client.');
     const amount = round(num(req.body?.amount, 'Le montant', { min: 0.01, max: 1e8 }));
-    const method = oneOf(req.body?.method ?? 'espèces', 'Le mode de règlement', ['espèces', 'mobile money', 'carte']);
+    const method = oneOf(req.body?.method ?? 'espèces', 'Le mode de règlement', ['espèces', 'mobile money']);
     const reference = str(req.body?.reference, 'La référence', { required: false, max: 100 });
     const id = transaction(db, () => {
       const r = db
@@ -374,7 +374,6 @@ module.exports = function shiftRoutes(db) {
   // a correction calls it again after undoing the first closing (closed_at is kept).
   function applyClosing(shift, b) {
     const cash = round(num(b.cash, 'Le montant en espèces ($)', { max: 1e8 }));
-    const card = round(num(b.card ?? 0, 'Le montant par carte', { max: 1e8 }));
     const mobileMoney = round(num(b.mobileMoney ?? 0, 'Le montant en mobile money', { max: 1e8 }));
     const notes = str(b.notes, 'La remarque', { required: false, max: 500 });
     const ends = new Map((Array.isArray(b.readings) ? b.readings : []).map((r) => [Number(r.nozzleId), r.endMeter]));
@@ -404,9 +403,9 @@ module.exports = function shiftRoutes(db) {
         db.prepare('UPDATE tanks SET book_stock = ROUND(book_stock - ?, 2) WHERE id = ?').run(liters, r.tank_id);
       }
       db.prepare(
-        `UPDATE shifts SET status = 'closed', closed_at = COALESCE(closed_at, datetime('now')), cash = ?, card = ?, mobile_money = ?,
+        `UPDATE shifts SET status = 'closed', closed_at = COALESCE(closed_at, datetime('now')), cash = ?, mobile_money = ?,
            total_liters = ?, notes = ? WHERE id = ?`,
-      ).run(cash, card, mobileMoney, round(totalLiters), notes, shift.id);
+      ).run(cash, mobileMoney, round(totalLiters), notes, shift.id);
       reconcile(shift.id);
     }
   }

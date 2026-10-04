@@ -5,7 +5,7 @@ import { icon } from '../icons.js';
 import { renderClosing } from './attendant.js';
 
 // Money handed over, in dollars.
-const declared = (s) => (s.cash || 0) + (s.card || 0) + (s.mobile_money || 0);
+const declared = (s) => (s.cash || 0) + (s.mobile_money || 0);
 
 let filter = 'closed';
 let attendantFilter = '';
@@ -291,7 +291,6 @@ export function shiftSummary(shift, tolerance) {
           cardHeader('Caisse'),
           h('div', { class: 'summary-line' }, h('span', {}, 'Espèces'), h('span', {}, fmt.money(shift.cash))),
           shift.mobile_money ? h('div', { class: 'summary-line' }, h('span', {}, 'Mobile money'), h('span', {}, fmt.money(shift.mobile_money))) : null,
-          h('div', { class: 'summary-line' }, h('span', {}, 'Carte'), h('span', {}, fmt.money(shift.card))),
           h('div', { class: 'summary-line total' }, h('span', {}, 'Total déclaré'), h('span', {}, fmt.money(declared(shift)))),
           shift.notes ? h('p', { class: 'muted', style: 'margin-top:12px' }, `Remarque du pompiste : ${shift.notes}`) : null,
           shift.status === 'validated'

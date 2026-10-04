@@ -142,7 +142,7 @@ test('poste : prix abonné, crédit sans combos, plafond, rapprochement', async 
   const closed = await pompiste('POST', `/api/shifts/${shift.id}/close`, {
     readings: [{ nozzleId: nozzle.nozzle_id, endMeter: 500 }],
     cash: 390,
-    card: 100,
+    mobileMoney: 100,
   });
   assert.strictEqual(closed.status, 200);
   assert.strictEqual(closed.data.total_amount, 610);
@@ -323,6 +323,13 @@ test('pompiste : client rapide (particulier), crédit accordé, règlement et d�
 
   const exp = await pompiste('POST', `/api/shifts/${shift.id}/expenses`, { category: 'Fournitures', amount: 15, description: 'Eau et savon' });
   assert.strictEqual(exp.status, 201);
+
+  // A customer not known yet comes to pay: created on the spot, the payment is an advance. No card.
+  const payer = await pompiste('POST', '/api/customers/quick', { name: 'Kambale Transport' });
+  assert.strictEqual((await pompiste('POST', `/api/shifts/${shift.id}/payments`, { customerId: payer.data.id, amount: 20, method: 'carte' })).status, 400, 'pas de carte');
+  const advance = await pompiste('POST', `/api/shifts/${shift.id}/payments`, { customerId: payer.data.id, amount: 20, method: 'mobile money' });
+  assert.strictEqual(advance.status, 201);
+  assert.strictEqual(advance.data.balance, -20);
 
   const dash = (await gerant('GET', '/api/dashboard')).data;
   assert.ok(dash.alerts.some((a) => a.text.includes('hors plafond')));

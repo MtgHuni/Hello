@@ -7,12 +7,12 @@ Trois espaces, selon le rôle :
 | Rôle | Ce qu'il fait |
 |------|---------------|
 | **Gérant** | Tableau de bord et alertes, validation des postes (clôture à la place d'un pompiste, correction d'une clôture, remarque au pompiste), cuves (livraisons, jaugeages), clients (crédit, règlements, créances par ancienneté avec relance WhatsApp, relevés PDF), dépenses, rapports (marge, écarts par pompiste) en PDF et Excel, réglages (prix, prix programmés, pompes, équipe), sauvegarde et journal |
-| **Pompiste** | Sur téléphone : ouvre son poste, saisit les **crédits** (et crée un client avec son seul nom), encaisse un règlement, note une dépense payée en caisse, clôture avec les index de fin et le comptage en dollars (espèces, mobile money, carte). L'écart s'affiche immédiatement ; le rapport PDF du poste se télécharge ou se partage. Lit les remarques du gérant sur ses postes (accueil et historique) |
+| **Pompiste** | Sur téléphone : ouvre son poste, saisit les **crédits** (et crée un client avec son seul nom), encaisse un règlement (un client inconnu est créé sur place), note une dépense payée en caisse, clôture avec les index de fin et le comptage en dollars (espèces, mobile money). L'écart s'affiche immédiatement ; le rapport PDF du poste se télécharge ou se partage. Lit les remarques du gérant sur ses postes (accueil et historique) |
 | **Client** | Crée son compte avec son téléphone, prépare un achat à crédit pendant qu'il attend (le pompiste confirme d'un geste), suit son solde et télécharge son relevé du mois |
 
 ## Principes de gestion
 
-- **Rapprochement de poste** : litres = index fin − index début (par pistolet). Montant à remettre = litres × prix public + supplément des abonnés − ventes à crédit − carburant échangé contre des combos + règlements encaissés − dépenses payées en caisse. Écart = espèces + mobile money + carte − montant à remettre. Tout est compté en dollars.
+- **Rapprochement de poste** : litres = index fin − index début (par pistolet). Montant à remettre = litres × prix public + supplément des abonnés − ventes à crédit − carburant échangé contre des combos + règlements encaissés − dépenses payées en caisse. Écart = espèces + mobile money − montant à remettre. Tout est compté en dollars.
 - **Catégories de clients** (réglées dans Réglages → Clients et combos) :
   - **Particulier** : plafond de crédit fixe, le même pour tous ;
   - **Abonné** : prix au litre plus élevé (colonne « Prix abonnés » de chaque produit), plafond plus haut, et le total du mois doit être payé avant le jour fixé du mois suivant ; passé ce jour, un abonné qui doit encore le mois précédent ne peut plus prendre à crédit (sauf crédit accordé par le pompiste, signalé au gérant).
