@@ -1,6 +1,6 @@
 import { flags } from '../ui.js';
 import { api } from '../api.js';
-import { h, fmt, pageHeader, card, cardHeader, table, segmented, kpi, badge, button, formDialog, toast, field, todayISO, isoDate, setContent } from '../ui.js';
+import { h, fmt, pageHeader, card, cardHeader, table, segmented, kpi, badge, button, formDialog, toast, field, todayISO, isoDate, setContent, pdfLinks, whatsappNumber } from '../ui.js';
 import { icon } from '../icons.js';
 
 let typeFilter = 'all';
@@ -48,7 +48,12 @@ export async function renderCustomers(page, ctx) {
   const toReview = customers.filter((c) => c.needs_review && c.active).length;
   if (typeFilter === 'review' && !toReview) typeFilter = 'all';
   setContent(page, 
-    pageHeader('Clients', `${customers.length} client${customers.length > 1 ? 's' : ''} · encours total ${fmt.money(receivables)}`, button('Nouveau client', () => customerDialog(null, ctx), { iconName: 'plus' })),
+    pageHeader(
+      'Clients',
+      `${customers.length} client${customers.length > 1 ? 's' : ''} · encours total ${fmt.money(receivables)}`,
+      button('Créances', () => ctx.navigate('clients/creances'), { variant: 'secondary', iconName: 'cash' }),
+      button('Nouveau client', () => customerDialog(null, ctx), { iconName: 'plus' }),
+    ),
     h(
       'section',
       { class: 'card flush' },
@@ -106,7 +111,53 @@ async function customerDialog(customer, ctx, onDone) {
   else ctx.navigate(`clients/${ok.id}`);
 }
 
+// Who owes what, by age: payments settle the oldest credit first, so the old column is what to chase.
+async function renderReceivables(page, ctx) {
+  const { rows, totals } = await api.get('/customers/receivables');
+  const station = ctx.state.settings.stationName;
+  const remind = (r) => {
+    const number = whatsappNumber(r.phone);
+    if (!number) return h('span', { class: 'muted small' }, 'Pas de téléphone');
+    const text = `Bonjour ${r.name}, votre solde chez ${station} est de ${fmt.money(r.balance)}${r.old ? `, dont ${fmt.money(r.old)} depuis plus de 30 jours` : ''}. Merci de passer le régler. ${station}`;
+    return h(
+      'a',
+      { class: 'btn secondary sm', href: `https://wa.me/${number}?text=${encodeURIComponent(text)}`, target: '_blank', rel: 'noopener', onClick: (e) => e.stopPropagation() },
+      'Relancer',
+    );
+  };
+  setContent(
+    page,
+    h('a', { class: 'back no-print', href: '#/clients' }, icon('back'), 'Clients'),
+    pageHeader('Créances', 'Ce que les clients doivent, par ancienneté. Les règlements soldent d’abord les crédits les plus anciens.'),
+    h(
+      'div',
+      { class: 'grid grid-4' },
+      kpi('Plus de 30 jours', fmt.money(totals.old), 'À relancer en priorité'),
+      kpi('8 à 30 jours', fmt.money(totals.month)),
+      kpi('7 derniers jours', fmt.money(totals.recent)),
+      kpi('Total dû', fmt.money(totals.balance), `${rows.length} client${rows.length > 1 ? 's' : ''}`),
+    ),
+    h(
+      'section',
+      { class: 'card flush section' },
+      table(
+        [
+          { label: 'Client', render: (r) => h('span', {}, h('strong', {}, r.name), h('div', { class: 'muted small' }, `${TYPE_LABEL[r.type]}${r.oldest_days ? ` · plus ancien : ${r.oldest_days} j` : ''}`)) },
+          { label: '+ 30 jours', align: 'right', render: (r) => (r.old ? h('strong', { class: 'variance-neg' }, fmt.money(r.old)) : '—') },
+          { label: '8 à 30 j', align: 'right', render: (r) => (r.month ? fmt.money(r.month) : '—') },
+          { label: '7 jours', align: 'right', render: (r) => (r.recent ? fmt.money(r.recent) : '—') },
+          { label: 'Total', align: 'right', render: (r) => h('strong', {}, fmt.money(r.balance)) },
+          { label: '', align: 'right', render: remind },
+        ],
+        rows,
+        { empty: 'Aucun client ne doit d’argent.', onRowClick: (r) => ctx.navigate(`clients/${r.id}`) },
+      ),
+    ),
+  );
+}
+
 export async function renderCustomerDetail(page, ctx) {
+  if (ctx.id === 'creances') return renderReceivables(page, ctx);
   const period = defaultPeriod();
   const load = async () => {
     const acc = await api.get(`/customers/${ctx.id}?from=${period.from}&to=${period.to}`);
@@ -118,6 +169,7 @@ export async function renderCustomerDetail(page, ctx) {
         c.name,
         [TYPE_LABEL[c.type], c.phone, c.email, c.plate].filter(Boolean).join(' · '),
         c.type === 'account' || acc.balance > 0 ? button('Règlement', () => paymentDialog(c, reload), { iconName: 'card' }) : null,
+        pdfLinks(`/api/customers/${c.id}/statement.pdf?month=${period.from.slice(0, 7)}`, `releve-${period.from.slice(0, 7)}.pdf`, { label: 'Relevé PDF' }),
         button('Modifier', () => customerDialog(c, ctx, reload), { variant: 'secondary', iconName: 'edit' }),
         button(c.login ? 'Accès client' : 'Créer un accès', () => loginDialog(c, reload), { variant: 'secondary', iconName: 'user' }),
       ),

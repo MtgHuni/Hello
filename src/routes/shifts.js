@@ -9,6 +9,7 @@ const { customerBalance } = require('./customers');
 const { createSale } = require('../sales');
 const { refreshCustomer } = require('../loyalty');
 const { shiftReportPdf } = require('../shiftReport');
+const { applyScheduledPrices } = require('../prices');
 const { audit } = require('../audit');
 
 const staff = requireRole('manager', 'attendant');
@@ -121,6 +122,7 @@ module.exports = function shiftRoutes(db) {
     if (!pumpIds.length) fail(400, 'Choisissez au moins une pompe.');
 
     const id = transaction(db, () => {
+      applyScheduledPrices(db); // a price due by now is frozen into this shift
       if (db.prepare("SELECT 1 FROM shifts WHERE attendant_id = ? AND status = 'open'").get(req.user.id)) {
         fail(409, 'Vous avez déjà un poste ouvert.');
       }

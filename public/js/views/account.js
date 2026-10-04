@@ -1,6 +1,6 @@
 import { flags } from '../ui.js';
 import { api } from '../api.js';
-import { priceTotem, h, fmt, pageHeader, button, formDialog, confirmDialog, toast, spinner, setContent } from '../ui.js';
+import { priceTotem, h, fmt, pageHeader, button, formDialog, confirmDialog, toast, spinner, setContent, pdfLinks } from '../ui.js';
 import { icon } from '../icons.js';
 import { statement, defaultPeriod } from './customers.js';
 
@@ -164,6 +164,7 @@ export async function renderAccount(page) {
   const products = (await api.get('/products').catch(() => [])).filter((p) => p.active);
   const subscriber = acc.customer.type === 'account';
   const totem = priceTotem(products.map((p) => ({ id: p.id, name: p.name, price: subscriber ? p.subscriber_price : p.price })));
-  setContent(page, pageHeader(acc.customer.name, 'Votre espace client'), totem, fillHost, combosHost, statementHost, h('p', { class: 'muted small section' }, 'Une question sur votre compte ? Adressez-vous au gérant de la station.'));
+  const month = new Date().toLocaleDateString('sv-SE').slice(0, 7);
+  setContent(page, pageHeader(acc.customer.name, 'Votre espace client', pdfLinks(`/api/me/statement.pdf?month=${month}`, `releve-${month}.pdf`, { label: 'Mon relevé PDF' })), totem, fillHost, combosHost, statementHost, h('p', { class: 'muted small section' }, 'Une question sur votre compte ? Adressez-vous au gérant de la station.'));
   await refreshRequest();
 }

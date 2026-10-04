@@ -480,6 +480,43 @@ test('sauvegarde téléchargeable et journal des changements', async () => {
   assert.strictEqual(history[0].subscriber_price, 1.4, 'le prix abonné est gardé dans l’historique');
 });
 
+test('créances par ancienneté, relevé PDF, prix programmé, jours de stock', async () => {
+  // Garage Mwami's credit is 40 days old: the first to chase.
+  const garage = (await gerant('GET', '/api/customers')).data.find((c) => c.name === 'Garage Mwami');
+  db.prepare("UPDATE sales SET created_at = datetime('now', '-40 days') WHERE customer_id = ? AND kind = 'credit'").run(garage.id);
+  const receivables = (await gerant('GET', '/api/customers/receivables')).data;
+  const row = receivables.rows.find((r) => r.id === garage.id);
+  assert.strictEqual(row.old, row.balance, 'tout le solde a plus de 30 jours');
+  assert.ok(row.oldest_days >= 40);
+  assert.strictEqual(receivables.rows[0].id, garage.id, 'les plus anciennes dettes en premier');
+  assert.ok(receivables.totals.balance >= row.balance);
+  assert.strictEqual((await pompiste('GET', '/api/customers/receivables')).status, 403);
+
+  const month = today().slice(0, 7);
+  const statement = await gerant('GET', `/api/customers/${garage.id}/statement.pdf?month=${month}`);
+  assert.strictEqual(statement.status, 200);
+  assert.strictEqual(statement.raw.subarray(0, 5).toString(), '%PDF-');
+  assert.match(statement.raw.toString('latin1'), /\(Solde au d\\351but du mois\)/);
+  assert.strictEqual((await gerant('GET', '/api/me/statement.pdf')).status, 403);
+
+  // A price scheduled for later does not change today's price; once due, the next read applies it.
+  const essence = ctx.products.find((p) => p.name === 'Essence');
+  const local = (ms) => new Date(Date.now() + ms).toLocaleString('sv-SE').replace(' ', 'T').slice(0, 16);
+  assert.strictEqual((await gerant('PUT', `/api/products/${essence.id}`, { price: 1.6, effectiveAt: local(-3600e3) })).status, 400, 'date passée');
+  const scheduled = await gerant('PUT', `/api/products/${essence.id}`, { price: 1.6, subscriberPrice: 1.7, effectiveAt: local(2 * 86400e3) });
+  assert.strictEqual(scheduled.data.price, 1.5);
+  assert.strictEqual(scheduled.data.next_price, 1.6);
+  db.prepare("UPDATE products SET next_price_at = datetime('now', '-1 minute') WHERE id = ?").run(essence.id);
+  const now = (await gerant('GET', '/api/products')).data.find((p) => p.id === essence.id);
+  assert.strictEqual(now.price, 1.6);
+  assert.strictEqual(now.subscriber_price, 1.7);
+  assert.strictEqual(now.next_price, null);
+  assert.ok((await gerant('GET', '/api/audit?category=prix')).data.some((a) => a.action === 'price_applied'));
+
+  const gasoil = (await gerant('GET', '/api/dashboard')).data.tanks.find((t) => t.name === 'Cuve Gasoil');
+  assert.strictEqual(typeof gasoil.days_left, 'number', 'jours de stock au rythme des 14 derniers jours');
+});
+
 test('migration : une base ancienne est convertie (loyalty → paid, combos)', () => {
   const fs = require('node:fs');
   const os = require('node:os');

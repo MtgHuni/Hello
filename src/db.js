@@ -253,10 +253,15 @@ const MIGRATIONS = [
   ['shifts', 'mobile_money', 'REAL'],
   ['shifts', 'cash_cdf', 'REAL'],
   ['shifts', 'cdf_rate', 'REAL'],
+  // Price change scheduled for a date (src/prices.js).
+  ['products', 'next_price', 'REAL'],
+  ['products', 'next_subscriber_price', 'REAL'],
+  ['products', 'next_price_at', 'TEXT'],
+  ['products', 'next_price_by', 'INTEGER REFERENCES users(id)'],
 ];
 
 // Bumped with every schema change; recorded in PRAGMA user_version.
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 function missingColumns(db) {
   return MIGRATIONS.filter(([table, column]) => {

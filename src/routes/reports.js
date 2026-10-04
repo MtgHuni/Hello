@@ -55,10 +55,14 @@ module.exports = function reportRoutes(db) {
 
     const tanks = db
       .prepare(
-        `SELECT t.id, t.name, t.capacity, t.low_level, t.book_stock, p.id AS product_id, p.name AS product_name
+        `SELECT t.id, t.name, t.capacity, t.low_level, t.book_stock, p.id AS product_id, p.name AS product_name,
+           (SELECT COALESCE(SUM(r.liters), 0) FROM shift_readings r JOIN shifts s ON s.id = r.shift_id
+             WHERE r.tank_id = t.id AND s.status != 'open' AND s.closed_at >= datetime('now', '-14 days')) AS sold14
          FROM tanks t JOIN products p ON p.id = t.product_id WHERE t.active = 1 ORDER BY t.id`,
       )
-      .all();
+      .all()
+      // Days of stock left at the pace of the last 14 days.
+      .map((t) => ({ ...t, days_left: t.sold14 > 0 ? Math.floor(t.book_stock / (t.sold14 / 14)) : null }));
 
     const openShifts = db
       .prepare(

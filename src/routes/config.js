@@ -3,6 +3,7 @@ const { getSettings, syncCreditLimits } = require('../db');
 const { fail, num, str, bool, transaction } = require('../util');
 const { requireRole } = require('../auth');
 const { audit } = require('../audit');
+const { applyScheduledPrices } = require('../prices');
 
 const price3 = (n) => Number(n).toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 
@@ -79,7 +80,15 @@ module.exports = function configRoutes(db) {
   // ---- Products & prices -------------------------------------------------
 
   router.get('/products', requireRole(), (req, res) => {
-    res.json(db.prepare('SELECT id, name, price, COALESCE(subscriber_price, price) AS subscriber_price, active FROM products ORDER BY id').all());
+    transaction(db, () => applyScheduledPrices(db));
+    res.json(
+      db
+        .prepare(
+          `SELECT id, name, price, COALESCE(subscriber_price, price) AS subscriber_price, active, next_price, next_subscriber_price, next_price_at
+           FROM products ORDER BY id`,
+        )
+        .all(),
+    );
   });
 
   router.post('/products', manager, (req, res) => {
@@ -103,6 +112,39 @@ module.exports = function configRoutes(db) {
     const subscriberPrice =
       num(req.body?.subscriberPrice, 'Le prix abonnés', { min: 0.001, max: 1000, required: false }) ?? product.subscriber_price ?? price;
     const active = bool(req.body?.active, !!product.active) ? 1 : 0;
+
+    // A date in the future schedules the new prices instead of applying them now.
+    if (req.body?.effectiveAt || req.body?.cancelScheduled) {
+      transaction(db, () => {
+        db.prepare('UPDATE products SET name = ?, active = ? WHERE id = ?').run(name, active, product.id);
+        if (req.body.cancelScheduled) {
+          db.prepare('UPDATE products SET next_price = NULL, next_subscriber_price = NULL, next_price_at = NULL, next_price_by = NULL WHERE id = ?').run(product.id);
+          audit(db, req, { category: 'prix', action: 'price_unscheduled', entity: 'products', id: product.id, summary: `Prix programmé annulé : ${name}` });
+          return;
+        }
+        const local = String(req.body.effectiveAt).replace('T', ' ');
+        if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(local)) fail(400, 'Date d’effet invalide.');
+        const at = db.prepare("SELECT datetime(?, 'utc') AS v, datetime(?, 'utc') > datetime('now') AS future").get(local, local);
+        if (!at.future) fail(400, 'Choisissez une date à venir, ou laissez la date vide pour appliquer le prix tout de suite.');
+        db.prepare('UPDATE products SET next_price = ?, next_subscriber_price = ?, next_price_at = ?, next_price_by = ? WHERE id = ?').run(
+          price,
+          subscriberPrice,
+          at.v,
+          req.user.id,
+          product.id,
+        );
+        audit(db, req, {
+          category: 'prix',
+          action: 'price_scheduled',
+          entity: 'products',
+          id: product.id,
+          summary: `Prix ${name} programmé pour le ${local.split(' ')[0].split('-').reverse().join('/')} à ${local.split(' ')[1]} : ${price3(price)} $/L, abonnés ${price3(subscriberPrice)} $/L`,
+          after: { price, subscriber_price: subscriberPrice, at: at.v },
+        });
+      });
+      return res.json(db.prepare('SELECT * FROM products WHERE id = ?').get(product.id));
+    }
+
     transaction(db, () => {
       db.prepare('UPDATE products SET name = ?, price = ?, subscriber_price = ?, active = ? WHERE id = ?').run(name, price, subscriberPrice, active, product.id);
       const oldSubscriber = product.subscriber_price ?? product.price;

@@ -2,8 +2,9 @@ const express = require('express');
 const { fail, num, str, oneOf, bool, round, dateParam, transaction } = require('../util');
 const { requireRole, hashPassword, checkPasswordStrength } = require('../auth');
 const { audit } = require('../audit');
+const { statementPdf } = require('../statementReport');
 const { getSettings, syncCreditLimits } = require('../db');
-const { refreshCustomer, subscriberDues } = require('../loyalty');
+const { refreshCustomer, subscriberDues, creditAllocation } = require('../loyalty');
 
 const manager = requireRole('manager');
 const frNum = (n, digits = 2) => n.toLocaleString('fr-FR', { maximumFractionDigits: digits });
@@ -208,6 +209,44 @@ function customerRoutes(db) {
     }
     res.json(db.prepare(`${listSql} WHERE c.id = ?`).get(current.id));
   });
+
+  // Unpaid credit by age (payments settle the oldest credit first): who to chase first.
+  router.get('/customers/receivables', manager, (req, res) => {
+    const today = db.prepare("SELECT date('now', 'localtime') AS d").get().d;
+    const ageOf = (day) => Math.round((Date.parse(today) - Date.parse(day)) / 86400e3);
+    const rows = [];
+    for (const c of db.prepare(`${listSql} WHERE c.active = 1`).all()) {
+      if (c.balance <= 0) continue;
+      const due = { recent: 0, month: 0, old: 0 };
+      let oldest = 0;
+      for (const s of creditAllocation(db, c.id)) {
+        if (s.unpaid <= 0.001) continue;
+        const age = ageOf(s.day);
+        oldest = Math.max(oldest, age);
+        due[age <= 7 ? 'recent' : age <= 30 ? 'month' : 'old'] += s.unpaid;
+      }
+      rows.push({ id: c.id, name: c.name, type: c.type, phone: c.phone, balance: c.balance, recent: round(due.recent), month: round(due.month), old: round(due.old), oldest_days: oldest });
+    }
+    rows.sort((a, b) => b.old - a.old || b.month - a.month || b.balance - a.balance);
+    const total = (key) => round(rows.reduce((t, r) => t + r[key], 0));
+    res.json({ rows, totals: { recent: total('recent'), month: total('month'), old: total('old'), balance: total('balance') } });
+  });
+
+  // Monthly statement as a PDF: the manager for any customer, a customer for their own account.
+  function sendStatement(req, res, customerId) {
+    const month = /^\d{4}-\d{2}$/.test(req.query.month || '') ? req.query.month : db.prepare("SELECT strftime('%Y-%m', 'now', 'localtime') AS m").get().m;
+    const from = `${month}-01`;
+    const to = db.prepare("SELECT date(?, '+1 month', '-1 day') AS d").get(from).d;
+    const acc = account(customerId, from, to);
+    const settings = getSettings(db);
+    const pdf = statementPdf(acc, { stationName: settings.stationName, month, graceDays: settings.subscriberGraceDays });
+    const slug = acc.customer.name.normalize('NFD').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'client';
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', `attachment; filename="releve-${slug}-${month}.pdf"`);
+    res.send(pdf);
+  }
+  router.get('/customers/:id/statement.pdf', manager, (req, res) => sendStatement(req, res, Number(req.params.id)));
+  router.get('/me/statement.pdf', requireRole('customer'), (req, res) => sendStatement(req, res, req.user.customer_id));
 
   router.get('/customers/:id', manager, (req, res) => {
     res.json(account(Number(req.params.id), dateParam(req.query.from, 'La date de début'), dateParam(req.query.to, 'La date de fin')));

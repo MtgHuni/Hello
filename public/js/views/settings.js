@@ -33,7 +33,11 @@ export async function renderSettings(page, ctx) {
         table(
           [
             { label: 'Produit', render: (p) => h('span', {}, h('span', { class: 'swatch', style: `background:${productColor(p.id)}` }), p.name) },
-            { label: 'Prix public', align: 'right', render: (p) => h('strong', {}, fmt.price(p.price)) },
+            {
+              label: 'Prix public',
+              align: 'right',
+              render: (p) => h('span', {}, h('strong', {}, fmt.price(p.price)), p.next_price_at ? h('div', { class: 'muted small' }, `→ ${fmt.price(p.next_price)} le ${fmt.dateTime(p.next_price_at)}`) : null),
+            },
             { label: 'Prix abonnés', align: 'right', render: (p) => fmt.price(p.subscriber_price) },
             { label: 'Statut', render: (p) => (p.active ? badge('Actif', 'good') : badge('Inactif')) },
             {
@@ -192,12 +196,18 @@ async function productDialog(p, reload) {
       { name: 'name', label: 'Nom', value: p?.name, required: true },
       { name: 'price', label: 'Prix public ($/L)', type: 'number', step: '0.001', min: '0.001', value: p?.price, required: true },
       { name: 'subscriberPrice', label: 'Prix abonnés ($/L)', type: 'number', step: '0.001', min: '0.001', value: p?.subscriber_price, hint: 'Un peu plus élevé, en échange du crédit au mois' },
-      ...(p ? [{ name: 'active', label: 'Produit actif', type: 'checkbox', value: !!p.active }] : []),
+      ...(p
+        ? [
+            { name: 'effectiveAt', label: 'À partir du (facultatif)', type: 'datetime-local', hint: 'Vide : le prix change tout de suite. Sinon il s’applique au premier poste ouvert après cette date.' },
+            ...(p.next_price_at ? [{ name: 'cancelScheduled', label: `Annuler le prix programmé (${fmt.price(p.next_price)} le ${fmt.dateTime(p.next_price_at)})`, type: 'checkbox', value: false, full: true }] : []),
+            { name: 'active', label: 'Produit actif', type: 'checkbox', value: !!p.active },
+          ]
+        : []),
     ],
-    onSubmit: (d) => (p ? api.put(`/products/${p.id}`, d) : api.post('/products', d)),
+    onSubmit: (d) => (p ? api.put(`/products/${p.id}`, { ...d, effectiveAt: d.effectiveAt || undefined, cancelScheduled: d.cancelScheduled || undefined }) : api.post('/products', d)),
   });
   if (ok) {
-    toast(p ? 'Prix mis à jour.' : 'Produit ajouté.');
+    toast(!p ? 'Produit ajouté.' : ok.next_price_at && ok.next_price_at !== p.next_price_at ? 'Nouveau prix programmé.' : 'Prix mis à jour.');
     reload();
   }
 }

@@ -178,9 +178,41 @@ export function button(label, onClick, { variant = '', iconName, type = 'button'
   return h('button', { class: `btn ${variant}`, type, onClick, ...rest }, iconName ? icon(iconName) : null, label);
 }
 
-// Download link to a closed shift's PDF report (cash, sales from the indexes, credits, expenses).
+// A PDF to download, plus a "Partager" button when the phone can share files
+// (WhatsApp, e-mail…): the file goes through the phone's share sheet.
+export function pdfLinks(url, filename, { label = 'Rapport PDF', variant = 'secondary' } = {}) {
+  const link = h('a', { class: `btn ${variant}`, href: url, download: filename }, icon('download'), label);
+  const canShare = typeof File === 'function' && navigator.canShare?.({ files: [new File([''], 'x.pdf', { type: 'application/pdf' })] });
+  if (!canShare) return link;
+  const share = button(
+    'Partager',
+    async () => {
+      try {
+        const res = await fetch(url, { credentials: 'same-origin' });
+        if (!res.ok) throw new Error();
+        const file = new File([await res.blob()], filename, { type: 'application/pdf' });
+        await navigator.share({ files: [file], title: filename });
+      } catch (err) {
+        if (err?.name !== 'AbortError') toast('Partage impossible : téléchargez le PDF.', 'error');
+      }
+    },
+    { variant, iconName: 'share' },
+  );
+  return [link, share];
+}
+
+// A closed shift's PDF report (cash, sales from the indexes, credits, expenses).
 export function reportLink(shiftId, variant = 'secondary') {
-  return h('a', { class: `btn ${variant}`, href: `/api/shifts/${shiftId}/report.pdf`, download: `rapport-poste-${shiftId}.pdf` }, icon('download'), 'Rapport PDF');
+  return pdfLinks(`/api/shifts/${shiftId}/report.pdf`, `rapport-poste-${shiftId}.pdf`, { variant });
+}
+
+// WhatsApp number from a Congolese phone (+243…, 0…, or 9 digits).
+export function whatsappNumber(phone) {
+  let d = String(phone || '').replace(/\D/g, '');
+  if (d.startsWith('00')) d = d.slice(2);
+  if (d.startsWith('0')) d = `243${d.slice(1)}`;
+  else if (d.length === 9) d = `243${d}`;
+  return d.length >= 11 ? d : null;
 }
 
 export function card(...children) {
@@ -292,7 +324,7 @@ export function tankGauge(tank) {
     h(
       'div',
       { class: 'tank-foot' },
-      h('span', { class: 'num' }, `${fmt.liters(tank.book_stock)} / ${fmt.liters(tank.capacity)}`),
+      h('span', { class: 'num' }, `${fmt.liters(tank.book_stock)} / ${fmt.liters(tank.capacity)}${tank.days_left != null ? ` · ≈ ${tank.days_left} jour${tank.days_left > 1 ? 's' : ''}` : ''}`),
       low ? badge('Stock bas', 'critical') : badge('Niveau correct', 'good'),
     ),
   );
