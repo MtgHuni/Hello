@@ -19,7 +19,6 @@ const SETTING_LABELS = {
   individual_credit_limit: 'plafond particuliers',
   subscriber_credit_limit: 'plafond abonnés',
   subscriber_grace_days: 'délai des abonnés',
-  cdf_rate: 'taux du franc congolais',
 };
 
 const manager = requireRole('manager');
@@ -54,7 +53,6 @@ module.exports = function configRoutes(db) {
       individual_credit_limit: pick(b.individualCreditLimit, cur.individualCreditLimit, 'Le plafond des particuliers', { max: 1e8 }),
       subscriber_credit_limit: pick(b.subscriberCreditLimit, cur.subscriberCreditLimit, 'Le plafond des abonnés', { max: 1e8 }),
       subscriber_grace_days: pick(b.subscriberGraceDays, cur.subscriberGraceDays, 'Le délai de paiement des abonnés', { min: 1, max: 28, integer: true }),
-      cdf_rate: pick(b.cdfRate, cur.cdfRate, 'Le taux du franc congolais', { min: 1, max: 1e6 }),
     };
     values.combos_enabled = bool(b.combosEnabled, cur.combosEnabled) ? 1 : 0;
     const stored = Object.fromEntries(db.prepare('SELECT key, value FROM settings').all().map((r) => [r.key, r.value]));

@@ -70,10 +70,9 @@ export async function renderReports(page, ctx) {
       kpi("Chiffre d'affaires", fmt.money(t.amount), fmt.liters(t.liters)),
       kpi(
         'Encaissé',
-        fmt.money(t.cash + t.card + t.mobileMoney + t.cdfUsd),
+        fmt.money(t.cash + t.card + t.mobileMoney),
         [
           `Espèces ${fmt.money(t.cash)}`,
-          t.cashCdf ? `${fmt.number(t.cashCdf)} FC ≈ ${fmt.money(t.cdfUsd)}` : null,
           t.mobileMoney ? `Mobile money ${fmt.money(t.mobileMoney)}` : null,
           t.card ? `Carte ${fmt.money(t.card)}` : null,
         ]

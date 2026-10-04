@@ -4,8 +4,8 @@ import { shiftLine, h, fmt, pageHeader, card, cardHeader, table, segmented, shif
 import { icon } from '../icons.js';
 import { renderClosing } from './attendant.js';
 
-// Money handed over, in dollars (francs congolais at the rate frozen at closing).
-const declared = (s) => (s.cash || 0) + (s.card || 0) + (s.mobile_money || 0) + (s.cdf_rate ? (s.cash_cdf || 0) / s.cdf_rate : 0);
+// Money handed over, in dollars.
+const declared = (s) => (s.cash || 0) + (s.card || 0) + (s.mobile_money || 0);
 
 let filter = 'closed';
 let attendantFilter = '';
@@ -258,10 +258,7 @@ export function shiftSummary(shift, tolerance) {
     closed
       ? card(
           cardHeader('Caisse'),
-          h('div', { class: 'summary-line' }, h('span', {}, 'Espèces en dollars'), h('span', {}, fmt.money(shift.cash))),
-          shift.cash_cdf
-            ? h('div', { class: 'summary-line' }, h('span', {}, `Espèces en francs (${fmt.number(shift.cdf_rate)} FC = 1 $)`), h('span', {}, `${fmt.number(shift.cash_cdf)} FC ≈ ${fmt.money(shift.cash_cdf / shift.cdf_rate)}`))
-            : null,
+          h('div', { class: 'summary-line' }, h('span', {}, 'Espèces'), h('span', {}, fmt.money(shift.cash))),
           shift.mobile_money ? h('div', { class: 'summary-line' }, h('span', {}, 'Mobile money'), h('span', {}, fmt.money(shift.mobile_money))) : null,
           h('div', { class: 'summary-line' }, h('span', {}, 'Carte'), h('span', {}, fmt.money(shift.card))),
           h('div', { class: 'summary-line total' }, h('span', {}, 'Total déclaré'), h('span', {}, fmt.money(declared(shift)))),

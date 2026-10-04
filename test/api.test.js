@@ -63,6 +63,10 @@ test('premier lancement : configuration de la station', async () => {
   const me = (await gerant('GET', '/api/auth/me')).data;
   assert.strictEqual(me.user.role, 'manager');
   assert.strictEqual(me.settings.combosPerLiter, 1);
+  assert.strictEqual(me.settings.combosEnabled, false, 'combos désactivés par défaut');
+  assert.strictEqual(me.settings.cdfRate, undefined, 'tout en dollars');
+  // The combo tests below need the programme on.
+  await gerant('PUT', '/api/settings', { combosEnabled: true });
   assert.strictEqual(me.settings.individualCreditLimit, 50);
   assert.strictEqual(me.settings.subscriberCreditLimit, 500);
 
@@ -374,20 +378,18 @@ test('accès : un pompiste ne voit pas le poste d’un autre ; mot de passe chan
   assert.strictEqual((await luc('GET', '/api/auth/me')).status, 200, 'la session en cours reste ouverte');
 });
 
-test('le gérant clôture à la place du pompiste (francs congolais, mobile money), puis corrige la clôture', async () => {
-  await gerant('PUT', '/api/settings', { cdfRate: 2500 });
+test('le gérant clôture à la place du pompiste (mobile money), puis corrige la clôture', async () => {
   const shift = (await gerant('GET', `/api/shifts/${ctx.shift.id}`)).data;
   const nozzle = shift.readings[0];
   const start = nozzle.start_meter;
   const stock = () => db.prepare('SELECT book_stock FROM tanks WHERE id = ?').get(nozzle.tank_id).book_stock;
   const meter = () => db.prepare('SELECT meter FROM nozzles WHERE id = ?').get(nozzle.nozzle_id).meter;
   const stockBefore = stock();
-  const count = { cash: 5, cashCdf: 25000, mobileMoney: 2 }; // 25 000 FC = 10 $ at 2 500 FC/$
+  const count = { cash: 15, mobileMoney: 2 };
 
   const closed = await gerant('POST', `/api/shifts/${shift.id}/close`, { readings: [{ nozzleId: nozzle.nozzle_id, endMeter: start + 200 }], ...count });
   assert.strictEqual(closed.status, 200);
-  assert.strictEqual(closed.data.cdf_rate, 2500, 'taux figé à la clôture');
-  assert.strictEqual(closed.data.variance, Math.round((5 + 10 + 2 - closed.data.expected_amount) * 100) / 100);
+  assert.strictEqual(closed.data.variance, Math.round((15 + 2 - closed.data.expected_amount) * 100) / 100);
   assert.strictEqual(stock(), stockBefore - 200);
   assert.ok((await gerant('GET', '/api/audit?category=postes')).data.some((a) => a.action === 'shift_closed_by_manager'));
 
@@ -540,13 +542,18 @@ test('migration : une base ancienne est convertie (loyalty → paid, combos)', (
       product_id INTEGER NOT NULL, kind TEXT NOT NULL CHECK (kind IN ('credit', 'loyalty')), liters REAL NOT NULL, unit_price REAL NOT NULL,
       amount REAL NOT NULL, points INTEGER NOT NULL DEFAULT 0, plate TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')));
     INSERT INTO sales (shift_id, customer_id, nozzle_id, product_id, kind, liters, unit_price, amount, points)
-      VALUES (1, 1, 1, 1, 'loyalty', 10, 1, 10, 10), (1, 1, 1, 1, 'credit', 5, 1, 5, 5);`);
+      VALUES (1, 1, 1, 1, 'loyalty', 10, 1, 10, 10), (1, 1, 1, 1, 'credit', 5, 1, 5, 5);
+    CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    INSERT INTO settings VALUES ('combos_enabled', '1'), ('cdf_rate', '2800');`);
   old.close();
   const migrated = openDb(file);
   assert.deepStrictEqual(migrated.prepare('SELECT kind FROM sales ORDER BY id').all().map((r) => r.kind), ['paid', 'credit']);
   assert.strictEqual(migrated.prepare('SELECT loyalty_points FROM customers').get().loyalty_points, 10, 'le crédit non payé ne rapporte plus');
   assert.strictEqual(migrated.prepare('SELECT credit_limit FROM customers').get().credit_limit, 50);
   assert.strictEqual(migrated.prepare('PRAGMA user_version').get().user_version, SCHEMA_VERSION);
+  const setting = (key) => migrated.prepare('SELECT value FROM settings WHERE key = ?').get(key)?.value;
+  assert.strictEqual(setting('combos_enabled'), '0', 'version 6 : combos coupés');
+  assert.strictEqual(setting('cdf_rate'), undefined, 'version 6 : tout en dollars');
   assert.ok(fs.readdirSync(dir).some((f) => f.startsWith('old.db.avant-migration-')), 'copie gardée avant la mise à jour');
   migrated.close();
   fs.rmSync(dir, { recursive: true, force: true });

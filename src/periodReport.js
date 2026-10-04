@@ -23,8 +23,7 @@ function periodReportPdf(r, { stationName, cashTolerance = 0, combosEnabled, now
   report.line('Vendu à crédit', money(t.credit));
   if (combosEnabled || t.combos) report.line('Échangé contre des combos', money(t.combos));
   report.line('Règlements de clients reçus', money(t.payments));
-  report.line('Encaissé : espèces en dollars', money(t.cash));
-  if (t.cashCdf) report.line(`Encaissé : espèces en francs, ${number(t.cashCdf)} FC`, money(t.cdfUsd));
+  report.line('Encaissé : espèces', money(t.cash));
   if (t.mobileMoney) report.line('Encaissé : mobile money', money(t.mobileMoney));
   if (t.card) report.line('Encaissé : carte', money(t.card));
   report.line('Écarts de caisse cumulés', signed(t.variance), { bold: true, color: varianceColor(t.variance) });
@@ -37,8 +36,8 @@ function periodReportPdf(r, { stationName, cashTolerance = 0, combosEnabled, now
   }
 
   // ---- Shifts ----
-  report.section('Postes', 'Remis = espèces en dollars + francs convertis au taux du poste + mobile money + carte.');
-  const handedOver = (s) => round((s.cash || 0) + (s.card || 0) + (s.mobile_money || 0) + (s.cdf_rate ? (s.cash_cdf || 0) / s.cdf_rate : 0));
+  report.section('Postes', 'Remis = espèces + mobile money + carte, en dollars.');
+  const handedOver = (s) => round((s.cash || 0) + (s.card || 0) + (s.mobile_money || 0));
   const sum = (key) => round(r.shifts.reduce((a, s) => a + (s[key] || 0), 0));
   report.table(
     [

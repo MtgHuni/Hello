@@ -21,8 +21,7 @@ function shiftReportPdf(shift, { stationName, combosEnabled, cashTolerance = 0, 
   const credits = shift.sales.filter((s) => s.kind === 'credit');
   const combos = shift.sales.filter((s) => s.kind === 'combo');
   const pendingNote = (item) => (item.cancel_requested_at ? 'Annulation demandée' : '');
-  const cdf = shift.cash_cdf && shift.cdf_rate ? round(shift.cash_cdf / shift.cdf_rate) : 0;
-  const handedOver = round((shift.cash || 0) + (shift.card || 0) + (shift.mobile_money || 0) + cdf);
+  const handedOver = round((shift.cash || 0) + (shift.card || 0) + (shift.mobile_money || 0));
 
   // ---- Cash ----
   report.section('Caisse', 'À remettre = ventes par les index − crédits − combos + règlements reçus − dépenses.');
@@ -32,8 +31,7 @@ function shiftReportPdf(shift, { stationName, combosEnabled, cashTolerance = 0, 
   report.line('+ Règlements de clients reçus', money(shift.payments_amount));
   report.line('− Dépenses payées par la caisse', money(shift.expenses_amount));
   report.line('À remettre', money(shift.expected_amount), { bold: true });
-  report.line('Remis : espèces en dollars', money(shift.cash));
-  if (shift.cash_cdf) report.line(`Remis : espèces en francs, ${number(shift.cash_cdf)} FC à ${number(shift.cdf_rate)} FC/$`, money(cdf));
+  report.line('Remis : espèces', money(shift.cash));
   if (shift.mobile_money) report.line('Remis : mobile money', money(shift.mobile_money));
   if (shift.card) report.line('Remis : carte', money(shift.card));
   report.line('Total remis', money(handedOver), { bold: true });

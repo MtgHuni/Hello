@@ -548,7 +548,6 @@ async function addExpense(ctx, shift, reload) {
 export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, onDone } = {}) {
   const tol = ctx.state.settings.cashTolerance;
   const correcting = mode === 'correct';
-  const rate = shift.cdf_rate || ctx.state.settings.cdfRate;
   const first = (value, fallback) => (correcting ? value ?? fallback : fallback);
   const credit = shift.credit_amount || 0;
   const payments = shift.payments_amount || 0;
@@ -560,11 +559,7 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
     expected: h('span', { class: 'num' }),
     declared: h('span', { class: 'num' }),
     variance: h('span', { class: 'num' }),
-    cdf: h('span', { class: 'num' }),
   };
-  const cdfCount = h('span', { class: 'muted small' });
-  const cdfLine = h('div', { class: 'summary-line', hidden: true }, h('span', {}, `Dont francs congolais (${fmt.number(rate)} FC = 1 $)`, h('br'), cdfCount), lines.cdf);
-  const cdfLive = h('span', { class: 'small muted' });
   const perNozzle = new Map();
 
   const form = h('form', { class: 'stack' });
@@ -589,12 +584,7 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
     total += surcharge;
     const expected = total - credit - combos + payments - expenses;
     const value = (name) => Number(form.elements[name].value) || 0;
-    const cdf = value('cashCdf');
-    const declared = value('cash') + value('card') + value('mobileMoney') + cdf / rate;
-    cdfLine.hidden = !cdf;
-    lines.cdf.textContent = fmt.money(cdf / rate);
-    cdfCount.textContent = `${fmt.number(cdf)} FC`;
-    cdfLive.textContent = cdf ? `${fmt.number(cdf)} FC ≈ ${fmt.money(cdf / rate)}` : '';
+    const declared = value('cash') + value('card') + value('mobileMoney');
     lines.total.textContent = complete ? fmt.money(total) : '—';
     lines.expected.textContent = complete ? fmt.money(expected) : '—';
     lines.declared.textContent = fmt.money(declared);
@@ -624,8 +614,7 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
       h(
         'div',
         { class: 'form-grid' },
-        field({ name: 'cash', label: 'Espèces en dollars ($)', type: 'number', step: '0.01', min: '0', required: true, value: first(shift.cash, undefined), onInput: recompute }),
-        h('div', {}, field({ name: 'cashCdf', label: 'Espèces en francs (FC)', type: 'number', step: '1', min: '0', value: first(shift.cash_cdf || undefined, undefined), placeholder: 'Vide = 0', onInput: recompute }), cdfLive),
+        field({ name: 'cash', label: 'Espèces ($)', type: 'number', step: '0.01', min: '0', required: true, value: first(shift.cash, undefined), onInput: recompute }),
         field({ name: 'mobileMoney', label: 'Mobile money ($)', type: 'number', step: '0.01', min: '0', value: first(shift.mobile_money || undefined, undefined), placeholder: 'Vide = 0', onInput: recompute }),
         field({ name: 'card', label: 'Carte ($)', type: 'number', step: '0.01', min: '0', value: first(shift.card || undefined, undefined), placeholder: 'Vide = 0', onInput: recompute }),
         field({ name: 'notes', label: 'Remarque (facultatif)', type: 'textarea', full: true, value: first(shift.notes, undefined) }),
@@ -641,7 +630,6 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
       expenses ? h('div', { class: 'summary-line' }, h('span', {}, 'Dépenses payées'), h('span', { class: 'num' }, `− ${fmt.money(expenses)}`)) : null,
       h('div', { class: 'summary-line' }, h('span', {}, 'À remettre'), lines.expected),
       h('div', { class: 'summary-line' }, h('span', {}, 'Déclaré'), lines.declared),
-      cdfLine,
       h('div', { class: 'summary-line total' }, h('span', {}, 'Écart'), lines.variance),
     ),
     h(
@@ -686,7 +674,6 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
       const closed = await api.post(`/shifts/${shift.id}/${correcting ? 'correct' : 'close'}`, {
         readings: shift.readings.map((r) => ({ nozzleId: r.nozzle_id, endMeter: Number(form.elements[`end_${r.nozzle_id}`].value) })),
         cash: Number(form.elements.cash.value),
-        cashCdf: Number(form.elements.cashCdf.value) || 0,
         mobileMoney: Number(form.elements.mobileMoney.value) || 0,
         card: Number(form.elements.card.value) || 0,
         notes: form.elements.notes.value,

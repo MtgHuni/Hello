@@ -1,8 +1,8 @@
 const express = require('express');
 const { EXPENSE_CATEGORIES, getSettings } = require('../db');
 
-// Money handed over, in dollars: francs congolais are converted at the rate frozen at closing.
-const declared = (s) => round((s.cash || 0) + (s.card || 0) + (s.mobile_money || 0) + (s.cdf_rate ? (s.cash_cdf || 0) / s.cdf_rate : 0));
+// Money handed over, in dollars.
+const declared = (s) => round((s.cash || 0) + (s.card || 0) + (s.mobile_money || 0));
 const { fail, num, str, oneOf, round, dateParam, transaction, money, clientRef } = require('../util');
 const { requireRole } = require('../auth');
 const { customerBalance } = require('./customers');
@@ -320,11 +320,10 @@ module.exports = function shiftRoutes(db) {
   // Closing = reconciliation: litres from meters, expected money vs declared money,
   // then meters and tank book stocks move forward. Runs inside the caller's transaction;
   // a correction calls it again after undoing the first closing (closed_at is kept).
-  function applyClosing(shift, b, rate) {
+  function applyClosing(shift, b) {
     const cash = round(num(b.cash, 'Le montant en espèces ($)', { max: 1e8 }));
     const card = round(num(b.card ?? 0, 'Le montant par carte', { max: 1e8 }));
     const mobileMoney = round(num(b.mobileMoney ?? 0, 'Le montant en mobile money', { max: 1e8 }));
-    const cashCdf = round(num(b.cashCdf ?? 0, 'Les espèces en francs congolais', { max: 1e13 }));
     const notes = str(b.notes, 'La remarque', { required: false, max: 500 });
     const ends = new Map((Array.isArray(b.readings) ? b.readings : []).map((r) => [Number(r.nozzleId), r.endMeter]));
     {
@@ -354,8 +353,8 @@ module.exports = function shiftRoutes(db) {
       }
       db.prepare(
         `UPDATE shifts SET status = 'closed', closed_at = COALESCE(closed_at, datetime('now')), cash = ?, card = ?, mobile_money = ?,
-           cash_cdf = ?, cdf_rate = ?, total_liters = ?, notes = ? WHERE id = ?`,
-      ).run(cash, card, mobileMoney, cashCdf, rate, round(totalLiters), notes, shift.id);
+           total_liters = ?, notes = ? WHERE id = ?`,
+      ).run(cash, card, mobileMoney, round(totalLiters), notes, shift.id);
       reconcile(shift.id);
     }
   }
@@ -364,7 +363,7 @@ module.exports = function shiftRoutes(db) {
   router.post('/shifts/:id/close', staff, (req, res) => {
     const shift = getOwnShift(req);
     transaction(db, () => {
-      applyClosing(shift, req.body || {}, getSettings(db).cdfRate);
+      applyClosing(shift, req.body || {});
       if (shift.attendant_id !== req.user.id) {
         const attendant = db.prepare('SELECT name FROM users WHERE id = ?').get(shift.attendant_id).name;
         const s = db.prepare('SELECT * FROM shifts WHERE id = ?').get(shift.id);
@@ -401,7 +400,7 @@ module.exports = function shiftRoutes(db) {
         db.prepare('UPDATE nozzles SET meter = ? WHERE id = ?').run(r.start_meter, r.nozzle_id);
         db.prepare('UPDATE tanks SET book_stock = ROUND(book_stock + ?, 2) WHERE id = ?').run(r.liters || 0, r.tank_id);
       }
-      applyClosing(shift, req.body || {}, shift.cdf_rate ?? getSettings(db).cdfRate);
+      applyClosing(shift, req.body || {});
       const after = db.prepare('SELECT * FROM shifts WHERE id = ?').get(shift.id);
       const pick = (s) => ({ total_liters: s.total_liters, total_amount: s.total_amount, expected_amount: s.expected_amount, declared: declared(s), variance: s.variance });
       audit(db, req, {

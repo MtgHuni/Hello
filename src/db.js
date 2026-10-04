@@ -249,10 +249,8 @@ const MIGRATIONS = [
   ['expenses', 'cancel_requested_by', 'INTEGER REFERENCES users(id)'],
   ['expenses', 'cancel_reason', 'TEXT'],
   ['price_history', 'subscriber_price', 'REAL'],
-  // Money handed over at closing besides dollars and cards (francs congolais at the frozen rate).
+  // Money handed over at closing besides cash and cards, in dollars.
   ['shifts', 'mobile_money', 'REAL'],
-  ['shifts', 'cash_cdf', 'REAL'],
-  ['shifts', 'cdf_rate', 'REAL'],
   // Price change scheduled for a date (src/prices.js).
   ['products', 'next_price', 'REAL'],
   ['products', 'next_subscriber_price', 'REAL'],
@@ -265,7 +263,7 @@ const MIGRATIONS = [
 ];
 
 // Bumped with every schema change; recorded in PRAGMA user_version.
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 6;
 
 function missingColumns(db) {
   return MIGRATIONS.filter(([table, column]) => {
@@ -294,6 +292,7 @@ const tableSql = (db, name) => db.prepare("SELECT sql FROM sqlite_master WHERE t
 // (station.db.avant-migration-AAAA-MM-JJ-HHMMSS), to roll back by hand if needed.
 function backupBeforeMigration(db, file) {
   const outdated =
+    db.prepare('PRAGMA user_version').get().user_version < SCHEMA_VERSION ||
     missingColumns(db).length > 0 || !tableSql(db, 'sales').includes("'combo'") || !(tableSql(db, 'purchase_requests') || "'combo'").includes("'combo'");
   const hasData = db.prepare('SELECT EXISTS (SELECT 1 FROM users) OR EXISTS (SELECT 1 FROM sales) AS v').get().v;
   if (!outdated || !hasData) return null;
@@ -325,11 +324,10 @@ const DEFAULT_SETTINGS = {
   points_per_liter: '1', // combos per litre
   combo_value: '0.05', // value of one combo, in dollars
   combo_threshold: '100', // combos needed before they can be exchanged
-  combos_enabled: '1', // '0' : no combo is earned, none is shown, no exchange is possible
+  combos_enabled: '0', // '1' : combos are earned on paid-off credit and exchanged for fuel
   individual_credit_limit: '50',
   subscriber_credit_limit: '500',
   subscriber_grace_days: '5', // days after month end for subscribers to pay
-  cdf_rate: '2800', // francs congolais for one dollar, used to count FC cash at closing
 };
 
 // Rebuilds the sales table when its kind constraint is from an older release
@@ -406,6 +404,7 @@ function openDb(file) {
   if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true });
   const db = new DatabaseSync(file);
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
+  const version = db.prepare('PRAGMA user_version').get().user_version;
   db.exec(SCHEMA);
   if (file !== ':memory:') backupBeforeMigration(db, file);
   addMissingColumns(db);
@@ -427,6 +426,10 @@ function openDb(file) {
     const { refreshCustomer } = require('./loyalty');
     for (const { id } of db.prepare('SELECT id FROM customers').all()) refreshCustomer(db, id);
   }
+  if (version < 6) {
+    // Version 6: everything is counted in dollars and the combo programme starts switched off.
+    db.exec("UPDATE settings SET value = '0' WHERE key = 'combos_enabled'; DELETE FROM settings WHERE key = 'cdf_rate';");
+  }
   db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
   return db;
 }
@@ -445,7 +448,6 @@ function getSettings(db) {
     individualCreditLimit: Number(s.individual_credit_limit),
     subscriberCreditLimit: Number(s.subscriber_credit_limit),
     subscriberGraceDays: Number(s.subscriber_grace_days),
-    cdfRate: Number(s.cdf_rate),
     expenseCategories: EXPENSE_CATEGORIES,
   };
 }
