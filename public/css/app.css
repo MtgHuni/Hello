@@ -752,7 +752,7 @@ input[type='checkbox']:not(.switch)::after {
   width: 6px;
   height: 11px;
   margin-top: -2px;
-  border: solid #fff;
+  border: solid var(--on-accent);
   border-width: 0 2.5px 2.5px 0;
   transform: rotate(45deg) scale(0);
   transition: transform 0.25s var(--ease);
