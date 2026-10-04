@@ -29,8 +29,12 @@ function periodReportPdf(r, { stationName, cashTolerance = 0, combosEnabled, now
   if (t.card) report.line('Encaissé : carte', money(t.card));
   report.line('Écarts de caisse cumulés', signed(t.variance), { bold: true, color: varianceColor(t.variance) });
   report.line('Dépenses', money(t.expenses));
-  report.line(t.costKnown ? 'Marge brute estimée' : 'Marge brute estimée (prix d’achat manquant)', money(t.grossMargin));
-  report.line('Résultat net estimé (marge − dépenses)', money(t.net), { bold: true, color: t.net < 0 ? COLORS.BAD : COLORS.INK });
+  if (t.costKnown) {
+    report.line('Marge brute estimée', money(t.grossMargin));
+    report.line('Résultat net estimé (marge − dépenses)', money(t.net), { bold: true, color: t.net < 0 ? COLORS.BAD : COLORS.INK });
+  } else {
+    report.line('Marge et résultat', 'prix d’achat manquant dans les livraisons');
+  }
 
   // ---- Shifts ----
   report.section('Postes', 'Remis = espèces en dollars + francs convertis au taux du poste + mobile money + carte.');

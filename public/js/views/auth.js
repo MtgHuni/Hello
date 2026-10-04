@@ -6,6 +6,8 @@ import { brandMark } from '../icons.js';
 // Le film de la marque (rendu avec HyperFrames) : en boucle, sans son ;
 // image fixe si l'appareil demande moins d'animations ou si la vidéo ne se charge pas.
 function filmPanel() {
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches || navigator.connection?.saveData;
+  if (still) return h('div', { class: 'auth-film' });
   const video = h(
     'video',
     { class: 'auth-video', muted: true, playsinline: true, loop: true, preload: 'auto', poster: '/media/mtg-totem-poster.jpg', 'aria-hidden': 'true', tabindex: '-1' },

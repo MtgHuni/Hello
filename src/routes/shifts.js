@@ -3,7 +3,7 @@ const { EXPENSE_CATEGORIES, getSettings } = require('../db');
 
 // Money handed over, in dollars: francs congolais are converted at the rate frozen at closing.
 const declared = (s) => round((s.cash || 0) + (s.card || 0) + (s.mobile_money || 0) + (s.cdf_rate ? (s.cash_cdf || 0) / s.cdf_rate : 0));
-const { fail, num, str, oneOf, round, dateParam, transaction, money } = require('../util');
+const { fail, num, str, oneOf, round, dateParam, transaction, money, clientRef } = require('../util');
 const { requireRole } = require('../auth');
 const { customerBalance } = require('./customers');
 const { createSale } = require('../sales');
@@ -173,6 +173,9 @@ module.exports = function shiftRoutes(db) {
   // A customer settling their account at the pump: the money goes into the shift's cash.
   router.post('/shifts/:id/payments', staff, (req, res) => {
     const shift = getOwnShift(req);
+    const ref = clientRef(req.body?.clientRef);
+    const done = ref && db.prepare('SELECT * FROM payments WHERE client_ref = ?').get(ref);
+    if (done) return res.status(201).json({ id: done.id, balance: customerBalance(db, done.customer_id) });
     const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(Number(req.body?.customerId));
     if (!customer) fail(400, 'Choisissez un client.');
     const amount = round(num(req.body?.amount, 'Le montant', { min: 0.01, max: 1e8 }));
@@ -180,8 +183,8 @@ module.exports = function shiftRoutes(db) {
     const reference = str(req.body?.reference, 'La référence', { required: false, max: 100 });
     const id = transaction(db, () => {
       const r = db
-        .prepare('INSERT INTO payments (customer_id, amount, method, reference, user_id, shift_id) VALUES (?, ?, ?, ?, ?, ?)')
-        .run(customer.id, amount, method, reference, req.user.id, shift.id);
+        .prepare('INSERT INTO payments (customer_id, amount, method, reference, user_id, shift_id, client_ref) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .run(customer.id, amount, method, reference, req.user.id, shift.id, ref);
       refreshCustomer(db, customer.id); // paid-off credit sales now earn their combos
       return r.lastInsertRowid;
     });
@@ -191,16 +194,19 @@ module.exports = function shiftRoutes(db) {
   // Small expense paid from the shift's cash (deducted from the amount to hand over).
   router.post('/shifts/:id/expenses', staff, (req, res) => {
     const shift = getOwnShift(req);
+    const ref = clientRef(req.body?.clientRef);
+    const done = ref && db.prepare('SELECT * FROM expenses WHERE client_ref = ?').get(ref);
+    if (done) return res.status(201).json(done);
     const category = oneOf(req.body?.category, 'La catégorie', EXPENSE_CATEGORIES);
     const amount = round(num(req.body?.amount, 'Le montant', { min: 0.01, max: 1e7 }));
     const description = str(req.body?.description, 'La description', { max: 300 });
     const beneficiary = str(req.body?.beneficiary, 'Le bénéficiaire', { required: false, max: 120 });
     const id = db
       .prepare(
-        `INSERT INTO expenses (expense_date, category, amount, description, beneficiary, method, shift_id, user_id)
-         VALUES (date('now', 'localtime'), ?, ?, ?, ?, 'espèces', ?, ?)`,
+        `INSERT INTO expenses (expense_date, category, amount, description, beneficiary, method, shift_id, user_id, client_ref)
+         VALUES (date('now', 'localtime'), ?, ?, ?, ?, 'espèces', ?, ?, ?)`,
       )
-      .run(category, amount, description, beneficiary, shift.id, req.user.id).lastInsertRowid;
+      .run(category, amount, description, beneficiary, shift.id, req.user.id, ref).lastInsertRowid;
     res.status(201).json(db.prepare('SELECT * FROM expenses WHERE id = ?').get(id));
   });
 

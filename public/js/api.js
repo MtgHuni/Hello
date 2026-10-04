@@ -1,10 +1,25 @@
+// A request gives up after 15 s: on a weak connection the screen answers instead of freezing.
+const TIMEOUT = 15000;
+
 async function request(method, url, body) {
-  const res = await fetch(`/api${url}`, {
-    method,
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-    credentials: 'same-origin',
-  });
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), TIMEOUT);
+  let res;
+  try {
+    res = await fetch(`/api${url}`, {
+      method,
+      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+      credentials: 'same-origin',
+      signal: abort.signal,
+    });
+  } catch {
+    const err = new Error('Connexion perdue. Vérifiez le réseau, puis réessayez.');
+    err.code = 'network';
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
   if (res.status === 401 && !url.startsWith('/auth/')) {
     window.dispatchEvent(new Event('auth:lost'));
   }

@@ -1,6 +1,6 @@
 import { flags } from '../ui.js';
 import { api } from '../api.js';
-import { priceTotem, shiftLine, h, fmt, pageHeader, card, cardHeader, table, shiftBadge, varianceCell, button, formDialog, confirmDialog, toast, field, productColor, badge, kpi, parseServerDate, setContent, reportLink } from '../ui.js';
+import { priceTotem, shiftLine, h, fmt, pageHeader, card, cardHeader, table, shiftBadge, varianceCell, button, formDialog, confirmDialog, toast, field, productColor, badge, kpi, parseServerDate, setContent, reportLink, busy, newRef, toggleTheme } from '../ui.js';
 import { icon } from '../icons.js';
 import { shiftSummary } from './shifts.js';
 
@@ -128,18 +128,25 @@ function renderOpenShift(page, ctx, shift) {
     })),
   ].sort((a, b) => b.at.localeCompare(a.at));
 
-  const quick = (label, iconName, onClick, primary) =>
-    h('button', { type: 'button', class: `quick-action ${primary ? 'primary' : ''}`, onClick, 'data-lnav': primary ? label : null }, h('span', { class: 'qa-icon' }, icon(iconName)), label);
+  // One action at a time: a second tap while the form loads does nothing.
+  const quick = (label, iconName, action, primary) =>
+    h('button', { type: 'button', class: `quick-action ${primary ? 'primary' : ''}`, onClick: (e) => busy(e.currentTarget, action) }, h('span', { class: 'qa-icon' }, icon(iconName)), label);
 
   setContent(page, 
-    pageHeader('Poste en cours', `Ouvert à ${fmt.time(shift.opened_at)} · ${pumps}`, shiftBadge('open')),
+    pageHeader(
+      'Poste en cours',
+      `Ouvert à ${fmt.time(shift.opened_at)} · ${pumps}`,
+      shiftBadge('open'),
+      // Full sun at the pump: day mode in one tap.
+      h('button', { type: 'button', class: 'btn secondary sm theme-toggle', onClick: toggleTheme, 'aria-label': 'Changer de mode : jour ou nuit' }, 'Jour / nuit'),
+    ),
     shiftLine('open'),
     // Les prix figés à l'ouverture du poste, un par produit.
     priceTotem([...new Map(shift.readings.map((r) => [r.product_id, { id: r.product_id, name: r.product_name, price: r.unit_price, subscriberPrice: r.subscriber_price }])).values()]),
     h(
       'div',
       { class: 'stack' },
-      requestQueue(shift, reload),
+      // The actions stay in place: a new request never pushes them away under the thumb.
       h(
         'div',
         { class: 'quick-actions' },
@@ -147,6 +154,7 @@ function renderOpenShift(page, ctx, shift) {
         quick('Règlement', 'cash', () => addPayment(shift, reload)),
         quick('Dépense', 'wallet', () => addExpense(ctx, shift, reload)),
       ),
+      requestQueue(shift, reload),
       h(
         'div',
         { class: 'grid kpi-row' },
@@ -196,21 +204,19 @@ function renderOpenShift(page, ctx, shift) {
 // ---------- Purchases started by customers on their phone ----------
 // Polled every few seconds; the attendant confirms with one tap.
 function requestQueue(shift, reload) {
-  const host = h('div', { class: 'stack', style: 'gap:10px' });
+  const offline = h('p', { class: 'offline-strip', role: 'status', hidden: true });
+  const list = h('div', { class: 'stack', style: 'gap:10px' });
+  const host = h('div', { class: 'stack', style: 'gap:10px' }, offline, list);
   const priceOf = (productId, type) => {
     const r = shift.readings.find((x) => x.product_id === productId);
     return type === 'account' ? r?.subscriber_price ?? r?.unit_price : r?.unit_price;
   };
   let known = null;
   let seenConnected = false;
-
-  const act = async (fn) => {
-    try {
-      await fn();
-    } catch (err) {
-      toast(err.message, 'error');
-    }
-  };
+  let drawn = null; // ids on screen
+  const minutes = new Map(); // request id → its « il y a N min »
+  const ago = (r) => `il y a ${Math.max(0, Math.round((Date.now() - parseServerDate(r.created_at)) / 60000))} min`;
+  const act = (fn) => (e) => busy(e.currentTarget, fn);
 
   async function confirmRequest(r, adjust = {}) {
     try {
@@ -237,8 +243,15 @@ function requestQueue(shift, reload) {
   }
 
   function draw(rows) {
-    if (!rows.length) return host.replaceChildren();
-    setContent(host, 
+    const ids = rows.map((r) => r.id).join(',');
+    if (ids === drawn) {
+      for (const r of rows) if (minutes.has(r.id)) minutes.get(r.id).textContent = ago(r);
+      return;
+    }
+    drawn = ids;
+    minutes.clear();
+    if (!rows.length) return list.replaceChildren();
+    setContent(list, 
       h('h2', { class: 'queue-title' }, h('span', { class: 'pulse', 'aria-hidden': 'true' }), `Demandes des clients (${rows.length})`),
       ...rows.map((r) => {
         const price = priceOf(r.product_id, r.customer_type) ?? r.current_price;
@@ -248,7 +261,7 @@ function requestQueue(shift, reload) {
         return h(
           'div',
           { class: 'queue-card' },
-          h('div', { class: 'who' }, h('span', { class: 'name' }, r.customer_name), h('span', { class: 'muted small' }, `il y a ${Math.max(0, Math.round((Date.now() - parseServerDate(r.created_at)) / 60000))} min`)),
+          h('div', { class: 'who' }, h('span', { class: 'name' }, r.customer_name), minutes.set(r.id, h('span', { class: 'muted small' }, ago(r))).get(r.id)),
           h('div', { class: 'row between' }, h('span', { class: 'what' }, r.amount ? fmt.money(r.amount) : fmt.liters(r.liters)), h('span', { class: 'muted' }, `${r.product_name} · ${r.amount ? `≈ ${fmt.liters(liters)}` : `≈ ${fmt.money(amount)}`}`)),
           h(
             'div',
@@ -264,37 +277,55 @@ function requestQueue(shift, reload) {
           h(
             'div',
             { class: 'actions' },
-            button('Refuser', () => act(async () => {
+            button('Refuser', act(async () => {
               if (!(await confirmDialog('Refuser la demande ?', `${r.customer_name} · ${r.product_name}`, { confirmLabel: 'Refuser', danger: true }))) return;
               await api.post(`/requests/${r.id}/reject`, {});
               reload();
             }), { variant: 'secondary' }),
-            button('Ajuster', () => act(() => adjust(r)), { variant: 'secondary' }),
-            button('Confirmer', () => act(() => confirmRequest(r)), { iconName: 'check' }),
+            button('Ajuster', act(() => adjust(r)), { variant: 'secondary' }),
+            button('Confirmer', act(() => confirmRequest(r)), { iconName: 'check' }),
           ),
         );
       }),
     );
   }
 
+  // The next check starts once this one has answered; while the network is down the checks
+  // slow down, and after two failures a strip says since when the list is not up to date.
+  let timer = null;
+  let inFlight = false;
+  let failures = 0;
+  let lastOk = Date.now();
   async function poll() {
+    clearTimeout(timer);
     if (host.isConnected) seenConnected = true;
-    else if (seenConnected) return clearInterval(timer); // screen left
-    if (document.hidden) return;
-    try {
-      const rows = await api.get('/requests/pending');
-      const ids = rows.map((r) => r.id);
-      if (known && ids.some((id) => !known.includes(id))) {
-        navigator.vibrate?.([80, 60, 80]);
-        toast(`Nouvelle demande : ${rows.find((r) => !known.includes(r.id)).customer_name}`);
+    else if (seenConnected) return; // screen left
+    if (!document.hidden && !inFlight) {
+      inFlight = true;
+      try {
+        const rows = await api.get('/requests/pending');
+        failures = 0;
+        lastOk = Date.now();
+        offline.hidden = true;
+        const ids = rows.map((r) => r.id);
+        if (known && ids.some((id) => !known.includes(id))) {
+          navigator.vibrate?.([80, 60, 80]);
+          toast(`Nouvelle demande : ${rows.find((r) => !known.includes(r.id)).customer_name}`);
+        }
+        known = ids;
+        draw(rows);
+      } catch {
+        failures += 1;
+        if (failures >= 2) {
+          offline.hidden = false;
+          offline.textContent = `Hors connexion · demandes non mises à jour depuis ${new Date(lastOk).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
+        }
+      } finally {
+        inFlight = false;
       }
-      known = ids;
-      draw(rows);
-    } catch (err) {
-      console.warn('Demandes clients :', err); // network hiccup: next poll will retry
     }
+    timer = setTimeout(poll, failures ? Math.min(30000, 4000 * 2 ** failures) : 4000);
   }
-  const timer = setInterval(poll, 4000);
   // Check right away when the phone screen comes back on.
   const onVisible = () => {
     if (!document.hidden) poll();
@@ -305,15 +336,60 @@ function requestQueue(shift, reload) {
   return host;
 }
 
+// The customers list is kept for 30 s: opening a form a second time is instant.
+let customerCache = null;
+async function customersList() {
+  if (customerCache && Date.now() - customerCache.at < 30000) return customerCache.list;
+  const list = await api.get('/customers');
+  customerCache = { at: Date.now(), list };
+  return list;
+}
+const forgetCustomers = () => (customerCache = null);
+
+// Customer search for the attendant's forms: the three closest customers appear as chips to tap,
+// so a typo never puts a debt on someone else. A new customer comes only from its own chip.
+const norm = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+const customerLabel = (c) => [c.name, c.plate, c.phone].filter(Boolean).join(' · ');
+function customerSearch(customers, { allowNew = false, onPick } = {}) {
+  let picked = null; // a customer, or { name } for a new one
+  const chips = h('div', { class: 'chips', 'aria-live': 'polite' });
+  const exact = (text) => customers.find((c) => norm(c.name) === norm(text) || norm(customerLabel(c)) === norm(text));
+  const choose = (form, c) => {
+    picked = c;
+    form.elements.customer.value = c.id ? customerLabel(c) : c.name;
+    chips.replaceChildren();
+    onPick?.(form, picked);
+  };
+  const onInput = (e) => {
+    const form = e.target.form;
+    const text = form.elements.customer.value;
+    picked = exact(text) || null;
+    chips.replaceChildren();
+    if (norm(text) && !picked) {
+      const q = norm(text);
+      const matches = customers
+        .map((c) => ({ c, at: norm(customerLabel(c)).indexOf(q) }))
+        .filter((m) => m.at >= 0)
+        .sort((a, b) => (b.at === 0) - (a.at === 0) || a.c.name.localeCompare(b.c.name))
+        .slice(0, 3);
+      for (const { c } of matches) {
+        chips.append(
+          h('button', { type: 'button', class: 'chip', onClick: () => choose(form, c) }, c.name, h('span', { class: 'chip-sub' }, [c.plate, c.phone].filter(Boolean).join(' · ') || (c.type === 'account' ? 'abonné' : 'particulier'))),
+        );
+      }
+      if (allowNew) chips.append(h('button', { type: 'button', class: 'chip new', onClick: () => choose(form, { name: text.trim() }) }, `Nouveau client « ${text.trim()} »`));
+    }
+    onPick?.(form, picked);
+  };
+  return { onInput, chips, picked: () => picked };
+}
+
 // Credit entered by the attendant (paid sales are not entered: the indexes count them),
 // built for speed: one search field for the customer (name, plate or phone; an unknown
 // name creates the customer), one-tap product and unit, amount in dollars or litres.
 async function addCredit(ctx, shift, reload) {
-  const customers = await api.get('/customers');
-  const label = (c) => [c.name, c.plate, c.phone].filter(Boolean).join(' · ');
-  const byLabel = new Map(customers.map((c) => [label(c).toLowerCase(), c]));
-  const byName = new Map(customers.map((c) => [c.name.toLowerCase(), c]));
-  const find = (text) => byLabel.get(text.trim().toLowerCase()) || byName.get(text.trim().toLowerCase());
+  const customers = await customersList();
+  const clientRef = newRef();
   const products = [...new Map(shift.readings.map((r) => [r.product_id, r])).values()];
   // Subscribers pay the subscriber price fixed at shift opening.
   const priceOf = (productId, c) => {
@@ -325,12 +401,16 @@ async function addCredit(ctx, shift, reload) {
   const who = h('p', { class: 'hint-line' });
   const summary = h('div', { class: 'summary-line total' }, h('span', {}, 'Total'), h('span', {}, '—'));
   const update = (e) => {
-    const form = e.target.form;
+    const form = e.target?.form ?? e;
     const text = form.elements.customer.value.trim();
-    const c = text ? find(text) : null;
+    const choice = search.picked();
+    const c = choice?.id ? choice : null;
     if (!text) {
       who.textContent = '';
       who.className = 'hint-line';
+    } else if (choice && !choice.id) {
+      who.textContent = `Nouveau client « ${choice.name} » : il sera créé à l’enregistrement.`;
+      who.className = 'hint-line new';
     } else if (c) {
       const parts = [c.type === 'account' ? 'Abonné' : 'Particulier'];
       if (flags.combos) parts.push(`${c.points ?? 0} combos${c.points >= comboThreshold ? ` (= ${fmt.money(c.points * comboValue)})` : ''}`);
@@ -339,8 +419,8 @@ async function addCredit(ctx, shift, reload) {
       who.className = c.late ? 'hint-line variance-neg' : 'hint-line';
       if (c.plate && !form.elements.plate.value) form.elements.plate.value = c.plate;
     } else {
-      who.textContent = `Nouveau client « ${text} » : il sera créé à l’enregistrement.`;
-      who.className = 'hint-line new';
+      who.textContent = 'Touchez un client proposé, ou « Nouveau client » pour le créer.';
+      who.className = 'hint-line';
     }
     const price = priceOf(form.elements.productId.value, c);
     const qty = Number(form.elements.qty.value) || 0;
@@ -351,8 +431,10 @@ async function addCredit(ctx, shift, reload) {
     summary.lastChild.textContent = qty ? `${fmt.liters(liters)} · ${fmt.money(amount)}${flags.combos ? ` · ${combos}` : ''}` : '—';
   };
 
+  const search = customerSearch(customers, { allowNew: true, onPick: (form) => update(form) });
   const fields = [
-    { name: 'customer', label: 'Client (nom, plaque ou téléphone)', required: true, list: 'customer-list', placeholder: 'Tapez quelques lettres…', onInput: update, enterkeyhint: 'next' },
+    { name: 'customer', label: 'Client (nom, plaque ou téléphone)', required: true, placeholder: 'Tapez quelques lettres…', onInput: search.onInput, enterkeyhint: 'next' },
+    { name: 'customerChips', type: 'node', node: search.chips },
     { name: 'productId', label: 'Produit', type: 'segment', options: products.map((r) => [r.product_id, r.product_name]), onInput: update },
     { name: 'unit', label: 'Unité', type: 'segment', options: [['amount', '$'], ['liters', 'L']], onInput: update },
     { name: 'qty', label: 'Quantité', type: 'number', step: '0.01', min: '0.01', required: true, onInput: update, inputmode: 'decimal' },
@@ -363,14 +445,17 @@ async function addCredit(ctx, shift, reload) {
     title: 'Crédit',
     submitLabel: 'Enregistrer le crédit',
     grid: false,
+    autofocus: true,
     fields,
-    extra: () => h('div', {}, h('datalist', { id: 'customer-list' }, customers.map((c) => h('option', { value: label(c) }))), who, summary),
+    extra: () => h('div', {}, who, summary),
     onSubmit: async (d, form) => {
-      let customer = find(d.customer);
+      const choice = search.picked();
+      if (!choice) throw new Error('Touchez un client proposé, ou « Nouveau client » pour le créer.');
+      let customer = choice.id ? choice : null;
       if (!customer) {
-        customer = await api.post('/customers/quick', { name: d.customer.trim() });
+        customer = await api.post('/customers/quick', { name: choice.name });
         customers.push(customer);
-        byName.set(customer.name.toLowerCase(), customer);
+        forgetCustomers();
         form.elements.customer.value = customer.name;
       }
       const body = {
@@ -379,6 +464,7 @@ async function addCredit(ctx, shift, reload) {
         payment: 'credit',
         [d.unit === 'amount' ? 'amount' : 'liters']: d.qty,
         plate: d.plate,
+        clientRef,
       };
       try {
         return await api.post(`/shifts/${shift.id}/sales`, body);
@@ -391,35 +477,53 @@ async function addCredit(ctx, shift, reload) {
     },
   });
   if (ok) {
+    forgetCustomers(); // balances changed
     toast(ok.over_limit ? 'Crédit accordé et signalé au gérant' : `Crédit enregistré · ${fmt.liters(ok.liters)} · ${fmt.money(ok.amount)}`);
     reload();
   }
 }
 
 async function addPayment(shift, reload) {
-  const customers = (await api.get('/customers')).filter((c) => c.balance > 0 || c.type === 'account');
+  const customers = (await customersList()).filter((c) => c.balance > 0 || c.type === 'account');
   if (!customers.length) return toast('Aucun client ne doit d’argent.', 'error');
+  const clientRef = newRef();
+  const owes = h('p', { class: 'hint-line' });
+  const search = customerSearch(customers, {
+    onPick: (form, c) => {
+      owes.textContent = c ? `Doit ${fmt.money(Math.max(0, c.balance))}` : '';
+      if (c && !form.elements.amount.value && c.balance > 0) form.elements.amount.value = c.balance.toFixed(2);
+    },
+  });
   const ok = await formDialog({
     title: 'Règlement client',
     submitLabel: 'Encaisser',
     intro: 'Un client vient payer sa dette : l’argent est ajouté à votre caisse.',
     grid: false,
+    autofocus: true,
     fields: [
-      { name: 'customerId', label: 'Client', type: 'select', required: true, options: [['', 'Choisir un client…'], ...customers.map((c) => [c.id, `${c.name} — doit ${fmt.money(Math.max(0, c.balance))}`])] },
-      { name: 'amount', label: 'Montant reçu ($)', type: 'number', step: '0.01', min: '0.01', required: true },
-      { name: 'method', label: 'Mode', type: 'select', options: [['espèces', 'Espèces'], ['mobile money', 'Mobile money'], ['carte', 'Carte']] },
+      { name: 'customer', label: 'Client (nom, plaque ou téléphone)', required: true, placeholder: 'Tapez quelques lettres…', onInput: search.onInput },
+      { name: 'customerChips', type: 'node', node: h('div', {}, search.chips, owes) },
+      { name: 'amount', label: 'Montant reçu ($)', type: 'number', step: '0.01', min: '0.01', required: true, hint: 'Rempli avec le solde dû : changez-le si le client paie une partie.' },
+      { name: 'method', label: 'Mode', type: 'segment', options: [['espèces', 'Espèces'], ['mobile money', 'Mobile money'], ['carte', 'Carte']] },
       { name: 'reference', label: 'Référence', placeholder: 'Facultatif (n° de transaction…)' },
     ],
-    onSubmit: (d) => api.post(`/shifts/${shift.id}/payments`, { ...d, customerId: Number(d.customerId) }),
+    onSubmit: (d) => {
+      const c = search.picked();
+      if (!c?.id) throw new Error('Touchez le client dans la liste proposée.');
+      return api.post(`/shifts/${shift.id}/payments`, { amount: d.amount, method: d.method, reference: d.reference, customerId: c.id, clientRef });
+    },
   });
   if (ok) {
+    forgetCustomers();
     toast(`Règlement encaissé · reste dû ${fmt.money(Math.max(0, ok.balance))}`);
     reload();
   }
 }
 
 async function addExpense(ctx, shift, reload) {
+  const clientRef = newRef();
   const ok = await formDialog({
+    autofocus: true,
     title: 'Dépense payée en caisse',
     submitLabel: 'Enregistrer la dépense',
     intro: 'Elle sera déduite du montant à remettre à la clôture.',
@@ -430,7 +534,7 @@ async function addExpense(ctx, shift, reload) {
       { name: 'description', label: 'Description', required: true, placeholder: 'Ex. : eau, ampoule, transport…' },
       { name: 'beneficiary', label: 'Payé à', placeholder: 'Facultatif' },
     ],
-    onSubmit: (d) => api.post(`/shifts/${shift.id}/expenses`, d),
+    onSubmit: (d) => api.post(`/shifts/${shift.id}/expenses`, { ...d, clientRef }),
   });
   if (ok) {
     toast('Dépense enregistrée');
@@ -458,7 +562,9 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
     variance: h('span', { class: 'num' }),
     cdf: h('span', { class: 'num' }),
   };
-  const cdfLine = h('div', { class: 'summary-line', hidden: true }, h('span', {}, `dont francs congolais (${fmt.number(rate)} FC = 1 $)`), lines.cdf);
+  const cdfCount = h('span', { class: 'muted small' });
+  const cdfLine = h('div', { class: 'summary-line', hidden: true }, h('span', {}, `Dont francs congolais (${fmt.number(rate)} FC = 1 $)`, h('br'), cdfCount), lines.cdf);
+  const cdfLive = h('span', { class: 'small muted' });
   const perNozzle = new Map();
 
   const form = h('form', { class: 'stack' });
@@ -486,7 +592,9 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
     const cdf = value('cashCdf');
     const declared = value('cash') + value('card') + value('mobileMoney') + cdf / rate;
     cdfLine.hidden = !cdf;
-    lines.cdf.textContent = `${fmt.number(cdf)} FC ≈ ${fmt.money(cdf / rate)}`;
+    lines.cdf.textContent = fmt.money(cdf / rate);
+    cdfCount.textContent = `${fmt.number(cdf)} FC`;
+    cdfLive.textContent = cdf ? `${fmt.number(cdf)} FC ≈ ${fmt.money(cdf / rate)}` : '';
     lines.total.textContent = complete ? fmt.money(total) : '—';
     lines.expected.textContent = complete ? fmt.money(expected) : '—';
     lines.declared.textContent = fmt.money(declared);
@@ -517,9 +625,9 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
         'div',
         { class: 'form-grid' },
         field({ name: 'cash', label: 'Espèces en dollars ($)', type: 'number', step: '0.01', min: '0', required: true, value: first(shift.cash, undefined), onInput: recompute }),
-        field({ name: 'cashCdf', label: 'Espèces en francs (FC)', type: 'number', step: '1', min: '0', value: first(shift.cash_cdf, 0), onInput: recompute }),
-        field({ name: 'mobileMoney', label: 'Mobile money ($)', type: 'number', step: '0.01', min: '0', value: first(shift.mobile_money, 0), onInput: recompute }),
-        field({ name: 'card', label: 'Carte ($)', type: 'number', step: '0.01', min: '0', value: first(shift.card, 0), onInput: recompute }),
+        h('div', {}, field({ name: 'cashCdf', label: 'Espèces en francs (FC)', type: 'number', step: '1', min: '0', value: first(shift.cash_cdf || undefined, undefined), placeholder: 'Vide = 0', onInput: recompute }), cdfLive),
+        field({ name: 'mobileMoney', label: 'Mobile money ($)', type: 'number', step: '0.01', min: '0', value: first(shift.mobile_money || undefined, undefined), placeholder: 'Vide = 0', onInput: recompute }),
+        field({ name: 'card', label: 'Carte ($)', type: 'number', step: '0.01', min: '0', value: first(shift.card || undefined, undefined), placeholder: 'Vide = 0', onInput: recompute }),
         field({ name: 'notes', label: 'Remarque (facultatif)', type: 'textarea', full: true, value: first(shift.notes, undefined) }),
         correcting ? field({ name: 'reason', label: 'Motif de la correction', required: true, full: true, placeholder: 'Ex. : index mal lu, billets oubliés' }) : null,
       ),
@@ -544,6 +652,28 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
     ),
   );
 
+  // Draft kept on the phone: leaving the screen or a reload does not lose the figures typed.
+  const draftKey = `closing-draft-${shift.id}`;
+  form.addEventListener('input', () => {
+    if (correcting) return;
+    try {
+      const values = {};
+      for (const el of form.elements) if (el.name && el.name !== 'reason') values[el.name] = el.value;
+      localStorage.setItem(draftKey, JSON.stringify(values));
+    } catch {
+      /* no storage: nothing kept */
+    }
+  });
+  const restoreDraft = () => {
+    if (correcting) return;
+    try {
+      const values = JSON.parse(localStorage.getItem(draftKey) || 'null');
+      if (values) for (const [name, value] of Object.entries(values)) if (form.elements[name] && value !== '') form.elements[name].value = value;
+    } catch {
+      /* unreadable draft: start empty */
+    }
+  };
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const ask = correcting
@@ -562,6 +692,11 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
         notes: form.elements.notes.value,
         reason: form.elements.reason?.value,
       });
+      try {
+        localStorage.removeItem(draftKey);
+      } catch {
+        /* nothing to remove */
+      }
       if (onDone) onDone(closed);
       else renderClosed(page, ctx, closed);
     } catch (err) {
@@ -572,6 +707,7 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
 
   const title = correcting ? `Corriger la clôture du poste n°${shift.id}` : mode === 'manager' ? `Clôturer le poste de ${shift.attendant_name}` : 'Clôturer mon poste';
   setContent(page, pageHeader(title, `Poste n°${shift.id} ouvert le ${fmt.dateTime(shift.opened_at)}`), form);
+  restoreDraft();
   recompute();
 }
 

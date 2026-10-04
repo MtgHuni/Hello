@@ -6,17 +6,17 @@ Trois espaces, selon le rôle :
 
 | Rôle | Ce qu'il fait |
 |------|---------------|
-| **Gérant** | Tableau de bord et alertes, validation des postes, cuves (livraisons, jaugeages), clients (crédit, règlements, relevés, fiches à compléter), dépenses, rapports (marge, résultat) et export Excel, réglages (prix, pompes, pistolets, équipe) |
-| **Pompiste** | Sur téléphone : ouvre son poste, saisit les ventes clients (et crée un client avec son seul nom), accorde un crédit, encaisse un règlement, note une dépense payée en caisse, clôture avec les index de fin et le comptage. L'écart s'affiche immédiatement |
-| **Client** | Crée son compte avec son téléphone, prépare son plein depuis son téléphone pendant qu'il attend (le pompiste confirme d'un geste), suit ses points, son solde et ses relevés |
+| **Gérant** | Tableau de bord et alertes, validation des postes (clôture à la place d'un pompiste, correction d'une clôture), cuves (livraisons, jaugeages, jours de stock), clients (crédit, règlements, créances par ancienneté avec relance WhatsApp, relevés PDF), dépenses, rapports (marge, écarts par pompiste) en PDF et Excel, réglages (prix, prix programmés, pompes, équipe, taux du franc congolais), sauvegarde et journal |
+| **Pompiste** | Sur téléphone : ouvre son poste, saisit les **crédits** (et crée un client avec son seul nom), encaisse un règlement, note une dépense payée en caisse, clôture avec les index de fin et le comptage ($, francs congolais, mobile money, carte). L'écart s'affiche immédiatement ; le rapport PDF du poste se télécharge ou se partage |
+| **Client** | Crée son compte avec son téléphone, prépare un achat à crédit pendant qu'il attend (le pompiste confirme d'un geste), suit son solde et télécharge son relevé du mois |
 
 ## Principes de gestion
 
-- **Rapprochement de poste** : litres = index fin − index début (par pistolet). Montant à remettre = litres × prix public + supplément des abonnés − ventes à crédit − carburant échangé contre des combos + règlements encaissés − dépenses payées en caisse. Écart = espèces + cartes déclarées − montant à remettre.
+- **Rapprochement de poste** : litres = index fin − index début (par pistolet). Montant à remettre = litres × prix public + supplément des abonnés − ventes à crédit − carburant échangé contre des combos + règlements encaissés − dépenses payées en caisse. Écart = espèces en dollars + espèces en francs congolais (au taux réglé, figé avec le poste) + mobile money + carte − montant à remettre.
 - **Catégories de clients** (réglées dans Réglages → Clients et combos) :
   - **Particulier** : plafond de crédit fixe, le même pour tous ;
   - **Abonné** : prix au litre plus élevé (colonne « Prix abonnés » de chaque produit), plafond plus haut, et le total du mois doit être payé avant le jour fixé du mois suivant ; passé ce jour, un abonné qui doit encore le mois précédent ne peut plus prendre à crédit (sauf crédit accordé par le pompiste, signalé au gérant).
-- **Combos** (points de fidélité) : X combos par litre acheté. Une vente payée les rapporte aussitôt ; une vente à crédit seulement quand elle est entièrement payée (les règlements soldent les crédits du plus ancien au plus récent). À partir du seuil, le client échange ses combos contre du carburant (valeur d'un combo en $), à la pompe ou depuis son téléphone.
+- **Combos** (points de fidélité, désactivables dans Réglages) : X combos par litre acheté à crédit, gagnés seulement quand le crédit est entièrement payé (les règlements soldent les crédits du plus ancien au plus récent). À partir du seuil, le client échange ses combos contre du carburant (valeur d'un combo en $), à la pompe ou depuis son téléphone.
 - **Nouveau client à la pompe** : le pompiste saisit seulement le nom ; le client est créé comme particulier et apparaît « À compléter » chez le gérant jusqu'à ce que sa fiche soit remplie.
 - **Crédit accordé par le pompiste** : au-delà du plafond, le pompiste peut accorder le crédit après confirmation ; la vente est marquée « hors plafond » avec son nom et signalée au gérant.
 - **Annulation d'une opération** (vente, règlement, dépense) : le pompiste la demande, avec une raison ; l'opération reste comptée jusqu'à la décision du gérant, qui l'annule ou la garde depuis la fiche du poste (alerte sur le tableau de bord). Un poste ne peut pas être validé tant qu'une annulation est en attente ; une annulation acceptée après la clôture refait le rapprochement.
@@ -25,9 +25,12 @@ Trois espaces, selon le rôle :
 - Les **index de début** sont repris automatiquement de la clôture précédente : le pompiste ne peut pas les modifier.
 - Le **prix** est figé à l'ouverture du poste : un changement de prix s'applique au poste suivant.
 - **Stock théorique** d'une cuve = dernier jaugeage + livraisons − litres vendus. Chaque jaugeage enregistre l'écart, puis devient la nouvelle référence.
-- **Ventes clients** : chaque vente à un client identifié est enregistrée : **payée**, **à crédit** ou **en combos**. Seules les ventes à crédit s'ajoutent au solde du client ; elles sont bloquées au-delà du plafond, sauf crédit accordé par le pompiste.
-- **Demande d'achat du client** : depuis son téléphone, le client choisit le carburant, le montant ($ ou litres) et le paiement. La demande apparaît en haut de l'écran du pompiste (actualisé toutes les 4 secondes, avec vibration) ; elle ne devient une vente, visible du gérant, qu'une fois confirmée. Les demandes non traitées expirent après 30 minutes.
-- **Saisie rapide par le pompiste** : un seul champ client (nom, plaque ou téléphone ; un nom inconnu crée le client), produit, paiement et unité en un geste, montant en dollars converti en litres au prix du poste.
+- **Ventes** : les ventes payées ne sont **pas saisies** : les index les comptent à la clôture. Le pompiste ne saisit que les **crédits** (et les échanges de combos s'ils sont actifs) ; ils s'ajoutent au solde du client et sont bloqués au-delà du plafond, sauf crédit accordé par le pompiste.
+- **Demande d'achat du client** : depuis son téléphone, le client choisit le carburant et le montant ($ ou litres), **à crédit** (un achat comptant se paie directement à la pompe). La demande apparaît en haut de l'écran du pompiste (actualisé toutes les 4 secondes, avec vibration) ; elle ne devient une vente, visible du gérant, qu'une fois confirmée. Les demandes non traitées expirent après 30 minutes.
+- **Saisie rapide par le pompiste** : un seul champ client (nom, plaque ou téléphone) avec les trois clients les plus proches à toucher ; un nouveau client se crée par sa propre pastille. Produit et unité en un geste, montant en dollars converti en litres au prix du poste. Un formulaire renvoyé après une coupure réseau n'enregistre jamais deux fois.
+- **Clôture corrigée par le gérant** : avant validation, il peut corriger les index et le comptage ; les compteurs et le stock des cuves sont recalculés, le motif est gardé au journal.
+- **Prix programmé** : un nouveau prix peut prendre effet à une date ; il s'applique au premier poste ouvert ensuite.
+- **Journal** (Réglages) : annulations acceptées ou refusées (l'opération supprimée y reste lisible), prix, réglages, index corrigés, équipe, clôtures corrigées, sauvegardes.
 - Les **tolérances** (écart de caisse en $, écart de jaugeage en litres) déclenchent les alertes du tableau de bord.
 
 ## Démarrer en local
@@ -50,13 +53,13 @@ Variables d'environnement :
 |----------|------|--------|
 | `PORT` | Port HTTP | `3000` |
 | `DB_FILE` | Fichier de la base SQLite | `data/station.db` |
-| `TZ` | Fuseau horaire de la station (journées des rapports) | celui du serveur |
+| `TZ` | Fuseau horaire de la station (journées des rapports) | `Africa/Lubumbashi` |
 
 ## Mise en ligne
 
 Le fichier `render.yaml` permet de déployer sur [Render](https://render.com) : *New → Blueprint*, choisir ce dépôt. Il prévoit un disque persistant pour la base de données (offre payante « Starter »). Sans disque persistant, les données seraient perdues à chaque redémarrage.
 
-Sauvegarde : il suffit de copier le fichier `station.db`.
+Sauvegarde : Réglages → Données → **Télécharger une sauvegarde** (copie complète et cohérente de la base, à garder ailleurs). Ne copiez pas `station.db` seul : en mode WAL, les dernières écritures sont dans `station.db-wal`. Avant chaque mise à jour de la structure de la base, une copie `station.db.avant-migration-…` est gardée à côté.
 
 ## Structure
 
@@ -65,7 +68,9 @@ server.js              démarrage
 src/app.js             application Express
 src/db.js              schéma SQLite et réglages
 src/auth.js            mots de passe, sessions, rôles
-src/routes/            API : auth, config (prix, cuves, pompes), stock, shifts, customers, users, reports
+src/routes/            API : auth, config (prix, cuves, pompes), stock, shifts, customers, requests, expenses, users, reports, admin (sauvegarde, journal)
+src/pdf.js, src/pdfReport.js   PDF sans dépendance et mise en page des rapports
+src/shiftReport.js, src/periodReport.js, src/statementReport.js   rapports PDF (poste, période, relevé client)
 public/                interface (HTML, CSS, JavaScript sans framework)
 public/js/views/       un fichier par écran
 test/                  tests de l'API
@@ -76,4 +81,4 @@ test/                  tests de l'API
 Pour ne pas tout ressaisir à chaque essai :
 
 - `npm run seed` remplit les cuves à 90 % (avec une livraison « Données de test » dans l'historique) et applique des prix de test (gasoil 1,35 ; essence 1,55). Le compte gérant doit déjà exister.
-- Variable `DEMO_SEED=1` (par exemple dans Render, *Environment*) : à chaque démarrage, les cuves sous 50 % sont complétées et les prix ne sont posés que s'ils n'ont jamais été modifiés. À retirer en production.
+- Variable `DEMO_SEED=1` (par exemple dans Render, *Environment*) : à chaque démarrage, les cuves sous 50 % sont complétées et les prix ne sont posés que s'ils n'ont jamais été modifiés. Rien n'est ajouté dès qu'un poste existe. À retirer en production.

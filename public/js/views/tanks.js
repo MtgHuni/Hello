@@ -74,7 +74,7 @@ export async function renderTanks(page, ctx) {
                 align: 'right',
                 render: (d) => {
                   const diff = d.liters_received - d.liters_ordered;
-                  return diff < 0 ? h('span', { class: 'variance-neg' }, `▼ ${fmt.liters(diff)}`) : '—';
+                  return diff < 0 ? h('span', { class: 'variance-neg' }, fmt.liters(diff)) : '—';
                 },
               },
               { label: 'Coût', align: 'right', render: (d) => (d.unit_cost ? fmt.money(d.unit_cost * d.liters_received) : '—') },
@@ -93,7 +93,7 @@ export async function renderTanks(page, ctx) {
                 align: 'right',
                 render: (d) => {
                   const bad = Math.abs(d.variance) > tol;
-                  return h('span', { class: bad ? 'variance-neg' : '' }, bad ? '⚠ ' : '', `${d.variance > 0 ? '+' : ''}${fmt.liters(d.variance)}`);
+                  return h('span', { class: bad ? 'variance-neg' : '', title: bad ? 'Hors tolérance' : null }, `${d.variance > 0 ? '+' : ''}${fmt.liters(d.variance)}`);
                 },
               },
               { label: 'Par', render: (d) => d.user_name || '—' },

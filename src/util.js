@@ -73,7 +73,10 @@ function csvCell(value) {
   return `"${s.replace(/"/g, '""')}"`;
 }
 
+// Key of a form sent by the attendant's phone (see the client_ref columns).
+const clientRef = (value) => (typeof value === 'string' && /^[\w-]{8,64}$/.test(value) ? value : null);
+
 // Amount in dollars for messages and the journal: 1 234,50 $.
 const money = (n) => `${(Number(n) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $`;
 
-module.exports = { HttpError, fail, round, num, str, oneOf, bool, dateParam, transaction, csvCell, money };
+module.exports = { HttpError, fail, round, num, str, oneOf, bool, dateParam, transaction, csvCell, money, clientRef };

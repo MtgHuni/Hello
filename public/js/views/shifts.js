@@ -207,12 +207,12 @@ export function shiftSummary(shift, tolerance) {
             render: (s) =>
               h(
                 'span',
-                { class: 'row', style: 'gap:6px;flex-wrap:nowrap' },
+                { class: 'row', style: 'gap:6px' },
                 s.kind === 'credit' ? (s.over_limit ? badge('Crédit hors plafond', 'serious') : badge('Crédit', 'info')) : s.kind === 'combo' ? badge('Combos', 'warning') : badge('Payé', 'good'),
                 s.source === 'customer' ? badge('Demande client') : null,
               ),
           },
-          ...(flags.combos ? [{ label: 'Combos', align: 'right', render: (s) => (s.points ? `+${s.points}` : s.combos_used ? `−${s.combos_used}` : s.points_due ? `+${s.points_due} au paiement` : '—') }] : []),
+          ...(flags.combos ? [{ label: 'Combos', align: 'right', render: (s) => (s.points ? `+${s.points}` : s.combos_used ? `−${s.combos_used}` : s.points_due ? `+${s.points_due} dû` : '—') }] : []),
           { label: 'Véhicule', render: (s) => s.plate || '—' },
           { label: 'Produit', key: 'product_name' },
           { label: 'Litres', align: 'right', render: (s) => fmt.liters(s.liters) },

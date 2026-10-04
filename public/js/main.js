@@ -1,6 +1,6 @@
 import { flags } from './ui.js';
 import { api } from './api.js';
-import { h, errorState, toast, formDialog, actionSheet, spinner, initials } from './ui.js';
+import { h, errorState, toast, formDialog, actionSheet, spinner, initials, applyTheme, toggleTheme } from './ui.js';
 import { icon, brandMark } from './icons.js';
 import { enhance } from './motion.js';
 import { renderLogin, renderSetup } from './views/auth.js';
@@ -92,25 +92,10 @@ async function changePassword() {
 }
 
 // Mode nuit (par défaut) ou mode jour pour la pompe en plein soleil ; mémorisé sur l'appareil.
-function applyTheme(theme) {
-  if (theme === 'light') document.documentElement.dataset.theme = 'light';
-  else delete document.documentElement.dataset.theme;
-  const color = theme === 'light' ? '#ffffff' : '#0a0a0b';
-  document.querySelector('meta[name=theme-color]')?.setAttribute('content', color);
-}
 try {
   applyTheme(localStorage.getItem('theme'));
 } catch {
   /* stockage indisponible : mode nuit */
-}
-function toggleTheme() {
-  const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
-  applyTheme(next);
-  try {
-    localStorage.setItem('theme', next);
-  } catch {
-    /* ignoré */
-  }
 }
 
 function accountMenu() {
@@ -245,7 +230,7 @@ async function route() {
   try {
     await view(page, { id, state, navigate, refresh: route });
   } catch (err) {
-    page.replaceChildren(errorState(err));
+    page.replaceChildren(errorState(err, () => route()));
   }
   clearTimeout(slow);
   if (token !== routeToken) return; // a newer navigation won

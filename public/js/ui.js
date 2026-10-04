@@ -140,7 +140,6 @@ export function varianceCell(value, tolerance) {
   return h(
     'span',
     { class: ok ? '' : value < 0 ? 'variance-neg' : 'variance-pos', title: ok ? 'Dans la tolérance' : 'Hors tolérance' },
-    ok ? '' : value < 0 ? '▼ ' : '▲ ',
     fmt.signedMoney(value),
   );
 }
@@ -247,7 +246,12 @@ export function table(columns, rows, { onRowClick, empty = 'Aucune donnée.', fo
         rows.map((row) =>
           h(
             'tr',
-            { class: onRowClick ? 'clickable' : '', onClick: onRowClick ? () => onRowClick(row) : null },
+            {
+              class: onRowClick ? 'clickable' : '',
+              tabindex: onRowClick ? '0' : null,
+              onClick: onRowClick ? () => onRowClick(row) : null,
+              onKeydown: onRowClick ? (e) => e.key === 'Enter' && onRowClick(row) : null,
+            },
             columns.map((c) => h('td', { class: [c.align === 'right' ? 'right' : '', c.wrap ? 'wrap' : ''].join(' ') }, c.render ? c.render(row) : row[c.key])),
           ),
         ),
@@ -402,6 +406,7 @@ function enableSwipeToDismiss(sheet, handle, close) {
 }
 
 export function field(f) {
+  if (f.type === 'node') return f.node;
   const id = `f-${f.name}-${Math.random().toString(36).slice(2, 7)}`;
   let input;
   if (f.type === 'checkbox') {
@@ -477,9 +482,10 @@ export function readForm(form, fields) {
 
 // Form in a sheet (right drawer on wide screens, bottom sheet on phones): title and ✕ on top, the action as a full-width slab at the bottom.
 // onSubmit may throw: the message is shown inline.
-export function formDialog({ title, intro, fields, submitLabel = 'Enregistrer', onSubmit, extra, grid = true }) {
+export function formDialog({ title, intro, fields, submitLabel = 'Enregistrer', onSubmit, extra, grid = true, autofocus = false }) {
   return new Promise((resolve) => {
     let settled = false;
+    let saving = false;
     const finish = (value) => {
       if (!settled) {
         settled = true;
@@ -488,6 +494,7 @@ export function formDialog({ title, intro, fields, submitLabel = 'Enregistrer', 
     };
     const { dialog } = openDialog((close) => {
       const dismiss = () => {
+        if (saving) return;
         close();
         finish(null);
       };
@@ -516,23 +523,33 @@ export function formDialog({ title, intro, fields, submitLabel = 'Enregistrer', 
       );
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
+        if (saving) return;
+        saving = true;
         submit.disabled = true;
+        submit.setAttribute('aria-busy', 'true');
         error.hidden = true;
         try {
           const result = await onSubmit(readForm(form, fields), form);
+          saving = false;
           close();
           finish(result ?? true);
         } catch (err) {
+          saving = false;
           error.textContent = err.message;
           error.hidden = false;
           submit.disabled = false;
+          submit.removeAttribute('aria-busy');
         }
       });
       enableSwipeToDismiss(form, handle, dismiss);
       setTimeout(() => {
-        if (matchMedia('(hover: hover)').matches) form.querySelector('.sheet-body input:not([readonly]),.sheet-body select,.sheet-body textarea')?.focus();
+        // On phones only when asked (the keyboard opens): the attendant's forms start with typing.
+        if (autofocus || matchMedia('(hover: hover)').matches) form.querySelector('.sheet-body input:not([readonly]):not([type=radio]),.sheet-body select,.sheet-body textarea')?.focus();
       }, 60);
       return form;
+    });
+    dialog.addEventListener('cancel', (e) => {
+      if (saving) e.preventDefault();
     });
     dialog.addEventListener('close', () => finish(null));
   });
@@ -592,6 +609,47 @@ export function actionSheet({ title, actions }) {
   );
 }
 
-export function errorState(err) {
-  return h('div', { class: 'card empty' }, h('p', {}, 'Impossible de charger cette page.'), h('p', { class: 'small' }, err.message));
+export function errorState(err, retry) {
+  return h(
+    'div',
+    { class: 'card empty' },
+    h('p', {}, 'Impossible de charger cette page.'),
+    h('p', { class: 'small' }, err.message),
+    retry ? h('div', { style: 'margin-top:16px' }, button('Réessayer', retry, { variant: 'secondary' })) : null,
+  );
+}
+
+// Runs a button's action once at a time: the button waits, disabled, and an error becomes a toast.
+export async function busy(btn, fn) {
+  if (!btn || btn.disabled) return;
+  btn.disabled = true;
+  btn.setAttribute('aria-busy', 'true');
+  try {
+    await fn();
+  } catch (err) {
+    toast(err.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.removeAttribute('aria-busy');
+  }
+}
+
+// Key of one form: sent with the record, it makes a second sending harmless.
+export const newRef = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`);
+
+// Night (default) or day mode for the pump in full sun; remembered on the device.
+export function applyTheme(theme) {
+  if (theme === 'light') document.documentElement.dataset.theme = 'light';
+  else delete document.documentElement.dataset.theme;
+  document.querySelector('meta[name=theme-color]')?.setAttribute('content', theme === 'light' ? '#ffffff' : '#0a0a0b');
+}
+
+export function toggleTheme() {
+  const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+  applyTheme(next);
+  try {
+    localStorage.setItem('theme', next);
+  } catch {
+    /* storage unavailable: the choice lasts until the page closes */
+  }
 }

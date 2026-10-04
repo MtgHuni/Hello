@@ -300,6 +300,13 @@ test('pompiste : client rapide (particulier), crédit accordé, règlement et d�
   const granted = await pompiste('POST', `/api/shifts/${shift.id}/sales`, { ...sale, grantCredit: true });
   assert.strictEqual(granted.data.over_limit, 1);
 
+  // The answer was lost and the form sent again: same key, same credit, no duplicate.
+  const resend = { customerId: ctx.fleet.id, nozzleId: nozzle.nozzle_id, liters: 1, clientRef: 'pompe-0001-abcd' };
+  const first = await pompiste('POST', `/api/shifts/${shift.id}/sales`, resend);
+  const again = await pompiste('POST', `/api/shifts/${shift.id}/sales`, resend);
+  assert.strictEqual(again.data.id, first.data.id);
+  assert.strictEqual(db.prepare("SELECT COUNT(*) AS n FROM sales WHERE client_ref = 'pompe-0001-abcd'").get().n, 1);
+
   const exp = await pompiste('POST', `/api/shifts/${shift.id}/expenses`, { category: 'Fournitures', amount: 15, description: 'Eau et savon' });
   assert.strictEqual(exp.status, 201);
 

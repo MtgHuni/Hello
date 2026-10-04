@@ -258,10 +258,14 @@ const MIGRATIONS = [
   ['products', 'next_subscriber_price', 'REAL'],
   ['products', 'next_price_at', 'TEXT'],
   ['products', 'next_price_by', 'INTEGER REFERENCES users(id)'],
+  // Key sent by the attendant's form: sending it again returns the first record (no duplicate).
+  ['sales', 'client_ref', 'TEXT'],
+  ['payments', 'client_ref', 'TEXT'],
+  ['expenses', 'client_ref', 'TEXT'],
 ];
 
 // Bumped with every schema change; recorded in PRAGMA user_version.
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 function missingColumns(db) {
   return MIGRATIONS.filter(([table, column]) => {
@@ -410,7 +414,11 @@ function openDb(file) {
   migrateRequests(db);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_payments_shift ON payments(shift_id);
     CREATE INDEX IF NOT EXISTS idx_expenses_shift ON expenses(shift_id);
-    CREATE INDEX IF NOT EXISTS idx_requests_status ON purchase_requests(status);`);
+    CREATE INDEX IF NOT EXISTS idx_requests_status ON purchase_requests(status);
+    CREATE INDEX IF NOT EXISTS idx_requests_customer ON purchase_requests(customer_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_sales_ref ON sales(client_ref) WHERE client_ref IS NOT NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_ref ON payments(client_ref) WHERE client_ref IS NOT NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_expenses_ref ON expenses(client_ref) WHERE client_ref IS NOT NULL;`);
   const insert = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
   for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) insert.run(key, value);
   syncCreditLimits(db);

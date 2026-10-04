@@ -1,5 +1,5 @@
 const { getSettings } = require('./db');
-const { fail, num, str, oneOf, round, transaction } = require('./util');
+const { fail, num, str, oneOf, round, transaction, clientRef } = require('./util');
 const { customerBalance } = require('./routes/customers');
 const { refreshCustomer, subscriberDues } = require('./loyalty');
 
@@ -14,6 +14,12 @@ const money = (n) => `${n.toLocaleString('fr-FR', { minimumFractionDigits: 2, ma
 //   combos:  earned at once on a paid sale, once fully paid on a credit sale
 //   credit:  beyond the limit, or for a subscriber late on last month, needs grantCredit.
 function createSale(db, shift, input) {
+  // The same form sent twice (answer lost on a weak network): the first sale is returned.
+  const ref = clientRef(input.clientRef);
+  if (ref) {
+    const done = db.prepare('SELECT * FROM sales WHERE client_ref = ?').get(ref);
+    if (done) return done;
+  }
   const settings = getSettings(db);
   const customer = db.prepare('SELECT * FROM customers WHERE id = ? AND active = 1').get(Number(input.customerId));
   if (!customer) fail(400, 'Client inconnu ou désactivé.');
@@ -72,10 +78,10 @@ function createSale(db, shift, input) {
     }
     const r = db
       .prepare(
-        `INSERT INTO sales (shift_id, customer_id, nozzle_id, product_id, kind, liters, unit_price, amount, points, points_due, combos_used, plate, over_limit, source)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO sales (shift_id, customer_id, nozzle_id, product_id, kind, liters, unit_price, amount, points, points_due, combos_used, plate, over_limit, source, client_ref)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(shift.id, customer.id, reading.nozzle_id, reading.product_id, payment, liters, unitPrice, amount, payment === 'paid' ? pointsDue : 0, pointsDue, combosUsed, plate, overLimit, input.source || 'attendant');
+      .run(shift.id, customer.id, reading.nozzle_id, reading.product_id, payment, liters, unitPrice, amount, payment === 'paid' ? pointsDue : 0, pointsDue, combosUsed, plate, overLimit, input.source || 'attendant', ref);
     refreshCustomer(db, customer.id);
     if (input.afterInsert) input.afterInsert(Number(r.lastInsertRowid));
     return r.lastInsertRowid;

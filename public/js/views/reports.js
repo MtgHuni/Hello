@@ -86,13 +86,14 @@ export async function renderReports(page, ctx) {
     h(
       'div',
       { class: 'grid grid-3 section' },
-      kpi('Marge brute estimée', fmt.money(t.grossMargin), t.costKnown ? 'Ventes − coût d’achat du carburant' : 'Prix d’achat manquant pour un produit : saisissez-le dans les livraisons'),
+      kpi('Marge brute estimée', t.costKnown ? fmt.money(t.grossMargin) : '—', t.costKnown ? 'Ventes − coût d’achat du carburant' : 'Prix d’achat manquant pour un produit : saisissez-le dans les livraisons'),
       kpi('Dépenses', fmt.money(t.expenses), r.expensesByCategory[0] ? `Surtout : ${r.expensesByCategory[0].category}` : 'Aucune dépense'),
-      kpi('Résultat net estimé', h('span', { class: t.net < 0 ? 'variance-neg' : '' }, fmt.money(t.net)), 'Marge brute − dépenses'),
+      kpi('Résultat net estimé', t.costKnown ? h('span', { class: t.net < 0 ? 'variance-neg' : '' }, fmt.money(t.net)) : '—', t.costKnown ? 'Marge brute − dépenses' : 'Calculé dès que les prix d’achat sont connus'),
     ),
+    // Full width: these tables have six columns.
     h(
       'div',
-      { class: 'grid grid-2 section' },
+      { class: 'stack section' },
       h(
         'section',
         { class: 'card flush' },

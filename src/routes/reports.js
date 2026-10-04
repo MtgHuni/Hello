@@ -2,7 +2,7 @@ const express = require('express');
 const { getSettings } = require('../db');
 const { round, dateParam, fail, csvCell } = require('../util');
 const { requireRole } = require('../auth');
-const { subscriberDues } = require('../loyalty');
+const { subscriberDues, creditAllocation } = require('../loyalty');
 const { periodReportPdf } = require('../periodReport');
 
 const manager = requireRole('manager');
@@ -187,6 +187,14 @@ module.exports = function reportRoutes(db) {
       openShifts,
       toValidate: toValidate.length,
       receivables: round(customers.reduce((t, c) => t + Math.max(0, c.balance), 0)),
+      // Unpaid credit older than 30 days (payments settle the oldest credit first).
+      receivablesOld: round(
+        customers
+          .filter((c) => c.balance > 0)
+          .flatMap((c) => creditAllocation(db, c.id))
+          .filter((s) => s.unpaid > 0 && s.day < db.prepare("SELECT date('now', 'localtime', '-30 days') AS d").get().d)
+          .reduce((t, s) => t + s.unpaid, 0),
+      ),
       todayExpenses,
       toReview,
       combos: { total: combos.total, value: round(combos.total * settings.comboValue), redeemable: combos.redeemable },

@@ -137,9 +137,30 @@ async function renderReceivables(page, ctx) {
       kpi('7 derniers jours', fmt.money(totals.recent)),
       kpi('Total dû', fmt.money(totals.balance), `${rows.length} client${rows.length > 1 ? 's' : ''}`),
     ),
+    // Phones: one stacked row per customer, the Relancer button full width.
     h(
       'section',
-      { class: 'card flush section' },
+      { class: 'card flush section recv-list' },
+      rows.length
+        ? rows.map((r) =>
+            h(
+              'div',
+              { class: 'recv-item' },
+              h(
+                'a',
+                { class: 'recv-head', href: `#/clients/${r.id}` },
+                h('span', {}, h('strong', {}, r.name), h('span', { class: 'muted small' }, `${TYPE_LABEL[r.type]}${r.oldest_days ? ` · plus ancien : ${r.oldest_days} j` : ''}`)),
+                h('span', { class: 'recv-total' }, fmt.money(r.balance)),
+              ),
+              h('div', { class: 'muted small' }, [r.old ? `${fmt.money(r.old)} à + 30 j` : null, r.month ? `${fmt.money(r.month)} à 8–30 j` : null, r.recent ? `${fmt.money(r.recent)} sur 7 j` : null].filter(Boolean).join(' · ')),
+              remind(r),
+            ),
+          )
+        : h('div', { class: 'empty' }, 'Aucun client ne doit d’argent.'),
+    ),
+    h(
+      'section',
+      { class: 'card flush section recv-table' },
       table(
         [
           { label: 'Client', render: (r) => h('span', {}, h('strong', {}, r.name), h('div', { class: 'muted small' }, `${TYPE_LABEL[r.type]}${r.oldest_days ? ` · plus ancien : ${r.oldest_days} j` : ''}`)) },

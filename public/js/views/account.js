@@ -14,6 +14,7 @@ export async function renderAccount(page) {
   let acc = null;
   let timer = null;
   let seenConnected = false;
+  let wasPending = false; // to tell the customer when a request expires
 
   const loadStatement = async () => {
     acc = await api.get(`/me/account?from=${period.from}&to=${period.to}`);
@@ -31,6 +32,8 @@ export async function renderAccount(page) {
     else if (seenConnected) return clearInterval(timer);
     const r = await api.get('/me/requests/current').catch(() => undefined);
     if (r === undefined) return;
+    if (!r && wasPending) toast('Votre demande a expiré : personne ne l’a traitée en 30 minutes. Vous pouvez la refaire.', 'error');
+    wasPending = r?.status === 'pending';
     drawRequest(r);
     clearInterval(timer);
     timer = r?.status === 'pending' ? setInterval(refreshRequest, 4000) : null;

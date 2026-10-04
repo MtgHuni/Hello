@@ -31,7 +31,9 @@ function createApp({ dbFile }) {
     next();
   });
   app.use(express.json({ limit: '100kb' }));
-  app.use(express.static(path.join(__dirname, '..', 'public')));
+  const pub = path.join(__dirname, '..', 'public');
+  for (const dir of ['fonts', 'media', 'icons']) app.use(`/${dir}`, express.static(path.join(pub, dir), { maxAge: '7d' }));
+  app.use(express.static(pub));
 
   // Health check for the host: the database answers.
   app.get('/api/health', (req, res) => {

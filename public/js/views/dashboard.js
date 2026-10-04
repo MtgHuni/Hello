@@ -24,15 +24,15 @@ export async function renderDashboard(page, { state, navigate }) {
       { class: 'grid grid-4' },
       kpi("Ventes aujourd'hui", fmt.money(d.todayTotal.amount), [d.openShifts.length ? `${d.openShifts.length} poste${d.openShifts.length > 1 ? 's' : ''} en cours, compté${d.openShifts.length > 1 ? 's' : ''} à la clôture` : 'Postes clôturés', `Dépenses : ${fmt.money(d.todayExpenses)}`].join(' · ')),
       kpi('Litres vendus', fmt.liters(d.todayTotal.liters), d.todayByProduct.map((p) => `${p.name} ${fmt.number(p.liters)}`).join(' · ')),
-      kpi('Postes ouverts', String(d.openShifts.length), d.openShifts.length ? d.openShifts.map((s) => s.attendant_name).join(', ') : 'Aucun pompiste en service'),
-      kpi('Encours clients', fmt.money(d.receivables), `${d.toValidate} poste${d.toValidate > 1 ? 's' : ''} à valider`),
+      kpi('Postes ouverts', String(d.openShifts.length), [d.openShifts.length ? d.openShifts.map((s) => s.attendant_name).join(', ') : 'Aucun pompiste en service', d.toValidate ? `${d.toValidate} à valider` : null].filter(Boolean).join(' · ')),
+      h('a', { class: 'card kpi kpi-link', href: '#/clients/creances' }, h('div', { class: 'label' }, 'Encours clients'), h('div', { class: 'value' }, fmt.money(d.receivables)), h('div', { class: 'sub' }, d.receivablesOld ? `${fmt.money(d.receivablesOld)} à plus de 30 jours` : 'Rien à plus de 30 jours')),
     ),
 
     // One ruled board: sales, alerts, stock and customer facts share a single surface.
     h(
       'div',
       { class: 'board section' },
-      h('section', { class: 'card board-chart' }, cardHeader('Ventes des 7 derniers jours', 'Chiffre d’affaires par jour, en dollars'), barChart(d.last7)),
+      h('section', { class: 'card board-chart' }, cardHeader('Ventes des 7 derniers jours', `Total ${fmt.money(d.last7.reduce((t, x) => t + x.amount, 0))} · chiffre d’affaires par jour, en dollars`), barChart(d.last7)),
       h('section', { class: 'card board-alerts' }, cardHeader('Alertes', d.alerts.length ? `${d.alerts.length} point${d.alerts.length > 1 ? 's' : ''} à surveiller` : null), alertList(d.alerts)),
       h(
         'section',
@@ -86,7 +86,11 @@ function barChart(days) {
       'div',
       { class: 'bars', role: 'img', 'aria-label': days.map((d) => `${fmt.day(d.date)} : ${fmt.money(d.amount)}`).join(', ') },
       days.map((d, i) => {
-        const col = h('div', { class: 'bar-col' }, h('div', { class: 'bar', style: `height:${(d.amount / max) * 100}%;--i:${i}` }));
+        const col = h(
+          'div',
+          { class: 'bar-col' },
+          h('div', { class: 'bar', style: `height:${(d.amount / max) * 100}%;--i:${i}` }, d.amount ? h('span', { class: 'bar-value', 'aria-hidden': 'true' }, fmt.number(Math.round(d.amount))) : null),
+        );
         col.addEventListener('mouseenter', () => {
           setContent(tip, h('div', { style: 'font-weight:600' }, fmt.money(d.amount)), h('div', { class: 'muted' }, `${fmt.day(d.date)} · ${fmt.liters(d.liters)}`));
           tip.hidden = false;

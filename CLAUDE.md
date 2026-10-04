@@ -24,7 +24,8 @@ Requires Node ≥ 22.13 (built-in `node:sqlite`, hence `--disable-warning=Experi
 **Database** (`src/db.js`):
 - One `SCHEMA` string of `CREATE TABLE IF NOT EXISTS`.
 - Schema changes on existing databases:
-  - new columns go into `MIGRATIONS` (`[table, column, definition]`, added when missing);
+  - new columns go into `MIGRATIONS` (`[table, column, definition]`, added when missing, in one transaction) and bump `SCHEMA_VERSION` (`PRAGMA user_version`);
+  - a database holding data is copied to `<db>.avant-migration-…` before any change;
   - a CHECK constraint change needs a table rebuild, like `migrateSalesKind` / `migrateRequests`.
   - Production data on Render must survive, so add a migration and a migration test.
 - Settings are key/value rows. `getSettings(db)` maps them to camelCase (`combosPerLiter`, `comboValue`, `comboThreshold`, `individualCreditLimit`, `subscriberCreditLimit`, `subscriberGraceDays`, …).
@@ -47,6 +48,12 @@ Requires Node ≥ 22.13 (built-in `node:sqlite`, hence `--disable-warning=Experi
   - closing reconciles litres from the indexes against cash: `expected = sold + subscriber surcharge − credit − combos + payments collected − cash expenses`.
   - not every sale is entered: the shift's sales come from the indexes, and entered sales only record credits, combos and subscriber prices;
   - `GET /shifts/:id/report.pdf` (closed shifts) is the end-of-shift report: cash, sales from the indexes, credits, expenses, payments. It is built by `src/shiftReport.js` on `src/pdf.js`, a dependency-free PDF writer (Helvetica, WinAnsi).
+- Closing logic is `applyClosing()` in `src/routes/shifts.js`, used by `POST /shifts/:id/close` (the attendant, or the manager in their place) and `POST /shifts/:id/correct` (manager, before validation: undoes meters and tank stock, closes again, reason required). The cash count is dollars + francs congolais (`cash_cdf` at the `cdf_rate` frozen with the shift) + mobile money + card.
+- Paid sales are never entered: `POST /shifts/:id/sales` refuses `paid`, and customer requests are on credit (or combos while enabled).
+- Forms from the attendant's phone send a `clientRef`: sending it again returns the first record (unique `client_ref` on sales, payments, expenses).
+- Journal: `audit(db, req, {...})` in `src/audit.js` writes `audit_log` (category, summary, before/after JSON, reason). Call it for any change a manager should be able to trace; an accepted cancellation keeps the deleted row there.
+- Scheduled prices (`products.next_price*`) are applied by `applyScheduledPrices()` (`src/prices.js`) at shift opening and when prices are listed.
+- PDF reports are built on `src/pdfReport.js` (`Report`: section, line, table, paragraph, finish) over `src/pdf.js`: shift, period and customer statement.
 - Cancelling an operation (sale, payment, expense):
   - the attendant only asks: `POST /shifts/:id/:kind/:itemId/cancel`, which sets `cancel_requested_*`;
   - the manager decides: `DELETE` cancels it, `POST …/keep` keeps it;
@@ -74,4 +81,4 @@ Requires Node ≥ 22.13 (built-in `node:sqlite`, hence `--disable-warning=Experi
 
 ## Deployment
 
-`render.yaml` is a Render blueprint (`TZ=Africa/Lubumbashi`, `DB_FILE` on a persistent disk). The SQLite file is the whole state; back it up by copying `station.db`.
+`render.yaml` is a Render blueprint (`TZ=Africa/Lubumbashi`, `DB_FILE` on a persistent disk, health check `/api/health`). The SQLite file is the whole state; back it up with Réglages → Données (`GET /api/backup`, `VACUUM INTO`), never by copying `station.db` alone (WAL).
