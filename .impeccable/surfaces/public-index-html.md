@@ -5,22 +5,22 @@ primary_target: "public/index.html"
 related_targets: []
 ---
 
-# Surface: application shell (all screens)
+# Surface: application shell (all screens: gérant, pompiste, client)
 
-Mode: Operate. Redesign: the apple.com world is replaced by "Midnight Line", pinned by the user as "luxe sombre et premium".
+Mode: Operate. Replacement world "Totem de nuit", rebuilt 2026-10-04 after the user rejected "Midnight Line" as a recolour of the apple.com layout ("change tout"). User pins: luxe sombre et premium; gasoil = vert, essence = rouge; design through the impeccable skill.
 
 ## Direction contract
 
-THESIS: MTG Station is a midnight-blue enamel board with porcelain type: premium, calm, readable. It refuses the light-grey Apple tile look and the neon-on-black dashboard.
+THESIS: the app is the station's price totem at night: black ground, figures in condensed bold, one colour field per fuel. It refuses the apple.com tile grid and the centred top-nav it replaced.
 
-OWN-WORLD: ground #070e1b, lacquered navy panels #0f1b2f with a 1px porcelain hairline and no resting shadow, porcelain text #f4f1ea, one amber action ink #f2b134 with dark text, a line colour per product (gasoil cobalt, essence coral), status green/red/orange always with a word. Inter throughout, tight tracking, tabular figures. A day mode (white enamel, darker amber) for full sun.
+OWN-WORLD: ground #0a0a0b, panels #141416 ruled by a 1px porcelain hairline (no resting shadow), porcelain text #f5f4ef, gasoil field #23c46b, essence field #f0313a, both with black text, brand yellow #ffc414 for the drop, the active nav icon and the shift line, white rectangular action slabs (10px radius). Barlow Condensed for names and figures, Inter for reading. Day mode with the same roles for full sun.
 
-STORY: the attendant sees at a glance where the shift stands and records a sale in a few taps; the manager reads credit, combos and stock on one board.
+STORY: everyone sees today's prices first; the attendant knows where the shift stands and records a sale in a few taps; the manager reads sales, credit and stock on one ruled board.
 
-FIRST VIEWPORT: dark header with the amber drop, one big semibold headline with grey subhead, then the shift line (four stops: Ouverture, Ventes, Clôture, Validation), then the amber primary quick action beside two quiet panels.
+FIRST VIEWPORT: wide screens: 252px side rail (brand, icon nav, account at the foot), condensed 64px headline ruled off from content, the price totem (one colour field per fuel, 84px price), then one ruled band of figures. Phones: top bar with the page name, the same totem in two columns, bottom tab bar (four tabs + Plus).
 
-SIGNATURE: the shift line, a transit line with four stops; the current stop burns, past stops are filled amber. Motion: numbers count in, tank gauges rise with one sheen, a drawn check and ripple confirm a balanced till.
+SIGNATURE: the price totem: fields fill from the bottom like a tank, prices count up, one sheen crosses them. Also the four-stop shift line, forms as drawers from the right, and the HyperFrames brand film on the split sign-in screen.
 
-FORM: user-pinned dark luxury, fused with the midnight transit diagram (catalog challenger, seed 083e3a8b); the roll was superseded by the user's pin.
+FORM: user-pinned dark luxury fused with the station price totem (forecourt pylon), roll seed 083e3a8b superseded by the pin.
 
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance

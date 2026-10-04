@@ -1,7 +1,7 @@
 /* =====================================================================
    MTG Station — « Totem de nuit »
    The forecourt at night: black ground, porcelain type, the price totem lit up.
-   Gasoil yellow and essence green own their fields; actions are white slabs.
+   Gasoil green and essence red own their fields; actions are white slabs.
    ===================================================================== */
 
 /* Inter, served by the station itself (no third-party request on weak networks) */
@@ -34,7 +34,7 @@
   color-scheme: dark;
 
   /* The forecourt at night: black ground, porcelain type, the price totem lit up.
-     Each fuel owns a colour field (gasoil yellow, essence green); actions are white. */
+     Each fuel owns a colour field (gasoil green, essence red); the brand is lit yellow; actions are white. */
 
   /* Grounds */
   --bg: #0a0a0b;
@@ -67,8 +67,8 @@
   --brand: #ffc414;
 
   /* Fuels */
-  --gasoil: #ffc414;
-  --essence: #23c46b;
+  --gasoil: #23c46b;
+  --essence: #f0313a;
   --on-fuel: #0a0a0b;
 
   /* Status: fills (dots, switches) and text (readable in the sun) */
@@ -153,8 +153,8 @@
   --on-accent: #ffffff;
   --focus: rgba(200, 140, 0, 0.5);
   --brand: #e0a800;
-  --gasoil: #ffc414;
-  --essence: #1fb862;
+  --gasoil: #1fb862;
+  --essence: #e0262f;
   --green: #17a35a;
   --red: #d92d20;
   --orange: #d9650a;
@@ -217,7 +217,7 @@ a:hover { text-decoration: underline; }
 * { scrollbar-width: thin; scrollbar-color: var(--fill) transparent; }
 
 /* ---------- Shell: side rail (wide screens), top bar + tab bar (phones) ---------- */
-.shell { min-height: 100vh; min-height: 100dvh; display: grid; grid-template-columns: var(--side-w) minmax(0, 1fr); }
+.shell { min-height: 100vh; min-height: 100dvh; display: grid; grid-template-columns: var(--side-w) minmax(0, 1fr); background: linear-gradient(to right, var(--surface-2) calc(var(--side-w) - 1px), var(--hairline) 0, var(--hairline) var(--side-w), transparent 0); }
 .shell-main { min-width: 0; }
 .main { padding: 0 44px 72px; }
 .page-slot { view-transition-name: page; }
@@ -536,6 +536,7 @@ a:hover { text-decoration: underline; }
 .alert-list { display: flex; flex-direction: column; }
 .alert-item { display: flex; align-items: center; gap: 14px; padding: 14px 0; border-top: 1px solid var(--hairline); color: var(--text); }
 .alert-item:first-child { border-top: none; padding-top: 0; }
+.card-header + .alert-item { border-top: none; padding-top: 0; }
 .alert-item:hover { text-decoration: none; }
 .alert-item:hover .alert-text { color: var(--link); }
 .alert-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; flex: none; color: #fff; }
@@ -907,8 +908,9 @@ dialog.action-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; 
 
 /* ---------- Auth screens: the brand film beside the form ---------- */
 .auth { min-height: 100vh; min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); background: var(--bg); }
-.auth-film { position: relative; overflow: hidden; background: #0a0a0b; }
-.auth-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.auth-film { position: relative; overflow: hidden; background: #0a0a0b url('/media/mtg-totem-poster.jpg') center / cover no-repeat; }
+.auth-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.6s var(--ease-out); }
+.auth-video.is-playing { opacity: 1; }
 .auth-pane { display: grid; place-items: center; padding: 56px 44px; }
 .auth-card { width: min(420px, 100%); animation: fade-up 0.8s var(--ease) both; }
 .auth-card .brand-mark { display: none; }
@@ -1084,7 +1086,7 @@ html[data-nav='fade']::view-transition-new(page) { animation: fade-up 0.5s var(-
 
 /* Phones and small tablets: the rail folds into a top bar and a tab bar. */
 @media (max-width: 1023px) {
-  .shell { display: block; }
+  .shell { display: block; background: none; }
   .side { display: none; }
   .topbar { display: flex; }
   .shell.has-tabs .tabbar { display: grid; }

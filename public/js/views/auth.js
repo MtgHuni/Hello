@@ -8,14 +8,19 @@ import { brandMark } from '../icons.js';
 function filmPanel() {
   const video = h(
     'video',
-    { class: 'auth-video', muted: true, playsinline: true, loop: true, preload: 'metadata', poster: '/media/mtg-totem-poster.jpg', 'aria-hidden': 'true', tabindex: '-1' },
+    { class: 'auth-video', muted: true, playsinline: true, loop: true, preload: 'auto', poster: '/media/mtg-totem-poster.jpg', 'aria-hidden': 'true', tabindex: '-1' },
     h('source', { src: '/media/mtg-totem.webm', type: 'video/webm' }),
     h('source', { src: '/media/mtg-totem.mp4', type: 'video/mp4' }),
   );
   video.muted = true;
+  // The poster is the panel's background: the video only fades in once it really plays,
+  // so a blocked autoplay never leaves a black first frame on screen.
+  video.addEventListener('playing', () => video.classList.add('is-playing'));
+  video.addEventListener('pause', () => video.classList.remove('is-playing'));
   if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
     video.autoplay = true;
-    video.play?.().catch(() => {});
+    // Ask again once data is there: a play() before the panel is in the page can be dropped.
+    video.addEventListener('canplay', () => video.play?.().catch(() => {}), { once: true });
   }
   return h('div', { class: 'auth-film' }, video);
 }
