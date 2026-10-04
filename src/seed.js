@@ -36,7 +36,7 @@ function seedTestData(db, { force = false, fill = 0.9 } = {}) {
       if (price === product.price) continue;
       // Prix abonné : 5 cents au-dessus du prix public, comme le veut la règle des abonnés.
       db.prepare('UPDATE products SET price = ?, subscriber_price = ? WHERE id = ?').run(price, round(price + 0.05, 2), product.id);
-      db.prepare('INSERT INTO price_history (product_id, price, user_id) VALUES (?, ?, ?)').run(product.id, price, manager.id);
+      db.prepare('INSERT INTO price_history (product_id, price, subscriber_price, user_id) VALUES (?, ?, ?, ?)').run(product.id, price, round(price + 0.05, 2), manager.id);
       result.prices.push({ name: product.name, price });
     }
     return result;

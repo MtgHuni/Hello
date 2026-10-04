@@ -1,6 +1,7 @@
 import { flags } from '../ui.js';
 import { api } from '../api.js';
 import { h, fmt, pageHeader, card, cardHeader, table, badge, button, formDialog, openDialog, toast, productColor, setContent } from '../ui.js';
+import { icon } from '../icons.js';
 
 export async function renderSettings(page, ctx) {
   const [settings, products, pumps, tanks, users] = await Promise.all([
@@ -108,6 +109,22 @@ export async function renderSettings(page, ctx) {
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Tolérance d’écart de jaugeage'), h('span', {}, `± ${fmt.liters(settings.stockTolerance)}`)),
       ),
 
+      // ---- Data: backup and journal ----
+      card(
+        cardHeader('Données', 'Sauvegarde complète de la base et journal des changements'),
+        h(
+          'p',
+          { class: 'muted', style: 'margin:0 0 16px' },
+          'Téléchargez une sauvegarde régulièrement et gardez-la ailleurs (ordinateur, clé USB, e-mail) : elle contient toute la station.',
+        ),
+        h(
+          'div',
+          { class: 'row' },
+          h('a', { class: 'btn secondary', href: '/api/backup', download: '' }, icon('download'), 'Télécharger une sauvegarde'),
+          button('Ouvrir le journal', () => ctx.navigate('reglages/journal'), { variant: 'secondary', iconName: 'shifts' }),
+        ),
+      ),
+
       // ---- Customers & combos ----
       card(
         cardHeader('Clients et combos', 'Plafonds de crédit par catégorie et programme de fidélité', button('Modifier', () => customersDialog(settings, reload), { variant: 'ghost' })),
@@ -193,7 +210,8 @@ async function priceHistory(p) {
       table(
         [
           { label: 'Date', render: (r) => fmt.dateTime(r.changed_at) },
-          { label: 'Prix', align: 'right', render: (r) => fmt.price(r.price) },
+          { label: 'Prix public', align: 'right', render: (r) => fmt.price(r.price) },
+          { label: 'Prix abonnés', align: 'right', render: (r) => (r.subscriber_price == null ? '—' : fmt.price(r.subscriber_price)) },
           { label: 'Par', render: (r) => r.user_name || '—' },
         ],
         rows,

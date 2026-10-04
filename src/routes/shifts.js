@@ -1,11 +1,12 @@
 const express = require('express');
 const { EXPENSE_CATEGORIES, getSettings } = require('../db');
-const { fail, num, str, oneOf, round, dateParam, transaction } = require('../util');
+const { fail, num, str, oneOf, round, dateParam, transaction, money } = require('../util');
 const { requireRole } = require('../auth');
 const { customerBalance } = require('./customers');
 const { createSale } = require('../sales');
 const { refreshCustomer } = require('../loyalty');
 const { shiftReportPdf } = require('../shiftReport');
+const { audit } = require('../audit');
 
 const staff = requireRole('manager', 'attendant');
 
@@ -205,6 +206,13 @@ module.exports = function shiftRoutes(db) {
     payments: { table: 'payments', missing: 'Règlement introuvable.' },
     expenses: { table: 'expenses', missing: 'Dépense introuvable.' },
   };
+  // How an operation reads in the journal.
+  const describe = (table, item) =>
+    table === 'sales'
+      ? `${item.kind === 'credit' ? 'crédit' : item.kind === 'combo' ? 'échange de combos' : 'vente'} de ${money(item.amount)}`
+      : table === 'payments'
+        ? `règlement de ${money(item.amount)}`
+        : `dépense de ${money(item.amount)} (${item.category})`;
 
   function cancellable(req, shift) {
     if (!Object.hasOwn(CANCELLABLE, req.params.kind)) fail(404, 'Opération introuvable.');
@@ -238,6 +246,15 @@ module.exports = function shiftRoutes(db) {
       // A sale confirmed from a customer's request: the request is cancelled with it.
       if (table === 'sales') db.prepare("UPDATE purchase_requests SET sale_id = NULL, status = 'cancelled' WHERE sale_id = ?").run(item.id);
       db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(item.id);
+      audit(db, req, {
+        category: 'annulations',
+        action: 'cancel_accepted',
+        entity: table,
+        id: item.id,
+        summary: `Annulation acceptée : ${describe(table, item)}, poste n°${shift.id}${item.cancel_requested_at ? ' (demandée par le pompiste)' : ''}`,
+        before: item,
+        reason: item.cancel_reason,
+      });
       if (item.customer_id) refreshCustomer(db, item.customer_id);
       if (shift.status === 'closed') reconcile(shift.id);
     });
@@ -250,6 +267,14 @@ module.exports = function shiftRoutes(db) {
     if (!shift) fail(404, 'Poste introuvable.');
     const { table, item } = cancellable(req, shift);
     db.prepare(`UPDATE ${table} SET cancel_requested_at = NULL, cancel_requested_by = NULL, cancel_reason = NULL WHERE id = ?`).run(item.id);
+    audit(db, req, {
+      category: 'annulations',
+      action: 'cancel_refused',
+      entity: table,
+      id: item.id,
+      summary: `Annulation refusée : ${describe(table, item)} gardé(e), poste n°${shift.id}`,
+      reason: item.cancel_reason,
+    });
     res.status(204).end();
   });
 

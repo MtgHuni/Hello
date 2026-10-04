@@ -407,6 +407,28 @@ test('dépenses et rapport avec marge', async () => {
   assert.strictEqual(res.status, 401);
 });
 
+test('sauvegarde téléchargeable et journal des changements', async () => {
+  const backup = await gerant('GET', '/api/backup');
+  assert.strictEqual(backup.status, 200);
+  assert.strictEqual(backup.raw.subarray(0, 15).toString(), 'SQLite format 3', 'un vrai fichier SQLite');
+  assert.strictEqual((await pompiste('GET', '/api/backup')).status, 403);
+
+  await gerant('PUT', `/api/products/${ctx.diesel.id}`, { price: 1.25 });
+  const journal = (await gerant('GET', '/api/audit')).data;
+  const accepted = journal.find((a) => a.action === 'cancel_accepted');
+  assert.ok(accepted, 'annulation acceptée gardée au journal');
+  assert.strictEqual(accepted.category, 'annulations');
+  assert.ok(journal.some((a) => a.category === 'prix' && a.summary.includes('1,200 → 1,250')));
+  assert.ok(journal.some((a) => a.category === 'reglages' && a.summary.includes('programme de combos')));
+  assert.ok(journal.some((a) => a.category === 'equipe' && a.summary.includes('mot de passe') === false));
+  assert.ok(journal.some((a) => a.category === 'donnees'));
+  assert.ok((await gerant('GET', '/api/audit?category=prix')).data.every((a) => a.category === 'prix'));
+  assert.strictEqual((await pompiste('GET', '/api/audit')).status, 403);
+  const history = (await gerant('GET', `/api/products/${ctx.diesel.id}/history`)).data;
+  assert.strictEqual(history[0].price, 1.25);
+  assert.strictEqual(history[0].subscriber_price, 1.4, 'le prix abonné est gardé dans l’historique');
+});
+
 test('migration : une base ancienne est convertie (loyalty → paid, combos)', () => {
   const fs = require('node:fs');
   const os = require('node:os');
@@ -429,6 +451,8 @@ test('migration : une base ancienne est convertie (loyalty → paid, combos)', (
   assert.deepStrictEqual(migrated.prepare('SELECT kind FROM sales ORDER BY id').all().map((r) => r.kind), ['paid', 'credit']);
   assert.strictEqual(migrated.prepare('SELECT loyalty_points FROM customers').get().loyalty_points, 10, 'le crédit non payé ne rapporte plus');
   assert.strictEqual(migrated.prepare('SELECT credit_limit FROM customers').get().credit_limit, 50);
+  assert.strictEqual(migrated.prepare('PRAGMA user_version').get().user_version, 2);
+  assert.ok(fs.readdirSync(dir).some((f) => f.startsWith('old.db.avant-migration-')), 'copie gardée avant la mise à jour');
   migrated.close();
   fs.rmSync(dir, { recursive: true, force: true });
 });

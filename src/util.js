@@ -73,4 +73,7 @@ function csvCell(value) {
   return `"${s.replace(/"/g, '""')}"`;
 }
 
-module.exports = { HttpError, fail, round, num, str, oneOf, bool, dateParam, transaction, csvCell };
+// Amount in dollars for messages and the journal: 1 234,50 $.
+const money = (n) => `${(Number(n) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $`;
+
+module.exports = { HttpError, fail, round, num, str, oneOf, bool, dateParam, transaction, csvCell, money };

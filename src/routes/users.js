@@ -1,6 +1,9 @@
 const express = require('express');
 const { fail, str, oneOf, bool } = require('../util');
 const { requireRole, hashPassword, checkPasswordStrength } = require('../auth');
+const { audit } = require('../audit');
+
+const ROLE = { manager: 'gérant', attendant: 'pompiste' };
 
 const manager = requireRole('manager');
 
@@ -21,6 +24,7 @@ module.exports = function userRoutes(db) {
     const id = db
       .prepare('INSERT INTO users (name, login, password_hash, role) VALUES (?, ?, ?, ?)')
       .run(name, login, await hashPassword(password), role).lastInsertRowid;
+    audit(db, req, { category: 'equipe', action: 'user', entity: 'users', id: Number(id), summary: `Membre ajouté : ${name} (${ROLE[role]}, identifiant ${login})` });
     res.status(201).json(db.prepare(`${select} AND id = ?`).get(id));
   });
 
@@ -36,6 +40,15 @@ module.exports = function userRoutes(db) {
     const passwordHash = req.body?.password ? await hashPassword(checkPasswordStrength(req.body.password)) : null;
     db.prepare('UPDATE users SET name = ?, role = ?, active = ? WHERE id = ?').run(name, role, active, user.id);
     if (passwordHash) db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, user.id);
+    const changes = [
+      name !== user.name ? `nom ${user.name} → ${name}` : null,
+      role !== user.role ? `${ROLE[user.role]} → ${ROLE[role]}` : null,
+      active !== user.active ? (active ? 'réactivé' : 'désactivé') : null,
+      passwordHash ? 'mot de passe réinitialisé' : null,
+    ].filter(Boolean);
+    if (changes.length) {
+      audit(db, req, { category: 'equipe', action: 'user', entity: 'users', id: user.id, summary: `${user.name} : ${changes.join(', ')}` });
+    }
     if (!active || req.body?.password) db.prepare('DELETE FROM sessions WHERE user_id = ?').run(user.id);
     res.json(db.prepare(`${select} AND id = ?`).get(user.id));
   });

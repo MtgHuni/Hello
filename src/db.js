@@ -200,6 +200,22 @@ CREATE TABLE IF NOT EXISTS expenses (
   created_at   TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Journal: who changed what (see src/audit.js).
+CREATE TABLE IF NOT EXISTS audit_log (
+  id         INTEGER PRIMARY KEY,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  user_id    INTEGER REFERENCES users(id),
+  category   TEXT NOT NULL,
+  action     TEXT NOT NULL,
+  entity     TEXT NOT NULL,
+  entity_id  INTEGER,
+  summary    TEXT NOT NULL,
+  before     TEXT, -- JSON
+  after      TEXT, -- JSON
+  reason     TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_audit_category ON audit_log(category);
+
 CREATE INDEX IF NOT EXISTS idx_shifts_status ON shifts(status);
 CREATE INDEX IF NOT EXISTS idx_shifts_closed ON shifts(closed_at);
 CREATE INDEX IF NOT EXISTS idx_sales_customer ON sales(customer_id);
@@ -232,13 +248,47 @@ const MIGRATIONS = [
   ['expenses', 'cancel_requested_at', 'TEXT'],
   ['expenses', 'cancel_requested_by', 'INTEGER REFERENCES users(id)'],
   ['expenses', 'cancel_reason', 'TEXT'],
+  ['price_history', 'subscriber_price', 'REAL'],
 ];
 
-function addMissingColumns(db) {
-  for (const [table, column, definition] of MIGRATIONS) {
+// Bumped with every schema change; recorded in PRAGMA user_version.
+const SCHEMA_VERSION = 2;
+
+function missingColumns(db) {
+  return MIGRATIONS.filter(([table, column]) => {
     const columns = db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
-    if (!columns.includes(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+    return !columns.includes(column);
+  });
+}
+
+// All or nothing: a failed ALTER leaves the database as it was.
+function addMissingColumns(db) {
+  const missing = missingColumns(db);
+  if (!missing.length) return;
+  db.exec('BEGIN');
+  try {
+    for (const [table, column, definition] of missing) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
   }
+}
+
+const tableSql = (db, name) => db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?").get(name)?.sql;
+
+// Before changing a database that holds data, a full copy is kept next to it
+// (station.db.avant-migration-AAAA-MM-JJ-HHMMSS), to roll back by hand if needed.
+function backupBeforeMigration(db, file) {
+  const outdated =
+    missingColumns(db).length > 0 || !tableSql(db, 'sales').includes("'combo'") || !(tableSql(db, 'purchase_requests') || "'combo'").includes("'combo'");
+  const hasData = db.prepare('SELECT EXISTS (SELECT 1 FROM users) OR EXISTS (SELECT 1 FROM sales) AS v').get().v;
+  if (!outdated || !hasData) return null;
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
+  const copy = `${file}.avant-migration-${stamp}`;
+  db.exec(`VACUUM INTO '${copy.replace(/'/g, "''")}'`);
+  console.log(`Base sauvegardée avant mise à jour : ${copy}`);
+  return copy;
 }
 
 const EXPENSE_CATEGORIES = [
@@ -274,6 +324,8 @@ const DEFAULT_SETTINGS = {
 function migrateSalesKind(db) {
   const { sql } = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'sales'").get();
   if (sql.includes("'combo'")) return false;
+  const count = () => db.prepare('SELECT COUNT(*) AS n FROM sales').get().n;
+  const rowsBefore = count();
   db.exec('PRAGMA foreign_keys = OFF');
   db.exec('BEGIN');
   try {
@@ -307,6 +359,10 @@ function migrateSalesKind(db) {
       CREATE INDEX IF NOT EXISTS idx_sales_customer ON sales(customer_id);
       CREATE INDEX IF NOT EXISTS idx_sales_shift ON sales(shift_id);
     `);
+    // Every sale must have been copied; links to missing rows are reported, not fatal.
+    if (count() !== rowsBefore) throw new Error('Migration des ventes annulée : des ventes manquent après la copie.');
+    const broken = db.prepare('PRAGMA foreign_key_check(sales)').all().length;
+    if (broken) console.warn(`Migration des ventes : ${broken} vente(s) liée(s) à un élément absent.`);
     db.exec('COMMIT');
   } catch (err) {
     db.exec('ROLLBACK');
@@ -337,6 +393,7 @@ function openDb(file) {
   const db = new DatabaseSync(file);
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
   db.exec(SCHEMA);
+  if (file !== ':memory:') backupBeforeMigration(db, file);
   addMissingColumns(db);
   const salesRebuilt = migrateSalesKind(db);
   if (salesRebuilt) addMissingColumns(db); // the rebuilt table only has the older columns
@@ -352,6 +409,7 @@ function openDb(file) {
     const { refreshCustomer } = require('./loyalty');
     for (const { id } of db.prepare('SELECT id FROM customers').all()) refreshCustomer(db, id);
   }
+  db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
   return db;
 }
 

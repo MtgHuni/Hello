@@ -1,6 +1,7 @@
 const express = require('express');
 const { EXPENSE_CATEGORIES } = require('../db');
-const { fail, num, str, oneOf, round, dateParam, csvCell } = require('../util');
+const { fail, num, str, oneOf, round, dateParam, csvCell, money } = require('../util');
+const { audit } = require('../audit');
 const { requireRole } = require('../auth');
 
 const manager = requireRole('manager');
@@ -97,6 +98,14 @@ module.exports = function expenseRoutes(db) {
   router.delete('/expenses/:id', manager, (req, res) => {
     const current = getEditable(req.params.id);
     db.prepare('DELETE FROM expenses WHERE id = ?').run(current.id);
+    audit(db, req, {
+      category: 'annulations',
+      action: 'expense_deleted',
+      entity: 'expenses',
+      id: current.id,
+      summary: `Dépense supprimée : ${current.category}, ${money(current.amount)} (${current.description})`,
+      before: current,
+    });
     res.status(204).end();
   });
 

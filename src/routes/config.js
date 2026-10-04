@@ -2,6 +2,23 @@ const express = require('express');
 const { getSettings, syncCreditLimits } = require('../db');
 const { fail, num, str, bool, transaction } = require('../util');
 const { requireRole } = require('../auth');
+const { audit } = require('../audit');
+
+const price3 = (n) => Number(n).toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+
+// Names of the settings in the journal.
+const SETTING_LABELS = {
+  station_name: 'nom de la station',
+  cash_tolerance: 'tolérance de caisse',
+  stock_tolerance: 'tolérance de jaugeage',
+  points_per_liter: 'combos par litre',
+  combo_value: 'valeur d’un combo',
+  combo_threshold: 'seuil d’échange',
+  combos_enabled: 'programme de combos',
+  individual_credit_limit: 'plafond particuliers',
+  subscriber_credit_limit: 'plafond abonnés',
+  subscriber_grace_days: 'délai des abonnés',
+};
 
 const manager = requireRole('manager');
 
@@ -37,9 +54,23 @@ module.exports = function configRoutes(db) {
       subscriber_grace_days: pick(b.subscriberGraceDays, cur.subscriberGraceDays, 'Le délai de paiement des abonnés', { min: 1, max: 28, integer: true }),
     };
     values.combos_enabled = bool(b.combosEnabled, cur.combosEnabled) ? 1 : 0;
-    const stmt = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
-    for (const [key, value] of Object.entries(values)) stmt.run(key, String(value));
-    syncCreditLimits(db);
+    const stored = Object.fromEntries(db.prepare('SELECT key, value FROM settings').all().map((r) => [r.key, r.value]));
+    const changed = Object.keys(values).filter((key) => String(values[key]) !== stored[key]);
+    transaction(db, () => {
+      const stmt = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
+      for (const [key, value] of Object.entries(values)) stmt.run(key, String(value));
+      syncCreditLimits(db);
+      if (changed.length) {
+        audit(db, req, {
+          category: 'reglages',
+          action: 'settings',
+          entity: 'settings',
+          summary: `Réglages modifiés : ${changed.map((k) => `${SETTING_LABELS[k] || k} ${stored[k] ?? '—'} → ${values[k]}`).join(', ')}`,
+          before: Object.fromEntries(changed.map((k) => [k, stored[k]])),
+          after: Object.fromEntries(changed.map((k) => [k, String(values[k])])),
+        });
+      }
+    });
     res.json(getSettings(db));
   });
 
@@ -56,7 +87,7 @@ module.exports = function configRoutes(db) {
     if (db.prepare('SELECT 1 FROM products WHERE name = ?').get(name)) fail(409, 'Ce produit existe déjà.');
     const id = transaction(db, () => {
       const pid = Number(db.prepare('INSERT INTO products (name, price, subscriber_price) VALUES (?, ?, ?)').run(name, price, subscriberPrice).lastInsertRowid);
-      db.prepare('INSERT INTO price_history (product_id, price, user_id) VALUES (?, ?, ?)').run(pid, price, req.user.id);
+      db.prepare('INSERT INTO price_history (product_id, price, subscriber_price, user_id) VALUES (?, ?, ?, ?)').run(pid, price, subscriberPrice, req.user.id);
       return pid;
     });
     res.status(201).json(db.prepare('SELECT * FROM products WHERE id = ?').get(id));
@@ -72,8 +103,18 @@ module.exports = function configRoutes(db) {
     const active = bool(req.body?.active, !!product.active) ? 1 : 0;
     transaction(db, () => {
       db.prepare('UPDATE products SET name = ?, price = ?, subscriber_price = ?, active = ? WHERE id = ?').run(name, price, subscriberPrice, active, product.id);
-      if (price !== product.price) {
-        db.prepare('INSERT INTO price_history (product_id, price, user_id) VALUES (?, ?, ?)').run(product.id, price, req.user.id);
+      const oldSubscriber = product.subscriber_price ?? product.price;
+      if (price !== product.price || subscriberPrice !== oldSubscriber) {
+        db.prepare('INSERT INTO price_history (product_id, price, subscriber_price, user_id) VALUES (?, ?, ?, ?)').run(product.id, price, subscriberPrice, req.user.id);
+        audit(db, req, {
+          category: 'prix',
+          action: 'price',
+          entity: 'products',
+          id: product.id,
+          summary: `Prix ${name} : ${price3(product.price)} → ${price3(price)} $/L, abonnés ${price3(oldSubscriber)} → ${price3(subscriberPrice)} $/L`,
+          before: { price: product.price, subscriber_price: oldSubscriber },
+          after: { price, subscriber_price: subscriberPrice },
+        });
       }
     });
     res.json(db.prepare('SELECT * FROM products WHERE id = ?').get(product.id));
@@ -83,7 +124,7 @@ module.exports = function configRoutes(db) {
     res.json(
       db
         .prepare(
-          `SELECT h.price, h.changed_at, u.name AS user_name
+          `SELECT h.price, h.subscriber_price, h.changed_at, u.name AS user_name
            FROM price_history h LEFT JOIN users u ON u.id = h.user_id
            WHERE h.product_id = ? ORDER BY h.id DESC LIMIT 100`,
         )
@@ -210,6 +251,17 @@ module.exports = function configRoutes(db) {
       active,
       nozzle.id,
     );
+    if (meter !== nozzle.meter) {
+      audit(db, req, {
+        category: 'reglages',
+        action: 'nozzle_meter',
+        entity: 'nozzles',
+        id: nozzle.id,
+        summary: `Index du ${name} corrigé à la main : ${nozzle.meter} → ${meter}`,
+        before: { meter: nozzle.meter },
+        after: { meter },
+      });
+    }
     res.json(listPumps());
   });
 

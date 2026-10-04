@@ -11,6 +11,7 @@ import { renderTanks } from './views/tanks.js';
 import { renderCustomers, renderCustomerDetail } from './views/customers.js';
 import { renderReports } from './views/reports.js';
 import { renderSettings } from './views/settings.js';
+import { renderJournal } from './views/journal.js';
 import { renderAccount } from './views/account.js';
 import { renderExpenses } from './views/expenses.js';
 
@@ -37,7 +38,7 @@ const NAV = {
 };
 
 const DETAIL_ROUTES = {
-  manager: { postes: renderShiftDetail, clients: renderCustomerDetail },
+  manager: { postes: renderShiftDetail, clients: renderCustomerDetail, reglages: renderJournal },
   attendant: { historique: renderShiftDetail },
 };
 

@@ -1,6 +1,7 @@
 const express = require('express');
 const { fail, num, str, oneOf, bool, round, dateParam, transaction } = require('../util');
 const { requireRole, hashPassword, checkPasswordStrength } = require('../auth');
+const { audit } = require('../audit');
 const { getSettings, syncCreditLimits } = require('../db');
 const { refreshCustomer, subscriberDues } = require('../loyalty');
 
@@ -189,6 +190,22 @@ function customerRoutes(db) {
     ).run(f.type, f.name, f.phone, f.email, f.address, f.plate, active, current.id);
     syncCreditLimits(db);
     db.prepare('UPDATE users SET active = ? WHERE customer_id = ?').run(active, current.id);
+    const TYPE = { account: 'abonné', individual: 'particulier' };
+    const changes = [
+      f.type !== current.type ? `${TYPE[current.type]} → ${TYPE[f.type]}` : null,
+      active !== current.active ? (active ? 'réactivé' : 'désactivé') : null,
+    ].filter(Boolean);
+    if (changes.length) {
+      audit(db, req, {
+        category: 'clients',
+        action: 'customer',
+        entity: 'customers',
+        id: current.id,
+        summary: `Client ${f.name} : ${changes.join(', ')}`,
+        before: { type: current.type, active: current.active },
+        after: { type: f.type, active },
+      });
+    }
     res.json(db.prepare(`${listSql} WHERE c.id = ?`).get(current.id));
   });
 
