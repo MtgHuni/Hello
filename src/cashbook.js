@@ -63,7 +63,7 @@ function allEntries(db) {
       day: e.day,
       account: ACCOUNT_OF_METHOD[e.method],
       out: e.amount,
-      label: `Dépense${e.shift_id ? ` du poste n°${e.shift_id} (pompiste)` : ''} · ${e.category} : ${e.description}`,
+      label: `Dépense${e.shift_id ? ` du poste n°${e.shift_id}` : ''} · ${e.category} : ${e.description}`,
       source: 'expense',
       id: e.id,
       link: e.shift_id ? `#/postes/${e.shift_id}` : '#/depenses',
