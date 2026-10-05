@@ -601,6 +601,7 @@ test('un seul poste à la fois, livre de caisse (espèces et mobile money), livr
   // Cash handed over goes into the till, mobile money into its own balance.
   const running = (await gerant('GET', `/api/shifts/${open.id}`)).data;
   await bea('POST', `/api/shifts/${open.id}/momo`, { productId: ctx.diesel.id, liters: 25 }); // 25 L at 1,20 = 30 $
+  await bea('POST', `/api/shifts/${open.id}/expenses`, { category: 'Fournitures', amount: 5, description: 'Eau' }); // paid from the till
   await closeShift(running, Object.fromEntries(running.readings.map((r) => [r.nozzle_id, r.start_meter + 100])), { cash: 50 });
   let b = await cash();
   assert.strictEqual(b.cash.balance, 150);
@@ -638,6 +639,11 @@ test('un seul poste à la fois, livre de caisse (espèces et mobile money), livr
   assert.strictEqual(counted.data.balances.cash.lastCount.diff, -1);
   const book = (await gerant('GET', '/api/cashbook?account=cash')).data;
   assert.ok(book.movements.some((m) => m.source === 'shift') && book.movements.some((m) => m.source === 'supplier_payment'));
+  // The attendant's expenses show in the book, the shift coming in before them.
+  const spent = book.movements.find((m) => m.source === 'expense' && m.label.includes('du poste n°'));
+  assert.ok(spent, 'dépense du pompiste dans la caisse');
+  const its = book.movements.find((m) => m.source === 'shift' && spent.link === m.link);
+  assert.ok(its && its.label.includes('dépenses du poste'));
   assert.strictEqual(book.days.at(-1).end, 70);
   const pdf = await gerant('GET', '/api/cashbook.pdf');
   assert.strictEqual(pdf.raw.subarray(0, 5).toString(), '%PDF-');

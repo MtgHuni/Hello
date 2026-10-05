@@ -2,7 +2,7 @@
 // reaches the till when it is withdrawn (a transfer). Most entries come from what the app
 // already records (closed shifts, payments and expenses outside a shift, deliveries paid on
 // the spot, supplier payments); the manager adds the rest by hand (cash_movements).
-const { round } = require('./util');
+const { round, money } = require('./util');
 const { attendantNamesSql } = require('./checkpoints');
 
 const ACCOUNTS = { cash: 'Espèces', momo: 'Mobile money' };
@@ -19,8 +19,8 @@ const KINDS = {
   retrait_banque: { label: 'Retrait à la banque', sign: 1, accounts: ['cash'], old: true },
   retrait_momo: { label: 'Retrait du mobile money vers la caisse', sign: 0, accounts: ['momo'] }, // transfer
   frais_momo: { label: 'Frais mobile money', sign: -1, accounts: ['momo'] },
-  autre_entree: { label: 'Autre entrée', sign: 1, accounts: ['cash', 'momo'] },
-  autre_sortie: { label: 'Autre sortie', sign: -1, accounts: ['cash', 'momo'] },
+  autre_entree: { label: 'Entrée', sign: 1, accounts: ['cash', 'momo'] },
+  autre_sortie: { label: 'Sortie', sign: -1, accounts: ['cash', 'momo'] },
 };
 
 
@@ -35,12 +35,14 @@ function allEntries(db) {
 
   for (const s of db
     .prepare(
-      `SELECT s.id, s.closed_at AS at, date(s.closed_at, 'localtime') AS day, s.cash, s.mobile_money, COALESCE(${attendantNamesSql}, u.name) AS attendant
+      `SELECT s.id, s.closed_at AS at, date(s.closed_at, 'localtime') AS day, s.cash, s.mobile_money, COALESCE(${attendantNamesSql}, u.name) AS attendant,
+         (SELECT COALESCE(SUM(e.amount), 0) FROM expenses e WHERE e.shift_id = s.id) AS spent
        FROM shifts s JOIN users u ON u.id = s.attendant_id WHERE s.status != 'open'`,
     )
     .all()) {
     const base = { at: s.at, day: s.day, source: 'shift', id: s.id, link: `#/postes/${s.id}` };
-    push({ ...base, account: 'cash', in: s.cash, label: `Clôture du poste n°${s.id} (${s.attendant})` });
+    // The cash handed over plus what the attendants spent from it: those expenses go out below.
+    push({ ...base, account: 'cash', in: round(s.cash + s.spent), label: `Clôture du poste n°${s.id} (${s.attendant})${s.spent ? ` : espèces remises ${money(s.cash)} + dépenses du poste` : ''}` });
     push({ ...base, account: 'momo', in: s.mobile_money, label: `Mobile money du poste n°${s.id} (${s.attendant})` });
   }
 
@@ -54,9 +56,18 @@ function allEntries(db) {
   }
 
   for (const e of db
-    .prepare('SELECT id, created_at AS at, expense_date AS day, amount, method, category, description FROM expenses WHERE shift_id IS NULL')
+    .prepare("SELECT id, created_at AS at, expense_date AS day, amount, method, category, description, shift_id FROM expenses WHERE shift_id IS NULL OR shift_id IN (SELECT id FROM shifts WHERE status != 'open')")
     .all()) {
-    push({ at: e.at, day: e.day, account: ACCOUNT_OF_METHOD[e.method], out: e.amount, label: `Dépense · ${e.category} : ${e.description}`, source: 'expense', id: e.id, link: '#/depenses' });
+    push({
+      at: e.at,
+      day: e.day,
+      account: ACCOUNT_OF_METHOD[e.method],
+      out: e.amount,
+      label: `Dépense${e.shift_id ? ` du poste n°${e.shift_id} (pompiste)` : ''} · ${e.category} : ${e.description}`,
+      source: 'expense',
+      id: e.id,
+      link: e.shift_id ? `#/postes/${e.shift_id}` : '#/depenses',
+    });
   }
 
   for (const d of db

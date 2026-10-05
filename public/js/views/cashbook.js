@@ -10,21 +10,17 @@ const ACCOUNTS = [
   ['cash', 'Espèces'],
   ['momo', 'Mobile money'],
 ];
-// Movements entered by hand, by balance.
+// Movements entered by hand: an entry or an exit, with its reason; from mobile money, also a
+// withdrawal to the till.
 const KINDS = {
   cash: [
-    ['apport', 'Apport du propriétaire'],
-    ['retrait_proprio', 'Retrait du propriétaire'],
-    ['autre_entree', 'Autre entrée'],
-    ['autre_sortie', 'Autre sortie'],
+    ['autre_entree', 'Entrée'],
+    ['autre_sortie', 'Sortie'],
   ],
   momo: [
-    ['retrait_momo', 'Retrait vers la caisse'],
-    ['frais_momo', 'Frais mobile money'],
-    ['apport', 'Apport du propriétaire'],
-    ['retrait_proprio', 'Retrait du propriétaire'],
-    ['autre_entree', 'Autre entrée'],
-    ['autre_sortie', 'Autre sortie'],
+    ['autre_entree', 'Entrée'],
+    ['autre_sortie', 'Sortie'],
+    ['retrait_momo', 'Vers la caisse'],
   ],
 };
 
@@ -181,12 +177,15 @@ async function movementDialog(acc, reload) {
   const label = ACCOUNTS.find(([v]) => v === acc)[1];
   const ok = await formDialog({
     title: `Mouvement · ${label}`,
-    intro: acc === 'momo' ? 'Un retrait vers la caisse sort du mobile money et entre dans les espèces.' : 'Les postes, règlements, dépenses et paiements aux fournisseurs s’inscrivent tout seuls.',
+    intro:
+      acc === 'momo'
+        ? 'De l’argent qui entre ou qui sort du mobile money. « Vers la caisse » : retiré du mobile money, il entre dans les espèces.'
+        : 'De l’argent qui entre ou qui sort de la caisse. Les postes, dépenses, règlements et paiements aux fournisseurs s’inscrivent tout seuls.',
     grid: false,
     fields: [
-      { name: 'kind', label: 'Type', type: 'select', options: KINDS[acc], required: true },
+      { name: 'kind', label: 'Mouvement', type: 'segment', full: true, options: KINDS[acc], value: 'autre_entree' },
       { name: 'amount', label: 'Montant ($)', type: 'number', step: '0.01', min: '0.01', required: true },
-      { name: 'note', label: 'Remarque', placeholder: 'Facultatif (ex. : bordereau n°…)' },
+      { name: 'note', label: 'Motif', required: true, placeholder: 'Ex. : apport du propriétaire, monnaie, bordereau n°…' },
     ],
     submitLabel: 'Enregistrer',
     onSubmit: (d) => api.post('/cashbook/movements', { ...d, account: acc }),
