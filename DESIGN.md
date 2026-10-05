@@ -223,8 +223,8 @@ This world replaces the apple.com tile grid and centred top nav that came before
 A near-neutral black and porcelain world with two saturated fuel fields and one lit yellow; every value has a day twin with the same role.
 
 ### Primary
-- **Sign Yellow** (`--sign-yellow` #ffc414; day #f5b800): the main action. Primary buttons (tinted like every button), the main quick action's icon square, the segmented thumb (a tint with an edge), the selected choice tile and pump option, the checked box, the remark card. Text on it is always night-ground black. Hover #ffd34f, press #e8ac00.
-- **Signs Sky, Violet, Orange** (`--sign-sky` #7fb2ff, `--sign-violet` #b69cff, `--sign-orange` #ff9a3d; day #2f6fd6, #6a4bd1, #d9650a, with darker `-ink` twins for text on bone): every other action and every panel header. A secondary button is a tint of its sign (15% night, 12% day) with a 55% edge and its text in the sign's ink; side by side, buttons take turns sky → violet → orange (`:nth-child(… of .btn.secondary)`). Panel headers are a band tinted the same way with the title in the sign's ink, panels taking turns in the same order; table heads carry a faint (6%) wash of their panel's sign. Quick actions are all built alike, a tinted tile with a solid icon square: yellow for the main one (Crédit), then sky, violet, orange.
+- **Sign Yellow** (`--sign-yellow` #ffc414; day #f5b800): the main action. Primary buttons (solid like every button), the main quick action's icon square, the segmented thumb (a tint with an edge), the selected choice tile and pump option, the checked box, the remark card. Text on it is always night-ground black. Hover #ffd34f, press #e8ac00.
+- **Signs Sky, Violet, Orange** (`--sign-sky` #7fb2ff, `--sign-violet` #b69cff, `--sign-orange` #ff9a3d; day #2f6fd6, #6a4bd1, #d9650a, with darker `-ink` twins for text on bone): every other action and every panel header, lit solid (user's request, 2026-10-05, "le plein"). `--solid` fills a sign and `--on-solid` writes on it: at night the light signs carry night-ground black; by day the deep `-ink` twins are the fills and carry white, and yellow keeps its black. Side by side, buttons take turns sky → violet → orange (`:nth-child(… of .btn.secondary)`). Panel headers are a solid band with the title written on it, panels taking turns in the same order; a header's other buttons become slabs of the page (night panel, day white) so they stand off the band, its main one stays yellow; table heads carry a faint (6%) wash of their panel's sign. Quick actions are solid tiles, sky, violet, orange in turn, each icon on a square of the tile's ink; only the main one's icon (Crédit's +) is yellow.
 - **Porcelain** (porcelain; day: day-ink): links and the caret.
 
 ### Secondary
@@ -311,10 +311,11 @@ One shape: the rounded rectangle, everywhere (user's request, 2026-10-05: "si c'
 ## Components
 
 ### Buttons
-Lit signs, all built alike (user's request, 2026-10-05): a tint of the button's colour, a 1px edge of it at 55%, the text in its ink. Only the colour changes: yellow for the main action, sky, violet, orange for the others, red for a destructive one. Buttons side by side are the same size (`.btn-row`: each takes the width of the widest; on a phone a page header's buttons fill the width in equal columns), and a status badge sits under the page title, not among the buttons.
+Lit signs, all built alike (user's request, 2026-10-05): a solid fill of the button's colour with the text written on it. Only the colour changes: yellow for the main action, sky, violet, orange for the others, red for a destructive one. Buttons grouped in one place are the same width (`buttonRow()` / `.btn-row`: each takes the width of the widest, up to four on a line; on a phone two by two at half the width, centred, an odd last one centred alone), and a status badge sits under the page title, not among the buttons. The requests queue keeps its three buttons on one line, equal, even on a phone.
 - **Shape:** 10px radius, 46px minimum height (34px small, 54px large).
-- **Primary:** the yellow sign, its tint 6 points stronger than the others, Inter 16px 600, 10px 20px padding. Hover deepens the tint and the edge goes solid; press deeper still, with a 0.97 press scale.
-- **Secondary:** a tint of its sign (sky, then violet, then orange among its siblings) with a 1px edge of the sign at 55% and the text in the sign's ink; hover deepens the tint and the edge goes solid.
+- **Primary:** the yellow sign, black text, Inter 16px 600, 10px 20px padding. Hover lightens the fill (14% white), press darkens it (14% black), with a 0.97 press scale.
+- **Secondary:** its sign solid (sky, then violet, then orange among its siblings), the text in `--on-solid`; same hover and press.
+- **Day mode key:** a sun on a 34px square beside the account (top bar on phones, beside the name in the side rail), as on iOS; lit yellow while day mode is on (`themeButton()` in `ui.js`).
 - **Ghost:** the sky sign with less side padding (light actions such as Modifier, + Ajouter). **Danger / Destructive:** the red sign with bad-text.
 - **Focus:** the global 2px brand-yellow outline at 2px offset.
 
@@ -322,7 +323,7 @@ Lit signs, all built alike (user's request, 2026-10-05): a tint of the button's 
 - **Corner Style:** 14px.
 - **Background:** night panel (day: white).
 - **Shadow Strategy:** inset hairline only (see Elevation).
-- **Header:** a strip across the top, 18px 24px 16px, ruled off by a hairline; title in condensed 26px.
+- **Header:** a solid band of the panel's sign across the top, 18px 24px 16px; title in condensed 26px written in `--on-solid`, the subtitle at 78% of it.
 - **Internal Padding:** 24px (20px 18px on phones). Flush cards carry tables edge to edge.
 
 ### Inputs / Fields
