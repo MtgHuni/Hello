@@ -6,7 +6,6 @@ const { balanceSql, subscriberDues, creditAllocation } = require('../loyalty');
 const { balances, supplierBalances } = require('../cashbook');
 const { attendantNamesSql, closingCutoff } = require('../checkpoints');
 const { periodReportPdf } = require('../periodReport');
-const { storageOf } = require('../storage');
 
 const manager = requireRole('manager');
 
@@ -97,9 +96,6 @@ module.exports = function reportRoutes(db) {
       .all(settings.stockTolerance);
 
     const alerts = [];
-    if (storageOf() === 'temporaire') {
-      alerts.push({ level: 'critical', text: 'Base de données sans disque permanent : tout sera effacé au prochain déploiement. Ajoutez le disque sur Render (voir le guide).', link: '#/reglages' });
-    }
     for (const t of tanks) {
       if (t.book_stock <= t.low_level) {
         alerts.push({ level: 'critical', text: `${t.name} : stock bas (${round(t.book_stock)} L, seuil ${t.low_level} L)`, link: '#/cuves' });

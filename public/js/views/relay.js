@@ -25,7 +25,7 @@ const KIND = {
   },
   ouverture: {
     title: 'Ouverture du matin',
-    intro: 'Vérifiez que les index et les espèces sont ceux laissés à la fermeture, puis ouvrez : le poste continue.',
+    intro: 'Vérifiez les espèces laissées à la fermeture, puis ouvrez : le poste continue avec les index de la fermeture.',
     money: 'Espèces reprises de la fermeture ($)',
     submit: 'Ouvrir la station',
     confirm: 'Le poste reprend avec ces index et cet argent.',
@@ -123,9 +123,11 @@ export function renderCheckpoint(page, ctx, shift, kind, { report } = {}) {
     }, 300);
   };
 
-  form.append(
-    card(
-      cardHeader('1. Index', morning ? 'Ceux de la fermeture : corrigez si un compteur a bougé' : 'Relevez le compteur de chaque pistolet'),
+  const parts = [
+    morning
+      ? h('div', { hidden: true }, shift.readings.map((r) => h('input', { type: 'hidden', name: `m_${r.nozzle_id}`, value: String(lastMeter(r)) })))
+      : card(
+      cardHeader('1. Index', 'Relevez le compteur de chaque pistolet'),
       h(
         'div',
         { class: 'stack' },
@@ -138,15 +140,14 @@ export function renderCheckpoint(page, ctx, shift, kind, { report } = {}) {
             step: '0.01',
             min: String(lastMeter(r)),
             required: true,
-            value: morning ? lastMeter(r) : undefined,
             onInput: refresh,
           }),
         ),
       ),
     ),
-    preview,
+    morning ? null : preview,
     card(
-      cardHeader('2. Argent'),
+      cardHeader(morning ? 'Argent' : '2. Argent'),
       h(
         'div',
         { class: 'form-grid' },
@@ -160,7 +161,8 @@ export function renderCheckpoint(page, ctx, shift, kind, { report } = {}) {
       morning ? h('span') : button('Retour', () => renderAttendant(page, ctx), { variant: 'large secondary' }),
       button(k.submit, null, { variant: 'large', type: 'submit' }),
     ),
-  );
+  ];
+  form.append(...parts.filter(Boolean));
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -193,8 +195,7 @@ export function renderCheckpoint(page, ctx, shift, kind, { report } = {}) {
   setContent(
     page,
     pageHeader(k.title, `Poste n°${shift.id} · ${k.intro}`),
-    morning && report ? reportCard(report, tol, { title: `Fermeture d’hier soir${report.by ? ` · ${report.by}` : ''}` }) : null,
+    morning && report ? h('div', { style: 'margin-bottom:20px' }, reportCard(report, tol, { title: `Fermeture d’hier soir${report.by ? ` · ${report.by}` : ''}` })) : null,
     form,
   );
-  if (morning) refresh();
 }

@@ -89,4 +89,4 @@ Requires Node ≥ 22.13 (built-in `node:sqlite`, hence `--disable-warning=Experi
 
 ## Deployment
 
-`src/storage.js` tells on Render whether the database is on the persistent disk (`/api/health` `storage`, a dashboard alert otherwise). `render.yaml` is a Render blueprint (`TZ=Africa/Lubumbashi`, `DB_FILE` on a persistent disk, health check `/api/health`). The SQLite file is the whole state; back it up with Réglages → Données (`GET /api/backup`, `VACUUM INTO`), never by copying `station.db` alone (WAL).
+`src/storage.js` tells on Render whether the database is on the persistent disk (`/api/health` `storage`, a warning in the log otherwise). `render.yaml` is a Render blueprint (`TZ=Africa/Lubumbashi`, `DB_FILE` on a persistent disk, health check `/api/health`). The SQLite file is the whole state; back it up with Réglages → Données (`GET /api/backup`, `VACUUM INTO`), never by copying `station.db` alone (WAL).
