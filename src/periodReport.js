@@ -36,8 +36,8 @@ function periodReportPdf(r, { stationName, cashTolerance = 0, combosEnabled, now
   }
 
   // ---- Shifts ----
-  report.section('Postes', 'Remis = espèces comptées (monnaie laissée comprise) + mobile money, en dollars.');
-  const handedOver = (s) => round((s.cash || 0) + (s.mobile_money || 0));
+  report.section('Postes', 'Remis = espèces remises + monnaie laissée aux pompistes + mobile money, en dollars.');
+  const handedOver = (s) => round((s.cash || 0) + (s.change_left || 0) + (s.mobile_money || 0));
   const sum = (key) => round(r.shifts.reduce((a, s) => a + (s[key] || 0), 0));
   report.table(
     [

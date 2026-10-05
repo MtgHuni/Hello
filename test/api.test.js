@@ -801,14 +801,14 @@ test('monnaie laissée aux pompistes, dépense du pompiste dans la caisse, cuves
   const spent = (await pompiste('POST', `/api/shifts/${shift.id}/expenses`, { category: 'Fournitures', amount: 3, description: 'Savon' })).data;
   assert.ok((await book()).movements.some((m) => m.source === 'expense' && m.id === spent.id && m.out === 3), 'sortie visible tout de suite');
 
-  // The change left can not be more than the cash counted.
-  assert.strictEqual((await closeShift(shift, ends, { cash: 50, changeLeft: 60 })).status, 400);
+  // The change left stays with the attendants: the cash handed over is the rest, and the gap counts both.
   const before = (await book()).balances.cash.balance;
-  const closed = (await closeShift(shift, ends, { cash: 50, changeLeft: 20 })).data;
+  const closed = (await closeShift(shift, ends, { cash: 30, changeLeft: 20 })).data;
   assert.strictEqual(closed.change_left, 20);
-  // The till gets the cash less the change (the expense already went out): 50 − 20 + 3.
+  assert.strictEqual(closed.variance, Math.round((30 + 20 + closed.mobile_money - closed.expected_amount) * 100) / 100);
+  // The till gets the cash handed over (the expense already went out): 30 + 3.
   const after = await book();
-  assert.strictEqual(after.balances.cash.balance, Math.round((before + 50 - 20 + 3) * 100) / 100);
+  assert.strictEqual(after.balances.cash.balance, Math.round((before + 30 + 3) * 100) / 100);
   assert.ok(after.movements.find((m) => m.source === 'shift' && m.id === shift.id).label.includes('monnaie laissée'));
 
   // The next shift starts with the change: its first relief and its closing count it.

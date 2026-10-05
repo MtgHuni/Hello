@@ -774,7 +774,7 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
     expected: h('span', { class: 'num' }),
     expectedCash: h('span', { class: 'num' }),
     declared: h('span', { class: 'num' }),
-    paidIn: h('span', { class: 'num' }),
+    changeLeft: h('span', { class: 'num nowrap' }),
     variance: h('span', { class: 'num' }),
   };
   const perNozzle = new Map();
@@ -805,10 +805,11 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
     const declared = value('cash') + momo;
     lines.total.textContent = complete ? fmt.money(total) : '—';
     lines.expected.textContent = complete ? fmt.money(expected) : '—';
-    lines.expectedCash.textContent = complete ? fmt.money(expected - momo) : '—';
+    // The change left stays with the attendants: it is not handed over.
+    lines.changeLeft.textContent = `− ${fmt.money(value('changeLeft'))}`;
+    lines.expectedCash.textContent = complete ? fmt.money(expected - momo - value('changeLeft')) : '—';
     lines.declared.textContent = fmt.money(value('cash'));
-    lines.paidIn.textContent = fmt.money(value('cash') - value('changeLeft'));
-    setContent(lines.variance, complete && form.elements.cash.value !== '' ? varianceCell(Math.round((declared - expected) * 100) / 100, tol) : '—');
+    setContent(lines.variance, complete && form.elements.cash.value !== '' ? varianceCell(Math.round((declared + value('changeLeft') - expected) * 100) / 100, tol) : '—');
   };
 
   form.append(
@@ -830,13 +831,13 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
       ),
     ),
     card(
-      cardHeader('2. Caisse', 'Comptez toutes les espèces, puis dites combien de monnaie vous laissez aux pompistes : le mobile money est le total saisi pendant le poste'),
+      cardHeader('2. Caisse', 'La monnaie laissée aux pompistes reste avec eux pour le poste suivant ; comptez les espèces qu’ils vous remettent. Le mobile money est le total saisi pendant le poste.'),
       h('div', { class: 'summary-line', style: 'margin-bottom:12px' }, h('span', {}, 'Mobile money reçu'), h('span', { class: 'num' }, fmt.money(momo))),
       h(
         'div',
         { class: 'form-grid' },
-        field({ name: 'cash', label: 'Espèces comptées ($)', type: 'number', step: '0.01', min: '0', required: true, value: first(shift.cash, undefined), onInput: recompute }),
         field({ name: 'changeLeft', label: 'Monnaie laissée aux pompistes ($)', type: 'number', step: '0.01', min: '0', value: first(shift.change_left, received || undefined), onInput: recompute }),
+        field({ name: 'cash', label: 'Espèces remises ($)', type: 'number', step: '0.01', min: '0', required: true, value: first(shift.cash, undefined), onInput: recompute }),
         field({ name: 'notes', label: 'Remarque (facultatif)', type: 'textarea', full: true, value: first(shift.notes, undefined) }),
         correcting ? field({ name: 'reason', label: 'Motif de la correction', required: true, full: true, placeholder: 'Ex. : index mal lu, billets oubliés' }) : null,
       ),
@@ -851,10 +852,10 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
       expenses ? h('div', { class: 'summary-line' }, h('span', {}, 'Dépenses payées'), h('span', { class: 'num' }, `− ${fmt.money(expenses)}`)) : null,
       h('div', { class: 'summary-line' }, h('span', {}, 'À remettre'), lines.expected),
       momo ? h('div', { class: 'summary-line' }, h('span', {}, 'Reçu en mobile money'), h('span', { class: 'num' }, `− ${fmt.money(momo)}`)) : null,
+      h('div', { class: 'summary-line' }, h('span', {}, 'Monnaie laissée aux pompistes'), lines.changeLeft),
       h('div', { class: 'summary-line' }, h('span', {}, 'Espèces à remettre'), lines.expectedCash),
-      h('div', { class: 'summary-line' }, h('span', {}, 'Espèces comptées'), lines.declared),
+      h('div', { class: 'summary-line' }, h('span', {}, 'Espèces remises'), lines.declared),
       h('div', { class: 'summary-line total' }, h('span', {}, 'Écart'), lines.variance),
-      h('div', { class: 'summary-line' }, h('span', {}, 'Versé à la caisse (sans la monnaie laissée)'), lines.paidIn),
     ),
     h(
       'div',

@@ -393,7 +393,7 @@ const MIGRATIONS = [
 ];
 
 // Bumped with every schema change; recorded in PRAGMA user_version.
-const SCHEMA_VERSION = 13;
+const SCHEMA_VERSION = 14;
 
 function missingColumns(db) {
   return MIGRATIONS.filter(([table, column]) => {
@@ -558,6 +558,10 @@ function openDb(file) {
     // Credit sales only earn their combos once paid: recompute every balance.
     const { refreshCustomer } = require('./loyalty');
     for (const { id } of db.prepare('SELECT id FROM customers').all()) refreshCustomer(db, id);
+  }
+  if (version < 14) {
+    // Version 14: the closing's cash is what is handed over, without the change left (it was counted in).
+    db.exec('UPDATE shifts SET cash = ROUND(cash - change_left, 2) WHERE change_left > 0');
   }
   if (version < 11) {
     // Version 11: the manager's closing is final, there is no validation step any more.

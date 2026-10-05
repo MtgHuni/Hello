@@ -41,9 +41,9 @@ function allEntries(db) {
     )
     .all()) {
     const base = { at: s.at, day: s.day, source: 'shift', id: s.id, link: `#/postes/${s.id}` };
-    // The cash paid into the till (the change left with the attendants stays with them), plus
-    // what was spent from it during the shift: those expenses go out on their own lines.
-    const paidIn = round(s.cash - s.change_left);
+    // The cash handed over (the change left with the attendants stays with them), plus what was
+    // spent from it during the shift: those expenses go out on their own lines.
+    const paidIn = s.cash;
     const detail = [s.change_left ? `monnaie laissée aux pompistes ${money(s.change_left)}` : null, s.spent ? `avec les dépenses du poste (${money(s.spent)})` : null].filter(Boolean).join(', ');
     push({ ...base, account: 'cash', in: round(paidIn + s.spent), label: `Clôture du poste n°${s.id} (${s.attendant})${detail ? ` : ${detail}` : ''}` });
     push({ ...base, account: 'momo', in: s.mobile_money, label: `Mobile money du poste n°${s.id} (${s.attendant})` });

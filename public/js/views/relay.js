@@ -55,7 +55,7 @@ export function reportCard(r, tol, { title, preview = false } = {}) {
     r.combos ? line('Échangé contre des combos', `− ${fmt.money(r.combos)}`) : null,
     r.payments ? line('Règlements reçus', `+ ${fmt.money(r.payments)}`) : null,
     r.expenses ? line('Dépenses payées', `− ${fmt.money(r.expenses)}`) : null,
-    r.received ? line('Espèces reçues au début', `+ ${fmt.money(r.received)}`) : null,
+    r.received ? line(r.from_kind === 'opening' ? 'Monnaie reçue à la clôture' : 'Espèces reçues au début', `+ ${fmt.money(r.received)}`) : null,
     line('Argent à avoir', fmt.money(r.expected), 'total'),
     r.mobile_money ? line('Reçu en mobile money', `− ${fmt.money(r.mobile_money)}`) : null,
     r.mobile_money ? line('Espèces à avoir', fmt.money(r.expected_cash), 'total') : null,

@@ -1,8 +1,9 @@
 const express = require('express');
 const { EXPENSE_CATEGORIES, getSettings } = require('../db');
 
-// Money handed over, in dollars.
-const declared = (s) => round((s.cash || 0) + (s.mobile_money || 0));
+// Money accounted for at the closing, in dollars: cash handed over, change left with the
+// attendants, mobile money entered during the shift.
+const declared = (s) => round((s.cash || 0) + (s.change_left || 0) + (s.mobile_money || 0));
 const { fail, num, str, oneOf, round, dateParam, transaction, money, clientRef } = require('../util');
 const { requireRole } = require('../auth');
 const { customerBalance } = require('./customers');
@@ -626,7 +627,6 @@ module.exports = function shiftRoutes(db) {
   function applyClosing(shift, b) {
     const cash = round(num(b.cash, 'Le montant en espèces ($)', { max: 1e8 }));
     const changeLeft = round(num(b.changeLeft ?? 0, 'La monnaie laissée aux pompistes', { max: 1e7 }));
-    if (changeLeft > cash) fail(400, 'La monnaie laissée aux pompistes ne peut pas dépasser les espèces comptées.');
     const notes = str(b.notes, 'La remarque', { required: false, max: 500 });
     const ends = new Map((Array.isArray(b.readings) ? b.readings : []).map((r) => [Number(r.nozzleId), r.endMeter]));
     const last = lastMeters(db, shift.id);
