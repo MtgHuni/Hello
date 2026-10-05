@@ -678,6 +678,12 @@ export function applyTheme(theme) {
   if (theme === 'light') document.documentElement.dataset.theme = 'light';
   else delete document.documentElement.dataset.theme;
   document.querySelector('meta[name=theme-color]')?.setAttribute('content', theme === 'light' ? '#ffffff' : '#0a0a0b');
+  for (const b of document.querySelectorAll('.theme-btn')) b.setAttribute('aria-pressed', String(theme === 'light'));
+}
+
+// The sun beside the account, as on iOS: one tap for day mode, lit while it is on.
+export function themeButton() {
+  return h('button', { class: 'theme-btn', type: 'button', 'aria-label': 'Mode jour (plein soleil)', 'aria-pressed': String(document.documentElement.dataset.theme === 'light'), onClick: toggleTheme }, icon('sun'));
 }
 
 export function toggleTheme() {

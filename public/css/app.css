@@ -342,6 +342,16 @@ dialog.nav-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; hei
 @keyframes drawer-left-in { from { transform: translateX(-100%); } }
 @keyframes drawer-left-out { to { transform: translateX(-100%); } }
 .side-foot:hover > svg { color: var(--text); }
+/* The account and, beside it, the sun of day mode. */
+.side-account { display: flex; align-items: center; gap: 4px; margin-top: auto; padding-top: 10px; border-top: 1px solid var(--hairline); }
+.side-account .side-foot { flex: 1; min-width: 0; margin-top: 0; padding: 4px 6px 4px 10px; border-top: none; }
+/* Day mode, as on iOS: a sun on a key of the bar, lit yellow while the day mode is on. */
+.theme-btn { display: grid; place-items: center; flex: none; width: 44px; height: 44px; padding: 0; border: none; background: none; color: var(--text-2); cursor: pointer; }
+.theme-btn svg { width: 34px; height: 34px; padding: 7px; border-radius: 8px; background: var(--surface-3); stroke-width: 2; transition: background-color 0.2s var(--ease), color 0.2s; }
+.theme-btn:hover svg { color: var(--text); }
+.theme-btn[aria-pressed='true'] svg { background: var(--sign-yellow); color: var(--on-sign); }
+.theme-btn:focus-visible { outline: none; }
+.theme-btn:focus-visible svg { box-shadow: 0 0 0 2px var(--focus); }
 .who { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.25; }
 .who strong { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .who span { font-size: 12px; color: var(--text-3); }
@@ -364,6 +374,7 @@ dialog.nav-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; hei
 .topbar-brand { display: grid; place-items: center; width: 32px; height: 32px; margin-left: -4px; }
 .topbar-brand .brand-mark { width: 22px; height: 22px; }
 .topbar-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-display); font-size: 24px; font-weight: 700; letter-spacing: 0.01em; text-transform: uppercase; }
+.topbar .theme-btn { margin-right: -6px; }
 .topbar-account { display: grid; place-items: center; width: 44px; height: 44px; margin-right: -6px; padding: 0; border: none; background: none; cursor: pointer; }
 .tabbar {
   position: fixed;

@@ -1,6 +1,6 @@
 import { flags } from './ui.js';
 import { api } from './api.js';
-import { h, errorState, toast, formDialog, actionSheet, openDialog, spinner, initials, applyTheme, toggleTheme } from './ui.js';
+import { h, errorState, toast, formDialog, actionSheet, openDialog, spinner, initials, applyTheme, toggleTheme, themeButton } from './ui.js';
 import { icon, brandMark } from './icons.js';
 import { enhance } from './motion.js';
 import { renderLogin, renderSetup } from './views/auth.js';
@@ -125,11 +125,16 @@ function buildShell() {
     h('a', { class: 'side-brand', href: '#/', 'aria-label': `${state.settings.stationName}, accueil` }, brandMark(), h('span', {}, state.settings.stationName)),
     nav.length > 1 ? h('nav', { class: 'side-nav', 'aria-label': 'Navigation' }, nav.map((n) => link(n, false))) : h('div', { class: 'spacer' }),
     h(
-      'button',
-      { class: 'side-foot', type: 'button', 'aria-label': 'Mon compte', onClick: accountMenu },
-      h('span', { class: 'avatar' }, initials(state.user.name)),
-      h('span', { class: 'who' }, h('strong', {}, state.user.name), h('span', {}, ROLE_LABEL[role])),
-      icon('more'),
+      'div',
+      { class: 'side-account' },
+      h(
+        'button',
+        { class: 'side-foot', type: 'button', 'aria-label': 'Mon compte', onClick: accountMenu },
+        h('span', { class: 'avatar' }, initials(state.user.name)),
+        h('span', { class: 'who' }, h('strong', {}, state.user.name), h('span', {}, ROLE_LABEL[role])),
+        icon('more'),
+      ),
+      themeButton(),
     ),
   );
 
@@ -139,6 +144,7 @@ function buildShell() {
     { class: 'topbar' },
     h('a', { class: 'topbar-brand', href: '#/', 'aria-label': `${state.settings.stationName}, accueil` }, brandMark()),
     topTitle,
+    themeButton(),
     h('button', { class: 'topbar-account', type: 'button', 'aria-label': 'Mon compte', onClick: accountMenu }, h('span', { class: 'avatar' }, initials(state.user.name))),
   );
 

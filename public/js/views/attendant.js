@@ -1,6 +1,6 @@
 import { flags } from '../ui.js';
 import { api } from '../api.js';
-import { priceTotem, shiftLine, h, fmt, pageHeader, card, cardHeader, table, shiftBadge, varianceCell, button, formDialog, confirmDialog, toast, field, productColor, badge, kpi, parseServerDate, setContent, reportLink, busy, newRef, toggleTheme, buttonRow } from '../ui.js';
+import { priceTotem, shiftLine, h, fmt, pageHeader, card, cardHeader, table, shiftBadge, varianceCell, button, formDialog, confirmDialog, toast, field, productColor, badge, kpi, parseServerDate, setContent, reportLink, busy, newRef, buttonRow } from '../ui.js';
 import { icon } from '../icons.js';
 import { shiftSummary } from './shifts.js';
 import { renderJoin, renderCheckpoint } from './relay.js';
@@ -199,10 +199,8 @@ function renderOpenShift(page, ctx, shift, remarks = null) {
   setContent(page, 
     pageHeader(
       'Poste en cours',
-      `Poste n°${shift.id} · depuis le ${fmt.dateTime(shift.opened_at)} · en service : ${shift.on_duty.join(', ')}`,
+      `Poste n°${shift.id} · depuis le ${fmt.dateTime(shift.opened_at)}${shift.on_duty.length ? ` · en service : ${shift.on_duty.join(', ')}` : ''}`,
       shiftBadge('open'),
-      // Full sun at the pump: day mode in one tap.
-      h('button', { type: 'button', class: 'btn secondary sm theme-toggle', onClick: toggleTheme, 'aria-label': 'Changer de mode : jour ou nuit' }, 'Jour / nuit'),
     ),
     shiftLine('open'),
     remarks,
