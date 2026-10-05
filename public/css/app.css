@@ -173,6 +173,7 @@
   --sign-yellow-hover: #ffc414;
   --sign-yellow-press: #d9a200;
   --sign-yellow-ink: #6f5000;
+  --sign-yellow-deep: #9a6c00; /* by day, yellow buttons and headers: deep enough for white text */
   --sign-sky: #2f6fd6;
   --sign-sky-ink: #1f5bbd;
   --sign-violet: #6a4bd1;
@@ -707,6 +708,8 @@ tfoot td { font-weight: 600; border-top: 1px solid var(--separator); border-bott
 .btn.ghost { padding-left: 12px; padding-right: 12px; }
 .btn.danger, .btn.destructive { --hue: var(--red); --hue-ink: var(--bad-text); }
 /* Day: deep fills with white ink (the yellow keeps its dark ink). */
+/* Day: every sign is a deep fill with white text; the yellow ones take the deep gold. */
+:root[data-theme='light'] :is(.btn, .card.remark-card, .quick-action.primary) { --solid: var(--sign-yellow-deep); --on-solid: #fff; }
 :root[data-theme='light'] :is(.btn.secondary, .btn.ghost, .btn.danger, .btn.destructive, .card:not(.remark-card)) { --solid: var(--hue-ink); --on-solid: #fff; }
 :root[data-theme='light'] .card-header .btn:is(.secondary, .ghost) { --solid: var(--surface); --on-solid: var(--text); }
 .more-link { display: inline-flex; align-items: center; gap: 2px; font-size: 15px; font-weight: 600; white-space: nowrap; }
@@ -1106,9 +1109,6 @@ dialog.action-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; 
 .quick-action .qa-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--radius-md); background: var(--on-solid); color: var(--solid); }
 .quick-action .qa-icon svg { width: 21px; height: 21px; }
 .quick-action.primary { --hue: var(--sign-yellow); --hue-ink: var(--sign-yellow-ink); }
-:root[data-theme='light'] .quick-action.primary { --solid: var(--hue); --on-solid: var(--on-sign); }
-/* By day every icon sits on a white square, in its tile's colour: Crédit's + is yellow. */
-:root[data-theme='light'] .quick-action.primary .qa-icon { background: #fff; color: var(--sign-yellow); }
 .kpi-row { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .kpi-row .card { padding: 18px; }
 .kpi-row .kpi .label { font-size: 13px; }
