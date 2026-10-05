@@ -437,7 +437,8 @@ dialog.nav-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; hei
 }
 /* The header is a lit band across the top of the panel: a tint of its sign, the title in that
    colour. Panels take turns (sky, violet, orange), so neighbouring headers never match. */
-.card { --hue: var(--sign-sky); --hue-ink: var(--sign-sky-ink); }
+/* Every sign is lit solid: --solid fills it, --on-solid writes on it. */
+.card { --hue: var(--sign-sky); --hue-ink: var(--sign-sky-ink); --solid: var(--hue); --on-solid: var(--on-sign); }
 .card:nth-child(3n + 2 of section.card) { --hue: var(--sign-violet); --hue-ink: var(--sign-violet-ink); }
 .card:nth-child(3n + 3 of section.card) { --hue: var(--sign-orange); --hue-ink: var(--sign-orange-ink); }
 .card-header {
@@ -448,13 +449,16 @@ dialog.nav-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; hei
   flex-wrap: wrap;
   margin: -24px -24px 22px;
   padding: 18px 24px 16px;
-  border-bottom: 1px solid color-mix(in oklab, var(--hue) 40%, transparent);
   border-top-left-radius: inherit; /* square in a board cell, rounded on a lone panel */
   border-top-right-radius: inherit;
-  background: color-mix(in oklab, var(--hue) var(--sign-tint), var(--surface));
+  background: var(--solid);
+  color: var(--on-solid);
 }
-.card-header h2 { font-size: 26px; color: var(--hue-ink); }
-.card-header p { color: var(--text-2); font-size: 14px; line-height: 1.4; margin-top: 3px; letter-spacing: -0.012em; }
+.card-header h2 { font-size: 26px; color: var(--on-solid); }
+.card-header p { color: color-mix(in oklab, var(--on-solid) 78%, var(--solid)); font-size: 14px; line-height: 1.4; margin-top: 3px; letter-spacing: -0.012em; }
+.card-header a:not(.btn) { color: var(--on-solid); }
+/* On a lit header the other buttons are slabs of the page, the main one stays yellow. */
+.card-header .btn:is(.secondary, .ghost) { --solid: var(--surface); --on-solid: var(--text); }
 /* A filter beside the segmented control (e.g. one attendant's shifts). */
 .card-header .header-select { width: auto; min-width: 200px; min-height: 40px; padding: 8px 36px 8px 14px; }
 .card.flush { padding: 0; overflow: hidden; }
@@ -661,7 +665,8 @@ tfoot td { font-weight: 600; border-top: 1px solid var(--separator); border-bott
 .btn {
   --hue: var(--sign-yellow);
   --hue-ink: var(--sign-yellow-ink);
-  --tint: calc(var(--sign-tint) + 6%); /* the main action reads a little stronger */
+  --solid: var(--hue);
+  --on-solid: var(--on-sign);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -669,9 +674,9 @@ tfoot td { font-weight: 600; border-top: 1px solid var(--separator); border-bott
   min-height: 46px;
   padding: 10px 20px;
   border-radius: var(--radius-md);
-  border: 1px solid color-mix(in oklab, var(--hue) 55%, transparent);
-  background: color-mix(in oklab, var(--hue) var(--tint), var(--surface));
-  color: var(--hue-ink);
+  border: 1px solid transparent;
+  background: var(--solid);
+  color: var(--on-solid);
   font: inherit;
   font-size: 16px;
   font-weight: 600;
@@ -681,15 +686,18 @@ tfoot td { font-weight: 600; border-top: 1px solid var(--separator); border-bott
   user-select: none;
   transition: background-color 0.2s var(--ease), color 0.2s, border-color 0.2s, opacity 0.2s, transform 0.2s var(--ease);
 }
-.btn:hover { background: color-mix(in oklab, var(--hue) calc(var(--tint) + 12%), var(--surface)); border-color: var(--hue); text-decoration: none; }
-.btn:active { background: color-mix(in oklab, var(--hue) calc(var(--tint) + 20%), var(--surface)); }
+.btn:hover { background: color-mix(in oklab, var(--solid) 86%, #fff); text-decoration: none; }
+.btn:active { background: color-mix(in oklab, var(--solid) 86%, #000); }
 .btn:disabled { opacity: 0.42; cursor: default; }
 .btn svg { width: 18px; height: 18px; stroke-width: 2; }
-.btn.secondary, .btn.ghost { --hue: var(--sign-sky); --hue-ink: var(--sign-sky-ink); --tint: var(--sign-tint); }
+.btn.secondary, .btn.ghost { --hue: var(--sign-sky); --hue-ink: var(--sign-sky-ink); }
 .btn.secondary:nth-child(3n + 2 of .btn.secondary) { --hue: var(--sign-violet); --hue-ink: var(--sign-violet-ink); }
 .btn.secondary:nth-child(3n + 3 of .btn.secondary) { --hue: var(--sign-orange); --hue-ink: var(--sign-orange-ink); }
 .btn.ghost { padding-left: 12px; padding-right: 12px; }
-.btn.danger, .btn.destructive { --hue: var(--red); --hue-ink: var(--bad-text); --tint: var(--sign-tint); }
+.btn.danger, .btn.destructive { --hue: var(--red); --hue-ink: var(--bad-text); }
+/* Day: deep fills with white ink (the yellow keeps its dark ink). */
+:root[data-theme='light'] :is(.btn.secondary, .btn.ghost, .btn.danger, .btn.destructive, .card:not(.remark-card)) { --solid: var(--hue-ink); --on-solid: #fff; }
+:root[data-theme='light'] .card-header .btn:is(.secondary, .ghost) { --solid: var(--surface); --on-solid: var(--text); }
 .more-link { display: inline-flex; align-items: center; gap: 2px; font-size: 15px; font-weight: 600; white-space: nowrap; }
 .more-link svg { width: 16px; height: 16px; stroke-width: 2.2; margin-top: 1px; }
 .btn.large { min-height: 54px; padding: 14px 26px; font-size: 17px; }
@@ -1077,15 +1085,16 @@ dialog.action-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; 
   transition: box-shadow 0.3s var(--ease), background-color 0.2s, transform 0.2s var(--ease);
 }
 .quick-action:hover { box-shadow: var(--shadow-lift); }
-/* Each action is its own sign, all built alike: a tinted tile and a solid icon square, yellow for
-   the main one (Crédit), then sky, violet, orange. */
-.quick-action { --hue: var(--sign-sky); --hue-ink: var(--sign-sky-ink); background: color-mix(in oklab, var(--hue) var(--sign-tint), var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--hue) 45%, transparent); color: var(--hue-ink); }
-.quick-action:nth-child(4n + 3) { --hue: var(--sign-violet); --hue-ink: var(--sign-violet-ink); }
-.quick-action:nth-child(4n + 4) { --hue: var(--sign-orange); --hue-ink: var(--sign-orange-ink); }
-.quick-action:hover { background: color-mix(in oklab, var(--hue) calc(var(--sign-tint) + 10%), var(--surface)); box-shadow: inset 0 0 0 1px var(--hue), var(--shadow-lift); }
-.quick-action .qa-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--radius-md); background: var(--hue); color: var(--on-sign); }
+/* Each action is its own lit sign, all built alike: a solid tile, sky, violet, orange in turn, and
+   its icon on a square of the tile's ink. Only the main action's icon (Crédit's +) is yellow. */
+.quick-action { --hue: var(--sign-sky); --hue-ink: var(--sign-sky-ink); --solid: var(--hue); --on-solid: var(--on-sign); background: var(--solid); color: var(--on-solid); }
+.quick-action:nth-child(4n + 2) { --hue: var(--sign-violet); --hue-ink: var(--sign-violet-ink); }
+.quick-action:nth-child(4n + 3) { --hue: var(--sign-orange); --hue-ink: var(--sign-orange-ink); }
+:root[data-theme='light'] .quick-action { --solid: var(--hue-ink); --on-solid: #fff; }
+.quick-action:hover { background: color-mix(in oklab, var(--solid) 88%, #fff); box-shadow: var(--shadow-lift); }
+.quick-action .qa-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--radius-md); background: var(--on-solid); color: var(--solid); }
 .quick-action .qa-icon svg { width: 21px; height: 21px; }
-.quick-action.primary { --hue: var(--sign-yellow); --hue-ink: var(--sign-yellow-ink); }
+.quick-action.primary .qa-icon { background: var(--sign-yellow); color: var(--on-sign); }
 .kpi-row { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .kpi-row .card { padding: 18px; }
 .kpi-row .kpi .label { font-size: 13px; }
@@ -1289,8 +1298,9 @@ html[data-nav='fade']::view-transition-new(page) { animation: fade-up 0.5s var(-
   .kpi-row { gap: 8px; }
   .kpi-row .card { padding: 14px 12px; }
   .kpi-row .kpi .value { font-size: 24px; }
-  .queue-card .actions { grid-template-columns: 1fr 1fr; }
-  .queue-card .actions .btn:last-child { grid-column: 1 / -1; }
+  .queue-card .actions { gap: 6px; }
+  .queue-card .actions .btn { padding-left: 6px; padding-right: 6px; font-size: 15px; }
+  .queue-card .actions .btn svg { display: none; }
   .totem-price { font-size: 48px; }
 }
 
@@ -1470,8 +1480,8 @@ input:focus, select:focus, textarea:focus { border-color: var(--text); }
 .remark-card .card-header { flex-wrap: nowrap; }
 .remark-card .card-header .btn-row { flex: none; }
 .remark-nav { display: flex; align-items: center; gap: 6px; }
-.remark-count { min-width: 44px; text-align: center; font-family: var(--font-display); font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--hue-ink); }
-.remark-nav .circle-btn { background: color-mix(in oklab, var(--hue) 22%, var(--surface)); color: var(--hue-ink); }
+.remark-count { min-width: 44px; text-align: center; font-family: var(--font-display); font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--on-solid); }
+.remark-nav .circle-btn { background: var(--surface); color: var(--text); }
 .remark-nav .circle-btn:disabled { opacity: 0.35; cursor: default; }
 .remark-track { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; }
 .remark-track::-webkit-scrollbar { display: none; }
