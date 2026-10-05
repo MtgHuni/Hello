@@ -64,6 +64,12 @@ module.exports = function shiftRoutes(db) {
       )
       .all(id);
     for (const r of shift.readings) r.tested = testedLiters(id, r.nozzle_id);
+    shift.tanks = db
+      .prepare(
+        `SELECT st.*, t.name, t.capacity, t.low_level, p.name AS product_name, p.id AS product_id
+         FROM shift_tank_stock st JOIN tanks t ON t.id = st.tank_id JOIN products p ON p.id = t.product_id WHERE st.shift_id = ? ORDER BY t.id`,
+      )
+      .all(id);
     shift.momo_total = momoTotal(db, id);
     shift.liters_by_product = litersByProduct([id]).get(Number(id)) || [];
     shift.pending_cancellations = pendingCancellations(id);
@@ -113,6 +119,12 @@ module.exports = function shiftRoutes(db) {
       const liters = netLiters(r, sales, testedLiters(shiftId, r.nozzle_id));
       db.prepare('UPDATE shift_readings SET liters = ?, amount = ? WHERE id = ?').run(liters, round(liters * r.unit_price), r.id);
       db.prepare('UPDATE tanks SET book_stock = ROUND(book_stock + ?, 2) WHERE id = ?').run(round((r.liters || 0) - liters), r.tank_id);
+      db.prepare('UPDATE shift_tank_stock SET sold = ROUND(sold - ?, 2), stock_after = ROUND(stock_after + ?, 2) WHERE shift_id = ? AND tank_id = ?').run(
+        round((r.liters || 0) - liters),
+        round((r.liters || 0) - liters),
+        shiftId,
+        r.tank_id,
+      );
     }
     db.prepare('UPDATE shifts SET total_liters = (SELECT ROUND(COALESCE(SUM(liters), 0), 2) FROM shift_readings WHERE shift_id = ?) WHERE id = ?').run(shiftId, shiftId);
     reconcile(shiftId);
@@ -591,9 +603,9 @@ module.exports = function shiftRoutes(db) {
     const comboAmount = round(sales.filter((s) => s.kind === 'combo').reduce((t, s) => t + s.amount, 0));
     const paymentsAmount = round(db.prepare('SELECT COALESCE(SUM(amount), 0) AS v FROM payments WHERE shift_id = ?').get(shiftId).v);
     const expensesAmount = round(db.prepare('SELECT COALESCE(SUM(amount), 0) AS v FROM expenses WHERE shift_id = ?').get(shiftId).v);
-    // To hand over = fuel sold − sold on credit − exchanged for combos
-    //               + account payments received − expenses paid from the till.
-    const expected = round(totalAmount - creditAmount - comboAmount + paymentsAmount - expensesAmount);
+    // To hand over = change received at the opening + fuel sold − sold on credit − exchanged for
+    //               combos + account payments received − expenses paid from the till.
+    const expected = round((shift.change_received || 0) + totalAmount - creditAmount - comboAmount + paymentsAmount - expensesAmount);
     // Mobile money is not counted: it is the total of what was entered as paid by mobile money.
     const mobileMoney = momoTotal(db, shiftId);
     db.prepare(
@@ -613,6 +625,8 @@ module.exports = function shiftRoutes(db) {
   // a correction calls it again after undoing the first closing (closed_at is kept).
   function applyClosing(shift, b) {
     const cash = round(num(b.cash, 'Le montant en espèces ($)', { max: 1e8 }));
+    const changeLeft = round(num(b.changeLeft ?? 0, 'La monnaie laissée aux pompistes', { max: 1e7 }));
+    if (changeLeft > cash) fail(400, 'La monnaie laissée aux pompistes ne peut pas dépasser les espèces comptées.');
     const notes = str(b.notes, 'La remarque', { required: false, max: 500 });
     const ends = new Map((Array.isArray(b.readings) ? b.readings : []).map((r) => [Number(r.nozzleId), r.endMeter]));
     const last = lastMeters(db, shift.id);
@@ -640,9 +654,16 @@ module.exports = function shiftRoutes(db) {
         db.prepare('UPDATE tanks SET book_stock = ROUND(book_stock - ?, 2) WHERE id = ?').run(liters, r.tank_id);
       }
       db.prepare(
-        `UPDATE shifts SET status = 'closed', closed_at = COALESCE(closed_at, datetime('now')), cash = ?,
+        `UPDATE shifts SET status = 'closed', closed_at = COALESCE(closed_at, datetime('now')), cash = ?, change_left = ?,
            total_liters = ?, notes = ? WHERE id = ?`,
-      ).run(cash, round(totalLiters), notes, shift.id);
+      ).run(cash, changeLeft, round(totalLiters), notes, shift.id);
+      // Each tank as the shift leaves it, for the report.
+      db.prepare('DELETE FROM shift_tank_stock WHERE shift_id = ?').run(shift.id);
+      db.prepare(
+        `INSERT INTO shift_tank_stock (shift_id, tank_id, sold, stock_after)
+         SELECT ?, t.id, COALESCE((SELECT SUM(r.liters) FROM shift_readings r WHERE r.shift_id = ? AND r.tank_id = t.id), 0), t.book_stock
+         FROM tanks t WHERE t.active = 1 OR t.id IN (SELECT tank_id FROM shift_readings WHERE shift_id = ?)`,
+      ).run(shift.id, shift.id, shift.id);
       reconcile(shift.id);
     }
   }
@@ -659,6 +680,7 @@ module.exports = function shiftRoutes(db) {
       const present = db.prepare('SELECT DISTINCT user_id FROM shift_attendants WHERE shift_id = ? AND left_at IS NULL ORDER BY id').all(shift.id);
       db.prepare("UPDATE shift_attendants SET left_at = datetime('now') WHERE shift_id = ? AND left_at IS NULL").run(shift.id);
       nextId = openShift(present[0]?.user_id ?? shift.attendant_id);
+      db.prepare('UPDATE shifts SET change_received = (SELECT change_left FROM shifts WHERE id = ?) WHERE id = ?').run(shift.id, nextId);
       for (const p of present) join(nextId, p.user_id);
       if (shift.station_closed_at) db.prepare('UPDATE shifts SET station_closed_at = ? WHERE id = ?').run(shift.station_closed_at, nextId);
       const s = db.prepare('SELECT * FROM shifts WHERE id = ?').get(shift.id);
@@ -698,6 +720,7 @@ module.exports = function shiftRoutes(db) {
       }
       applyClosing(shift, req.body || {});
       if (next?.status === 'open') {
+        db.prepare('UPDATE shifts SET change_received = (SELECT change_left FROM shifts WHERE id = ?) WHERE id = ?').run(shift.id, next.id);
         const firstTaken = db.prepare('SELECT c.id FROM shift_checkpoints c WHERE c.shift_id = ? ORDER BY c.id LIMIT 1').get(next.id);
         for (const r of db.prepare('SELECT nozzle_id, end_meter FROM shift_readings WHERE shift_id = ?').all(shift.id)) {
           const taken = firstTaken && db.prepare('SELECT meter FROM checkpoint_readings WHERE checkpoint_id = ? AND nozzle_id = ?').get(firstTaken.id, r.nozzle_id);

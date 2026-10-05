@@ -3,6 +3,7 @@ const express = require('express');
 const { openDb } = require('./db');
 const { loadUser } = require('./auth');
 const { HttpError } = require('./util');
+const { checkStorage, storageOf } = require('./storage');
 
 // Everything the app loads comes from its own origin (fonts and film are self-hosted).
 const CSP = [
@@ -17,6 +18,7 @@ const CSP = [
 
 function createApp({ dbFile }) {
   const db = openDb(dbFile);
+  checkStorage(dbFile);
   const app = express();
 
   app.set('trust proxy', 1);
@@ -38,7 +40,8 @@ function createApp({ dbFile }) {
   // Health check for the host: the database answers.
   app.get('/api/health', (req, res) => {
     db.prepare('SELECT 1').get();
-    res.set('Cache-Control', 'no-store').json({ ok: true });
+    // On Render, also where the database lives: « disque » survives a deploy, « temporaire » does not.
+    res.set('Cache-Control', 'no-store').json({ ok: true, ...(storageOf() ? { storage: storageOf() } : {}) });
   });
 
   const api = express.Router();

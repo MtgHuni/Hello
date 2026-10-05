@@ -35,14 +35,17 @@ function allEntries(db) {
 
   for (const s of db
     .prepare(
-      `SELECT s.id, s.closed_at AS at, date(s.closed_at, 'localtime') AS day, s.cash, s.mobile_money, COALESCE(${attendantNamesSql}, u.name) AS attendant,
+      `SELECT s.id, s.closed_at AS at, date(s.closed_at, 'localtime') AS day, s.cash, s.change_left, s.mobile_money, COALESCE(${attendantNamesSql}, u.name) AS attendant,
          (SELECT COALESCE(SUM(e.amount), 0) FROM expenses e WHERE e.shift_id = s.id) AS spent
        FROM shifts s JOIN users u ON u.id = s.attendant_id WHERE s.status != 'open'`,
     )
     .all()) {
     const base = { at: s.at, day: s.day, source: 'shift', id: s.id, link: `#/postes/${s.id}` };
-    // The cash handed over plus what the attendants spent from it: those expenses go out below.
-    push({ ...base, account: 'cash', in: round(s.cash + s.spent), label: `Clôture du poste n°${s.id} (${s.attendant})${s.spent ? ` : espèces remises ${money(s.cash)} + dépenses du poste` : ''}` });
+    // The cash paid into the till (the change left with the attendants stays with them), plus
+    // what was spent from it during the shift: those expenses go out on their own lines.
+    const paidIn = round(s.cash - s.change_left);
+    const detail = [s.change_left ? `monnaie laissée aux pompistes ${money(s.change_left)}` : null, s.spent ? `avec les dépenses du poste (${money(s.spent)})` : null].filter(Boolean).join(', ');
+    push({ ...base, account: 'cash', in: round(paidIn + s.spent), label: `Clôture du poste n°${s.id} (${s.attendant})${detail ? ` : ${detail}` : ''}` });
     push({ ...base, account: 'momo', in: s.mobile_money, label: `Mobile money du poste n°${s.id} (${s.attendant})` });
   }
 
@@ -56,7 +59,7 @@ function allEntries(db) {
   }
 
   for (const e of db
-    .prepare("SELECT id, created_at AS at, expense_date AS day, amount, method, category, description, shift_id FROM expenses WHERE shift_id IS NULL OR shift_id IN (SELECT id FROM shifts WHERE status != 'open')")
+    .prepare("SELECT id, created_at AS at, expense_date AS day, amount, method, category, description, shift_id FROM expenses")
     .all()) {
     push({
       at: e.at,

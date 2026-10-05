@@ -791,6 +791,42 @@ test('tests de pompe : remis en cuve une fois approuvés par le gérant, pas ven
   assert.match(tooMuch.data.error, /tests de pompe/);
 });
 
+test('monnaie laissée aux pompistes, dépense du pompiste dans la caisse, cuves du rapport', async () => {
+  const shift = (await gerant('GET', `/api/shifts/${(await gerant('GET', '/api/shifts/open')).data.id}`)).data;
+  const diesel = dieselOf(shift);
+  const ends = { [diesel.nozzle_id]: diesel.start_meter + 20 }; // 10 L of it went back in after a test
+  const book = async () => (await gerant('GET', '/api/cashbook')).data;
+
+  // The attendant's expense shows in the cash book as soon as it is entered.
+  const spent = (await pompiste('POST', `/api/shifts/${shift.id}/expenses`, { category: 'Fournitures', amount: 3, description: 'Savon' })).data;
+  assert.ok((await book()).movements.some((m) => m.source === 'expense' && m.id === spent.id && m.out === 3), 'sortie visible tout de suite');
+
+  // The change left can not be more than the cash counted.
+  assert.strictEqual((await closeShift(shift, ends, { cash: 50, changeLeft: 60 })).status, 400);
+  const before = (await book()).balances.cash.balance;
+  const closed = (await closeShift(shift, ends, { cash: 50, changeLeft: 20 })).data;
+  assert.strictEqual(closed.change_left, 20);
+  // The till gets the cash less the change (the expense already went out): 50 − 20 + 3.
+  const after = await book();
+  assert.strictEqual(after.balances.cash.balance, Math.round((before + 50 - 20 + 3) * 100) / 100);
+  assert.ok(after.movements.find((m) => m.source === 'shift' && m.id === shift.id).label.includes('monnaie laissée'));
+
+  // The next shift starts with the change: its first relief and its closing count it.
+  const next = (await gerant('GET', `/api/shifts/${closed.next_shift_id}`)).data;
+  assert.strictEqual(next.change_received, 20);
+  const preview = await gerant('POST', `/api/shifts/${next.id}/checkpoints/preview`, { readings: next.readings.map((r) => ({ nozzleId: r.nozzle_id, meter: r.start_meter })) });
+  assert.strictEqual(preview.data.received, 20);
+  const second = (await closeShift(next, {}, { cash: 20 })).data;
+  assert.strictEqual(second.expected_amount, 20);
+  assert.strictEqual(second.variance, 0);
+
+  // The tanks as the shift left them, in its detail and its report.
+  assert.ok(closed.tanks.length >= 2);
+  assert.strictEqual(closed.tanks.find((t) => t.tank_id === diesel.tank_id).sold, 10);
+  const pdf = await gerant('GET', `/api/shifts/${shift.id}/report.pdf`);
+  assert.strictEqual(pdf.raw.subarray(0, 5).toString(), '%PDF-');
+});
+
 test('migration : une base ancienne est convertie (loyalty → paid, combos)', () => {
   const fs = require('node:fs');
   const os = require('node:os');

@@ -24,14 +24,19 @@ function shiftReportPdf(shift, { stationName, combosEnabled, cashTolerance = 0, 
   const handedOver = round((shift.cash || 0) + (shift.mobile_money || 0));
 
   // ---- Cash ----
-  report.section('Caisse', 'À remettre = ventes par les index − crédits − combos + règlements reçus − dépenses.');
+  report.section('Caisse', 'À remettre = monnaie reçue + ventes par les index − crédits − combos + règlements reçus − dépenses.');
+  if (shift.change_received) report.line('Monnaie reçue à l’ouverture (poste précédent)', money(shift.change_received));
   report.line('Ventes calculées par les index', money(shift.total_amount));
   report.line('− Ventes à crédit', money(shift.credit_amount));
   if (combosEnabled || shift.combo_amount) report.line('− Carburant échangé contre des combos', money(shift.combo_amount));
   report.line('+ Règlements de clients reçus', money(shift.payments_amount));
   report.line('− Dépenses payées par la caisse', money(shift.expenses_amount));
   report.line('À remettre', money(shift.expected_amount), { bold: true });
-  report.line('Remis : espèces', money(shift.cash));
+  report.line('Remis : espèces comptées', money(shift.cash));
+  if (shift.change_left) {
+    report.line('dont monnaie laissée aux pompistes', money(shift.change_left));
+    report.line('Versé à la caisse', money(round(shift.cash - shift.change_left)));
+  }
   if (shift.mobile_money) report.line('Mobile money reçu (saisi au fil du poste)', money(shift.mobile_money));
   report.line('Total remis', money(handedOver), { bold: true });
   const ok = Math.abs(shift.variance) <= cashTolerance;
@@ -79,6 +84,32 @@ function shiftReportPdf(shift, { stationName, combosEnabled, cashTolerance = 0, 
       ],
       tests.map((t) => [time(t.created_at), `${t.pump_name} · ${t.nozzle_name}`, liters(t.liters), t.user_name || '—', t.status === 'approved' ? 'Approuvé' : t.status === 'rejected' ? 'Refusé (compté vendu)' : 'En attente du gérant']),
     );
+  }
+
+  // ---- Tanks at the closing ----
+  const tanks = shift.tanks || [];
+  if (tanks.length) {
+    report.section('Cuves à la clôture', 'Stock théorique : dernier jaugeage + livraisons − ventes.');
+    report.table(
+      [
+        { label: 'CUVE', width: 140 },
+        { label: 'PRODUIT', width: 70 },
+        { label: 'VENDU', width: 70, align: 'right' },
+        { label: 'STOCK', width: 76, align: 'right' },
+        { label: 'CAPACITÉ', width: 76, align: 'right' },
+        { label: 'NIVEAU', align: 'right' },
+      ],
+      tanks.map((t) => [
+        `${t.name}${t.stock_after <= t.low_level ? ' (stock bas)' : ''}`,
+        t.product_name,
+        liters(t.sold),
+        liters(t.stock_after),
+        liters(t.capacity),
+        t.capacity ? `${Math.round((t.stock_after / t.capacity) * 100)} %` : '—',
+      ]),
+    );
+    const low = tanks.filter((t) => t.stock_after <= t.low_level);
+    if (low.length) report.note(`Stock bas : ${low.map((t) => `${t.name} (seuil ${liters(t.low_level)})`).join(', ')}.`, { bold: true, color: COLORS.BAD });
   }
 
   // ---- Credits ----

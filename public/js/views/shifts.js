@@ -372,7 +372,10 @@ export function shiftSummary(shift, tolerance) {
     closed
       ? card(
           cardHeader('Caisse'),
-          h('div', { class: 'summary-line' }, h('span', {}, 'Espèces'), h('span', {}, fmt.money(shift.cash))),
+          shift.change_received ? h('div', { class: 'summary-line' }, h('span', {}, 'Monnaie reçue à l’ouverture'), h('span', {}, fmt.money(shift.change_received))) : null,
+          h('div', { class: 'summary-line' }, h('span', {}, 'Espèces comptées'), h('span', {}, fmt.money(shift.cash))),
+          shift.change_left ? h('div', { class: 'summary-line' }, h('span', {}, 'dont monnaie laissée aux pompistes'), h('span', {}, fmt.money(shift.change_left))) : null,
+          shift.change_left ? h('div', { class: 'summary-line' }, h('span', {}, 'Versé à la caisse'), h('span', {}, fmt.money(shift.cash - shift.change_left))) : null,
           shift.mobile_money ? h('div', { class: 'summary-line' }, h('span', {}, 'Mobile money (saisi au fil du poste)'), h('span', {}, fmt.money(shift.mobile_money))) : null,
           h('div', { class: 'summary-line total' }, h('span', {}, 'Total déclaré'), h('span', {}, fmt.money(declared(shift)))),
           shift.notes ? h('p', { class: 'muted', style: 'margin-top:12px' }, `Remarque : ${shift.notes}`) : null,

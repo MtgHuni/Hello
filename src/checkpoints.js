@@ -28,7 +28,8 @@ function listCheckpoints(db, shiftId) {
 // The period that ends at `end` ({ at, meters: Map, cash, mobile_money, kind, user_name }),
 // starting at the previous checkpoint, or at the shift's opening (its start indexes, no money).
 function periodReport(db, shift, readings, previous, end) {
-  const from = previous || { at: shift.opened_at, meters: new Map(readings.map((r) => [r.nozzle_id, r.start_meter])), cash: 0 };
+  // The shift starts with the change left at the previous closing.
+  const from = previous || { at: shift.opened_at, meters: new Map(readings.map((r) => [r.nozzle_id, r.start_meter])), cash: shift.change_received || 0 };
   // From the shift's opening, what was entered in its first second counts too.
   const after = previous ? '>' : '>=';
   const inPeriod = (table) => db.prepare(`SELECT * FROM ${table} WHERE shift_id = ? AND created_at ${after} ? AND created_at <= ? ORDER BY id`).all(shift.id, from.at, end.at);

@@ -766,12 +766,15 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
   const combos = shift.combo_amount || 0;
   // Mobile money is not counted: it is the total entered as it was paid.
   const momo = shift.momo_total || 0;
+  // Change left at the previous closing: it is part of what is handed over.
+  const received = shift.change_received || 0;
   const lines = {
     total: h('span', { class: 'num' }),
     credit: h('span', { class: 'num' }, fmt.money(credit)),
     expected: h('span', { class: 'num' }),
     expectedCash: h('span', { class: 'num' }),
     declared: h('span', { class: 'num' }),
+    paidIn: h('span', { class: 'num' }),
     variance: h('span', { class: 'num' }),
   };
   const perNozzle = new Map();
@@ -797,13 +800,14 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
     // Subscribers' higher price is cashed on top of the pump price.
     const surcharge = shift.sales.reduce((t, x) => t + (x.amount - x.liters * (shift.readings.find((r) => r.nozzle_id === x.nozzle_id)?.unit_price ?? 0)), 0);
     total += surcharge;
-    const expected = total - credit - combos + payments - expenses;
+    const expected = received + total - credit - combos + payments - expenses;
     const value = (name) => Number(form.elements[name].value) || 0;
     const declared = value('cash') + momo;
     lines.total.textContent = complete ? fmt.money(total) : '—';
     lines.expected.textContent = complete ? fmt.money(expected) : '—';
     lines.expectedCash.textContent = complete ? fmt.money(expected - momo) : '—';
     lines.declared.textContent = fmt.money(value('cash'));
+    lines.paidIn.textContent = fmt.money(value('cash') - value('changeLeft'));
     setContent(lines.variance, complete && form.elements.cash.value !== '' ? varianceCell(Math.round((declared - expected) * 100) / 100, tol) : '—');
   };
 
@@ -826,18 +830,20 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
       ),
     ),
     card(
-      cardHeader('2. Caisse', 'Comptez les espèces : le mobile money est le total saisi pendant le poste'),
+      cardHeader('2. Caisse', 'Comptez toutes les espèces, puis dites combien de monnaie vous laissez aux pompistes : le mobile money est le total saisi pendant le poste'),
       h('div', { class: 'summary-line', style: 'margin-bottom:12px' }, h('span', {}, 'Mobile money reçu'), h('span', { class: 'num' }, fmt.money(momo))),
       h(
         'div',
         { class: 'form-grid' },
-        field({ name: 'cash', label: 'Espèces ($)', type: 'number', step: '0.01', min: '0', required: true, value: first(shift.cash, undefined), onInput: recompute }),
+        field({ name: 'cash', label: 'Espèces comptées ($)', type: 'number', step: '0.01', min: '0', required: true, value: first(shift.cash, undefined), onInput: recompute }),
+        field({ name: 'changeLeft', label: 'Monnaie laissée aux pompistes ($)', type: 'number', step: '0.01', min: '0', value: first(shift.change_left, received || undefined), onInput: recompute }),
         field({ name: 'notes', label: 'Remarque (facultatif)', type: 'textarea', full: true, value: first(shift.notes, undefined) }),
         correcting ? field({ name: 'reason', label: 'Motif de la correction', required: true, full: true, placeholder: 'Ex. : index mal lu, billets oubliés' }) : null,
       ),
     ),
     card(
       cardHeader('3. Rapprochement'),
+      received ? h('div', { class: 'summary-line' }, h('span', {}, 'Monnaie reçue à l’ouverture'), h('span', { class: 'num' }, `+ ${fmt.money(received)}`)) : null,
       h('div', { class: 'summary-line' }, h('span', {}, 'Ventes selon les index'), lines.total),
       h('div', { class: 'summary-line' }, h('span', {}, 'Vendu à crédit'), h('span', {}, '− ', lines.credit)),
       combos ? h('div', { class: 'summary-line' }, h('span', {}, 'Échangé contre des combos'), h('span', { class: 'num' }, `− ${fmt.money(combos)}`)) : null,
@@ -848,6 +854,7 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
       h('div', { class: 'summary-line' }, h('span', {}, 'Espèces à remettre'), lines.expectedCash),
       h('div', { class: 'summary-line' }, h('span', {}, 'Espèces comptées'), lines.declared),
       h('div', { class: 'summary-line total' }, h('span', {}, 'Écart'), lines.variance),
+      h('div', { class: 'summary-line' }, h('span', {}, 'Versé à la caisse (sans la monnaie laissée)'), lines.paidIn),
     ),
     h(
       'div',
@@ -891,6 +898,7 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
       const closed = await api.post(`/shifts/${shift.id}/${correcting ? 'correct' : 'close'}`, {
         readings: shift.readings.map((r) => ({ nozzleId: r.nozzle_id, endMeter: Number(form.elements[`end_${r.nozzle_id}`].value) })),
         cash: Number(form.elements.cash.value),
+        changeLeft: Number(form.elements.changeLeft.value) || 0,
         notes: form.elements.notes.value,
         reason: form.elements.reason?.value,
       });

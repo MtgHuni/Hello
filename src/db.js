@@ -300,6 +300,14 @@ CREATE TABLE IF NOT EXISTS pump_tests (
 );
 CREATE INDEX IF NOT EXISTS idx_pump_tests_shift ON pump_tests(shift_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_pump_tests_ref ON pump_tests(client_ref) WHERE client_ref IS NOT NULL;
+-- Each tank at a shift's closing: litres sold from it and the book stock left (for the report).
+CREATE TABLE IF NOT EXISTS shift_tank_stock (
+  shift_id    INTEGER NOT NULL REFERENCES shifts(id),
+  tank_id     INTEGER NOT NULL REFERENCES tanks(id),
+  sold        REAL NOT NULL DEFAULT 0,
+  stock_after REAL NOT NULL,
+  PRIMARY KEY (shift_id, tank_id)
+);
 CREATE TABLE IF NOT EXISTS checkpoint_readings (
   checkpoint_id INTEGER NOT NULL REFERENCES shift_checkpoints(id),
   nozzle_id     INTEGER NOT NULL REFERENCES nozzles(id),
@@ -377,12 +385,15 @@ const MIGRATIONS = [
   ['deliveries', 'pay_method', 'TEXT'],
   // Evening closing: the shift stays open, nothing is entered until the morning opening.
   ['shifts', 'station_closed_at', 'TEXT'],
+  // Change (monnaie) left with the attendants at the closing, received by the next shift.
+  ['shifts', 'change_left', 'REAL NOT NULL DEFAULT 0'],
+  ['shifts', 'change_received', 'REAL NOT NULL DEFAULT 0'],
   // Who entered the credit (several attendants share a shift).
   ['sales', 'user_id', 'INTEGER REFERENCES users(id)'],
 ];
 
 // Bumped with every schema change; recorded in PRAGMA user_version.
-const SCHEMA_VERSION = 12;
+const SCHEMA_VERSION = 13;
 
 function missingColumns(db) {
   return MIGRATIONS.filter(([table, column]) => {
