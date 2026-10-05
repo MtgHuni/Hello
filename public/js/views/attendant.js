@@ -751,15 +751,19 @@ async function addExpense(ctx, shift, reload) {
   }
 }
 
-// ---------- 3. Closing: end meters + cash count, live reconciliation ----------
-// mode 'attendant': own shift. 'manager': closing an abandoned shift in the attendant's place.
+// ---------- 3. Closing in two steps: end meters (the next shift opens), then the money ----------
+// mode 'manager' (or 'attendant'): the end meters only. 'count': the money of a closed shift.
 // 'correct': the manager fixes a closed shift, starting from the first closing.
 export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, onDone } = {}) {
   const tol = ctx.state.settings.cashTolerance;
   const correcting = mode === 'correct';
+  const counting = mode === 'count';
+  const showMeters = !counting;
+  const showMoney = counting || (correcting && !!shift.counted_at);
   // The last index taken during the shift (relief, evening closing, morning opening).
   const lastTaken = (r) => shift.checkpoints?.at(-1)?.nozzles.find((n) => n.nozzle_id === r.nozzle_id)?.to ?? r.start_meter;
   const first = (value, fallback) => (correcting ? value ?? fallback : fallback);
+  const cashGiven = () => showMoney && form.elements.cash.value !== '';
   const credit = shift.credit_amount || 0;
   const payments = shift.payments_amount || 0;
   const expenses = shift.expenses_amount || 0;
@@ -785,7 +789,8 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
     let complete = true;
     for (const r of shift.readings) {
       const v = form.elements[`end_${r.nozzle_id}`].value;
-      const out = perNozzle.get(r.nozzle_id);
+      // Counting: no meter field, nothing to show under it.
+      const out = perNozzle.get(r.nozzle_id) || {};
       if (v === '') {
         complete = false;
         out.textContent = '';
@@ -801,7 +806,7 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
     const surcharge = shift.sales.reduce((t, x) => t + (x.amount - x.liters * (shift.readings.find((r) => r.nozzle_id === x.nozzle_id)?.unit_price ?? 0)), 0);
     total += surcharge;
     const expected = received + total - credit - combos + payments - expenses;
-    const value = (name) => Number(form.elements[name].value) || 0;
+    const value = (name) => Number(form.elements[name]?.value) || 0;
     const declared = value('cash') + momo;
     lines.total.textContent = complete ? fmt.money(total) : '—';
     lines.expected.textContent = complete ? fmt.money(expected) : '—';
@@ -809,12 +814,15 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
     lines.changeLeft.textContent = `− ${fmt.money(value('changeLeft'))}`;
     lines.expectedCash.textContent = complete ? fmt.money(expected - momo - value('changeLeft')) : '—';
     lines.declared.textContent = fmt.money(value('cash'));
-    setContent(lines.variance, complete && form.elements.cash.value !== '' ? varianceCell(Math.round((declared + value('changeLeft') - expected) * 100) / 100, tol) : '—');
+    setContent(lines.variance, complete && cashGiven() ? varianceCell(Math.round((declared + value('changeLeft') - expected) * 100) / 100, tol) : '—');
   };
 
-  form.append(
-    card(
-      cardHeader('1. Index de fin', 'Relevez le compteur de chaque produit'),
+  // Counting: the end meters are those of the closing.
+  const meterInputs = h('div', { hidden: true }, shift.readings.map((r) => h('input', { type: 'hidden', name: `end_${r.nozzle_id}`, value: String(r.end_meter ?? '') })));
+  // Cards absent in this step are left out (append would write « null »).
+  form.append(...[
+    showMeters ? card(
+      cardHeader(correcting ? '1. Index de fin' : 'Index de fin', correcting ? 'Relevez le compteur de chaque produit' : 'Relevez les compteurs : le poste se ferme et le suivant s’ouvre aussitôt. Vous compterez l’argent ensuite.'),
       h(
         'div',
         { class: 'stack' },
@@ -829,9 +837,9 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
           );
         }),
       ),
-    ),
-    card(
-      cardHeader('2. Caisse', 'La monnaie laissée aux pompistes reste avec eux pour le poste suivant ; comptez les espèces qu’ils vous remettent. Le mobile money est le total saisi pendant le poste.'),
+    ) : meterInputs,
+    showMoney ? card(
+      cardHeader(correcting ? '2. Caisse' : 'Argent', 'La monnaie laissée aux pompistes reste avec eux pour le poste suivant ; comptez les espèces qu’ils vous remettent. Le mobile money est le total saisi pendant le poste.'),
       h('div', { class: 'summary-line', style: 'margin-bottom:12px' }, h('span', {}, 'Mobile money reçu'), h('span', { class: 'num' }, fmt.money(momo))),
       h(
         'div',
@@ -839,11 +847,11 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
         field({ name: 'changeLeft', label: 'Monnaie laissée aux pompistes ($)', type: 'number', step: '0.01', min: '0', value: first(shift.change_left, received || undefined), onInput: recompute }),
         field({ name: 'cash', label: 'Espèces remises ($)', type: 'number', step: '0.01', min: '0', required: true, value: first(shift.cash, undefined), onInput: recompute }),
         field({ name: 'notes', label: 'Remarque (facultatif)', type: 'textarea', full: true, value: first(shift.notes, undefined) }),
-        correcting ? field({ name: 'reason', label: 'Motif de la correction', required: true, full: true, placeholder: 'Ex. : index mal lu, billets oubliés' }) : null,
       ),
-    ),
+    ) : null,
+    correcting ? card(field({ name: 'reason', label: 'Motif de la correction', required: true, full: true, placeholder: 'Ex. : index mal lu, billets oubliés' })) : null,
     card(
-      cardHeader('3. Rapprochement'),
+      cardHeader('Rapprochement'),
       received ? h('div', { class: 'summary-line' }, h('span', {}, 'Monnaie reçue à l’ouverture'), h('span', { class: 'num' }, `+ ${fmt.money(received)}`)) : null,
       h('div', { class: 'summary-line' }, h('span', {}, 'Ventes selon les index'), lines.total),
       h('div', { class: 'summary-line' }, h('span', {}, 'Vendu à crédit'), h('span', {}, '− ', lines.credit)),
@@ -852,18 +860,22 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
       expenses ? h('div', { class: 'summary-line' }, h('span', {}, 'Dépenses payées'), h('span', { class: 'num' }, `− ${fmt.money(expenses)}`)) : null,
       h('div', { class: 'summary-line' }, h('span', {}, 'À remettre'), lines.expected),
       momo ? h('div', { class: 'summary-line' }, h('span', {}, 'Reçu en mobile money'), h('span', { class: 'num' }, `− ${fmt.money(momo)}`)) : null,
-      h('div', { class: 'summary-line' }, h('span', {}, 'Monnaie laissée aux pompistes'), lines.changeLeft),
-      h('div', { class: 'summary-line' }, h('span', {}, 'Espèces à remettre'), lines.expectedCash),
-      h('div', { class: 'summary-line' }, h('span', {}, 'Espèces remises'), lines.declared),
-      h('div', { class: 'summary-line total' }, h('span', {}, 'Écart'), lines.variance),
+      showMoney
+        ? [
+            h('div', { class: 'summary-line' }, h('span', {}, 'Monnaie laissée aux pompistes'), lines.changeLeft),
+            h('div', { class: 'summary-line' }, h('span', {}, 'Espèces à remettre'), lines.expectedCash),
+            h('div', { class: 'summary-line' }, h('span', {}, 'Espèces remises'), lines.declared),
+            h('div', { class: 'summary-line total' }, h('span', {}, 'Écart'), lines.variance),
+          ]
+        : null,
     ),
     h(
       'div',
       { class: 'grid grid-2' },
       button('Retour', () => (onBack ? onBack() : renderAttendant(page, ctx)), { variant: 'large secondary' }),
-      button(correcting ? 'Corriger la clôture' : 'Clôturer le poste', null, { variant: 'large', type: 'submit' }),
+      button(correcting ? 'Corriger la clôture' : counting ? 'Enregistrer le comptage' : 'Clôturer le poste', null, { variant: 'large', type: 'submit' }),
     ),
-  );
+  ].filter(Boolean));
 
   // Draft kept on the phone: leaving the screen or a reload does not lose the figures typed.
   const draftKey = `closing-draft-${shift.id}`;
@@ -891,16 +903,17 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
     e.preventDefault();
     const ask = correcting
       ? ['Corriger la clôture ?', 'Les index, le stock des cuves et l’écart seront recalculés. La correction est gardée au journal.', 'Corriger']
-      : ['Clôturer le poste ?', 'Le poste est rapproché et le suivant s’ouvre aussitôt avec les mêmes index et les pompistes en service.', 'Clôturer'];
+      : counting
+        ? ['Enregistrer le comptage ?', 'L’écart du poste est calculé et la monnaie laissée passe au poste en cours.', 'Enregistrer']
+        : ['Clôturer le poste ?', 'Le poste se ferme maintenant et le suivant s’ouvre aussitôt avec ces index et les pompistes en service. Vous compterez l’argent ensuite.', 'Clôturer'];
     if (!(await confirmDialog(ask[0], ask[1], { confirmLabel: ask[2] }))) return;
     const submit = form.querySelector('button[type=submit]');
     submit.disabled = true;
     try {
-      const closed = await api.post(`/shifts/${shift.id}/${correcting ? 'correct' : 'close'}`, {
-        readings: shift.readings.map((r) => ({ nozzleId: r.nozzle_id, endMeter: Number(form.elements[`end_${r.nozzle_id}`].value) })),
-        cash: Number(form.elements.cash.value),
-        changeLeft: Number(form.elements.changeLeft.value) || 0,
-        notes: form.elements.notes.value,
+      const money = showMoney ? { cash: Number(form.elements.cash.value), changeLeft: Number(form.elements.changeLeft.value) || 0, notes: form.elements.notes.value } : {};
+      const closed = await api.post(`/shifts/${shift.id}/${correcting ? 'correct' : counting ? 'count' : 'close'}`, {
+        ...(counting ? {} : { readings: shift.readings.map((r) => ({ nozzleId: r.nozzle_id, endMeter: Number(form.elements[`end_${r.nozzle_id}`].value) })) }),
+        ...money,
         reason: form.elements.reason?.value,
       });
       try {
@@ -916,7 +929,7 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
     }
   });
 
-  const title = correcting ? `Corriger la clôture du poste n°${shift.id}` : `Clôturer le poste n°${shift.id}`;
+  const title = correcting ? `Corriger la clôture du poste n°${shift.id}` : counting ? `Compter l’argent du poste n°${shift.id}` : `Clôturer le poste n°${shift.id}`;
   setContent(page, pageHeader(title, `Poste n°${shift.id} ouvert le ${fmt.dateTime(shift.opened_at)}`), form);
   restoreDraft();
   recompute();

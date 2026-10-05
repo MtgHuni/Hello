@@ -388,12 +388,13 @@ const MIGRATIONS = [
   // Change (monnaie) left with the attendants at the closing, received by the next shift.
   ['shifts', 'change_left', 'REAL NOT NULL DEFAULT 0'],
   ['shifts', 'change_received', 'REAL NOT NULL DEFAULT 0'],
+  ['shifts', 'counted_at', 'TEXT'], // the money counted after the closing (null: still to count)
   // Who entered the credit (several attendants share a shift).
   ['sales', 'user_id', 'INTEGER REFERENCES users(id)'],
 ];
 
 // Bumped with every schema change; recorded in PRAGMA user_version.
-const SCHEMA_VERSION = 15;
+const SCHEMA_VERSION = 16;
 
 function missingColumns(db) {
   return MIGRATIONS.filter(([table, column]) => {
@@ -583,6 +584,10 @@ function openDb(file) {
     // Credit sales only earn their combos once paid: recompute every balance.
     const { refreshCustomer } = require('./loyalty');
     for (const { id } of db.prepare('SELECT id FROM customers').all()) refreshCustomer(db, id);
+  }
+  if (version < 16) {
+    // Version 16: a closing may come before the money is counted; every earlier closing was counted.
+    db.exec("UPDATE shifts SET counted_at = closed_at WHERE status != 'open' AND counted_at IS NULL");
   }
   if (version < 14) {
     // Version 14: the closing's cash is what is handed over, without the change left (it was counted in).

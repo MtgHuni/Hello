@@ -38,14 +38,14 @@ const NAV = {
   ],
   customer: [['', 'Mon compte', 'user', renderAccount]],
 };
-// The owner (actionnaire): every screen of the manager, to read, but the pump.
-NAV.owner = NAV.manager.filter(([path]) => path !== 'pompe');
+// The owner (actionnaire): the manager's screens, to read, but the pump and the settings.
+NAV.owner = NAV.manager.filter(([path]) => !['pompe', 'reglages'].includes(path));
 
 const DETAIL_ROUTES = {
   manager: { postes: renderShiftDetail, clients: renderCustomerDetail, reglages: renderJournal },
   attendant: { historique: renderShiftDetail },
 };
-DETAIL_ROUTES.owner = DETAIL_ROUTES.manager;
+DETAIL_ROUTES.owner = { postes: renderShiftDetail, clients: renderCustomerDetail };
 
 const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 

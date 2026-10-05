@@ -74,7 +74,7 @@ export async function renderShifts(page, ctx) {
             : [{ label: 'Litres', align: 'right', render: (s) => (s.total_liters == null ? '—' : fmt.liters(s.total_liters)) }]),
           { label: 'Ventes', align: 'right', render: (s) => (s.total_amount == null ? '—' : fmt.money(s.total_amount)) },
           { label: 'Écart caisse', align: 'right', render: (s) => varianceCell(s.variance, tol) },
-          { label: 'Statut', render: (s) => h('span', { class: 'row', style: 'gap:6px;flex-wrap:nowrap' }, shiftBadge(s.status), s.over_limit_count ? badge('Crédit hors plafond', 'serious') : null) },
+          { label: 'Statut', render: (s) => h('span', { class: 'row', style: 'gap:6px;flex-wrap:nowrap' }, shiftBadge(s.status), s.status === 'closed' && !s.counted_at ? badge('Argent à compter', 'warning') : null, s.over_limit_count ? badge('Crédit hors plafond', 'serious') : null) },
         ],
         shifts,
         {
@@ -93,7 +93,7 @@ export async function renderShiftDetail(page, ctx) {
   const backPath = isManager ? 'postes' : 'historique';
   const reload = () => renderShiftDetail(page, ctx);
   const closingBy = (mode) => () =>
-    renderClosing(page, ctx, shift, { mode, onBack: reload, onDone: (closed) => (toast(mode === 'correct' ? 'Clôture corrigée.' : `Poste clôturé · poste n°${closed.next_shift_id} ouvert`), reload()) });
+    renderClosing(page, ctx, shift, { mode, onBack: reload, onDone: (closed) => (toast(mode === 'correct' ? 'Clôture corrigée.' : mode === 'count' ? 'Argent compté.' : `Poste clôturé · poste n°${closed.next_shift_id} ouvert`), reload()) });
   setContent(page, 
     h('a', { class: 'back no-print', href: `#/${backPath}` }, icon('back'), isManager ? 'Postes' : 'Historique'),
     pageHeader(
@@ -108,6 +108,15 @@ export async function renderShiftDetail(page, ctx) {
     ),
     shiftLine(shift.status),
     remarkCard(shift, isManager),
+    // Second step of the closing: the money, counted once the next shift has started.
+    shift.status === 'closed' && !shift.counted_at
+      ? h(
+          'section',
+          { class: 'card row between', style: 'margin-bottom:20px' },
+          h('div', { style: 'flex:1;min-width:220px' }, h('h3', {}, 'Argent à compter'), h('p', { class: 'muted', style: 'font-size:15px;margin-top:2px' }, 'Le poste est clôturé et le suivant a commencé. Comptez la monnaie laissée et les espèces remises : l’écart se calcule alors.')),
+          isManager ? edit(button('Compter l’argent', closingBy('count'), { iconName: 'cash' })) : null,
+        )
+      : null,
     relaysCard(shift, ctx.state.settings.cashTolerance),
     isManager ? cancellationRequests(shift, () => renderShiftDetail(page, ctx)) : null,
     pumpTestsCard(shift, isManager, reload),
@@ -270,7 +279,7 @@ export function shiftSummary(shift, tolerance) {
           kpi('Ventes totales', fmt.money(shift.total_amount), shift.liters_by_product.length ? shift.liters_by_product.map((p) => `${p.name} ${fmt.liters(p.liters)}`).join(' · ') : fmt.liters(shift.total_liters)),
           kpi('Crédit clients', fmt.money(shift.credit_amount), shift.combo_amount ? `+ ${fmt.money(shift.combo_amount)} échangés en combos` : 'Non encaissé'),
           kpi('À remettre', fmt.money(shift.expected_amount), [shift.payments_amount ? `+ ${fmt.money(shift.payments_amount)} règlements` : null, shift.expenses_amount ? `− ${fmt.money(shift.expenses_amount)} dépenses` : null].filter(Boolean).join(' · ') || `Déclaré : ${fmt.money(declared(shift))}`),
-          kpi('Écart de caisse', varianceCell(shift.variance, tolerance), Math.abs(shift.variance) <= tolerance ? 'Dans la tolérance' : `Tolérance : ± ${fmt.money(tolerance)}`),
+          kpi('Écart de caisse', varianceCell(shift.variance, tolerance), !shift.counted_at ? 'Argent à compter' : Math.abs(shift.variance) <= tolerance ? 'Dans la tolérance' : `Tolérance : ± ${fmt.money(tolerance)}`),
         )
       : null,
     h(
@@ -368,7 +377,7 @@ export function shiftSummary(shift, tolerance) {
           ),
         )
       : null,
-    closed
+    closed && shift.counted_at
       ? card(
           cardHeader('Caisse'),
           shift.change_received ? h('div', { class: 'summary-line' }, h('span', {}, 'Monnaie reçue à l’ouverture'), h('span', {}, fmt.money(shift.change_received))) : null,

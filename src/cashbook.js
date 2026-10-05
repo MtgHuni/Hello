@@ -35,7 +35,7 @@ function allEntries(db) {
 
   for (const s of db
     .prepare(
-      `SELECT s.id, s.closed_at AS at, date(s.closed_at, 'localtime') AS day, s.cash, s.change_left, s.mobile_money, COALESCE(${attendantNamesSql}, u.name) AS attendant,
+      `SELECT s.id, s.closed_at AS at, date(s.closed_at, 'localtime') AS day, s.cash, s.change_left, s.mobile_money, s.counted_at, COALESCE(${attendantNamesSql}, u.name) AS attendant,
          (SELECT COALESCE(SUM(e.amount), 0) FROM expenses e WHERE e.shift_id = s.id) AS spent
        FROM shifts s JOIN users u ON u.id = s.attendant_id WHERE s.status != 'open'`,
     )
@@ -44,7 +44,7 @@ function allEntries(db) {
     // The cash handed over (the change left with the attendants stays with them), plus what was
     // spent from it during the shift: those expenses go out on their own lines.
     const paidIn = s.cash;
-    const detail = [s.change_left ? `monnaie laissée aux pompistes ${money(s.change_left)}` : null, s.spent ? `avec les dépenses du poste (${money(s.spent)})` : null].filter(Boolean).join(', ');
+    const detail = [s.counted_at ? null : 'argent à compter', s.change_left ? `monnaie laissée aux pompistes ${money(s.change_left)}` : null, s.spent ? `avec les dépenses du poste (${money(s.spent)})` : null].filter(Boolean).join(', ');
     push({ ...base, account: 'cash', in: round(paidIn + s.spent), label: `Clôture du poste n°${s.id} (${s.attendant})${detail ? ` : ${detail}` : ''}` });
     push({ ...base, account: 'momo', in: s.mobile_money, label: `Mobile money du poste n°${s.id} (${s.attendant})` });
   }

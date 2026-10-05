@@ -846,6 +846,23 @@ test('monnaie laissée aux pompistes, dépense du pompiste dans la caisse, cuves
   assert.strictEqual(pdf.raw.subarray(0, 5).toString(), '%PDF-');
 });
 
+test('clôture en deux temps : les index d’abord, l’argent ensuite', async () => {
+  const open = (await gerant('GET', '/api/shifts/current')).data;
+  const closed = (await gerant('POST', `/api/shifts/${open.id}/close`, { readings: open.readings.map((r) => ({ nozzleId: r.nozzle_id, endMeter: r.start_meter + 10 })) })).data;
+  assert.strictEqual(closed.counted_at, null, 'argent pas encore compté');
+  assert.strictEqual(closed.variance, null);
+  assert.ok(closed.next_shift_id, 'le poste suivant est ouvert aussitôt');
+  assert.ok((await gerant('GET', '/api/dashboard')).data.alerts.some((a) => a.text === `Poste n°${open.id} : argent à compter`));
+  assert.strictEqual((await gerant('GET', `/api/shifts/${open.id}/report.pdf`)).status, 200);
+  const cash = Math.round((closed.expected_amount - 5 - closed.mobile_money) * 100) / 100;
+  const counted = (await gerant('POST', `/api/shifts/${open.id}/count`, { cash, changeLeft: 5 })).data;
+  assert.ok(counted.counted_at);
+  assert.strictEqual(counted.variance, 0);
+  assert.strictEqual((await gerant('GET', `/api/shifts/${closed.next_shift_id}`)).data.change_received, 5, 'la monnaie passe au poste en cours');
+  assert.strictEqual((await gerant('POST', `/api/shifts/${open.id}/count`, { cash: 1 })).status, 409, 'compté une seule fois');
+  assert.strictEqual((await gerant('POST', `/api/shifts/${open.id}/correct`, { reason: 'x', readings: [] })).status, 400, 'une correction redonne l’argent');
+});
+
 test('migration : une base ancienne est convertie (loyalty → paid, combos)', () => {
   const fs = require('node:fs');
   const os = require('node:os');

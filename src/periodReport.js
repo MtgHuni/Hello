@@ -60,7 +60,7 @@ function periodReportPdf(r, { stationName, cashTolerance = 0, combosEnabled, now
       money(s.credit_amount),
       money(s.expected_amount),
       money(handedOver(s)),
-      signed(s.variance),
+      s.counted_at ? signed(s.variance) : 'À compter',
     ]),
     {
       size: 8,

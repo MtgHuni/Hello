@@ -75,8 +75,9 @@ module.exports = function reportRoutes(db) {
     // Shifts closed in the last three days (their cash gap shows in the alerts).
     const recentlyClosed = db
       .prepare(
-        `SELECT s.id, s.closed_at, s.variance, s.total_amount, COALESCE(${attendantNamesSql}, u.name) AS attendant_name
-         FROM shifts s JOIN users u ON u.id = s.attendant_id WHERE s.status = 'closed' AND s.closed_at >= datetime('now', '-3 days') ORDER BY s.id`,
+        `SELECT s.id, s.closed_at, s.variance, s.counted_at, s.total_amount, COALESCE(${attendantNamesSql}, u.name) AS attendant_name
+         FROM shifts s JOIN users u ON u.id = s.attendant_id
+         WHERE s.status = 'closed' AND (s.closed_at >= datetime('now', '-3 days') OR s.counted_at IS NULL) ORDER BY s.id`,
       )
       .all();
 
@@ -102,7 +103,8 @@ module.exports = function reportRoutes(db) {
       }
     }
     for (const s of recentlyClosed) {
-      if (Math.abs(s.variance) > settings.cashTolerance) {
+      if (!s.counted_at) alerts.push({ level: 'warning', text: `Poste n°${s.id} : argent à compter`, link: `#/postes/${s.id}` });
+      else if (Math.abs(s.variance) > settings.cashTolerance) {
         alerts.push({
           level: 'serious',
           text: `Poste n°${s.id} (${s.attendant_name}) : écart de caisse de ${s.variance.toFixed(2).replace('.', ',')} $`,
@@ -351,7 +353,7 @@ module.exports = function reportRoutes(db) {
     const shifts = db
       .prepare(
         `SELECT s.id, s.status, s.closed_at, s.total_liters, s.total_amount, s.credit_amount, s.payments_amount, s.expenses_amount,
-           s.expected_amount, s.cash, s.mobile_money, s.variance, COALESCE(${attendantNamesSql}, u.name) AS attendant
+           s.expected_amount, s.cash, s.mobile_money, s.variance, s.counted_at, COALESCE(${attendantNamesSql}, u.name) AS attendant
          FROM shifts s JOIN users u ON u.id = s.attendant_id
          WHERE s.status != 'open' AND ${DAY} BETWEEN ? AND ? ORDER BY s.closed_at`,
       )
