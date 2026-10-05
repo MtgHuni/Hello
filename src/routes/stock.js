@@ -1,8 +1,22 @@
 const express = require('express');
 const { fail, num, str, oneOf, round, transaction } = require('../util');
 const { requireRole } = require('../auth');
+const { audit } = require('../audit');
 
 const manager = requireRole('manager');
+
+// Paid on the spot in cash (out of the cash book), taken on credit (a debt to the supplier), or
+// already paid before the app (neither: it only made the stock).
+const PAYMENT_LABEL = { cash: 'payée comptant', credit: 'à crédit', prepaid: 'déjà payée' };
+function paymentOf(b) {
+  const payment = oneOf(b.payment || 'cash', 'Le paiement', Object.keys(PAYMENT_LABEL));
+  return { payment, payMethod: payment === 'cash' ? 'espèces' : null };
+}
+function checkCredit(payment, supplier, amount) {
+  if (payment !== 'credit') return;
+  if (!supplier) fail(400, 'Indiquez le fournisseur : la livraison à crédit devient une dette envers lui.');
+  if (!amount) fail(400, 'Indiquez le montant dû : c’est ce que la station devra au fournisseur.');
+}
 
 module.exports = function stockRoutes(db) {
   const router = express.Router();
@@ -37,16 +51,10 @@ module.exports = function stockRoutes(db) {
     const unitCost = num(b.unitCost, "Le prix d'achat", { required: false, max: 1000 });
     const supplier = str(b.supplier, 'Le fournisseur', { required: false, max: 100 });
     const reference = str(b.reference, 'La référence', { required: false, max: 100 });
-    // Paid on the spot (out of the cash book) or taken on credit (a debt to the supplier).
-    const payment = oneOf(b.payment || 'cash', 'Le paiement', ['cash', 'credit']);
-    // A delivery paid on the spot is paid in cash, out of the till.
-    const payMethod = payment === 'cash' ? 'espèces' : null;
+    const { payment, payMethod } = paymentOf(b);
     const computed = unitCost ? round(unitCost * received) : null;
     const amount = b.amount === undefined || b.amount === '' || b.amount === null ? computed : round(num(b.amount, 'Le montant de la facture', { min: 0.01, max: 1e9 }));
-    if (payment === 'credit') {
-      if (!supplier) fail(400, 'Indiquez le fournisseur : la livraison à crédit devient une dette envers lui.');
-      if (!amount) fail(400, 'Indiquez le prix d’achat ou le montant de la facture : c’est ce que la station devra au fournisseur.');
-    }
+    checkCredit(payment, supplier, amount);
 
     const id = transaction(db, () => {
       const r = db
@@ -59,6 +67,33 @@ module.exports = function stockRoutes(db) {
       return r.lastInsertRowid;
     });
     res.status(201).json(db.prepare('SELECT * FROM deliveries WHERE id = ?').get(id));
+  });
+
+  // The payment of a delivery can be corrected (e.g. old deliveries entered to set the stock).
+  // The litres stay: they made the stock.
+  router.put('/deliveries/:id', manager, (req, res) => {
+    const d = db.prepare('SELECT * FROM deliveries WHERE id = ?').get(req.params.id);
+    if (!d) fail(404, 'Livraison introuvable.');
+    const b = req.body || {};
+    const { payment, payMethod } = paymentOf(b);
+    const supplier = b.supplier === undefined ? d.supplier : str(b.supplier, 'Le fournisseur', { required: false, max: 100 });
+    const reference = b.reference === undefined ? d.reference : str(b.reference, 'La référence', { required: false, max: 100 });
+    const amount = b.amount === undefined ? d.amount : b.amount === '' || b.amount === null ? null : round(num(b.amount, 'Le montant', { min: 0.01, max: 1e9 }));
+    checkCredit(payment, supplier, amount);
+    const after = { payment, pay_method: payMethod, supplier, reference, amount };
+    transaction(db, () => {
+      db.prepare('UPDATE deliveries SET payment = ?, pay_method = ?, supplier = ?, reference = ?, amount = ? WHERE id = ?').run(payment, payMethod, supplier, reference, amount, d.id);
+      audit(db, req, {
+        category: 'donnees',
+        action: 'delivery_payment',
+        entity: 'deliveries',
+        id: d.id,
+        summary: `Livraison du ${d.created_at.slice(0, 10)} (${d.liters_received} L) : paiement corrigé, ${PAYMENT_LABEL[d.payment] || '—'} → ${PAYMENT_LABEL[payment]}`,
+        before: { payment: d.payment, pay_method: d.pay_method, supplier: d.supplier, reference: d.reference, amount: d.amount },
+        after,
+      });
+    });
+    res.json(db.prepare('SELECT * FROM deliveries WHERE id = ?').get(d.id));
   });
 
   router.get('/dips', manager, (req, res) => {

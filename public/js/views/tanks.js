@@ -78,10 +78,10 @@ export async function renderTanks(page, ctx) {
                 },
               },
               { label: 'Montant', align: 'right', render: (d) => (d.amount ? fmt.money(d.amount) : d.unit_cost ? fmt.money(d.unit_cost * d.liters_received) : '—') },
-              { label: 'Paiement', render: (d) => (d.payment === 'credit' ? badge('À crédit', 'warning') : d.payment === 'cash' ? h('span', { title: d.pay_method || '' }, 'Comptant') : '—') },
+              { label: 'Paiement', render: (d) => (d.payment === 'credit' ? badge('À crédit', 'warning') : d.payment === 'prepaid' ? 'Déjà payée' : d.payment === 'cash' ? 'Comptant' : '—') },
             ],
             deliveries,
-            { empty: 'Aucune livraison enregistrée.' },
+            { empty: 'Aucune livraison enregistrée.', onRowClick: (d) => deliveryPaymentDialog(d, sup.names, reload) },
           )
         : table(
             [
@@ -107,6 +107,7 @@ export async function renderTanks(page, ctx) {
   );
 }
 
+const PAYMENTS = [['cash', 'Payée comptant'], ['credit', 'À crédit'], ['prepaid', 'Déjà payée']];
 const tankOptions = (tanks) => tanks.map((t) => [t.id, `${t.name} (${t.product_name})`]);
 
 async function deliveryDialog(tanks, supplierNames, reload) {
@@ -119,7 +120,7 @@ async function deliveryDialog(tanks, supplierNames, reload) {
     form.elements.supplier.required = credit;
     const received = Number(form.elements.litersReceived.value) || 0;
     const cost = Number(form.elements.unitCost.value) || 0;
-    total.textContent = received && cost ? `Montant : ${fmt.money(received * cost)}${credit ? ' dû au fournisseur' : ' payé maintenant'}` : credit ? 'Indiquez le prix d’achat : c’est la dette envers le fournisseur.' : '';
+    total.textContent = received && cost ? `Montant : ${fmt.money(received * cost)}${credit ? ' dû au fournisseur' : form.elements.payment.value === 'prepaid' ? ' déjà payé' : ' payé maintenant'}` : credit ? 'Indiquez le prix d’achat : c’est la dette envers le fournisseur.' : '';
   };
   const ok = await formDialog({
     title: 'Enregistrer une livraison',
@@ -132,7 +133,7 @@ async function deliveryDialog(tanks, supplierNames, reload) {
       { name: 'reference', label: 'N° du bon de livraison' },
       { name: 'unitCost', label: 'Prix d’achat ($/L)', type: 'number', step: '0.001', min: '0', onInput: update },
       { name: 'names', type: 'node', node: h('datalist', { id: 'supplier-names' }, supplierNames.map((n) => h('option', { value: n }))) },
-      { name: 'payment', label: 'Paiement', type: 'segment', full: true, options: [['cash', 'Payée comptant (espèces)'], ['credit', 'À crédit']], onInput: update },
+      { name: 'payment', label: 'Paiement', type: 'segment', full: true, options: PAYMENTS, onInput: update },
       { name: 'total', type: 'node', node: total },
     ],
     onSubmit: (d) => {
@@ -142,6 +143,26 @@ async function deliveryDialog(tanks, supplierNames, reload) {
   });
   if (ok) {
     toast('Livraison enregistrée.');
+    reload();
+  }
+}
+
+// The payment of a delivery, corrected afterwards: the litres stay, they made the stock.
+async function deliveryPaymentDialog(d, supplierNames, reload) {
+  const ok = await formDialog({
+    title: `Livraison du ${fmt.date(d.created_at)}`,
+    intro: `${d.tank_name} · ${fmt.liters(d.liters_received)} reçus. « Déjà payée » : réglée avant l’application, elle ne sort pas de la caisse. « À crédit » : le montant est ce que la station doit encore au fournisseur.`,
+    fields: [
+      { name: 'payment', label: 'Paiement', type: 'segment', full: true, options: PAYMENTS, value: d.payment || 'cash' },
+      { name: 'supplier', label: 'Fournisseur', list: 'supplier-names-edit', value: d.supplier || '' },
+      { name: 'reference', label: 'N° du bon de livraison', value: d.reference || '' },
+      { name: 'amount', label: 'Montant ($)', type: 'number', step: '0.01', min: '0', value: d.amount ?? '' },
+      { name: 'names', type: 'node', node: h('datalist', { id: 'supplier-names-edit' }, supplierNames.map((n) => h('option', { value: n }))) },
+    ],
+    onSubmit: (v) => api.put(`/deliveries/${d.id}`, { payment: v.payment, supplier: v.supplier, reference: v.reference, amount: v.amount }),
+  });
+  if (ok) {
+    toast('Paiement de la livraison corrigé.');
     reload();
   }
 }

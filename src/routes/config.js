@@ -31,7 +31,7 @@ module.exports = function configRoutes(db) {
   const nozzleInOpenShift = (nozzleId) =>
     db
       .prepare(
-        `SELECT 1 FROM shift_readings r JOIN shifts s ON s.id = r.shift_id
+        `SELECT r.shift_id FROM shift_readings r JOIN shifts s ON s.id = r.shift_id
          WHERE s.status = 'open' AND r.nozzle_id = ?`,
       )
       .get(nozzleId);
@@ -286,28 +286,28 @@ module.exports = function configRoutes(db) {
     const tankId = num(req.body?.tankId, 'La cuve', { integer: true, min: 1, required: false }) ?? nozzle.tank_id;
     const meter = num(req.body?.meter, "L'index du compteur", { required: false }) ?? nozzle.meter;
     const active = bool(req.body?.active, !!nozzle.active) ? 1 : 0;
-    if ((tankId !== nozzle.tank_id || meter !== nozzle.meter) && nozzleInOpenShift(nozzle.id)) {
-      fail(409, 'Ce pistolet est utilisé dans un poste ouvert. Clôturez le poste avant de modifier son index ou sa cuve.');
+    const open = nozzleInOpenShift(nozzle.id);
+    if (open && tankId !== nozzle.tank_id) fail(409, 'Ce pistolet est utilisé dans le poste ouvert : sa cuve ne peut pas changer avant la clôture.');
+    // The index can be set while the shift is open (the station's starting index), as long as no
+    // relief or closing has read the meters since: the shift then starts from the new index.
+    if (open && meter !== nozzle.meter && db.prepare('SELECT 1 FROM shift_checkpoints WHERE shift_id = ?').get(open.shift_id)) {
+      fail(409, 'Des index ont déjà été relevés sur le poste ouvert : corrigez l’index après la clôture.');
     }
     if (!db.prepare('SELECT 1 FROM tanks WHERE id = ?').get(tankId)) fail(400, 'Cuve inconnue.');
-    db.prepare('UPDATE nozzles SET name = ?, tank_id = ?, meter = ?, active = ? WHERE id = ?').run(
-      name,
-      tankId,
-      meter,
-      active,
-      nozzle.id,
-    );
-    if (meter !== nozzle.meter) {
+    transaction(db, () => {
+      db.prepare('UPDATE nozzles SET name = ?, tank_id = ?, meter = ?, active = ? WHERE id = ?').run(name, tankId, meter, active, nozzle.id);
+      if (meter === nozzle.meter) return;
+      if (open) db.prepare('UPDATE shift_readings SET start_meter = ? WHERE shift_id = ? AND nozzle_id = ?').run(meter, open.shift_id, nozzle.id);
       audit(db, req, {
         category: 'reglages',
         action: 'nozzle_meter',
         entity: 'nozzles',
         id: nozzle.id,
-        summary: `Index du ${name} corrigé à la main : ${nozzle.meter} → ${meter}`,
+        summary: `Index du ${name} corrigé à la main : ${nozzle.meter} → ${meter}${open ? ` (départ du poste n°${open.shift_id})` : ''}`,
         before: { meter: nozzle.meter },
         after: { meter },
       });
-    }
+    });
     res.json(listPumps());
   });
 

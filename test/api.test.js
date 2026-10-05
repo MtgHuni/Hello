@@ -643,6 +643,23 @@ test('un seul poste à la fois, livre de caisse (espèces et mobile money), livr
   assert.strictEqual(pdf.raw.subarray(0, 5).toString(), '%PDF-');
   assert.strictEqual((await pompiste('GET', '/api/cashbook')).status, 403);
   assert.ok((await gerant('GET', '/api/audit?category=caisse')).data.some((a) => a.action === 'supplier_payment'));
+
+  // Old deliveries entered to set the stock: « déjà payée » leaves nothing in the till, and the
+  // payment of one can be corrected afterwards (here 3 300 $ still owed to the supplier).
+  const before = (await cash()).cash.balance;
+  const old = (await gerant('POST', '/api/deliveries', { tankId: tank.id, litersOrdered: 50, litersReceived: 50, unitCost: 1, payment: 'prepaid' })).data;
+  assert.strictEqual((await cash()).cash.balance, before, 'déjà payée : rien ne sort de la caisse');
+  const cashOld = (await gerant('POST', '/api/deliveries', { tankId: tank.id, litersOrdered: 40, litersReceived: 40, unitCost: 1, payment: 'cash' })).data;
+  assert.strictEqual((await cash()).cash.balance, before - 40);
+  assert.strictEqual((await gerant('PUT', `/api/deliveries/${cashOld.id}`, { payment: 'credit', amount: 3300 })).status, 400, 'fournisseur obligatoire');
+  const fixed = await gerant('PUT', `/api/deliveries/${cashOld.id}`, { payment: 'credit', supplier: 'Ancien Fournisseur', amount: 3300 });
+  assert.strictEqual(fixed.status, 200);
+  assert.strictEqual((await cash()).cash.balance, before, 'corrigée : la sortie de caisse disparaît');
+  sup = (await gerant('GET', '/api/suppliers')).data.suppliers.find((s) => s.name === 'Ancien Fournisseur');
+  assert.strictEqual(sup.balance, 3300);
+  assert.strictEqual((await gerant('PUT', `/api/deliveries/${old.id}`, { payment: 'prepaid' })).data.payment, 'prepaid');
+  assert.ok((await gerant('GET', '/api/audit?category=donnees')).data.some((a) => a.action === 'delivery_payment'));
+  assert.strictEqual((await pompiste('PUT', `/api/deliveries/${old.id}`, { payment: 'cash' })).status, 403);
 });
 
 test('relève, fermeture du soir et ouverture du matin : le poste continue', async () => {
@@ -697,6 +714,7 @@ test('relève, fermeture du soir et ouverture du matin : le poste continue', asy
   assert.strictEqual(morning.data.shift.checkpoints.length, 3);
 
   // 15:30: the manager closes; the next shift opens with Paul on it.
+  assert.strictEqual((await gerant('PUT', `/api/nozzles/${diesel.nozzle_id}`, { meter: 99999 })).status, 409, 'index déjà relevé sur ce poste');
   const done = await closeShift(morning.data.shift, Object.fromEntries(at(30).map((r) => [r.nozzleId, r.meter])), { cash: 0 });
   assert.strictEqual(done.status, 200);
   assert.strictEqual(done.data.total_liters, 30);
@@ -711,6 +729,12 @@ test('relève, fermeture du soir et ouverture du matin : le poste continue', asy
   assert.strictEqual((await gerant('GET', `/api/shifts/${next.shift.id}`)).data.checkpoints.length, 0, 'le contrôle n’enregistre rien');
   assert.strictEqual((await gerant('GET', `/api/shifts/${shift.id}`)).data.sales.find((s) => s.id === credit.id).user_name, 'Paul');
   assert.strictEqual(dieselOf(next.shift).start_meter, diesel.start_meter + 30);
+
+  // The station's starting index, set while the shift is open and nothing read yet: the shift starts from it.
+  const set = await gerant('PUT', `/api/nozzles/${diesel.nozzle_id}`, { meter: 96677.58 });
+  assert.strictEqual(set.status, 200);
+  assert.strictEqual(dieselOf((await gerant('GET', `/api/shifts/${next.shift.id}`)).data).start_meter, 96677.58);
+  assert.ok((await gerant('GET', '/api/audit?category=reglages')).data.some((a) => a.summary.includes('96677.58') && a.summary.includes(`poste n°${next.shift.id}`)));
 });
 
 test('migration : une base ancienne est convertie (loyalty → paid, combos)', () => {

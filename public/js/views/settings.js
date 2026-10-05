@@ -249,7 +249,9 @@ async function nozzleDialog(pump, n, tankOptions, reload) {
   if (!tankOptions.length) return toast('Créez d’abord une cuve.', 'error');
   const ok = await formDialog({
     title: n ? `Modifier ${n.name}` : `Nouveau pistolet — ${pump.name}`,
-    intro: n ? 'Ne modifiez l’index qu’après un remplacement ou un étalonnage du compteur.' : 'Saisissez l’index actuellement affiché par le compteur.',
+    intro: n
+      ? 'Pour fixer l’index de départ, ou après un remplacement ou un étalonnage du compteur. Le poste ouvert repart de ce nouvel index.'
+      : 'Saisissez l’index actuellement affiché par le compteur.',
     grid: false,
     fields: [
       { name: 'name', label: 'Nom', value: n?.name, required: true, placeholder: 'Pistolet Gasoil' },
