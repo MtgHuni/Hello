@@ -319,6 +319,28 @@ a.btn:hover { text-decoration: none; }
   cursor: pointer;
 }
 .side-foot > svg { width: 18px; height: 18px; color: var(--text-3); flex: none; }
+/* « Plus » on a phone: the side rail itself, slid in from the left over the page. */
+dialog.nav-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; height: 100dvh; max-height: 100%; display: flex; justify-content: flex-start; }
+.nav-drawer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(300px, 84vw);
+  height: 100%;
+  padding: calc(env(safe-area-inset-top, 0px) + 18px) 14px calc(env(safe-area-inset-bottom, 0px) + 14px);
+  border-radius: 0 var(--radius-xl) var(--radius-xl) 0;
+  background: var(--surface-2);
+  box-shadow: inset -1px 0 0 var(--hairline), var(--shadow-lift);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  animation: drawer-left-in 0.42s var(--ease);
+}
+.nav-drawer.closing { animation: drawer-left-out 0.26s var(--ease-out) forwards; }
+.nav-drawer-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 18px; }
+.nav-drawer-head .side-brand { margin: 0; min-width: 0; }
+.nav-drawer .side-nav a { min-height: 48px; font-size: 16px; }
+@keyframes drawer-left-in { from { transform: translateX(-100%); } }
+@keyframes drawer-left-out { to { transform: translateX(-100%); } }
 .side-foot:hover > svg { color: var(--text); }
 .who { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.25; }
 .who strong { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -673,13 +695,17 @@ tfoot td { font-weight: 600; border-top: 1px solid var(--separator); border-bott
 .btn.large { min-height: 54px; padding: 14px 26px; font-size: 17px; }
 .btn.block { width: 100%; }
 .btn.sm { min-height: 34px; padding: 6px 14px; font-size: 14px; }
-/* Buttons side by side are the same size: each takes the width of the widest. */
-.btn-row { display: inline-grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); align-items: stretch; gap: 10px; }
+/* Buttons grouped in one place are the same width, the widest one's (buttonRow() in ui.js sets
+   --cols: up to four on a line). On a phone they go two by two, half the width each, centred,
+   an odd last one centred on its own line. */
+.btn-row { display: inline-grid; grid-template-columns: repeat(var(--cols, 1), minmax(0, 1fr)); align-items: stretch; gap: 10px; }
 .btn-row > .btn { width: 100%; }
 @media (max-width: 833px) {
-  /* On a phone the header buttons fill the width in equal columns. */
-  .page-header .btn-row:has(> .btn + .btn) { display: grid; width: 100%; grid-auto-flow: row; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
-  .page-header .btn-row > .btn { white-space: normal; text-align: center; }
+  .btn-row:not(.inline):not(.one) { display: flex; flex-wrap: wrap; justify-content: center; width: 100%; }
+  .btn-row:not(.inline):not(.one) > .btn { flex: 0 0 calc(50% - 5px); min-width: 0; gap: 6px; padding-left: 10px; padding-right: 10px; font-size: 15px; white-space: normal; text-align: center; }
+  /* A page header's lone button sits centred too. */
+  .page-header .btn-row.one { display: flex; justify-content: center; width: 100%; }
+  .page-header .btn-row.one > .btn { width: auto; min-width: calc(50% - 5px); }
 }
 /* A button waiting for the server (see busy() in ui.js). */
 .btn[aria-busy='true'], .quick-action[aria-busy='true'] { opacity: 0.6; cursor: progress; }

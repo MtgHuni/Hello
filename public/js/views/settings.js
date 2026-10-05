@@ -1,6 +1,6 @@
 import { flags } from '../ui.js';
 import { api } from '../api.js';
-import { h, fmt, pageHeader, card, cardHeader, table, badge, button, formDialog, openDialog, toast, productColor, setContent } from '../ui.js';
+import { h, fmt, pageHeader, card, cardHeader, table, badge, button, formDialog, openDialog, toast, productColor, setContent, buttonRow } from '../ui.js';
 import { icon } from '../icons.js';
 
 export async function renderSettings(page, ctx) {
@@ -43,7 +43,7 @@ export async function renderSettings(page, ctx) {
             {
               label: '',
               align: 'right',
-              render: (p) => h('span', { class: 'btn-row' }, button('Historique', () => priceHistory(p), { variant: 'secondary sm' }), button('Changer le prix', () => productDialog(p, reload), { variant: 'secondary sm' })),
+              render: (p) => h('span', { class: 'btn-row inline', style: '--cols:2' }, button('Historique', () => priceHistory(p), { variant: 'secondary sm' }), button('Changer le prix', () => productDialog(p, reload), { variant: 'secondary sm' })),
             },
           ],
           products,
@@ -122,12 +122,10 @@ export async function renderSettings(page, ctx) {
           { class: 'muted', style: 'margin:0 0 16px' },
           'Téléchargez une sauvegarde régulièrement et gardez-la ailleurs (ordinateur, clé USB, e-mail) : elle contient toute la station.',
         ),
-        h(
-          'div',
-          { class: 'btn-row' },
+        buttonRow([
           h('a', { class: 'btn secondary', href: '/api/backup', download: '' }, icon('download'), 'Télécharger une sauvegarde'),
           button('Ouvrir le journal', () => ctx.navigate('reglages/journal'), { variant: 'secondary', iconName: 'shifts' }),
-        ),
+        ]),
       ),
 
       // ---- Customers & combos ----

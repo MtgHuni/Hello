@@ -1,6 +1,6 @@
 import { flags } from './ui.js';
 import { api } from './api.js';
-import { h, errorState, toast, formDialog, actionSheet, spinner, initials, applyTheme, toggleTheme } from './ui.js';
+import { h, errorState, toast, formDialog, actionSheet, openDialog, spinner, initials, applyTheme, toggleTheme } from './ui.js';
 import { icon, brandMark } from './icons.js';
 import { enhance } from './motion.js';
 import { renderLogin, renderSetup } from './views/auth.js';
@@ -24,6 +24,7 @@ const NAV = {
   manager: [
     ['', 'Tableau de bord', 'home', renderDashboard, 'Accueil'],
     ['postes', 'Postes', 'shifts', renderShifts],
+    ['pompe', 'Mon poste', 'pump', renderAttendant],
     ['caisse', 'Caisse', 'cash', renderCashbook],
     ['clients', 'Clients', 'users', renderCustomers],
     ['depenses', 'Dépenses', 'wallet', renderExpenses],
@@ -150,7 +151,7 @@ function buildShell() {
         {
           class: 'tab-more',
           type: 'button',
-          onClick: () => actionSheet({ title: 'Plus', actions: rest.map(([path, label]) => ({ label, onClick: () => navigate(path) })) }),
+          onClick: openNavDrawer,
         },
         icon('more'),
         h('span', {}, 'Plus'),
@@ -161,6 +162,48 @@ function buildShell() {
   const el = h('div', { class: `shell ${role} ${tabbar ? 'has-tabs' : ''}` }, side, h('div', { class: 'shell-main' }, topbar, h('main', { class: 'main' }, slot)), tabbar);
   shell = { role, el, slot, topTitle, more, rest: rest.map(([path]) => path) };
   return shell;
+}
+
+// « Plus » on a phone: every section, those of the tab bar included, in a drawer from the side
+// built like the side rail of wide screens.
+function openNavDrawer() {
+  const nav = NAV[state.user.role];
+  const section = location.hash.replace(/^#\/?/, '').split('/')[0];
+  const current = (nav.find(([path]) => path === section) || nav[0])[0];
+  openDialog(
+    (close) => {
+      const go = (path) => (e) => {
+        e.preventDefault();
+        close();
+        navigate(path);
+      };
+      return h(
+        'div',
+        { class: 'nav-drawer', role: 'navigation', 'aria-label': 'Toutes les rubriques' },
+        h(
+          'div',
+          { class: 'nav-drawer-head' },
+          h('a', { class: 'side-brand', href: '#/', onClick: go('') }, brandMark(), h('span', {}, state.settings.stationName)),
+          h('button', { class: 'circle-btn', type: 'button', 'aria-label': 'Fermer', onClick: close }, icon('close')),
+        ),
+        h(
+          'nav',
+          { class: 'side-nav' },
+          nav.map(([path, label, iconName]) =>
+            h('a', { href: `#/${path}`, class: path === current ? 'active' : '', 'aria-current': path === current ? 'page' : null, onClick: go(path) }, icon(iconName), h('span', {}, label)),
+          ),
+        ),
+        h(
+          'button',
+          { class: 'side-foot', type: 'button', 'aria-label': 'Mon compte', onClick: () => (close(), accountMenu()) },
+          h('span', { class: 'avatar' }, initials(state.user.name)),
+          h('span', { class: 'who' }, h('strong', {}, state.user.name), h('span', {}, ROLE_LABEL[state.user.role])),
+          icon('more'),
+        ),
+      );
+    },
+    { kind: 'nav' },
+  );
 }
 
 function setActive(path, label) {

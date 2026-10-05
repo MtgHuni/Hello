@@ -163,6 +163,15 @@ export function shiftLine(status) {
   );
 }
 
+// Buttons grouped in one place all take the width of the widest one: up to four on a line,
+// more on two lines. On a phone they go two by two, half the width each, centred.
+export function buttonRow(items, { inline = false } = {}) {
+  const list = [items].flat(Infinity).filter(Boolean);
+  if (!list.length) return null;
+  const cols = list.length <= 4 ? list.length : Math.ceil(list.length / 2);
+  return h('div', { class: `btn-row no-print${inline ? ' inline' : ''}${list.length === 1 ? ' one' : ''}`, style: `--cols:${cols}` }, list);
+}
+
 // A status badge goes under the title; the buttons line up beside it, all the same size.
 export function pageHeader(title, subtitle, ...actions) {
   const items = actions.flat(Infinity).filter(Boolean);
@@ -172,7 +181,7 @@ export function pageHeader(title, subtitle, ...actions) {
     'header',
     { class: 'page-header' },
     h('div', {}, h('h1', {}, title), subtitle ? h('p', {}, subtitle) : null, badges.length ? h('div', { class: 'header-badges' }, badges) : null),
-    buttons.length ? h('div', { class: 'btn-row no-print' }, buttons) : null,
+    buttonRow(buttons),
   );
 }
 
@@ -226,7 +235,7 @@ export function cardHeader(title, subtitle, ...actions) {
     'div',
     { class: 'card-header' },
     h('div', {}, h('h2', {}, title), subtitle ? h('p', {}, subtitle) : null),
-    actions.length ? h('div', { class: 'btn-row no-print' }, actions) : null,
+    buttonRow(actions),
   );
 }
 

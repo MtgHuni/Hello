@@ -618,8 +618,10 @@ test('un seul poste à la fois, livre de caisse (espèces et mobile money), livr
 
   // A delivery paid on the spot leaves the till; one on credit is a debt to the supplier.
   const tank = ctx.tanks[0];
-  await gerant('POST', '/api/deliveries', { tankId: tank.id, litersOrdered: 30, litersReceived: 30, unitCost: 1, payment: 'cash', payMethod: 'espèces' });
-  assert.strictEqual((await cash()).cash.balance, 130);
+  await gerant('POST', '/api/deliveries', { tankId: tank.id, litersOrdered: 30, litersReceived: 30, unitCost: 1, payment: 'cash', payMethod: 'mobile money' });
+  assert.strictEqual((await cash()).cash.balance, 130, 'payée comptant : toujours en espèces, jamais en mobile money');
+  // The manager works the pump too: always on duty on « Mon poste ».
+  assert.strictEqual((await gerant('GET', '/api/shifts/state')).data.onDuty, true);
   assert.strictEqual((await gerant('POST', '/api/deliveries', { tankId: tank.id, litersOrdered: 100, litersReceived: 100, unitCost: 1.1, payment: 'credit' })).status, 400, 'fournisseur obligatoire');
   await gerant('POST', '/api/deliveries', { tankId: tank.id, litersOrdered: 100, litersReceived: 100, unitCost: 1.1, payment: 'credit', supplier: 'Total Goma' });
   assert.strictEqual((await cash()).cash.balance, 130, 'à crédit : rien ne sort de la caisse');

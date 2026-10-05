@@ -116,7 +116,6 @@ async function deliveryDialog(tanks, supplierNames, reload) {
   const update = (e) => {
     const form = e.target.form;
     const credit = form.elements.payment.value === 'credit';
-    form.querySelector('input[name=payMethod]').closest('.seg-field').hidden = credit;
     form.elements.supplier.required = credit;
     const received = Number(form.elements.litersReceived.value) || 0;
     const cost = Number(form.elements.unitCost.value) || 0;
@@ -133,8 +132,7 @@ async function deliveryDialog(tanks, supplierNames, reload) {
       { name: 'reference', label: 'N° du bon de livraison' },
       { name: 'unitCost', label: 'Prix d’achat ($/L)', type: 'number', step: '0.001', min: '0', onInput: update },
       { name: 'names', type: 'node', node: h('datalist', { id: 'supplier-names' }, supplierNames.map((n) => h('option', { value: n }))) },
-      { name: 'payment', label: 'Paiement', type: 'segment', full: true, options: [['cash', 'Payée comptant'], ['credit', 'À crédit']], onInput: update },
-      { name: 'payMethod', label: 'Payée avec', type: 'segment', full: true, options: [['espèces', 'Espèces'], ['mobile money', 'Mobile money']] },
+      { name: 'payment', label: 'Paiement', type: 'segment', full: true, options: [['cash', 'Payée comptant (espèces)'], ['credit', 'À crédit']], onInput: update },
       { name: 'total', type: 'node', node: total },
     ],
     onSubmit: (d) => {

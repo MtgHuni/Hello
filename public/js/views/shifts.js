@@ -1,6 +1,6 @@
 import { flags } from '../ui.js';
 import { api } from '../api.js';
-import { shiftLine, h, fmt, pageHeader, card, cardHeader, table, segmented, shiftBadge, varianceCell, kpi, formDialog, confirmDialog, toast, button, badge, setContent, reportLink } from '../ui.js';
+import { shiftLine, h, fmt, pageHeader, card, cardHeader, table, segmented, shiftBadge, varianceCell, kpi, formDialog, confirmDialog, toast, button, badge, setContent, reportLink, buttonRow } from '../ui.js';
 import { icon } from '../icons.js';
 import { renderClosing } from './attendant.js';
 import { reportCard } from './relay.js';
@@ -207,12 +207,7 @@ function cancellationRequests(shift, reload) {
           i.x.cancel_reason ? h('div', { class: 'small', style: 'margin-top:2px' }, `Raison : ${i.x.cancel_reason}`) : null,
         ),
         h('div', { class: 'num', style: 'font-weight:600' }, fmt.money(i.amount)),
-        h(
-          'div',
-          { class: 'btn-row no-print', style: 'gap:6px' },
-          button('Garder', () => decide(i, false), { variant: 'secondary sm' }),
-          button('Annuler', () => decide(i, true), { variant: 'destructive sm' }),
-        ),
+        buttonRow([button('Garder', () => decide(i, false), { variant: 'secondary sm' }), button('Annuler', () => decide(i, true), { variant: 'destructive sm' })]),
       ),
     ),
   );

@@ -150,12 +150,13 @@ module.exports = function shiftRoutes(db) {
     const id = openShiftId();
     if (!id) return res.json({ shift: null });
     const shift = shiftDetail(id);
-    res.json({ shift, onDuty: onDuty(id, req.user.id), lastReport: shift.checkpoints.at(-1) || null });
+    // The manager may work the pump too: they never need to take the shift.
+    res.json({ shift, onDuty: req.user.role === 'manager' || onDuty(id, req.user.id), lastReport: shift.checkpoints.at(-1) || null });
   });
 
   router.get('/shifts/current', staff, (req, res) => {
     const id = openShiftId();
-    res.json(id && onDuty(id, req.user.id) ? shiftDetail(id) : null);
+    res.json(id && (req.user.role === 'manager' || onDuty(id, req.user.id)) ? shiftDetail(id) : null);
   });
 
   // The manager's remarks the attendant has not read yet (shown on their home screen).

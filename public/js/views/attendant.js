@@ -1,6 +1,6 @@
 import { flags } from '../ui.js';
 import { api } from '../api.js';
-import { priceTotem, shiftLine, h, fmt, pageHeader, card, cardHeader, table, shiftBadge, varianceCell, button, formDialog, confirmDialog, toast, field, productColor, badge, kpi, parseServerDate, setContent, reportLink, busy, newRef, toggleTheme } from '../ui.js';
+import { priceTotem, shiftLine, h, fmt, pageHeader, card, cardHeader, table, shiftBadge, varianceCell, button, formDialog, confirmDialog, toast, field, productColor, badge, kpi, parseServerDate, setContent, reportLink, busy, newRef, toggleTheme, buttonRow } from '../ui.js';
 import { icon } from '../icons.js';
 import { shiftSummary } from './shifts.js';
 import { renderJoin, renderCheckpoint } from './relay.js';
@@ -8,7 +8,8 @@ import { renderJoin, renderCheckpoint } from './relay.js';
 // One shift for the station, always open: the attendant takes it (or continues it after a relief),
 // opens the station in the morning, or, the very first time, opens the first shift.
 export async function renderAttendant(page, ctx) {
-  const [state, remarks] = await Promise.all([api.get('/shifts/state'), api.get('/shifts/remarks/unread').catch(() => [])]);
+  const manager = ctx.state.user.role === 'manager';
+  const [state, remarks] = await Promise.all([api.get('/shifts/state'), manager ? [] : api.get('/shifts/remarks/unread').catch(() => [])]);
   const reload = () => renderAttendant(page, ctx);
   const remarkCards = remarkCarousel(remarks, ctx, reload);
   if (!state.shift) return renderStart(page, ctx, remarkCards);
@@ -886,7 +887,7 @@ function renderClosed(page, ctx, shift) {
         ),
       ),
       shiftSummary(shift, tol),
-      reportLink(shift.id, 'secondary large block'),
+      buttonRow(reportLink(shift.id, 'secondary large')),
       button('Terminé', () => renderAttendant(page, ctx), { variant: 'large block' }),
     ),
   );
