@@ -431,7 +431,7 @@ function requestQueue(shift, reload) {
 let customerCache = null;
 async function customersList() {
   if (customerCache && Date.now() - customerCache.at < 30000) return customerCache.list;
-  const list = await api.get('/customers');
+  const list = await api.get('/customers?form=1');
   customerCache = { at: Date.now(), list };
   return list;
 }
@@ -478,7 +478,7 @@ function customerSearch(customers, { allowNew = false, onPick } = {}) {
 // Credit entered by the attendant (paid sales are not entered: the indexes count them),
 // built for speed: one search field for the customer (name, plate or phone; an unknown
 // name creates the customer), one-tap product and unit, amount in dollars or litres.
-async function addCredit(ctx, shift, reload) {
+export async function addCredit(ctx, shift, reload) {
   const customers = await customersList();
   const clientRef = newRef();
   const products = [...new Map(shift.readings.map((r) => [r.product_id, r])).values()];
@@ -574,7 +574,7 @@ async function addCredit(ctx, shift, reload) {
   }
 }
 
-async function addPayment(shift, reload) {
+export async function addPayment(shift, reload) {
   const customers = await customersList();
   const clientRef = newRef();
   const owes = h('p', { class: 'hint-line' });
@@ -665,7 +665,7 @@ async function addPayment(shift, reload) {
 
 // Fuel paid by mobile money: only the litres and the fuel; the amount is at the shift's price.
 // At closing, the shift's mobile money is the total of these entries.
-async function addMomo(shift, reload) {
+export async function addMomo(shift, reload) {
   const clientRef = newRef();
   const products = [...new Map(shift.readings.map((r) => [r.product_id, { id: r.product_id, name: r.product_name, price: r.unit_price }])).values()];
   const amount = h('span', { class: 'num' }, '—');
@@ -697,7 +697,7 @@ async function addMomo(shift, reload) {
 const testBadge = (t) => (t.status === 'rejected' ? badge('Annulé', 'serious') : t.status === 'pending' ? badge('À confirmer', 'warning') : null);
 
 // A pump test: the nozzle, the litres poured back into the tank. The manager approves it.
-async function addTest(ctx, shift, reload) {
+export async function addTest(ctx, shift, reload) {
   const clientRef = newRef();
   const manager = ctx.state.user.role === 'manager';
   const quickLiters = h(
@@ -729,7 +729,7 @@ async function addTest(ctx, shift, reload) {
   }
 }
 
-async function addExpense(ctx, shift, reload) {
+export async function addExpense(ctx, shift, reload) {
   const clientRef = newRef();
   const ok = await formDialog({
     autofocus: true,

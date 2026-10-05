@@ -132,7 +132,7 @@ function customerRoutes(db) {
 
   router.get('/customers', requireRole('manager', 'attendant'), (req, res) => {
     const rows = db.prepare(`${listSql} ORDER BY c.name COLLATE NOCASE`).all();
-    if (req.user.role === 'attendant') {
+    if (req.user.role === 'attendant' || req.query.form === '1') {
       const graceDays = getSettings(db).subscriberGraceDays;
       // Attendants only need what the sale form shows.
       return res.json(

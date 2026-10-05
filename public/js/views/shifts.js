@@ -1,8 +1,8 @@
 import { flags, edit } from '../ui.js';
 import { api } from '../api.js';
-import { shiftLine, h, fmt, pageHeader, card, cardHeader, table, segmented, shiftBadge, varianceCell, kpi, formDialog, confirmDialog, toast, button, badge, setContent, reportLink, buttonRow } from '../ui.js';
+import { shiftLine, h, fmt, pageHeader, card, cardHeader, table, segmented, shiftBadge, varianceCell, kpi, formDialog, confirmDialog, actionSheet, toast, button, badge, setContent, reportLink, buttonRow } from '../ui.js';
 import { icon } from '../icons.js';
-import { renderClosing } from './attendant.js';
+import { renderClosing, addCredit, addPayment, addMomo, addExpense, addTest } from './attendant.js';
 import { reportCard } from './relay.js';
 import { renderShiftStatus } from './shiftStatus.js';
 
@@ -104,6 +104,7 @@ export async function renderShiftDetail(page, ctx) {
       isManager && shift.status === 'open' ? button('État du poste', () => ctx.navigate(`postes/${shift.id}/etat`), { variant: 'secondary', iconName: 'chart' }) : null,
       isManager && shift.status === 'open' ? edit(button('Clôturer le poste', closingBy('manager'), { variant: shift.closing_due ? '' : 'secondary', iconName: 'shifts' })) : null,
       isManager && shift.status === 'closed' ? edit(button('Corriger la clôture', closingBy('correct'), { variant: 'secondary', iconName: 'edit' })) : null,
+      isManager && shift.status === 'closed' ? edit(button('Ajouter un oubli', () => forgotten(ctx, shift, reload), { variant: 'secondary', iconName: 'plus' })) : null,
       isManager && shift.status !== 'open' && !flags.readonly ? button(shift.manager_comment ? 'Modifier la remarque' : 'Remarque au pompiste', () => remarkDialog(shift, reload), { variant: 'secondary', iconName: 'message' }) : null,
     ),
     shiftLine(shift.status),
@@ -122,6 +123,20 @@ export async function renderShiftDetail(page, ctx) {
     pumpTestsCard(shift, isManager, reload),
     shiftSummary(shift, ctx.state.settings.cashTolerance),
   );
+}
+
+// A forgotten operation, added after the closing: the shift's amounts and variance are recomputed.
+function forgotten(ctx, shift, reload) {
+  actionSheet({
+    title: `Ajouter un oubli au poste n°${shift.id} : le poste sera recalculé`,
+    actions: [
+      { label: 'Crédit', onClick: () => addCredit(ctx, shift, reload) },
+      { label: 'Règlement client', onClick: () => addPayment(shift, reload) },
+      { label: 'Payé en mobile money', onClick: () => addMomo(shift, reload) },
+      { label: 'Dépense payée en caisse', onClick: () => addExpense(ctx, shift, reload) },
+      { label: 'Test de pompe', onClick: () => addTest(ctx, shift, reload) },
+    ],
+  });
 }
 
 // Who worked on the shift, and each relief, evening closing and morning opening with its report.

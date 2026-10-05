@@ -861,6 +861,15 @@ test('clôture en deux temps : les index d’abord, l’argent ensuite', async (
   assert.strictEqual((await gerant('GET', `/api/shifts/${closed.next_shift_id}`)).data.change_received, 5, 'la monnaie passe au poste en cours');
   assert.strictEqual((await gerant('POST', `/api/shifts/${open.id}/count`, { cash: 1 })).status, 409, 'compté une seule fois');
   assert.strictEqual((await gerant('POST', `/api/shifts/${open.id}/correct`, { reason: 'x', readings: [] })).status, 400, 'une correction redonne l’argent');
+
+  // Forgotten operations, added by the manager after the closing: the shift is recomputed.
+  assert.strictEqual((await gerant('POST', `/api/shifts/${open.id}/expenses`, { amount: 5, category: 'Autre', description: 'Oubliée' })).status, 201);
+  assert.strictEqual((await gerant('GET', `/api/shifts/${open.id}`)).data.variance, 5, 'la dépense oubliée explique un surplus');
+  await gerant('POST', `/api/shifts/${open.id}/momo`, { productId: ctx.diesel.id, liters: 2 });
+  const late = (await gerant('GET', `/api/shifts/${open.id}`)).data;
+  assert.ok(late.mobile_money > closed.mobile_money, 'le mobile money oublié compte');
+  assert.ok((await gerant('GET', '/api/audit?category=postes')).data.some((a) => a.summary.startsWith(`Oubli ajouté au poste n°${open.id}`)));
+  assert.strictEqual((await pompiste('POST', `/api/shifts/${open.id}/expenses`, { amount: 1, category: 'Autre', description: 'x' })).status, 409, 'le pompiste n’ajoute rien à un poste clôturé');
 });
 
 test('migration : une base ancienne est convertie (loyalty → paid, combos)', () => {

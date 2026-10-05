@@ -154,9 +154,11 @@ module.exports = function shiftRoutes(db) {
 
   // open: to enter something, the attendant must be on the shift and the station open.
   // Otherwise (reading), having worked on it is enough.
-  function getOwnShift(req, { open = true } = {}) {
+  // late: the manager may also add a forgotten operation to a closed shift (see lateEntry).
+  function getOwnShift(req, { open = true, late = false } = {}) {
     const shift = db.prepare('SELECT * FROM shifts WHERE id = ?').get(req.params.id);
     if (!shift) fail(404, 'Poste introuvable.');
+    if (late && shift.status === 'closed' && req.user.role === 'manager') return shift;
     if (open && shift.status !== 'open') fail(409, 'Ce poste est déjà clôturé.');
     if (req.user.role !== 'manager') {
       if (open && !onDuty(shift.id, req.user.id)) fail(403, 'Prenez d’abord le poste.', 'not_on_duty');
@@ -393,16 +395,25 @@ module.exports = function shiftRoutes(db) {
 
   // Credit entered by the attendant (or fuel exchanged for combos). Paid sales are never
   // entered: the meter indexes count them at closing.
+  // A forgotten operation added after the closing: the shift's amounts and variance are recomputed.
+  function lateEntry(req, shift, table, item) {
+    if (shift.status !== 'closed') return;
+    reconcile(shift.id);
+    audit(db, req, { category: 'postes', action: 'late_entry', entity: table, id: Number(item.id), summary: `Oubli ajouté au poste n°${shift.id} après la clôture : ${describe(table, item)}` });
+  }
+
   router.post('/shifts/:id/sales', staff, (req, res) => {
-    const shift = getOwnShift(req);
+    const shift = getOwnShift(req, { late: true });
     const payment = req.body?.payment ?? 'credit';
     if (payment === 'paid') fail(400, 'Les ventes payées ne se saisissent pas : les index les comptent.', 'paid');
-    res.status(201).json(createSale(db, shift, { ...(req.body || {}), payment, source: 'attendant', userId: req.user.id }));
+    const sale = createSale(db, shift, { ...(req.body || {}), payment, source: 'attendant', userId: req.user.id });
+    lateEntry(req, shift, 'sales', sale);
+    res.status(201).json(sale);
   });
 
   // A customer settling their account at the pump: the money goes into the shift's cash.
   router.post('/shifts/:id/payments', staff, (req, res) => {
-    const shift = getOwnShift(req);
+    const shift = getOwnShift(req, { late: true });
     const ref = clientRef(req.body?.clientRef);
     const done = ref && db.prepare('SELECT * FROM payments WHERE client_ref = ?').get(ref);
     if (done) return res.status(201).json({ id: done.id, balance: customerBalance(db, done.customer_id) });
@@ -423,6 +434,7 @@ module.exports = function shiftRoutes(db) {
         .prepare('INSERT INTO payments (customer_id, amount, method, reference, user_id, shift_id, client_ref) VALUES (?, ?, ?, ?, ?, ?, ?)')
         .run(customer.id, amount, method, reference, req.user.id, shift.id, ref);
       refreshCustomer(db, customer.id); // paid-off credit sales now earn their combos
+      lateEntry(req, shift, 'payments', { id: r.lastInsertRowid, amount });
       return r.lastInsertRowid;
     });
     res.status(201).json({ id: Number(id), balance: customerBalance(db, customer.id) });
@@ -431,7 +443,7 @@ module.exports = function shiftRoutes(db) {
   // Fuel paid by mobile money: only the product and the litres, at the shift's price. The shift's
   // mobile money is the total of these (plus payments by mobile money): nothing to type at closing.
   router.post('/shifts/:id/momo', staff, (req, res) => {
-    const shift = getOwnShift(req);
+    const shift = getOwnShift(req, { late: true });
     const ref = clientRef(req.body?.clientRef);
     const done = ref && db.prepare('SELECT * FROM momo_sales WHERE client_ref = ?').get(ref);
     if (done) return res.status(201).json(done);
@@ -441,13 +453,15 @@ module.exports = function shiftRoutes(db) {
     const id = db
       .prepare('INSERT INTO momo_sales (shift_id, product_id, liters, unit_price, amount, user_id, client_ref) VALUES (?, ?, ?, ?, ?, ?, ?)')
       .run(shift.id, Number(req.body.productId), liters, reading.unit_price, round(liters * reading.unit_price), req.user.id, ref).lastInsertRowid;
-    res.status(201).json(db.prepare('SELECT * FROM momo_sales WHERE id = ?').get(id));
+    const momo = db.prepare('SELECT * FROM momo_sales WHERE id = ?').get(id);
+    lateEntry(req, shift, 'momo_sales', momo);
+    res.status(201).json(momo);
   });
 
   // Pump test: fuel drawn at the pump and poured back into the tank. Entered by the attendant, it
   // waits for the manager's approval; entered by the manager, it is approved at once.
   router.post('/shifts/:id/tests', staff, (req, res) => {
-    const shift = getOwnShift(req);
+    const shift = getOwnShift(req, { late: true });
     const ref = clientRef(req.body?.clientRef);
     const done = ref && db.prepare('SELECT * FROM pump_tests WHERE client_ref = ?').get(ref);
     if (done) return res.status(201).json(done);
@@ -463,7 +477,8 @@ module.exports = function shiftRoutes(db) {
            VALUES (?, ?, ?, ?, ?, ?, ?, ${manager ? "datetime('now')" : 'NULL'}, ?)`,
         )
         .run(shift.id, reading.nozzle_id, liters, note, manager ? 'approved' : 'pending', req.user.id, manager ? req.user.id : null, ref);
-      audit(db, req, { category: 'postes', action: 'pump_test', entity: 'pump_tests', id: Number(r.lastInsertRowid), summary: `Test de pompe : ${liters} L remis en cuve, poste n°${shift.id}${manager ? ' (saisi et approuvé par le gérant)' : ''}` });
+      audit(db, req, { category: 'postes', action: 'pump_test', entity: 'pump_tests', id: Number(r.lastInsertRowid), summary: `Test de pompe : ${liters} L remis en cuve, poste n°${shift.id}${manager ? ' (saisi et approuvé par le gérant)' : ''}${shift.status === 'closed' ? ', ajouté après la clôture' : ''}` });
+      if (shift.status === 'closed') applyTests(shift.id);
       return r.lastInsertRowid;
     });
     res.status(201).json(db.prepare('SELECT * FROM pump_tests WHERE id = ?').get(id));
@@ -495,7 +510,7 @@ module.exports = function shiftRoutes(db) {
 
   // Small expense paid from the shift's cash (deducted from the amount to hand over).
   router.post('/shifts/:id/expenses', staff, (req, res) => {
-    const shift = getOwnShift(req);
+    const shift = getOwnShift(req, { late: true });
     const ref = clientRef(req.body?.clientRef);
     const done = ref && db.prepare('SELECT * FROM expenses WHERE client_ref = ?').get(ref);
     if (done) return res.status(201).json(done);
@@ -509,7 +524,9 @@ module.exports = function shiftRoutes(db) {
          VALUES (date('now', 'localtime'), ?, ?, ?, ?, 'espèces', ?, ?, ?)`,
       )
       .run(category, amount, description, beneficiary, shift.id, req.user.id, ref).lastInsertRowid;
-    res.status(201).json(db.prepare('SELECT * FROM expenses WHERE id = ?').get(id));
+    const expense = db.prepare('SELECT * FROM expenses WHERE id = ?').get(id);
+    lateEntry(req, shift, 'expenses', expense);
+    res.status(201).json(expense);
   });
 
   // ---- Cancelling an operation: the attendant asks, the manager decides ----
