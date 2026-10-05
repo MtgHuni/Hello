@@ -110,6 +110,7 @@ export async function renderShiftDetail(page, ctx) {
     remarkCard(shift, isManager),
     relaysCard(shift, ctx.state.settings.cashTolerance),
     isManager ? cancellationRequests(shift, () => renderShiftDetail(page, ctx)) : null,
+    pumpTestsCard(shift, isManager, reload),
     shiftSummary(shift, ctx.state.settings.cashTolerance),
   );
 }
@@ -170,6 +171,49 @@ async function remarkDialog(shift, reload) {
     toast(saved.manager_comment ? 'Remarque enregistrée.' : 'Remarque retirée.');
     reload();
   }
+}
+
+// Pump tests: fuel drawn and poured back into the tank. Approved, it is not sold (the shift is
+// recomputed even after its closing); refused, the meter counts it as sold.
+function pumpTestsCard(shift, isManager, reload) {
+  const tests = shift.pump_tests || [];
+  if (!tests.length) return null;
+  const pending = tests.filter((t) => t.status === 'pending').length;
+  const decide = async (t, approve) => {
+    try {
+      await api.post(`/shifts/${shift.id}/tests/${t.id}/decide`, { approve });
+      toast(approve ? `Test approuvé : ${fmt.liters(t.liters)} remis en cuve` : 'Test refusé : compté comme vendu');
+      reload();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  };
+  const status = (t) => (t.status === 'approved' ? badge('Approuvé', 'good') : t.status === 'rejected' ? badge('Refusé', 'serious') : badge('À approuver', 'warning'));
+  return h(
+    'section',
+    { class: 'card section', style: 'margin-bottom:20px' },
+    cardHeader(
+      'Tests de pompe',
+      pending ? `${pending > 1 ? `${pending} tests attendent` : 'Un test attend'} votre décision : approuvé, le carburant n’est pas compté comme vendu.` : 'Carburant sorti pour un test et remis dans la cuve.',
+    ),
+    tests.map((t) =>
+      h(
+        'div',
+        { class: 'nozzle-row' },
+        h(
+          'div',
+          { class: 'grow' },
+          h('div', { style: 'font-weight:600' }, `${t.product_name} · ${t.pump_name} · ${t.nozzle_name}`),
+          h('div', { class: 'muted small' }, [fmt.time(t.created_at), t.user_name, t.note, t.decided_by_name && t.status !== 'pending' ? `décidé par ${t.decided_by_name}` : null].filter(Boolean).join(' · ')),
+        ),
+        h('div', { class: 'num', style: 'font-weight:600' }, fmt.liters(t.liters)),
+        isManager && t.status === 'pending'
+          ? buttonRow([button('Approuver', () => decide(t, true), { variant: 'sm' }), button('Refuser', () => decide(t, false), { variant: 'destructive sm' })])
+          : status(t),
+        isManager && t.status !== 'pending' ? button(t.status === 'approved' ? 'Refuser' : 'Approuver', () => decide(t, t.status !== 'approved'), { variant: 'ghost sm' }) : null,
+      ),
+    ),
+  );
 }
 
 // Operations the attendant asked to cancel: they stay counted until the manager decides.
@@ -239,7 +283,8 @@ export function shiftSummary(shift, tolerance) {
           { label: 'Produit', key: 'product_name' },
           { label: 'Index début', align: 'right', render: (r) => fmt.number(r.start_meter) },
           { label: 'Index fin', align: 'right', render: (r) => (r.end_meter == null ? '—' : fmt.number(r.end_meter)) },
-          { label: 'Litres', align: 'right', render: (r) => (r.liters == null ? '—' : fmt.liters(r.liters)) },
+          ...(shift.readings.some((r) => r.tested) ? [{ label: 'Tests (remis en cuve)', align: 'right', render: (r) => (r.tested ? `−${fmt.liters(r.tested)}` : '—') }] : []),
+          { label: 'Litres vendus', align: 'right', render: (r) => (r.liters == null ? '—' : fmt.liters(r.liters)) },
           { label: 'Prix', align: 'right', render: (r) => fmt.price(r.unit_price) },
           { label: 'Montant', align: 'right', render: (r) => (r.amount == null ? '—' : fmt.money(r.amount)) },
         ],

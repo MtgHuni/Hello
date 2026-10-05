@@ -283,6 +283,23 @@ CREATE TABLE IF NOT EXISTS momo_sales (
 );
 CREATE INDEX IF NOT EXISTS idx_momo_sales_shift ON momo_sales(shift_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_momo_sales_ref ON momo_sales(client_ref) WHERE client_ref IS NOT NULL;
+-- Pump tests: fuel drawn at the pump (calibration…) and poured back into the tank. The meter
+-- counted it: once the manager approves, these litres are not sold and stay in the tank.
+CREATE TABLE IF NOT EXISTS pump_tests (
+  id          INTEGER PRIMARY KEY,
+  shift_id    INTEGER NOT NULL REFERENCES shifts(id),
+  nozzle_id   INTEGER NOT NULL REFERENCES nozzles(id),
+  liters      REAL NOT NULL CHECK (liters > 0),
+  note        TEXT,
+  status      TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+  user_id     INTEGER REFERENCES users(id),
+  decided_by  INTEGER REFERENCES users(id),
+  decided_at  TEXT,
+  client_ref  TEXT,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_pump_tests_shift ON pump_tests(shift_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_pump_tests_ref ON pump_tests(client_ref) WHERE client_ref IS NOT NULL;
 CREATE TABLE IF NOT EXISTS checkpoint_readings (
   checkpoint_id INTEGER NOT NULL REFERENCES shift_checkpoints(id),
   nozzle_id     INTEGER NOT NULL REFERENCES nozzles(id),
@@ -365,7 +382,7 @@ const MIGRATIONS = [
 ];
 
 // Bumped with every schema change; recorded in PRAGMA user_version.
-const SCHEMA_VERSION = 11;
+const SCHEMA_VERSION = 12;
 
 function missingColumns(db) {
   return MIGRATIONS.filter(([table, column]) => {

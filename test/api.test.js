@@ -737,6 +737,54 @@ test('relève, fermeture du soir et ouverture du matin : le poste continue', asy
   assert.ok((await gerant('GET', '/api/audit?category=reglages')).data.some((a) => a.summary.includes('96677.58') && a.summary.includes(`poste n°${next.shift.id}`)));
 });
 
+test('tests de pompe : remis en cuve une fois approuvés par le gérant, pas vendus', async () => {
+  const shift = (await pompiste('GET', '/api/shifts/state')).data.shift;
+  const diesel = dieselOf(shift);
+  const stock = async () => (await gerant('GET', '/api/tanks')).data.find((t) => t.id === diesel.tank_id).book_stock;
+  const before = await stock();
+
+  // The attendant enters two tests: they wait for the manager. Sending one again changes nothing.
+  const t1 = await pompiste('POST', `/api/shifts/${shift.id}/tests`, { nozzleId: diesel.nozzle_id, liters: 20, note: 'étalonnage', clientRef: 'test-pompe-1' });
+  assert.strictEqual(t1.status, 201);
+  assert.strictEqual(t1.data.status, 'pending');
+  assert.strictEqual((await pompiste('POST', `/api/shifts/${shift.id}/tests`, { nozzleId: diesel.nozzle_id, liters: 20, clientRef: 'test-pompe-1' })).data.id, t1.data.id);
+  const t2 = (await pompiste('POST', `/api/shifts/${shift.id}/tests`, { nozzleId: diesel.nozzle_id, liters: 5 })).data;
+  assert.ok((await gerant('GET', '/api/dashboard')).data.alerts.some((a) => a.text.includes('tests de pompe') && a.link === `#/postes/${shift.id}`));
+  assert.strictEqual((await pompiste('POST', `/api/shifts/${shift.id}/tests/${t1.data.id}/decide`, { approve: true })).status, 403, 'seul le gérant approuve');
+
+  // Approved before the closing: 50 L on the meter, 20 L back in the tank, 30 L sold.
+  assert.strictEqual((await gerant('POST', `/api/shifts/${shift.id}/tests/${t1.data.id}/decide`, { approve: true })).status, 200);
+  const closed = await closeShift(shift, { [diesel.nozzle_id]: diesel.start_meter + 50 }, { cash: 0 });
+  assert.strictEqual(closed.status, 200);
+  assert.strictEqual(dieselOf(closed.data).liters, 30);
+  assert.strictEqual(dieselOf(closed.data).tested, 20);
+  assert.strictEqual(await stock(), Math.round((before - 30) * 100) / 100);
+
+  // The second, approved after the closing: the shift is recomputed (5 L less sold, back in the tank).
+  const expected = closed.data.expected_amount;
+  const approved = (await gerant('POST', `/api/shifts/${shift.id}/tests/${t2.id}/decide`, { approve: true })).data;
+  assert.strictEqual(dieselOf(approved).liters, 25);
+  assert.strictEqual(approved.expected_amount, Math.round((expected - 5 * diesel.unit_price) * 100) / 100);
+  assert.strictEqual(await stock(), Math.round((before - 25) * 100) / 100);
+  // Refused after all: sold again.
+  const refused = (await gerant('POST', `/api/shifts/${shift.id}/tests/${t2.id}/decide`, { approve: false })).data;
+  assert.strictEqual(dieselOf(refused).liters, 30);
+  assert.strictEqual(refused.expected_amount, expected);
+  assert.strictEqual(refused.pump_tests.find((t) => t.id === t2.id).status, 'rejected');
+  assert.ok((await gerant('GET', '/api/audit?category=postes')).data.some((a) => a.action === 'pump_test_approved'));
+  assert.strictEqual((await gerant('GET', `/api/shifts/${shift.id}/report.pdf`)).raw.subarray(0, 5).toString(), '%PDF-');
+
+  // More litres approved than the meter counted: refused.
+  const big = (await pompiste('POST', `/api/shifts/${shift.id}/tests`, { nozzleId: diesel.nozzle_id, liters: 1 })).status;
+  assert.strictEqual(big, 409, 'poste clôturé : plus de saisie');
+  const next = (await gerant('GET', `/api/shifts/${closed.data.next_shift_id}`)).data;
+  const own = await gerant('POST', `/api/shifts/${next.id}/tests`, { nozzleId: diesel.nozzle_id, liters: 10 });
+  assert.strictEqual(own.data.status, 'approved', 'saisi par le gérant : approuvé d’office');
+  const tooMuch = await closeShift(next, { [diesel.nozzle_id]: dieselOf(next).start_meter + 4 }, { cash: 0 });
+  assert.strictEqual(tooMuch.status, 400);
+  assert.match(tooMuch.data.error, /tests de pompe/);
+});
+
 test('migration : une base ancienne est convertie (loyalty → paid, combos)', () => {
   const fs = require('node:fs');
   const os = require('node:os');

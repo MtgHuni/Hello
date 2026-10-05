@@ -182,6 +182,14 @@ function renderOpenShift(page, ctx, shift, remarks = null) {
       amount: fmt.money(m.amount),
       remove: { url: `/shifts/${shift.id}/momo/${m.id}`, label: 'Annuler ce paiement mobile money', pending: !!m.cancel_requested_at },
     })),
+    ...shift.pump_tests.map((t) => ({
+      at: t.created_at,
+      title: 'Test de pompe',
+      detail: `${t.product_name} · ${t.pump_name} · ${t.nozzle_name}${t.note ? ` · ${t.note}` : ''}`,
+      tag: testBadge(t),
+      amount: fmt.liters(t.liters),
+      remove: null,
+    })),
     ...shift.expenses.map((e) => ({
       at: e.created_at,
       title: e.description,
@@ -221,6 +229,8 @@ function renderOpenShift(page, ctx, shift, remarks = null) {
         quick('Règlement', 'cash', () => addPayment(shift, reload)),
         quick('Dépense', 'wallet', () => addExpense(ctx, shift, reload)),
       ),
+      // Fuel drawn for a test and poured back into the tank: not sold once the manager approves.
+      button('Test de pompe (remis en cuve)', (e) => busy(e.currentTarget, () => addTest(ctx, shift, reload)), { variant: 'secondary block', iconName: 'pump' }),
       requestQueue(shift, reload),
       h(
         'div',
@@ -231,7 +241,7 @@ function renderOpenShift(page, ctx, shift, remarks = null) {
         kpi('Dépenses', fmt.money(shift.expenses_amount)),
       ),
       card(
-        cardHeader('Opérations du poste', 'Crédits, mobile money, règlements et dépenses : les ventes sont calculées par les index.'),
+        cardHeader('Opérations du poste', 'Crédits, mobile money, règlements, dépenses et tests de pompe : les ventes sont calculées par les index.'),
         entries.length
           ? entries.map((x) =>
               h(
@@ -244,7 +254,9 @@ function renderOpenShift(page, ctx, shift, remarks = null) {
                   h('div', { class: 'muted small' }, `${fmt.time(x.at)} · ${x.detail}`),
                 ),
                 h('div', { class: 'num', style: 'font-weight:600' }, x.amount),
-                x.remove.pending
+                !x.remove
+                  ? null
+                  : x.remove.pending
                   ? badge('Annulation demandée', 'warning')
                   : h('button', { class: 'btn danger sm', 'aria-label': x.remove.label, title: x.remove.label, onClick: () => cancelEntry(ctx, x, reload) }, icon('trash')),
                 h('div', { class: 'op-tags' }, x.tag),
@@ -682,6 +694,41 @@ async function addMomo(shift, reload) {
   }
 }
 
+const testBadge = (t) => (t.status === 'approved' ? badge('Approuvé', 'good') : t.status === 'rejected' ? badge('Refusé', 'serious') : badge('À approuver', 'warning'));
+
+// A pump test: the nozzle, the litres poured back into the tank. The manager approves it.
+async function addTest(ctx, shift, reload) {
+  const clientRef = newRef();
+  const manager = ctx.state.user.role === 'manager';
+  const quickLiters = h(
+    'div',
+    { class: 'full' },
+    buttonRow(
+      [5, 10, 20].map((l) => button(`${l} L`, (e) => (e.currentTarget.form.elements.liters.value = l), { variant: 'secondary sm' })),
+      { inline: true },
+    ),
+  );
+  const ok = await formDialog({
+    title: 'Test de pompe',
+    submitLabel: manager ? 'Enregistrer' : 'Envoyer au gérant',
+    intro: manager
+      ? 'Le carburant sorti pour un test et remis dans la cuve : il ne compte pas comme vendu.'
+      : 'Le carburant sorti pour un test et remis dans la cuve. Le gérant doit l’approuver : il ne comptera alors pas comme vendu.',
+    grid: false,
+    fields: [
+      { name: 'nozzleId', label: 'Pistolet', type: 'segment', options: shift.readings.map((r) => [String(r.nozzle_id), `${r.product_name} · ${r.pump_name}`]), value: String(shift.readings[0]?.nozzle_id) },
+      { name: 'liters', label: 'Litres remis en cuve', type: 'number', step: '0.01', min: '0.01', required: true },
+      { name: 'quick', type: 'node', node: quickLiters },
+      { name: 'note', label: 'Remarque (facultatif)', placeholder: 'Étalonnage, contrôle du compteur…' },
+    ],
+    onSubmit: (d) => api.post(`/shifts/${shift.id}/tests`, { nozzleId: Number(d.nozzleId), liters: Number(d.liters), note: d.note, clientRef }),
+  });
+  if (ok) {
+    toast(manager ? `Test de pompe : ${fmt.liters(ok.liters)} remis en cuve` : `Test de pompe envoyé au gérant (${fmt.liters(ok.liters)})`);
+    reload();
+  }
+}
+
 async function addExpense(ctx, shift, reload) {
   const clientRef = newRef();
   const ok = await formDialog({
@@ -741,9 +788,10 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
         out.textContent = '';
         continue;
       }
-      const liters = Number(v) - r.start_meter;
+      // Approved pump tests went back into the tank: not sold.
+      const liters = Number(v) - r.start_meter - (r.tested || 0);
       total += liters * r.unit_price;
-      out.textContent = liters < 0 ? 'Index inférieur au début !' : `${fmt.liters(liters)} · ${fmt.money(liters * r.unit_price)}`;
+      out.textContent = Number(v) < r.start_meter ? 'Index inférieur au début !' : `${fmt.liters(liters)}${r.tested ? ` (tests −${fmt.liters(r.tested)})` : ''} · ${fmt.money(liters * r.unit_price)}`;
       out.className = liters < 0 ? 'small variance-neg' : 'small muted';
     }
     // Subscribers' higher price is cashed on top of the pump price.

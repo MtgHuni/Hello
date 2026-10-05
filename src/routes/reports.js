@@ -158,6 +158,13 @@ module.exports = function reportRoutes(db) {
          GROUP BY shift_id ORDER BY shift_id`,
       )
       .all();
+    for (const t of db.prepare("SELECT shift_id, COUNT(*) AS n, ROUND(SUM(liters), 2) AS liters FROM pump_tests WHERE status = 'pending' GROUP BY shift_id ORDER BY shift_id").all()) {
+      alerts.push({
+        level: 'serious',
+        text: `Poste n°${t.shift_id} : ${t.n > 1 ? `${t.n} tests de pompe` : '1 test de pompe'} (${String(t.liters).replace('.', ',')} L remis en cuve) à approuver`,
+        link: `#/postes/${t.shift_id}`,
+      });
+    }
     for (const c of cancellations) {
       alerts.push({
         level: 'serious',

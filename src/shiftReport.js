@@ -65,6 +65,21 @@ function shiftReportPdf(shift, { stationName, combosEnabled, cashTolerance = 0, 
     readings.map((r) => [`${r.pump_name} · ${r.nozzle_name}`, r.product_name, number(r.start_meter), number(r.end_meter), liters(r.liters), price(r.unit_price), money(r.amount)]),
     { totals },
   );
+  const tests = shift.pump_tests || [];
+  if (tests.length) {
+    const approved = round(tests.filter((t) => t.status === 'approved').reduce((s, t) => s + t.liters, 0));
+    report.section('Tests de pompe (remis en cuve)', approved ? `${liters(approved)} approuvés : déduits des litres vendus, restés dans la cuve.` : null);
+    report.table(
+      [
+        { label: 'HEURE', width: 44 },
+        { label: 'POMPE · PISTOLET', width: 150 },
+        { label: 'LITRES', width: 60, align: 'right' },
+        { label: 'PAR', width: 100 },
+        { label: 'DÉCISION', indent: 14 },
+      ],
+      tests.map((t) => [time(t.created_at), `${t.pump_name} · ${t.nozzle_name}`, liters(t.liters), t.user_name || '—', t.status === 'approved' ? 'Approuvé' : t.status === 'rejected' ? 'Refusé (compté vendu)' : 'En attente du gérant']),
+    );
+  }
 
   // ---- Credits ----
   const saleColumns = [

@@ -55,6 +55,15 @@ module.exports = function shiftRoutes(db) {
          WHERE ms.shift_id = ? ORDER BY ms.id`,
       )
       .all(id);
+    shift.pump_tests = db
+      .prepare(
+        `SELECT t.*, n.name AS nozzle_name, pu.name AS pump_name, p.name AS product_name, us.name AS user_name, dm.name AS decided_by_name
+         FROM pump_tests t JOIN nozzles n ON n.id = t.nozzle_id JOIN pumps pu ON pu.id = n.pump_id JOIN tanks tk ON tk.id = n.tank_id
+         JOIN products p ON p.id = tk.product_id LEFT JOIN users us ON us.id = t.user_id LEFT JOIN users dm ON dm.id = t.decided_by
+         WHERE t.shift_id = ? ORDER BY t.id`,
+      )
+      .all(id);
+    for (const r of shift.readings) r.tested = testedLiters(id, r.nozzle_id);
     shift.momo_total = momoTotal(db, id);
     shift.liters_by_product = litersByProduct([id]).get(Number(id)) || [];
     shift.pending_cancellations = pendingCancellations(id);
@@ -88,6 +97,37 @@ module.exports = function shiftRoutes(db) {
       out.get(r.shift_id).push({ product_id: r.product_id, name: r.name, liters: r.liters });
     }
     return out;
+  }
+
+  // Litres of a nozzle's approved pump tests in a shift: drawn, then poured back into the tank.
+  const testedLiters = (shiftId, nozzleId) =>
+    round(db.prepare("SELECT COALESCE(SUM(liters), 0) AS v FROM pump_tests WHERE shift_id = ? AND nozzle_id = ? AND status = 'approved'").get(shiftId, nozzleId).v);
+
+  // A closed shift after a test is approved or refused: each nozzle's litres sold are the meter's
+  // minus the approved tests, the tank gets the difference back, then the money is reconciled.
+  function applyTests(shiftId) {
+    const readings = db.prepare('SELECT r.*, n.name AS nozzle_name FROM shift_readings r JOIN nozzles n ON n.id = r.nozzle_id WHERE r.shift_id = ?').all(shiftId);
+    const sales = db.prepare('SELECT nozzle_id, liters FROM sales WHERE shift_id = ?').all(shiftId);
+    for (const r of readings) {
+      if (r.end_meter == null) continue;
+      const liters = netLiters(r, sales, testedLiters(shiftId, r.nozzle_id));
+      db.prepare('UPDATE shift_readings SET liters = ?, amount = ? WHERE id = ?').run(liters, round(liters * r.unit_price), r.id);
+      db.prepare('UPDATE tanks SET book_stock = ROUND(book_stock + ?, 2) WHERE id = ?').run(round((r.liters || 0) - liters), r.tank_id);
+    }
+    db.prepare('UPDATE shifts SET total_liters = (SELECT ROUND(COALESCE(SUM(liters), 0), 2) FROM shift_readings WHERE shift_id = ?) WHERE id = ?').run(shiftId, shiftId);
+    reconcile(shiftId);
+  }
+
+  // Litres sold on a nozzle: the meter's, less the fuel poured back after approved tests.
+  function netLiters(r, sales, tested) {
+    const meter = round(r.end_meter - r.start_meter);
+    if (tested > meter + 0.001) fail(400, `${r.nozzle_name} : les tests de pompe approuvés (${tested} L) dépassent les litres du compteur (${meter} L).`);
+    const liters = round(meter - tested);
+    const customerLiters = sales.filter((s) => s.nozzle_id === r.nozzle_id).reduce((t, s) => t + s.liters, 0);
+    if (customerLiters > liters + 0.001) {
+      fail(400, `${r.nozzle_name} : les ventes clients (${round(customerLiters)} L) dépassent les litres vendus au compteur (${liters} L, tests de pompe déduits).`);
+    }
+    return liters;
   }
 
   const onDuty = (shiftId, userId) => !!db.prepare('SELECT 1 FROM shift_attendants WHERE shift_id = ? AND user_id = ? AND left_at IS NULL').get(shiftId, userId);
@@ -390,6 +430,54 @@ module.exports = function shiftRoutes(db) {
     res.status(201).json(db.prepare('SELECT * FROM momo_sales WHERE id = ?').get(id));
   });
 
+  // Pump test: fuel drawn at the pump and poured back into the tank. Entered by the attendant, it
+  // waits for the manager's approval; entered by the manager, it is approved at once.
+  router.post('/shifts/:id/tests', staff, (req, res) => {
+    const shift = getOwnShift(req);
+    const ref = clientRef(req.body?.clientRef);
+    const done = ref && db.prepare('SELECT * FROM pump_tests WHERE client_ref = ?').get(ref);
+    if (done) return res.status(201).json(done);
+    const reading = db.prepare('SELECT nozzle_id FROM shift_readings WHERE shift_id = ? AND nozzle_id = ?').get(shift.id, Number(req.body?.nozzleId));
+    if (!reading) fail(400, 'Choisissez le pistolet.');
+    const liters = round(num(req.body?.liters, 'Le nombre de litres', { min: 0.01, max: 500 }));
+    const note = str(req.body?.note, 'La remarque', { required: false, max: 200 });
+    const manager = req.user.role === 'manager';
+    const id = transaction(db, () => {
+      const r = db
+        .prepare(
+          `INSERT INTO pump_tests (shift_id, nozzle_id, liters, note, status, user_id, decided_by, decided_at, client_ref)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ${manager ? "datetime('now')" : 'NULL'}, ?)`,
+        )
+        .run(shift.id, reading.nozzle_id, liters, note, manager ? 'approved' : 'pending', req.user.id, manager ? req.user.id : null, ref);
+      audit(db, req, { category: 'postes', action: 'pump_test', entity: 'pump_tests', id: Number(r.lastInsertRowid), summary: `Test de pompe : ${liters} L remis en cuve, poste n°${shift.id}${manager ? ' (saisi et approuvé par le gérant)' : ''}` });
+      return r.lastInsertRowid;
+    });
+    res.status(201).json(db.prepare('SELECT * FROM pump_tests WHERE id = ?').get(id));
+  });
+
+  // The manager approves or refuses a test, also after the closing (the shift is then recomputed).
+  router.post('/shifts/:id/tests/:testId/decide', requireRole('manager'), (req, res) => {
+    const shift = db.prepare('SELECT * FROM shifts WHERE id = ?').get(req.params.id);
+    if (!shift) fail(404, 'Poste introuvable.');
+    const test = db.prepare('SELECT * FROM pump_tests WHERE id = ? AND shift_id = ?').get(req.params.testId, shift.id);
+    if (!test) fail(404, 'Test de pompe introuvable.');
+    const status = req.body?.approve === true ? 'approved' : req.body?.approve === false ? 'rejected' : fail(400, 'Approuvez ou refusez le test.');
+    transaction(db, () => {
+      db.prepare("UPDATE pump_tests SET status = ?, decided_by = ?, decided_at = datetime('now') WHERE id = ?").run(status, req.user.id, test.id);
+      if (shift.status === 'closed') applyTests(shift.id);
+      audit(db, req, {
+        category: 'postes',
+        action: status === 'approved' ? 'pump_test_approved' : 'pump_test_rejected',
+        entity: 'pump_tests',
+        id: test.id,
+        summary: `Test de pompe de ${test.liters} L ${status === 'approved' ? 'approuvé : remis en cuve, pas vendu' : 'refusé : compté comme vendu'}, poste n°${shift.id}`,
+        before: { status: test.status },
+        after: { status },
+      });
+    });
+    res.json(shiftDetail(shift.id));
+  });
+
   // Small expense paid from the shift's cash (deducted from the amount to hand over).
   router.post('/shifts/:id/expenses', staff, (req, res) => {
     const shift = getOwnShift(req);
@@ -545,11 +633,7 @@ module.exports = function shiftRoutes(db) {
         }
         const lastTaken = last?.get(r.nozzle_id);
         if (lastTaken != null && end < lastTaken - 0.001) fail(400, `L'index de fin (${r.nozzle_name}) ne peut pas être inférieur au dernier relevé du poste (${lastTaken}).`);
-        const liters = round(end - r.start_meter);
-        const customerLiters = sales.filter((s) => s.nozzle_id === r.nozzle_id).reduce((t, s) => t + s.liters, 0);
-        if (customerLiters > liters + 0.001) {
-          fail(400, `${r.nozzle_name} : les ventes clients (${round(customerLiters)} L) dépassent les litres du compteur (${liters} L).`);
-        }
+        const liters = netLiters({ ...r, end_meter: end }, sales, testedLiters(shift.id, r.nozzle_id));
         totalLiters += liters;
         db.prepare('UPDATE shift_readings SET end_meter = ?, liters = ?, amount = ? WHERE id = ?').run(end, liters, round(liters * r.unit_price), r.id);
         db.prepare('UPDATE nozzles SET meter = ? WHERE id = ?').run(end, r.nozzle_id);

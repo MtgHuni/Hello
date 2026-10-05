@@ -33,11 +33,14 @@ function periodReport(db, shift, readings, previous, end) {
   const after = previous ? '>' : '>=';
   const inPeriod = (table) => db.prepare(`SELECT * FROM ${table} WHERE shift_id = ? AND created_at ${after} ? AND created_at <= ? ORDER BY id`).all(shift.id, from.at, end.at);
 
+  // Fuel drawn for an approved pump test went back into the tank: not sold.
+  const tests = inPeriod('pump_tests').filter((t) => t.status === 'approved');
   const nozzles = readings.map((r) => {
     const start = from.meters.get(r.nozzle_id) ?? r.start_meter;
     const stop = end.meters.get(r.nozzle_id) ?? start;
-    const liters = round(stop - start);
-    return { nozzle_id: r.nozzle_id, name: `${r.pump_name} · ${r.nozzle_name}`, product_id: r.product_id, product_name: r.product_name, from: start, to: stop, liters, amount: round(liters * r.unit_price) };
+    const tested = round(tests.filter((t) => t.nozzle_id === r.nozzle_id).reduce((s, t) => s + t.liters, 0));
+    const liters = round(stop - start - tested);
+    return { nozzle_id: r.nozzle_id, name: `${r.pump_name} · ${r.nozzle_name}`, product_id: r.product_id, product_name: r.product_name, from: start, to: stop, tested, liters, amount: round(liters * r.unit_price) };
   });
   const unitPrices = new Map(readings.map((r) => [r.nozzle_id, r.unit_price]));
   const customerName = new Map(db.prepare('SELECT id, name FROM customers').all().map((c) => [c.id, c.name]));
@@ -68,6 +71,7 @@ function periodReport(db, shift, readings, previous, end) {
     from_kind: previous?.kind || 'opening',
     nozzles,
     liters: round(nozzles.reduce((t, n) => t + n.liters, 0)),
+    tested: round(nozzles.reduce((t, n) => t + n.tested, 0)),
     sold,
     surcharge,
     credits,
