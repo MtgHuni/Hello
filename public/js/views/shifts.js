@@ -182,19 +182,19 @@ function pumpTestsCard(shift, isManager, reload) {
   const decide = async (t, approve) => {
     try {
       await api.post(`/shifts/${shift.id}/tests/${t.id}/decide`, { approve });
-      toast(approve ? `Test approuvé : ${fmt.liters(t.liters)} remis en cuve` : 'Test refusé : compté comme vendu');
+      toast(approve ? `Test confirmé : ${fmt.liters(t.liters)} remis en cuve` : 'Test annulé : compté comme vendu');
       reload();
     } catch (err) {
       toast(err.message, 'error');
     }
   };
-  const status = (t) => (t.status === 'approved' ? badge('Approuvé', 'good') : t.status === 'rejected' ? badge('Refusé', 'serious') : badge('À approuver', 'warning'));
+  const status = (t) => (t.status === 'approved' ? badge('Confirmé', 'good') : t.status === 'rejected' ? badge('Annulé', 'serious') : badge('À confirmer', 'warning'));
   return h(
     'section',
     { class: 'card section', style: 'margin-bottom:20px' },
     cardHeader(
       'Tests de pompe',
-      pending ? `${pending > 1 ? `${pending} tests attendent` : 'Un test attend'} votre décision : approuvé, le carburant n’est pas compté comme vendu.` : 'Carburant sorti pour un test et remis dans la cuve.',
+      pending ? `${pending > 1 ? `${pending} tests attendent` : 'Un test attend'} votre décision : confirmé, le carburant n’est pas compté comme vendu.` : 'Carburant sorti pour un test et remis dans la cuve.',
     ),
     tests.map((t) =>
       h(
@@ -204,13 +204,12 @@ function pumpTestsCard(shift, isManager, reload) {
           'div',
           { class: 'grow' },
           h('div', { style: 'font-weight:600' }, `${t.product_name} · ${t.pump_name} · ${t.nozzle_name}`),
-          h('div', { class: 'muted small' }, [fmt.time(t.created_at), t.user_name, t.note, t.decided_by_name && t.status !== 'pending' ? `décidé par ${t.decided_by_name}` : null].filter(Boolean).join(' · ')),
+          h('div', { class: 'muted small' }, [fmt.time(t.created_at), t.user_name, t.note, t.decided_by_name && t.status !== 'pending' ? `${t.status === 'approved' ? 'confirmé' : 'annulé'} par ${t.decided_by_name}` : null].filter(Boolean).join(' · ')),
         ),
         h('div', { class: 'num', style: 'font-weight:600' }, fmt.liters(t.liters)),
         isManager && t.status === 'pending'
-          ? buttonRow([button('Approuver', () => decide(t, true), { variant: 'sm' }), button('Refuser', () => decide(t, false), { variant: 'destructive sm' })])
+          ? buttonRow([button('Confirmer', () => decide(t, true), { variant: 'sm' }), button('Annuler', () => decide(t, false), { variant: 'destructive sm' })])
           : status(t),
-        isManager && t.status !== 'pending' ? button(t.status === 'approved' ? 'Refuser' : 'Approuver', () => decide(t, t.status !== 'approved'), { variant: 'ghost sm' }) : null,
       ),
     ),
   );

@@ -694,7 +694,7 @@ async function addMomo(shift, reload) {
   }
 }
 
-const testBadge = (t) => (t.status === 'approved' ? badge('Approuvé', 'good') : t.status === 'rejected' ? badge('Refusé', 'serious') : badge('À approuver', 'warning'));
+const testBadge = (t) => (t.status === 'approved' ? badge('Confirmé', 'good') : t.status === 'rejected' ? badge('Annulé', 'serious') : badge('À confirmer', 'warning'));
 
 // A pump test: the nozzle, the litres poured back into the tank. The manager approves it.
 async function addTest(ctx, shift, reload) {
@@ -713,7 +713,7 @@ async function addTest(ctx, shift, reload) {
     submitLabel: manager ? 'Enregistrer' : 'Envoyer au gérant',
     intro: manager
       ? 'Le carburant sorti pour un test et remis dans la cuve : il ne compte pas comme vendu.'
-      : 'Le carburant sorti pour un test et remis dans la cuve. Le gérant doit l’approuver : il ne comptera alors pas comme vendu.',
+      : 'Le carburant sorti pour un test et remis dans la cuve. Le gérant doit le confirmer : il ne comptera alors pas comme vendu.',
     grid: false,
     fields: [
       { name: 'nozzleId', label: 'Pistolet', type: 'segment', options: shift.readings.map((r) => [String(r.nozzle_id), `${r.product_name} · ${r.pump_name}`]), value: String(shift.readings[0]?.nozzle_id) },

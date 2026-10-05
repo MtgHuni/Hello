@@ -755,6 +755,7 @@ test('tests de pompe : remis en cuve une fois approuvés par le gérant, pas ven
   assert.strictEqual(t1.data.status, 'pending');
   assert.strictEqual((await pompiste('POST', `/api/shifts/${shift.id}/tests`, { nozzleId: diesel.nozzle_id, liters: 20, clientRef: 'test-pompe-1' })).data.id, t1.data.id);
   const t2 = (await pompiste('POST', `/api/shifts/${shift.id}/tests`, { nozzleId: diesel.nozzle_id, liters: 5 })).data;
+  const t3 = (await pompiste('POST', `/api/shifts/${shift.id}/tests`, { nozzleId: diesel.nozzle_id, liters: 3 })).data;
   assert.ok((await gerant('GET', '/api/dashboard')).data.alerts.some((a) => a.text.includes('tests de pompe') && a.link === `#/postes/${shift.id}`));
   assert.strictEqual((await pompiste('POST', `/api/shifts/${shift.id}/tests/${t1.data.id}/decide`, { approve: true })).status, 403, 'seul le gérant approuve');
 
@@ -772,11 +773,11 @@ test('tests de pompe : remis en cuve une fois approuvés par le gérant, pas ven
   assert.strictEqual(dieselOf(approved).liters, 25);
   assert.strictEqual(approved.expected_amount, Math.round((expected - 5 * diesel.unit_price) * 100) / 100);
   assert.strictEqual(await stock(), Math.round((before - 25) * 100) / 100);
-  // Refused after all: sold again.
-  const refused = (await gerant('POST', `/api/shifts/${shift.id}/tests/${t2.id}/decide`, { approve: false })).data;
-  assert.strictEqual(dieselOf(refused).liters, 30);
-  assert.strictEqual(refused.expected_amount, expected);
-  assert.strictEqual(refused.pump_tests.find((t) => t.id === t2.id).status, 'rejected');
+  // Decided once: a confirmed test can not change any more. A cancelled one stays sold.
+  assert.strictEqual((await gerant('POST', `/api/shifts/${shift.id}/tests/${t2.id}/decide`, { approve: false })).status, 409);
+  const refused = (await gerant('POST', `/api/shifts/${shift.id}/tests/${t3.id}/decide`, { approve: false })).data;
+  assert.strictEqual(dieselOf(refused).liters, 25);
+  assert.strictEqual(refused.pump_tests.find((t) => t.id === t3.id).status, 'rejected');
   assert.ok((await gerant('GET', '/api/audit?category=postes')).data.some((a) => a.action === 'pump_test_approved'));
   assert.strictEqual((await gerant('GET', `/api/shifts/${shift.id}/report.pdf`)).raw.subarray(0, 5).toString(), '%PDF-');
 

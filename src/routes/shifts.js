@@ -474,7 +474,8 @@ module.exports = function shiftRoutes(db) {
     if (!shift) fail(404, 'Poste introuvable.');
     const test = db.prepare('SELECT * FROM pump_tests WHERE id = ? AND shift_id = ?').get(req.params.testId, shift.id);
     if (!test) fail(404, 'Test de pompe introuvable.');
-    const status = req.body?.approve === true ? 'approved' : req.body?.approve === false ? 'rejected' : fail(400, 'Approuvez ou refusez le test.');
+    if (test.status !== 'pending') fail(409, test.status === 'approved' ? 'Ce test de pompe est déjà confirmé.' : 'Ce test de pompe est déjà annulé.');
+    const status = req.body?.approve === true ? 'approved' : req.body?.approve === false ? 'rejected' : fail(400, 'Confirmez ou annulez le test.');
     transaction(db, () => {
       db.prepare("UPDATE pump_tests SET status = ?, decided_by = ?, decided_at = datetime('now') WHERE id = ?").run(status, req.user.id, test.id);
       if (shift.status === 'closed') applyTests(shift.id);
@@ -483,7 +484,7 @@ module.exports = function shiftRoutes(db) {
         action: status === 'approved' ? 'pump_test_approved' : 'pump_test_rejected',
         entity: 'pump_tests',
         id: test.id,
-        summary: `Test de pompe de ${test.liters} L ${status === 'approved' ? 'approuvé : remis en cuve, pas vendu' : 'refusé : compté comme vendu'}, poste n°${shift.id}`,
+        summary: `Test de pompe de ${test.liters} L ${status === 'approved' ? 'confirmé : remis en cuve, pas vendu' : 'annulé : compté comme vendu'}, poste n°${shift.id}`,
         before: { status: test.status },
         after: { status },
       });

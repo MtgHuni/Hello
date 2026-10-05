@@ -71,7 +71,7 @@ function shiftReportPdf(shift, { stationName, combosEnabled, cashTolerance = 0, 
   const tests = shift.pump_tests || [];
   if (tests.length) {
     const approved = round(tests.filter((t) => t.status === 'approved').reduce((s, t) => s + t.liters, 0));
-    report.section('Tests de pompe (remis en cuve)', approved ? `${liters(approved)} approuvés : déduits des litres vendus, restés dans la cuve.` : null);
+    report.section('Tests de pompe (remis en cuve)', approved ? `${liters(approved)} confirmés : déduits des litres vendus, restés dans la cuve.` : null);
     report.table(
       [
         { label: 'HEURE', width: 44 },
@@ -80,7 +80,7 @@ function shiftReportPdf(shift, { stationName, combosEnabled, cashTolerance = 0, 
         { label: 'PAR', width: 100 },
         { label: 'DÉCISION', indent: 14 },
       ],
-      tests.map((t) => [time(t.created_at), `${t.pump_name} · ${t.nozzle_name}`, liters(t.liters), t.user_name || '—', t.status === 'approved' ? 'Approuvé' : t.status === 'rejected' ? 'Refusé (compté vendu)' : 'En attente du gérant']),
+      tests.map((t) => [time(t.created_at), `${t.pump_name} · ${t.nozzle_name}`, liters(t.liters), t.user_name || '—', t.status === 'approved' ? 'Confirmé' : t.status === 'rejected' ? 'Annulé (compté vendu)' : 'En attente du gérant']),
     );
   }
 
