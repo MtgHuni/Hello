@@ -9,7 +9,7 @@ import { renderAttendant } from './attendant.js';
 const KIND = {
   releve: {
     title: 'Relève',
-    intro: 'Relevez les index de tous les pistolets et comptez les espèces : le pompiste qui vous remplace recevra ce rapport.',
+    intro: 'Relevez les index et comptez les espèces : le pompiste qui vous remplace recevra ce rapport.',
     money: 'Espèces remises au pompiste suivant ($)',
     submit: 'Passer le relais',
     confirm: 'Vous quittez le poste : le suivant le continuera avec ces index et cet argent.',
@@ -127,14 +127,14 @@ export function renderCheckpoint(page, ctx, shift, kind, { report } = {}) {
     morning
       ? h('div', { hidden: true }, shift.readings.map((r) => h('input', { type: 'hidden', name: `m_${r.nozzle_id}`, value: String(lastMeter(r)) })))
       : card(
-      cardHeader('1. Index', 'Relevez le compteur de chaque pistolet'),
+      cardHeader('1. Index', 'Relevez le compteur de chaque produit'),
       h(
         'div',
         { class: 'stack' },
         shift.readings.map((r) =>
           field({
             name: `m_${r.nozzle_id}`,
-            label: `${r.pump_name} · ${r.nozzle_name}`,
+            label: r.product_name,
             hint: `Dernier relevé : ${fmt.number(lastMeter(r))}`,
             type: 'number',
             step: '0.01',

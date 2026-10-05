@@ -428,6 +428,24 @@ test('accès : un pompiste ne voit pas le poste d’un autre ; mot de passe chan
   assert.strictEqual((await luc('GET', '/api/auth/me')).status, 200, 'la session en cours reste ouverte');
 });
 
+test('actionnaire : consulte tout, ne modifie rien', async () => {
+  assert.strictEqual((await gerant('POST', '/api/users', { name: 'Awa', login: 'awa', password: 'actionnaire1', role: 'owner' })).status, 201);
+  const awa = client();
+  await awa('POST', '/api/auth/login', { login: 'awa', password: 'actionnaire1' });
+  assert.strictEqual((await awa('GET', '/api/auth/me')).data.user.role, 'owner');
+  for (const url of ['/api/dashboard', '/api/shifts', `/api/shifts/${ctx.shift.id}`, '/api/customers', '/api/expenses', '/api/tanks', '/api/cashbook', '/api/audit', '/api/users']) {
+    assert.strictEqual((await awa('GET', url)).status, 200, url);
+  }
+  const refused = await awa('POST', '/api/expenses', { amount: 5, category: 'Divers', description: 'x' });
+  assert.strictEqual(refused.status, 403);
+  assert.strictEqual(refused.data.code, 'read_only');
+  assert.strictEqual((await awa('PUT', '/api/settings', { stationName: 'Autre' })).status, 403);
+  const meters = ctx.shift.readings.map((r) => ({ nozzleId: r.nozzle_id, meter: r.start_meter + 1000 }));
+  assert.strictEqual((await awa('POST', `/api/shifts/${ctx.shift.id}/checkpoints/preview`, { readings: meters })).status, 200, 'vérifier les compteurs sans rien enregistrer');
+  assert.strictEqual((await awa('GET', '/api/backup')).status, 403, 'la sauvegarde reste au gérant');
+  assert.strictEqual((await awa('POST', '/api/auth/password', { current: 'actionnaire1', password: 'actionnaire2' })).status, 200, 'son propre mot de passe');
+});
+
 test('le gérant clôture à la place du pompiste (mobile money), puis corrige la clôture', async () => {
   const shift = (await gerant('GET', `/api/shifts/${ctx.shift.id}`)).data;
   const nozzle = dieselOf(shift);
@@ -845,6 +863,10 @@ test('migration : une base ancienne est convertie (loyalty → paid, combos)', (
       amount REAL NOT NULL, points INTEGER NOT NULL DEFAULT 0, plate TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')));
     INSERT INTO sales (shift_id, customer_id, nozzle_id, product_id, kind, liters, unit_price, amount, points)
       VALUES (1, 1, 1, 1, 'loyalty', 10, 1, 10, 10), (1, 1, 1, 1, 'credit', 5, 1, 5, 5);
+    CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL, login TEXT NOT NULL UNIQUE COLLATE NOCASE, password_hash TEXT NOT NULL,
+      role TEXT NOT NULL CHECK (role IN ('manager', 'attendant', 'customer')), customer_id INTEGER UNIQUE REFERENCES customers(id),
+      active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+    INSERT INTO users (name, login, password_hash, role) VALUES ('Ancien gérant', 'g', 'x', 'manager');
     CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     INSERT INTO settings VALUES ('combos_enabled', '1'), ('cdf_rate', '2800');`);
   old.close();
@@ -853,6 +875,8 @@ test('migration : une base ancienne est convertie (loyalty → paid, combos)', (
   assert.strictEqual(migrated.prepare('SELECT loyalty_points FROM customers').get().loyalty_points, 10, 'le crédit non payé ne rapporte plus');
   assert.strictEqual(migrated.prepare('SELECT credit_limit FROM customers').get().credit_limit, 50);
   assert.strictEqual(migrated.prepare('PRAGMA user_version').get().user_version, SCHEMA_VERSION);
+  assert.ok(migrated.prepare("SELECT sql FROM sqlite_master WHERE name = 'users'").get().sql.includes("'owner'"), 'version 15 : rôle actionnaire');
+  assert.strictEqual(migrated.prepare('SELECT login FROM users').get().login, 'g', 'les comptes sont gardés');
   const setting = (key) => migrated.prepare('SELECT value FROM settings WHERE key = ?').get(key)?.value;
   assert.strictEqual(setting('combos_enabled'), '0', 'version 6 : combos coupés');
   assert.strictEqual(setting('cdf_rate'), undefined, 'version 6 : tout en dollars');

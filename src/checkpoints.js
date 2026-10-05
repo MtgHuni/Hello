@@ -41,7 +41,7 @@ function periodReport(db, shift, readings, previous, end) {
     const stop = end.meters.get(r.nozzle_id) ?? start;
     const tested = round(tests.filter((t) => t.nozzle_id === r.nozzle_id).reduce((s, t) => s + t.liters, 0));
     const liters = round(stop - start - tested);
-    return { nozzle_id: r.nozzle_id, name: `${r.pump_name} · ${r.nozzle_name}`, product_id: r.product_id, product_name: r.product_name, from: start, to: stop, tested, liters, amount: round(liters * r.unit_price) };
+    return { nozzle_id: r.nozzle_id, name: r.product_name, product_id: r.product_id, product_name: r.product_name, from: start, to: stop, tested, liters, amount: round(liters * r.unit_price) };
   });
   const unitPrices = new Map(readings.map((r) => [r.nozzle_id, r.unit_price]));
   const customerName = new Map(db.prepare('SELECT id, name FROM customers').all().map((c) => [c.id, c.name]));

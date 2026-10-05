@@ -19,7 +19,7 @@ Requires Node ≥ 22.13 (built-in `node:sqlite`, hence `--disable-warning=Experi
 - `createApp({ dbFile })` in `src/app.js` mounts each `src/routes/*.js` factory `(db) => Router` under `/api`.
 - Errors are thrown, never returned: use `fail(status, message, code)` / `HttpError` from `src/util.js`. The error handler replies `{ error, code }`, and the frontend branches on `code` (e.g. `over_limit` opens a "grant credit?" confirmation, `duplicate`, `combos`).
 - Input validation uses the `num`, `str`, `oneOf`, `bool`, `dateParam` helpers. Multi-step writes go in `transaction(db, fn)` (BEGIN IMMEDIATE).
-- Auth (`src/auth.js`): cookie `sid` (sha256-hashed session token), scrypt passwords, `requireRole('manager' | 'attendant' | 'customer')`. A customer user is linked through `users.customer_id`.
+- Auth (`src/auth.js`): cookie `sid` (sha256-hashed session token), scrypt passwords, `requireRole('manager' | 'attendant' | 'customer')`. A customer user is linked through `users.customer_id`. The owner (`owner`, « Actionnaire », version 15) reads everything and changes nothing: `loadUser` passes them as a manager on GET/HEAD (`req.user.owner` stays true) and any other request keeps role `owner`, refused with `code: 'read_only'` (exceptions: `/auth/password`, the meters preview; the backup stays the manager's). The client sets `flags.readonly` and wraps every write control in `edit()` from `ui.js`; a new manager button that writes must be wrapped too.
 
 **Database** (`src/db.js`):
 - One `SCHEMA` string of `CREATE TABLE IF NOT EXISTS`.

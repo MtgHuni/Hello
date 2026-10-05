@@ -33,7 +33,7 @@ async function renderStart(page, ctx, remarkCards = []) {
             { class: 'stack', style: 'gap:10px' },
             h('p', { class: 'muted' }, 'Index de départ, relevés automatiquement'),
             nozzles.map((n) =>
-              h('div', { class: 'summary-line' }, h('span', {}, h('span', { class: 'swatch', style: `background:${productColor(n.product_id)}` }), `${n.pump} · ${n.name}`), h('span', { class: 'num' }, fmt.number(n.meter))),
+              h('div', { class: 'summary-line' }, h('span', {}, h('span', { class: 'swatch', style: `background:${productColor(n.product_id)}` }), n.product_name), h('span', { class: 'num' }, fmt.number(n.meter))),
             ),
           )
       : h('div', { class: 'empty' }, "Aucune pompe n'est configurée. Demandez au gérant."),
@@ -53,7 +53,7 @@ async function renderStart(page, ctx, remarkCards = []) {
   });
 
   setContent(page, 
-    pageHeader('Ouvrir le poste', 'Le premier poste de la station : il couvre toutes les pompes. Ensuite, chaque clôture ouvre le suivant.'),
+    pageHeader('Ouvrir le poste', 'Le premier poste de la station : il couvre l’essence et le gasoil. Ensuite, chaque clôture ouvre le suivant.'),
     remarkCards,
     card(form),
   );
@@ -185,7 +185,7 @@ function renderOpenShift(page, ctx, shift, remarks = null) {
     ...shift.pump_tests.map((t) => ({
       at: t.created_at,
       title: 'Test de pompe',
-      detail: `${t.product_name} · ${t.pump_name} · ${t.nozzle_name}${t.note ? ` · ${t.note}` : ''}`,
+      detail: `${t.product_name}${t.note ? ` · ${t.note}` : ''}`,
       tag: testBadge(t),
       amount: fmt.liters(t.liters),
       remove: null,
@@ -265,13 +265,13 @@ function renderOpenShift(page, ctx, shift, remarks = null) {
           : h('p', { class: 'muted' }, 'Aucune opération pour le moment.'),
       ),
       card(
-        cardHeader('Les pistolets', shift.checkpoints.length ? 'Prix du poste et dernier index relevé' : 'Prix et index relevés à l’ouverture du poste'),
+        cardHeader('Prix et index', shift.checkpoints.length ? 'Prix du poste et dernier index relevé' : 'Prix et index relevés à l’ouverture du poste'),
         shift.readings.map((r) =>
           h(
             'div',
             { class: 'nozzle-row' },
             h('span', { class: 'swatch', style: `background:${productColor(r.product_id)};width:12px;height:12px` }),
-            h('div', { class: 'grow' }, h('div', { style: 'font-weight:600' }, `${r.pump_name} · ${r.nozzle_name}`), h('div', { class: 'muted small' }, `${r.product_name} · ${fmt.price(r.unit_price)}`)),
+            h('div', { class: 'grow' }, h('div', { style: 'font-weight:600' }, r.product_name), h('div', { class: 'muted small' }, fmt.price(r.unit_price))),
             h(
               'div',
               { class: 'right' },
@@ -694,7 +694,7 @@ async function addMomo(shift, reload) {
   }
 }
 
-const testBadge = (t) => (t.status === 'approved' ? badge('Confirmé', 'good') : t.status === 'rejected' ? badge('Annulé', 'serious') : badge('À confirmer', 'warning'));
+const testBadge = (t) => (t.status === 'rejected' ? badge('Annulé', 'serious') : t.status === 'pending' ? badge('À confirmer', 'warning') : null);
 
 // A pump test: the nozzle, the litres poured back into the tank. The manager approves it.
 async function addTest(ctx, shift, reload) {
@@ -716,7 +716,7 @@ async function addTest(ctx, shift, reload) {
       : 'Le carburant sorti pour un test et remis dans la cuve. Le gérant doit le confirmer : il ne comptera alors pas comme vendu.',
     grid: false,
     fields: [
-      { name: 'nozzleId', label: 'Pistolet', type: 'segment', options: shift.readings.map((r) => [String(r.nozzle_id), `${r.product_name} · ${r.pump_name}`]), value: String(shift.readings[0]?.nozzle_id) },
+      { name: 'nozzleId', label: 'Produit', type: 'segment', options: shift.readings.map((r) => [String(r.nozzle_id), r.product_name]), value: String(shift.readings[0]?.nozzle_id) },
       { name: 'liters', label: 'Litres remis en cuve', type: 'number', step: '0.01', min: '0.01', required: true },
       { name: 'quick', type: 'node', node: quickLiters },
       { name: 'note', label: 'Remarque (facultatif)', placeholder: 'Étalonnage, contrôle du compteur…' },
@@ -814,7 +814,7 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
 
   form.append(
     card(
-      cardHeader('1. Index de fin', 'Relevez le compteur de chaque pistolet'),
+      cardHeader('1. Index de fin', 'Relevez le compteur de chaque produit'),
       h(
         'div',
         { class: 'stack' },
@@ -824,7 +824,7 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
           return h(
             'div',
             {},
-            field({ name: `end_${r.nozzle_id}`, label: `${r.pump_name} · ${r.nozzle_name} (début : ${fmt.number(r.start_meter)}${lastTaken(r) !== r.start_meter ? `, dernier relevé : ${fmt.number(lastTaken(r))}` : ''})`, type: 'number', step: '0.01', min: String(lastTaken(r)), required: true, value: first(r.end_meter, undefined), onInput: recompute }),
+            field({ name: `end_${r.nozzle_id}`, label: `${r.product_name} (début : ${fmt.number(r.start_meter)}${lastTaken(r) !== r.start_meter ? `, dernier relevé : ${fmt.number(lastTaken(r))}` : ''})`, type: 'number', step: '0.01', min: String(lastTaken(r)), required: true, value: first(r.end_meter, undefined), onInput: recompute }),
             out,
           );
         }),

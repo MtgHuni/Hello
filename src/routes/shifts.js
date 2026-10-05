@@ -113,7 +113,7 @@ module.exports = function shiftRoutes(db) {
   // A closed shift after a test is approved or refused: each nozzle's litres sold are the meter's
   // minus the approved tests, the tank gets the difference back, then the money is reconciled.
   function applyTests(shiftId) {
-    const readings = db.prepare('SELECT r.*, n.name AS nozzle_name FROM shift_readings r JOIN nozzles n ON n.id = r.nozzle_id WHERE r.shift_id = ?').all(shiftId);
+    const readings = db.prepare('SELECT r.*, p.name AS label FROM shift_readings r JOIN products p ON p.id = r.product_id WHERE r.shift_id = ?').all(shiftId);
     const sales = db.prepare('SELECT nozzle_id, liters FROM sales WHERE shift_id = ?').all(shiftId);
     for (const r of readings) {
       if (r.end_meter == null) continue;
@@ -134,11 +134,11 @@ module.exports = function shiftRoutes(db) {
   // Litres sold on a nozzle: the meter's, less the fuel poured back after approved tests.
   function netLiters(r, sales, tested) {
     const meter = round(r.end_meter - r.start_meter);
-    if (tested > meter + 0.001) fail(400, `${r.nozzle_name} : les tests de pompe approuvés (${tested} L) dépassent les litres du compteur (${meter} L).`);
+    if (tested > meter + 0.001) fail(400, `${r.label} : les tests de pompe approuvés (${tested} L) dépassent les litres du compteur (${meter} L).`);
     const liters = round(meter - tested);
     const customerLiters = sales.filter((s) => s.nozzle_id === r.nozzle_id).reduce((t, s) => t + s.liters, 0);
     if (customerLiters > liters + 0.001) {
-      fail(400, `${r.nozzle_name} : les ventes clients (${round(customerLiters)} L) dépassent les litres vendus au compteur (${liters} L, tests de pompe déduits).`);
+      fail(400, `${r.label} : les ventes clients (${round(customerLiters)} L) dépassent les litres vendus au compteur (${liters} L, tests de pompe déduits).`);
     }
     return liters;
   }
@@ -328,12 +328,12 @@ module.exports = function shiftRoutes(db) {
   function checkpointMeters(shift, list) {
     const given = new Map((Array.isArray(list) ? list : []).map((r) => [Number(r.nozzleId), r.meter]));
     const last = lastMeters(db, shift.id);
-    const readings = db.prepare('SELECT r.*, n.name AS nozzle_name, pu.name AS pump_name FROM shift_readings r JOIN nozzles n ON n.id = r.nozzle_id JOIN pumps pu ON pu.id = n.pump_id WHERE r.shift_id = ?').all(shift.id);
+    const readings = db.prepare('SELECT r.*, p.name AS label FROM shift_readings r JOIN products p ON p.id = r.product_id WHERE r.shift_id = ?').all(shift.id);
     const meters = new Map();
     for (const r of readings) {
       const floor = last?.get(r.nozzle_id) ?? r.start_meter;
-      const meter = num(given.get(r.nozzle_id), `L’index (${r.pump_name} · ${r.nozzle_name})`, { max: 1e12 });
-      if (meter < floor - 0.001) fail(400, `L’index (${r.pump_name} · ${r.nozzle_name}) ne peut pas être inférieur au dernier relevé (${floor}).`);
+      const meter = num(given.get(r.nozzle_id), `L’index (${r.label})`, { max: 1e12 });
+      if (meter < floor - 0.001) fail(400, `L’index (${r.label}) ne peut pas être inférieur au dernier relevé (${floor}).`);
       meters.set(r.nozzle_id, round(meter));
     }
     return meters;
@@ -349,7 +349,8 @@ module.exports = function shiftRoutes(db) {
       .all(shiftId);
 
   // What the period would look like with these indexes (shown before the attendant confirms).
-  router.post('/shifts/:id/checkpoints/preview', staff, (req, res) => {
+  // Saves nothing: the owner (actionnaire) may check the meters too.
+  router.post('/shifts/:id/checkpoints/preview', requireRole('manager', 'attendant', 'owner'), (req, res) => {
     const shift = db.prepare('SELECT * FROM shifts WHERE id = ?').get(req.params.id);
     if (!shift || shift.status !== 'open') fail(409, 'Ce poste n’est plus ouvert.');
     const meters = checkpointMeters(shift, req.body?.readings);
@@ -451,7 +452,7 @@ module.exports = function shiftRoutes(db) {
     const done = ref && db.prepare('SELECT * FROM pump_tests WHERE client_ref = ?').get(ref);
     if (done) return res.status(201).json(done);
     const reading = db.prepare('SELECT nozzle_id FROM shift_readings WHERE shift_id = ? AND nozzle_id = ?').get(shift.id, Number(req.body?.nozzleId));
-    if (!reading) fail(400, 'Choisissez le pistolet.');
+    if (!reading) fail(400, 'Choisissez le produit.');
     const liters = round(num(req.body?.liters, 'Le nombre de litres', { min: 0.01, max: 500 }));
     const note = str(req.body?.note, 'La remarque', { required: false, max: 200 });
     const manager = req.user.role === 'manager';
@@ -634,7 +635,7 @@ module.exports = function shiftRoutes(db) {
     {
       const readings = db
         .prepare(
-          `SELECT r.*, n.name AS nozzle_name FROM shift_readings r JOIN nozzles n ON n.id = r.nozzle_id
+          `SELECT r.*, p.name AS label FROM shift_readings r JOIN products p ON p.id = r.product_id
            WHERE r.shift_id = ?`,
         )
         .all(shift.id);
@@ -642,12 +643,12 @@ module.exports = function shiftRoutes(db) {
 
       let totalLiters = 0;
       for (const r of readings) {
-        const end = num(ends.get(r.nozzle_id), `L'index de fin (${r.nozzle_name})`, { max: 1e12 });
+        const end = num(ends.get(r.nozzle_id), `L'index de fin (${r.label})`, { max: 1e12 });
         if (end < r.start_meter) {
-          fail(400, `L'index de fin (${r.nozzle_name}) ne peut pas être inférieur à l'index de début (${r.start_meter}).`);
+          fail(400, `L'index de fin (${r.label}) ne peut pas être inférieur à l'index de début (${r.start_meter}).`);
         }
         const lastTaken = last?.get(r.nozzle_id);
-        if (lastTaken != null && end < lastTaken - 0.001) fail(400, `L'index de fin (${r.nozzle_name}) ne peut pas être inférieur au dernier relevé du poste (${lastTaken}).`);
+        if (lastTaken != null && end < lastTaken - 0.001) fail(400, `L'index de fin (${r.label}) ne peut pas être inférieur au dernier relevé du poste (${lastTaken}).`);
         const liters = netLiters({ ...r, end_meter: end }, sales, testedLiters(shift.id, r.nozzle_id));
         totalLiters += liters;
         db.prepare('UPDATE shift_readings SET end_meter = ?, liters = ?, amount = ? WHERE id = ?').run(end, liters, round(liters * r.unit_price), r.id);
@@ -705,14 +706,14 @@ module.exports = function shiftRoutes(db) {
     const reason = str(req.body?.reason, 'Le motif de la correction', { max: 300 });
     transaction(db, () => {
       const readings = db
-        .prepare('SELECT r.*, n.name AS nozzle_name FROM shift_readings r JOIN nozzles n ON n.id = r.nozzle_id WHERE r.shift_id = ?')
+        .prepare('SELECT r.*, p.name AS label FROM shift_readings r JOIN products p ON p.id = r.product_id WHERE r.shift_id = ?')
         .all(shift.id);
       // The next shift starts from these end indexes: it follows the correction while it is open.
       const next = db.prepare('SELECT * FROM shifts WHERE id > ? ORDER BY id LIMIT 1').get(shift.id);
       for (const r of readings) {
         const later = db.prepare('SELECT DISTINCT shift_id FROM shift_readings WHERE nozzle_id = ? AND shift_id > ?').all(r.nozzle_id, shift.id);
         if (later.some((l) => !next || l.shift_id !== next.id || next.status !== 'open')) {
-          fail(409, `${r.nozzle_name} a déjà servi dans un poste clôturé après celui-ci : la clôture ne peut plus être corrigée ici.`);
+          fail(409, `${r.label} a déjà servi dans un poste clôturé après celui-ci : la clôture ne peut plus être corrigée ici.`);
         }
       }
       for (const r of readings) {
@@ -737,7 +738,7 @@ module.exports = function shiftRoutes(db) {
         entity: 'shifts',
         id: shift.id,
         summary: `Clôture du poste n°${shift.id} corrigée : à remettre ${money(shift.expected_amount)} → ${money(after.expected_amount)}, écart ${money(shift.variance)} → ${money(after.variance)}`,
-        before: { ...pick(shift), readings: readings.map((r) => ({ nozzle: r.nozzle_name, end: r.end_meter })) },
+        before: { ...pick(shift), readings: readings.map((r) => ({ product: r.label, end: r.end_meter })) },
         after: pick(after),
         reason,
       });

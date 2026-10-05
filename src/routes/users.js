@@ -3,13 +3,14 @@ const { fail, str, oneOf, bool } = require('../util');
 const { requireRole, hashPassword, checkPasswordStrength } = require('../auth');
 const { audit } = require('../audit');
 
-const ROLE = { manager: 'gérant', attendant: 'pompiste' };
+const ROLE = { manager: 'gérant', attendant: 'pompiste', owner: 'actionnaire' };
+const ROLES = Object.keys(ROLE);
 
 const manager = requireRole('manager');
 
 module.exports = function userRoutes(db) {
   const router = express.Router();
-  const select = `SELECT id, name, login, role, active, created_at FROM users WHERE role IN ('manager', 'attendant')`;
+  const select = `SELECT id, name, login, role, active, created_at FROM users WHERE role IN ('manager', 'attendant', 'owner')`;
 
   router.get('/users', manager, (req, res) => {
     res.json(db.prepare(`${select} ORDER BY role, name COLLATE NOCASE`).all());
@@ -18,7 +19,7 @@ module.exports = function userRoutes(db) {
   router.post('/users', manager, async (req, res) => {
     const name = str(req.body?.name, 'Le nom', { max: 100 });
     const login = str(req.body?.login, "L'identifiant", { max: 100 });
-    const role = oneOf(req.body?.role, 'Le rôle', ['manager', 'attendant']);
+    const role = oneOf(req.body?.role, 'Le rôle', ROLES);
     const password = checkPasswordStrength(req.body?.password);
     if (db.prepare('SELECT 1 FROM users WHERE login = ?').get(login)) fail(409, 'Cet identifiant est déjà utilisé.');
     const id = db
@@ -32,7 +33,7 @@ module.exports = function userRoutes(db) {
     const user = db.prepare(`${select} AND id = ?`).get(req.params.id);
     if (!user) fail(404, 'Utilisateur introuvable.');
     const name = str(req.body?.name, 'Le nom', { required: false, max: 100 }) ?? user.name;
-    const role = req.body?.role ? oneOf(req.body.role, 'Le rôle', ['manager', 'attendant']) : user.role;
+    const role = req.body?.role ? oneOf(req.body.role, 'Le rôle', ROLES) : user.role;
     const active = bool(req.body?.active, !!user.active) ? 1 : 0;
     if (user.id === req.user.id && (!active || role !== 'manager')) {
       fail(400, 'Vous ne pouvez pas désactiver ni rétrograder votre propre compte.');

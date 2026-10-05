@@ -1,4 +1,4 @@
-import { flags } from '../ui.js';
+import { flags, edit } from '../ui.js';
 import { api } from '../api.js';
 import { h, fmt, pageHeader, card, cardHeader, table, badge, button, formDialog, openDialog, toast, productColor, setContent, buttonRow } from '../ui.js';
 import { icon } from '../icons.js';
@@ -13,6 +13,7 @@ export async function renderSettings(page, ctx) {
   ]);
   const reload = () => renderSettings(page, ctx);
   const tankOptions = tanks.filter((t) => t.active).map((t) => [t.id, `${t.name} (${t.product_name})`]);
+  const meters = pumps.flatMap((p) => p.nozzles);
 
   setContent(page, 
     pageHeader('Réglages', 'Station, prix, équipements et équipe.'),
@@ -28,7 +29,7 @@ export async function renderSettings(page, ctx) {
           'div',
           { class: 'card-header' },
           h('div', {}, h('h2', {}, 'Produits et prix'), h('p', {}, 'Un nouveau prix s’applique aux postes ouverts après le changement.')),
-          button('Ajouter un produit', () => productDialog(null, reload), { variant: 'ghost', iconName: 'plus' }),
+          edit(button('Ajouter un produit', () => productDialog(null, reload), { variant: 'ghost', iconName: 'plus' })),
         ),
         table(
           [
@@ -43,44 +44,27 @@ export async function renderSettings(page, ctx) {
             {
               label: '',
               align: 'right',
-              render: (p) => h('span', { class: 'btn-row inline', style: '--cols:2' }, button('Historique', () => priceHistory(p), { variant: 'secondary sm' }), button('Changer le prix', () => productDialog(p, reload), { variant: 'secondary sm' })),
+              render: (p) => h('span', { class: 'btn-row inline', style: `--cols:${flags.readonly ? 1 : 2}` }, button('Historique', () => priceHistory(p), { variant: 'secondary sm' }), edit(button('Changer le prix', () => productDialog(p, reload), { variant: 'secondary sm' }))),
             },
           ],
           products,
         ),
       ),
 
-      // ---- Pumps & nozzles ----
+      // ---- Meters: one pump, one meter per product ----
       card(
-        cardHeader('Pompes et pistolets', 'Chaque pistolet est relié à une cuve, qui détermine le produit.', button('Ajouter une pompe', () => pumpDialog(null, reload), { variant: 'ghost', iconName: 'plus' })),
-        pumps.length
-          ? h(
-              'div',
-              { class: 'grid grid-2' },
-              pumps.map((p) =>
-                h(
-                  'div',
-                  { class: 'card', style: 'box-shadow:none;background:var(--surface-2);border:none' },
-                  h(
-                    'div',
-                    { class: 'row between', style: 'margin-bottom:10px' },
-                    h('h3', {}, p.name, ' ', p.active ? null : badge('Désactivée'), p.busy_with ? badge(`En service · ${p.busy_with}`, 'info') : null),
-                    button('Modifier', () => pumpDialog(p, reload), { variant: 'ghost sm' }),
-                  ),
-                  p.nozzles.map((n) =>
-                    h(
-                      'div',
-                      { class: 'nozzle-row' },
-                      h('span', { class: 'swatch', style: `background:${productColor(n.product_id)};width:12px;height:12px` }),
-                      h('div', { class: 'grow' }, h('div', { style: 'font-weight:600' }, n.name, n.active ? '' : ' (inactif)'), h('div', { class: 'muted small' }, `${n.tank_name} · index ${fmt.number(n.meter)}`)),
-                      button('Modifier', () => nozzleDialog(p, n, tankOptions, reload), { variant: 'ghost sm' }),
-                    ),
-                  ),
-                  button('+ Pistolet', () => nozzleDialog(p, null, tankOptions, reload), { variant: 'ghost sm' }),
-                ),
+        cardHeader('Compteurs', 'Un compteur par produit, relié à sa cuve.', pumps[0] ? edit(button('Ajouter un compteur', () => meterDialog(null, tankOptions, reload, pumps[0].id), { variant: 'ghost', iconName: 'plus' })) : null),
+        meters.length
+          ? meters.map((n) =>
+              h(
+                'div',
+                { class: 'nozzle-row' },
+                h('span', { class: 'swatch', style: `background:${productColor(n.product_id)};width:12px;height:12px` }),
+                h('div', { class: 'grow' }, h('div', { style: 'font-weight:600' }, n.product_name, n.active ? '' : ' (inactif)'), h('div', { class: 'muted small' }, `${n.tank_name} · index ${fmt.number(n.meter)}`)),
+                edit(button('Modifier', () => meterDialog(n, tankOptions, reload), { variant: 'ghost sm' })),
               ),
             )
-          : h('div', { class: 'empty' }, 'Aucune pompe.'),
+          : h('div', { class: 'empty' }, 'Aucun compteur.'),
       ),
 
       // ---- Team ----
@@ -90,16 +74,16 @@ export async function renderSettings(page, ctx) {
         h(
           'div',
           { class: 'card-header' },
-          h('div', {}, h('h2', {}, 'Équipe'), h('p', {}, 'Gérants et pompistes. Les accès clients se créent depuis la fiche client.')),
-          button('Ajouter un membre', () => userDialog(null, ctx, reload), { variant: 'ghost', iconName: 'plus' }),
+          h('div', {}, h('h2', {}, 'Équipe'), h('p', {}, 'Gérants, pompistes et actionnaires. Les accès clients se créent depuis la fiche client.')),
+          edit(button('Ajouter un membre', () => userDialog(null, ctx, reload), { variant: 'ghost', iconName: 'plus' })),
         ),
         table(
           [
             { label: 'Nom', key: 'name' },
             { label: 'Identifiant', key: 'login' },
-            { label: 'Rôle', render: (u) => (u.role === 'manager' ? 'Gérant' : 'Pompiste') },
+            { label: 'Rôle', render: (u) => ROLES[u.role] },
             { label: 'Statut', render: (u) => (u.active ? badge('Actif', 'good') : badge('Désactivé')) },
-            { label: '', align: 'right', render: (u) => button('Modifier', () => userDialog(u, ctx, reload), { variant: 'secondary sm' }) },
+            { label: '', align: 'right', render: (u) => edit(button('Modifier', () => userDialog(u, ctx, reload), { variant: 'secondary sm' })) },
           ],
           users,
         ),
@@ -107,7 +91,7 @@ export async function renderSettings(page, ctx) {
 
       // ---- Station ----
       card(
-        cardHeader('Station', 'Nom et seuils de contrôle', button('Modifier', () => stationDialog(settings), { variant: 'ghost' })),
+        cardHeader('Station', 'Nom et seuils de contrôle', edit(button('Modifier', () => stationDialog(settings), { variant: 'ghost' }))),
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Nom'), h('span', {}, settings.stationName)),
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Tolérance d’écart de caisse'), h('span', {}, `± ${fmt.money(settings.cashTolerance)}`)),
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Tolérance d’écart de jaugeage'), h('span', {}, `± ${fmt.liters(settings.stockTolerance)}`)),
@@ -116,21 +100,21 @@ export async function renderSettings(page, ctx) {
 
       // ---- Data: backup and journal ----
       card(
-        cardHeader('Données', 'Sauvegarde complète de la base et journal des changements'),
-        h(
+        cardHeader('Données', flags.readonly ? 'Journal des changements' : 'Sauvegarde complète de la base et journal des changements'),
+        edit(h(
           'p',
           { class: 'muted', style: 'margin:0 0 16px' },
           'Téléchargez une sauvegarde régulièrement et gardez-la ailleurs (ordinateur, clé USB, e-mail) : elle contient toute la station.',
-        ),
+        )),
         buttonRow([
-          h('a', { class: 'btn secondary', href: '/api/backup', download: '' }, icon('download'), 'Télécharger une sauvegarde'),
+          edit(h('a', { class: 'btn secondary', href: '/api/backup', download: '' }, icon('download'), 'Télécharger une sauvegarde')),
           button('Ouvrir le journal', () => ctx.navigate('reglages/journal'), { variant: 'secondary', iconName: 'shifts' }),
         ]),
       ),
 
       // ---- Customers & combos ----
       card(
-        cardHeader('Clients et combos', 'Plafonds de crédit par catégorie et programme de fidélité', button('Modifier', () => customersDialog(settings, reload), { variant: 'ghost' })),
+        cardHeader('Clients et combos', 'Plafonds de crédit par catégorie et programme de fidélité', edit(button('Modifier', () => customersDialog(settings, reload), { variant: 'ghost' }))),
         h('h3', { style: 'margin:4px 0 2px' }, 'Particuliers'),
         line('Plafond de crédit', fmt.money(settings.individualCreditLimit)),
         h('h3', { style: 'margin:14px 0 2px' }, 'Abonnés'),
@@ -188,7 +172,7 @@ async function customersDialog(s, reload) {
 async function productDialog(p, reload) {
   const ok = await formDialog({
     title: p ? `Prix — ${p.name}` : 'Nouveau produit',
-    intro: p ? `Actuellement : ${fmt.price(p.price)} public, ${fmt.price(p.subscriber_price)} abonnés. Un changement s’applique aux postes ouverts ensuite.` : 'Ajoutez ensuite une cuve et un pistolet pour ce produit.',
+    intro: p ? `Actuellement : ${fmt.price(p.price)} public, ${fmt.price(p.subscriber_price)} abonnés. Un changement s’applique aux postes ouverts ensuite.` : 'Ajoutez ensuite une cuve et un compteur pour ce produit.',
     grid: false,
     fields: [
       { name: 'name', label: 'Nom', value: p?.name, required: true },
@@ -231,44 +215,27 @@ async function priceHistory(p) {
   );
 }
 
-async function pumpDialog(p, reload) {
+// n is null for a new meter, on the station's pump.
+async function meterDialog(n, tankOptions, reload, pumpId) {
+  if (!tankOptions.length) return toast('Créez d’abord une cuve.', 'error');
   const ok = await formDialog({
-    title: p ? `Modifier ${p.name}` : 'Nouvelle pompe',
-    intro: p ? null : 'Ajoutez ensuite un ou plusieurs pistolets à cette pompe.',
+    title: n ? `Compteur ${n.product_name}` : 'Nouveau compteur',
+    intro: !n ? 'Saisissez l’index actuellement affiché par le compteur.' : 'Pour fixer l’index de départ, ou après un remplacement ou un étalonnage du compteur. Le poste ouvert repart de ce nouvel index.',
     grid: false,
-    fields: [{ name: 'name', label: 'Nom', value: p?.name, required: true, placeholder: 'Pompe 3' }, ...(p ? [{ name: 'active', label: 'Pompe active', type: 'checkbox', value: !!p.active }] : [])],
-    onSubmit: (d) => (p ? api.put(`/pumps/${p.id}`, d) : api.post('/pumps', d)),
+    fields: [
+      { name: 'tankId', label: 'Cuve', type: 'select', options: tankOptions, value: n?.tank_id, required: true },
+      { name: 'meter', label: 'Index du compteur', type: 'number', step: '0.01', min: '0', value: n?.meter ?? 0, required: true },
+      ...(n ? [{ name: 'active', label: 'Compteur actif', type: 'checkbox', value: !!n.active }] : []),
+    ],
+    onSubmit: (d) => (n ? api.put(`/nozzles/${n.id}`, { ...d, tankId: Number(d.tankId) }) : api.post(`/pumps/${pumpId}/nozzles`, { ...d, name: 'Compteur', tankId: Number(d.tankId) })),
   });
   if (ok) {
-    toast('Pompe enregistrée.');
+    toast('Compteur enregistré.');
     reload();
   }
 }
 
-async function nozzleDialog(pump, n, tankOptions, reload) {
-  if (!tankOptions.length) return toast('Créez d’abord une cuve.', 'error');
-  const ok = await formDialog({
-    title: n ? `Modifier ${n.name}` : `Nouveau pistolet — ${pump.name}`,
-    intro: n
-      ? 'Pour fixer l’index de départ, ou après un remplacement ou un étalonnage du compteur. Le poste ouvert repart de ce nouvel index.'
-      : 'Saisissez l’index actuellement affiché par le compteur.',
-    grid: false,
-    fields: [
-      { name: 'name', label: 'Nom', value: n?.name, required: true, placeholder: 'Pistolet Gasoil' },
-      { name: 'tankId', label: 'Cuve', type: 'select', options: tankOptions, value: n?.tank_id, required: true },
-      { name: 'meter', label: 'Index du compteur', type: 'number', step: '0.01', min: '0', value: n?.meter ?? 0, required: true },
-      ...(n ? [{ name: 'active', label: 'Pistolet actif', type: 'checkbox', value: !!n.active }] : []),
-    ],
-    onSubmit: (d) => {
-      const body = { ...d, tankId: Number(d.tankId) };
-      return n ? api.put(`/nozzles/${n.id}`, body) : api.post(`/pumps/${pump.id}/nozzles`, body);
-    },
-  });
-  if (ok) {
-    toast('Pistolet enregistré.');
-    reload();
-  }
-}
+const ROLES = { attendant: 'Pompiste', manager: 'Gérant', owner: 'Actionnaire' };
 
 async function userDialog(u, ctx, reload) {
   const ok = await formDialog({
@@ -276,7 +243,7 @@ async function userDialog(u, ctx, reload) {
     fields: [
       { name: 'name', label: 'Nom', value: u?.name, required: true },
       ...(u ? [] : [{ name: 'login', label: 'Identifiant', required: true }]),
-      { name: 'role', label: 'Rôle', type: 'select', value: u?.role || 'attendant', options: [['attendant', 'Pompiste'], ['manager', 'Gérant']] },
+      { name: 'role', label: 'Rôle', type: 'select', value: u?.role || 'attendant', options: Object.entries(ROLES), hint: 'L’actionnaire consulte tout, sans rien pouvoir modifier.' },
       { name: 'password', label: u ? 'Nouveau mot de passe' : 'Mot de passe', type: 'text', required: !u, hint: u ? 'Laisser vide pour ne pas changer' : '8 caractères minimum' },
       ...(u ? [{ name: 'active', label: 'Compte actif', type: 'checkbox', value: !!u.active, full: true }] : []),
     ],

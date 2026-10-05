@@ -27,7 +27,7 @@ function createSale(db, shift, input) {
   let reading;
   if (input.nozzleId) {
     reading = db.prepare('SELECT * FROM shift_readings WHERE shift_id = ? AND nozzle_id = ?').get(shift.id, Number(input.nozzleId));
-    if (!reading) fail(400, 'Ce pistolet ne fait pas partie de votre poste.');
+    if (!reading) fail(400, 'Ce produit ne fait pas partie de votre poste.');
   } else {
     reading = db.prepare('SELECT * FROM shift_readings WHERE shift_id = ? AND product_id = ? ORDER BY id LIMIT 1').get(shift.id, Number(input.productId));
     if (!reading) fail(400, "Ce produit n'est servi par aucune pompe de votre poste.");

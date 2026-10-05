@@ -123,7 +123,8 @@ module.exports = function authRoutes(db) {
   });
 
   router.get('/auth/me', requireRole(), (req, res) => {
-    res.json({ user: req.user, settings: getSettings(db) });
+    const { owner, ...user } = req.user;
+    res.json({ user: owner ? { ...user, role: 'owner' } : user, settings: getSettings(db) });
   });
 
   router.post('/auth/password', requireRole(), async (req, res) => {

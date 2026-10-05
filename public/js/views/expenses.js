@@ -1,4 +1,5 @@
 import { api } from '../api.js';
+import { flags, edit } from '../ui.js';
 import { h, fmt, pageHeader, table, segmented, kpi, field, button, formDialog, confirmDialog, actionSheet, toast, todayISO, setContent } from '../ui.js';
 import { PRESETS, presetRange } from './reports.js';
 
@@ -34,7 +35,7 @@ export async function renderExpenses(page, ctx) {
       'Dépenses',
       range.from === range.to ? fmt.longDay(range.from) : `Du ${fmt.date(range.from)} au ${fmt.date(range.to)}`,
       h('a', { class: 'btn secondary', href: `/api/expenses?from=${range.from}&to=${range.to}&format=csv` }, 'Exporter (Excel)'),
-      button('Nouvelle dépense', () => expenseDialog(null, categories, reload), { iconName: 'plus' }),
+      edit(button('Nouvelle dépense', () => expenseDialog(null, categories, reload), { iconName: 'plus' })),
     ),
     h(
       'div',
@@ -105,6 +106,7 @@ function categoryBars(rows) {
 }
 
 function rowActions(e, categories, ctx, reload) {
+  if (flags.readonly) return e.shift_id ? ctx.navigate(`postes/${e.shift_id}`) : null;
   if (e.shift_id) {
     actionSheet({
       title: `Payée avec la caisse du poste n°${e.shift_id} : elle fait partie de son rapprochement et ne peut pas être modifiée ici.`,

@@ -1,4 +1,5 @@
 import { api } from '../api.js';
+import { flags, edit } from '../ui.js';
 import { h, fmt, pageHeader, card, cardHeader, table, segmented, kpi, field, button, formDialog, confirmDialog, toast, setContent, pdfLinks } from '../ui.js';
 import { PRESETS, presetRange } from './reports.js';
 
@@ -56,10 +57,10 @@ export async function renderCashbook(page, ctx) {
       'Caisse',
       'Livre de caisse : espèces et mobile money tenus à part.',
       pdfLinks(`/api/cashbook.pdf?from=${range.from}&to=${range.to}`, `livre-de-caisse-${range.from}-au-${range.to}.pdf`, { label: 'Livre PDF' }),
-      button('Compter', () => countDialog(account, current, reload), { variant: 'secondary', iconName: 'check' }),
-      button('Mouvement', () => movementDialog(account, reload), { iconName: 'plus' }),
+      edit(button('Compter', () => countDialog(account, current, reload), { variant: 'secondary', iconName: 'check' })),
+      edit(button('Mouvement', () => movementDialog(account, reload), { iconName: 'plus' })),
     ),
-    !cash.hasOpening || !momo.hasOpening
+    !flags.readonly && (!cash.hasOpening || !momo.hasOpening)
       ? h(
           'section',
           { class: 'card row between', style: 'margin-bottom:20px' },
@@ -143,7 +144,7 @@ export async function renderCashbook(page, ctx) {
             [...book.movements].reverse(),
             {
               empty: 'Aucun mouvement sur cette période.',
-              onRowClick: (m) => (m.source === 'movement' ? removeMovement(m, reload) : m.link ? ctx.navigate(m.link.slice(2)) : null),
+              onRowClick: (m) => (m.source === 'movement' && !flags.readonly ? removeMovement(m, reload) : m.link ? ctx.navigate(m.link.slice(2)) : null),
             },
           ),
     ),

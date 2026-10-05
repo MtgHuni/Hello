@@ -1,4 +1,4 @@
-import { flags } from '../ui.js';
+import { flags, edit } from '../ui.js';
 import { api } from '../api.js';
 import { h, fmt, pageHeader, card, cardHeader, table, segmented, kpi, badge, button, formDialog, confirmDialog, toast, field, todayISO, isoDate, setContent, pdfLinks, whatsappNumber } from '../ui.js';
 import { icon } from '../icons.js';
@@ -52,7 +52,7 @@ export async function renderCustomers(page, ctx) {
       'Clients',
       `${customers.length} client${customers.length > 1 ? 's' : ''} · encours total ${fmt.money(receivables)}`,
       button('Créances', () => ctx.navigate('clients/creances'), { variant: 'secondary', iconName: 'cash' }),
-      button('Nouveau client', () => customerDialog(null, ctx), { iconName: 'plus' }),
+      edit(button('Nouveau client', () => customerDialog(null, ctx), { iconName: 'plus' })),
     ),
     h(
       'section',
@@ -117,6 +117,7 @@ async function renderReceivables(page, ctx) {
   const station = ctx.state.settings.stationName;
   const remind = (r) => {
     const number = whatsappNumber(r.phone);
+    if (flags.readonly) return null;
     if (!number) return h('span', { class: 'muted small' }, 'Pas de téléphone');
     const text = `Bonjour ${r.name}, votre solde chez ${station} est de ${fmt.money(r.balance)}${r.old ? `, dont ${fmt.money(r.old)} depuis plus de 30 jours` : ''}. Merci de passer le régler. ${station}`;
     return h(
@@ -189,11 +190,11 @@ export async function renderCustomerDetail(page, ctx) {
       pageHeader(
         c.name,
         [TYPE_LABEL[c.type], c.phone, c.email, c.plate].filter(Boolean).join(' · '),
-        button('Règlement', () => paymentDialog(c, reload), { iconName: 'card' }),
-        button('Ancienne dette', () => oldDebtDialog(c, reload), { variant: 'secondary', iconName: 'plus' }),
+        edit(button('Règlement', () => paymentDialog(c, reload), { iconName: 'card' })),
+        edit(button('Ancienne dette', () => oldDebtDialog(c, reload), { variant: 'secondary', iconName: 'plus' })),
         pdfLinks(`/api/customers/${c.id}/statement.pdf?month=${period.from.slice(0, 7)}`, `releve-${period.from.slice(0, 7)}.pdf`, { label: 'Relevé PDF' }),
-        button('Modifier', () => customerDialog(c, ctx, reload), { variant: 'secondary', iconName: 'edit' }),
-        button(c.login ? 'Accès client' : 'Créer un accès', () => loginDialog(c, reload), { variant: 'secondary', iconName: 'user' }),
+        edit(button('Modifier', () => customerDialog(c, ctx, reload), { variant: 'secondary', iconName: 'edit' })),
+        edit(button(c.login ? 'Accès client' : 'Créer un accès', () => loginDialog(c, reload), { variant: 'secondary', iconName: 'user' })),
       ),
       c.needs_review
         ? h(
@@ -205,7 +206,7 @@ export async function renderCustomerDetail(page, ctx) {
               h('h3', {}, 'Fiche à compléter'),
               h('p', { class: 'muted', style: 'font-size:15px;margin-top:2px' }, `Créé à la pompe${c.created_by_name ? ` par ${c.created_by_name}` : ''} avec le nom seulement. Ajoutez le téléphone, l’immatriculation et le plafond de crédit.`),
             ),
-            button('Compléter la fiche', () => customerDialog(c, ctx, reload), { iconName: 'edit' }),
+            edit(button('Compléter la fiche', () => customerDialog(c, ctx, reload), { iconName: 'edit' })),
           )
         : null,
       statement(
@@ -215,7 +216,7 @@ export async function renderCustomerDetail(page, ctx) {
           Object.assign(period, p);
           load();
         },
-        { onOldDebt: (m) => removeOldDebt(c, m, reload) },
+        { onOldDebt: flags.readonly ? null : (m) => removeOldDebt(c, m, reload) },
       ),
     );
   };

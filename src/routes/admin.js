@@ -4,6 +4,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const express = require('express');
 const { requireRole } = require('../auth');
+const { fail } = require('../util');
 const { audit } = require('../audit');
 
 const manager = requireRole('manager');
@@ -15,6 +16,8 @@ module.exports = function adminRoutes(db) {
   // Backup of the whole database. VACUUM INTO writes a consistent copy, WAL included
   // (copying station.db alone can miss the latest writes).
   router.get('/backup', manager, (req, res) => {
+    // The copy holds the passwords' hashes and the sessions: the manager's alone.
+    if (req.user.owner) fail(403, 'La sauvegarde est réservée au gérant.', 'read_only');
     const day = db.prepare("SELECT date('now', 'localtime') AS d").get().d;
     const file = path.join(os.tmpdir(), `station-${crypto.randomUUID()}.db`);
     db.exec(`VACUUM INTO '${file.replace(/'/g, "''")}'`);

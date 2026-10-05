@@ -1,4 +1,5 @@
 import { api } from '../api.js';
+import { flags, edit } from '../ui.js';
 import { h, fmt, pageHeader, cardHeader, table, segmented, tankGauge, button, formDialog, confirmDialog, toast, badge, setContent } from '../ui.js';
 
 let tab = 'deliveries';
@@ -13,8 +14,8 @@ export async function renderTanks(page, ctx) {
     pageHeader(
       'Cuves',
       'Livraisons, jaugeages et stock théorique.',
-      button('Jaugeage', () => dipDialog(active, reload), { variant: 'secondary', iconName: 'ruler' }),
-      button('Livraison', () => deliveryDialog(active, sup.names, reload), { iconName: 'truck' }),
+      edit(button('Jaugeage', () => dipDialog(active, reload), { variant: 'secondary', iconName: 'ruler' })),
+      edit(button('Livraison', () => deliveryDialog(active, sup.names, reload), { iconName: 'truck' })),
     ),
     h(
       'div',
@@ -32,15 +33,15 @@ export async function renderTanks(page, ctx) {
               { class: 'muted' },
               t.last_dip_at ? ['Dernier jaugeage ', fmt.dateTime(t.last_dip_at), ' · écart ', h('span', { class: Math.abs(t.last_dip_variance) > tol ? 'variance-neg' : '' }, `${t.last_dip_variance > 0 ? '+' : ''}${fmt.liters(t.last_dip_variance)}`)] : 'Aucun jaugeage',
             ),
-            h('span', { class: 'row' }, t.active ? null : badge('Désactivée'), button('Modifier', () => tankDialog(products, t, reload), { variant: 'ghost sm' })),
+            h('span', { class: 'row' }, t.active ? null : badge('Désactivée'), edit(button('Modifier', () => tankDialog(products, t, reload), { variant: 'ghost sm' }))),
           ),
         ),
       ),
-      h(
+      edit(h(
         'button',
         { class: 'card empty no-print', style: 'border:1px dashed var(--field-border);cursor:pointer;font:inherit;color:var(--accent)', onClick: () => tankDialog(products, null, reload) },
         '+ Ajouter une cuve',
-      ),
+      )),
     ),
     suppliersCard(sup, reload),
     h(
@@ -81,7 +82,7 @@ export async function renderTanks(page, ctx) {
               { label: 'Paiement', render: (d) => (d.payment === 'credit' ? badge('À crédit', 'warning') : d.payment === 'prepaid' ? 'Déjà payée' : d.payment === 'cash' ? 'Comptant' : '—') },
             ],
             deliveries,
-            { empty: 'Aucune livraison enregistrée.', onRowClick: (d) => deliveryPaymentDialog(d, sup.names, reload) },
+            { empty: 'Aucune livraison enregistrée.', onRowClick: flags.readonly ? undefined : (d) => deliveryPaymentDialog(d, sup.names, reload) },
           )
         : table(
             [
@@ -175,14 +176,14 @@ function suppliersCard(sup, reload) {
   return h(
     'section',
     { class: 'card flush section' },
-    cardHeader('Fournisseurs', total ? `${fmt.money(total)} à payer pour des livraisons à crédit` : 'Rien à payer', button('Payer un fournisseur', () => supplierPaymentDialog(owing, null, reload), { variant: 'secondary sm', iconName: 'cash' })),
+    cardHeader('Fournisseurs', total ? `${fmt.money(total)} à payer pour des livraisons à crédit` : 'Rien à payer', edit(button('Payer un fournisseur', () => supplierPaymentDialog(owing, null, reload), { variant: 'secondary sm', iconName: 'cash' }))),
     table(
       [
         { label: 'Fournisseur', render: (s) => h('strong', {}, s.name) },
         { label: 'Livré à crédit', align: 'right', render: (s) => fmt.money(s.owed) },
         { label: 'Payé', align: 'right', render: (s) => fmt.money(s.paid) },
         { label: 'Reste à payer', align: 'right', render: (s) => (s.balance > 0 ? h('strong', { class: 'variance-neg' }, fmt.money(s.balance)) : 'Soldé') },
-        { label: '', align: 'right', render: (s) => (s.balance > 0 ? button('Payer', () => supplierPaymentDialog(owing, s, reload), { variant: 'ghost sm' }) : null) },
+        { label: '', align: 'right', render: (s) => (s.balance > 0 && !flags.readonly ? button('Payer', () => supplierPaymentDialog(owing, s, reload), { variant: 'ghost sm' }) : null) },
       ],
       owing,
       {},
@@ -200,7 +201,7 @@ function suppliersCard(sup, reload) {
               { label: 'Montant', align: 'right', render: (p) => fmt.money(p.amount) },
             ],
             sup.payments,
-            { onRowClick: (p) => removeSupplierPayment(p, reload) },
+            { onRowClick: flags.readonly ? undefined : (p) => removeSupplierPayment(p, reload) },
           ),
         )
       : null,

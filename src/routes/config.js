@@ -281,13 +281,13 @@ module.exports = function configRoutes(db) {
 
   router.put('/nozzles/:id', manager, (req, res) => {
     const nozzle = db.prepare('SELECT * FROM nozzles WHERE id = ?').get(req.params.id);
-    if (!nozzle) fail(404, 'Pistolet introuvable.');
+    if (!nozzle) fail(404, 'Compteur introuvable.');
     const name = str(req.body?.name, 'Le nom du pistolet', { required: false, max: 50 }) ?? nozzle.name;
     const tankId = num(req.body?.tankId, 'La cuve', { integer: true, min: 1, required: false }) ?? nozzle.tank_id;
     const meter = num(req.body?.meter, "L'index du compteur", { required: false }) ?? nozzle.meter;
     const active = bool(req.body?.active, !!nozzle.active) ? 1 : 0;
     const open = nozzleInOpenShift(nozzle.id);
-    if (open && tankId !== nozzle.tank_id) fail(409, 'Ce pistolet est utilisé dans le poste ouvert : sa cuve ne peut pas changer avant la clôture.');
+    if (open && tankId !== nozzle.tank_id) fail(409, 'Ce compteur est utilisé dans le poste ouvert : sa cuve ne peut pas changer avant la clôture.');
     // The index can be set while the shift is open (the station's starting index), as long as no
     // relief or closing has read the meters since: the shift then starts from the new index.
     if (open && meter !== nozzle.meter && db.prepare('SELECT 1 FROM shift_checkpoints WHERE shift_id = ?').get(open.shift_id)) {

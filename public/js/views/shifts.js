@@ -1,4 +1,4 @@
-import { flags } from '../ui.js';
+import { flags, edit } from '../ui.js';
 import { api } from '../api.js';
 import { shiftLine, h, fmt, pageHeader, card, cardHeader, table, segmented, shiftBadge, varianceCell, kpi, formDialog, confirmDialog, toast, button, badge, setContent, reportLink, buttonRow } from '../ui.js';
 import { icon } from '../icons.js';
@@ -87,9 +87,9 @@ export async function renderShifts(page, ctx) {
 }
 
 export async function renderShiftDetail(page, ctx) {
-  if (ctx.sub === 'etat' && ctx.state.user.role === 'manager') return renderShiftStatus(page, ctx);
+  const isManager = ['manager', 'owner'].includes(ctx.state.user.role);
+  if (ctx.sub === 'etat' && isManager) return renderShiftStatus(page, ctx);
   const shift = await api.get(`/shifts/${ctx.id}`);
-  const isManager = ctx.state.user.role === 'manager';
   const backPath = isManager ? 'postes' : 'historique';
   const reload = () => renderShiftDetail(page, ctx);
   const closingBy = (mode) => () =>
@@ -102,9 +102,9 @@ export async function renderShiftDetail(page, ctx) {
       shiftBadge(shift.status),
       shift.status !== 'open' ? reportLink(shift.id) : null,
       isManager && shift.status === 'open' ? button('État du poste', () => ctx.navigate(`postes/${shift.id}/etat`), { variant: 'secondary', iconName: 'chart' }) : null,
-      isManager && shift.status === 'open' ? button('Clôturer le poste', closingBy('manager'), { variant: shift.closing_due ? '' : 'secondary', iconName: 'shifts' }) : null,
-      isManager && shift.status === 'closed' ? button('Corriger la clôture', closingBy('correct'), { variant: 'secondary', iconName: 'edit' }) : null,
-      isManager && shift.status !== 'open' ? button(shift.manager_comment ? 'Modifier la remarque' : 'Remarque au pompiste', () => remarkDialog(shift, reload), { variant: 'secondary', iconName: 'message' }) : null,
+      isManager && shift.status === 'open' ? edit(button('Clôturer le poste', closingBy('manager'), { variant: shift.closing_due ? '' : 'secondary', iconName: 'shifts' })) : null,
+      isManager && shift.status === 'closed' ? edit(button('Corriger la clôture', closingBy('correct'), { variant: 'secondary', iconName: 'edit' })) : null,
+      isManager && shift.status !== 'open' && !flags.readonly ? button(shift.manager_comment ? 'Modifier la remarque' : 'Remarque au pompiste', () => remarkDialog(shift, reload), { variant: 'secondary', iconName: 'message' }) : null,
     ),
     shiftLine(shift.status),
     remarkCard(shift, isManager),
@@ -188,13 +188,14 @@ function pumpTestsCard(shift, isManager, reload) {
       toast(err.message, 'error');
     }
   };
-  const status = (t) => (t.status === 'approved' ? badge('Confirmé', 'good') : t.status === 'rejected' ? badge('Annulé', 'serious') : badge('À confirmer', 'warning'));
+  // Once confirmed, the test is just shown: only a cancelled or waiting one carries a sign.
+  const status = (t) => (t.status === 'rejected' ? badge('Annulé', 'serious') : t.status === 'pending' ? badge('À confirmer', 'warning') : null);
   return h(
     'section',
     { class: 'card section', style: 'margin-bottom:20px' },
     cardHeader(
       'Tests de pompe',
-      pending ? `${pending > 1 ? `${pending} tests attendent` : 'Un test attend'} votre décision : confirmé, le carburant n’est pas compté comme vendu.` : 'Carburant sorti pour un test et remis dans la cuve.',
+      pending ? `${pending > 1 ? `${pending} tests attendent` : 'Un test attend'} ${flags.readonly ? 'la décision du gérant' : 'votre décision'} : confirmé, le carburant n’est pas compté comme vendu.` : 'Carburant sorti pour un test et remis dans la cuve.',
     ),
     tests.map((t) =>
       h(
@@ -203,11 +204,11 @@ function pumpTestsCard(shift, isManager, reload) {
         h(
           'div',
           { class: 'grow' },
-          h('div', { style: 'font-weight:600' }, `${t.product_name} · ${t.pump_name} · ${t.nozzle_name}`),
-          h('div', { class: 'muted small' }, [fmt.time(t.created_at), t.user_name, t.note, t.decided_by_name && t.status !== 'pending' ? `${t.status === 'approved' ? 'confirmé' : 'annulé'} par ${t.decided_by_name}` : null].filter(Boolean).join(' · ')),
+          h('div', { style: 'font-weight:600' }, t.product_name),
+          h('div', { class: 'muted small' }, [fmt.time(t.created_at), t.user_name, t.note, t.decided_by_name && t.status === 'rejected' ? `annulé par ${t.decided_by_name}` : null].filter(Boolean).join(' · ')),
         ),
         h('div', { class: 'num', style: 'font-weight:600' }, fmt.liters(t.liters)),
-        isManager && t.status === 'pending'
+        isManager && !flags.readonly && t.status === 'pending'
           ? buttonRow([button('Confirmer', () => decide(t, true), { variant: 'sm' }), button('Annuler', () => decide(t, false), { variant: 'destructive sm' })])
           : status(t),
       ),
@@ -250,7 +251,7 @@ function cancellationRequests(shift, reload) {
           i.x.cancel_reason ? h('div', { class: 'small', style: 'margin-top:2px' }, `Raison : ${i.x.cancel_reason}`) : null,
         ),
         h('div', { class: 'num', style: 'font-weight:600' }, fmt.money(i.amount)),
-        buttonRow([button('Garder', () => decide(i, false), { variant: 'secondary sm' }), button('Annuler', () => decide(i, true), { variant: 'destructive sm' })]),
+        flags.readonly ? badge('En attente du gérant', 'warning') : buttonRow([button('Garder', () => decide(i, false), { variant: 'secondary sm' }), button('Annuler', () => decide(i, true), { variant: 'destructive sm' })]),
       ),
     ),
   );
@@ -275,10 +276,9 @@ export function shiftSummary(shift, tolerance) {
     h(
       'section',
       { class: 'card flush' },
-      h('div', { class: 'card-header' }, h('h2', {}, 'Index des pistolets')),
+      h('div', { class: 'card-header' }, h('h2', {}, 'Index')),
       table(
         [
-          { label: 'Pompe', render: (r) => `${r.pump_name} · ${r.nozzle_name}` },
           { label: 'Produit', key: 'product_name' },
           { label: 'Index début', align: 'right', render: (r) => fmt.number(r.start_meter) },
           { label: 'Index fin', align: 'right', render: (r) => (r.end_meter == null ? '—' : fmt.number(r.end_meter)) },

@@ -1,5 +1,5 @@
-// End-of-shift report as a PDF: cash reconciliation, sales computed from the
-// meter indexes (not every sale is entered), credits, expenses and payments.
+// End-of-shift report as a PDF: sales computed from the meter indexes (not every sale is
+// entered), credits, expenses, payments, pump tests, then the cash and the tanks.
 const { Report, fmt, COLORS } = require('./pdfReport');
 const { round } = require('./util');
 
@@ -23,26 +23,6 @@ function shiftReportPdf(shift, { stationName, combosEnabled, cashTolerance = 0, 
   const pendingNote = (item) => (item.cancel_requested_at ? 'Annulation demandée' : '');
   const handedOver = round((shift.cash || 0) + (shift.change_left || 0) + (shift.mobile_money || 0));
 
-  // ---- Cash ----
-  report.section('Caisse', 'À remettre = monnaie reçue + ventes par les index − crédits − combos + règlements reçus − dépenses.');
-  if (shift.change_received) report.line('Monnaie reçue à l’ouverture (poste précédent)', money(shift.change_received));
-  report.line('Ventes calculées par les index', money(shift.total_amount));
-  report.line('− Ventes à crédit', money(shift.credit_amount));
-  if (combosEnabled || shift.combo_amount) report.line('− Carburant échangé contre des combos', money(shift.combo_amount));
-  report.line('+ Règlements de clients reçus', money(shift.payments_amount));
-  report.line('− Dépenses payées par la caisse', money(shift.expenses_amount));
-  report.line('À remettre', money(shift.expected_amount), { bold: true });
-  if (shift.mobile_money) report.line('− Mobile money reçu (saisi au fil du poste)', money(shift.mobile_money));
-  if (shift.change_left) report.line('− Monnaie laissée aux pompistes', money(shift.change_left));
-  report.line('Espèces à remettre', money(round(shift.expected_amount - (shift.mobile_money || 0) - (shift.change_left || 0))), { bold: true });
-  report.line('Espèces remises', money(shift.cash));
-  report.line('Total remis (espèces + monnaie laissée + mobile money)', money(handedOver));
-  const ok = Math.abs(shift.variance) <= cashTolerance;
-  report.line(ok ? 'Écart de caisse (dans la tolérance)' : 'Écart de caisse (hors tolérance)', signed(shift.variance), { bold: true, color: ok ? COLORS.GOOD : COLORS.BAD });
-  if (shift.pending_cancellations) {
-    report.note(`${shift.pending_cancellations} annulation${shift.pending_cancellations > 1 ? 's' : ''} en attente de la décision du gérant.`, { bold: true, color: COLORS.BAD });
-  }
-
   // ---- Sales from the meters ----
   report.section('Ventes calculées par les index', 'Toutes les ventes ne sont pas saisies : litres = index de fin − index de début, au prix figé à l’ouverture.');
   const byProduct = new Map();
@@ -52,64 +32,21 @@ function shiftReportPdf(shift, { stationName, combosEnabled, cashTolerance = 0, 
     p.amount += r.amount || 0;
     byProduct.set(r.product_name, p);
   }
-  const totals = byProduct.size > 1 ? [...byProduct].map(([name, p]) => [`Total ${name}`, '', '', '', liters(round(p.liters)), '', money(round(p.amount))]) : [];
-  totals.push(['Total des index', '', '', '', liters(shift.total_liters), '', money(indexAmount)]);
-  if (surcharge) totals.push([surcharge > 0 ? 'Supplément abonnés' : 'Remise abonnés', '', '', '', '', '', money(surcharge)], ['Total des ventes', '', '', '', '', '', money(shift.total_amount)]);
+  const totals = byProduct.size > 1 ? [...byProduct].map(([name, p]) => [`Total ${name}`, '', '', liters(round(p.liters)), '', money(round(p.amount))]) : [];
+  totals.push(['Total des index', '', '', liters(shift.total_liters), '', money(indexAmount)]);
+  if (surcharge) totals.push([surcharge > 0 ? 'Supplément abonnés' : 'Remise abonnés', '', '', '', '', money(surcharge)], ['Total des ventes', '', '', '', '', money(shift.total_amount)]);
   report.table(
     [
-      { label: 'POMPE · PISTOLET', width: 146 },
-      { label: 'PRODUIT', width: 62 },
-      { label: 'INDEX DÉBUT', width: 68, align: 'right' },
-      { label: 'INDEX FIN', width: 68, align: 'right' },
-      { label: 'LITRES', width: 58, align: 'right' },
-      { label: 'PRIX $/L', width: 50, align: 'right' },
+      { label: 'PRODUIT', width: 150 },
+      { label: 'INDEX DÉBUT', width: 84, align: 'right' },
+      { label: 'INDEX FIN', width: 84, align: 'right' },
+      { label: 'LITRES', width: 66, align: 'right' },
+      { label: 'PRIX $/L', width: 56, align: 'right' },
       { label: 'MONTANT', align: 'right' },
     ],
-    readings.map((r) => [`${r.pump_name} · ${r.nozzle_name}`, r.product_name, number(r.start_meter), number(r.end_meter), liters(r.liters), price(r.unit_price), money(r.amount)]),
+    readings.map((r) => [r.product_name, number(r.start_meter), number(r.end_meter), liters(r.liters), price(r.unit_price), money(r.amount)]),
     { totals },
   );
-  const tests = shift.pump_tests || [];
-  if (tests.length) {
-    const approved = round(tests.filter((t) => t.status === 'approved').reduce((s, t) => s + t.liters, 0));
-    report.section('Tests de pompe (remis en cuve)', approved ? `${liters(approved)} confirmés : déduits des litres vendus, restés dans la cuve.` : null);
-    report.table(
-      [
-        { label: 'HEURE', width: 44 },
-        { label: 'POMPE · PISTOLET', width: 150 },
-        { label: 'LITRES', width: 60, align: 'right' },
-        { label: 'PAR', width: 100 },
-        { label: 'DÉCISION', indent: 14 },
-      ],
-      tests.map((t) => [time(t.created_at), `${t.pump_name} · ${t.nozzle_name}`, liters(t.liters), t.user_name || '—', t.status === 'approved' ? 'Confirmé' : t.status === 'rejected' ? 'Annulé (compté vendu)' : 'En attente du gérant']),
-    );
-  }
-
-  // ---- Tanks at the closing ----
-  const tanks = shift.tanks || [];
-  if (tanks.length) {
-    report.section('Cuves à la clôture', 'Stock théorique : dernier jaugeage + livraisons − ventes.');
-    report.table(
-      [
-        { label: 'CUVE', width: 140 },
-        { label: 'PRODUIT', width: 70 },
-        { label: 'VENDU', width: 70, align: 'right' },
-        { label: 'STOCK', width: 76, align: 'right' },
-        { label: 'CAPACITÉ', width: 76, align: 'right' },
-        { label: 'NIVEAU', align: 'right' },
-      ],
-      tanks.map((t) => [
-        `${t.name}${t.stock_after <= t.low_level ? ' (stock bas)' : ''}`,
-        t.product_name,
-        liters(t.sold),
-        liters(t.stock_after),
-        liters(t.capacity),
-        t.capacity ? `${Math.round((t.stock_after / t.capacity) * 100)} %` : '—',
-      ]),
-    );
-    const low = tanks.filter((t) => t.stock_after <= t.low_level);
-    if (low.length) report.note(`Stock bas : ${low.map((t) => `${t.name} (seuil ${liters(t.low_level)})`).join(', ')}.`, { bold: true, color: COLORS.BAD });
-  }
-
   // ---- Credits ----
   const saleColumns = [
     { label: 'HEURE', width: 44 },
@@ -163,6 +100,69 @@ function shiftReportPdf(shift, { stationName, combosEnabled, cashTolerance = 0, 
     shift.payments.map((p) => [time(p.created_at), p.customer_name, p.method, `${p.reference || '—'}${p.cancel_requested_at ? ' (annulation demandée)' : ''}`, money(p.amount)]),
     { totals: [['Total', '', '', '', money(shift.payments_amount)]], empty: 'Aucun règlement reçu sur ce poste.' },
   );
+
+  // ---- Pump tests ----
+  const tests = shift.pump_tests || [];
+  if (tests.length) {
+    const approved = round(tests.filter((t) => t.status === 'approved').reduce((s, t) => s + t.liters, 0));
+    report.section('Tests de pompe (remis en cuve)', approved ? `${liters(approved)} confirmés : déduits des litres vendus, restés dans la cuve.` : null);
+    report.table(
+      [
+        { label: 'HEURE', width: 44 },
+        { label: 'PRODUIT', width: 150 },
+        { label: 'LITRES', width: 60, align: 'right' },
+        { label: 'PAR', width: 100, indent: 14 },
+        { label: 'DÉCISION', indent: 14 },
+      ],
+      tests.map((t) => [time(t.created_at), t.product_name, liters(t.liters), t.user_name || '—', t.status === 'approved' ? 'Remis en cuve' : t.status === 'rejected' ? 'Annulé (compté vendu)' : 'En attente du gérant']),
+    );
+  }
+
+  // ---- Cash ----
+  report.section('Caisse', 'À remettre = monnaie reçue + ventes par les index − crédits − combos + règlements reçus − dépenses.');
+  if (shift.change_received) report.line('Monnaie reçue à l’ouverture (poste précédent)', money(shift.change_received));
+  report.line('Ventes calculées par les index', money(shift.total_amount));
+  report.line('− Ventes à crédit', money(shift.credit_amount));
+  if (combosEnabled || shift.combo_amount) report.line('− Carburant échangé contre des combos', money(shift.combo_amount));
+  report.line('+ Règlements de clients reçus', money(shift.payments_amount));
+  report.line('− Dépenses payées par la caisse', money(shift.expenses_amount));
+  report.line('À remettre', money(shift.expected_amount), { bold: true });
+  if (shift.mobile_money) report.line('− Mobile money reçu (saisi au fil du poste)', money(shift.mobile_money));
+  if (shift.change_left) report.line('− Monnaie laissée aux pompistes', money(shift.change_left));
+  report.line('Espèces à remettre', money(round(shift.expected_amount - (shift.mobile_money || 0) - (shift.change_left || 0))), { bold: true });
+  report.line('Espèces remises', money(shift.cash));
+  report.line('Total remis (espèces + monnaie laissée + mobile money)', money(handedOver));
+  const ok = Math.abs(shift.variance) <= cashTolerance;
+  report.line(ok ? 'Écart de caisse (dans la tolérance)' : 'Écart de caisse (hors tolérance)', signed(shift.variance), { bold: true, color: ok ? COLORS.GOOD : COLORS.BAD });
+  if (shift.pending_cancellations) {
+    report.note(`${shift.pending_cancellations} annulation${shift.pending_cancellations > 1 ? 's' : ''} en attente de la décision du gérant.`, { bold: true, color: COLORS.BAD });
+  }
+
+  // ---- Tanks at the closing ----
+  const tanks = shift.tanks || [];
+  if (tanks.length) {
+    report.section('Cuves à la clôture', 'Stock théorique : dernier jaugeage + livraisons − ventes.');
+    report.table(
+      [
+        { label: 'CUVE', width: 140 },
+        { label: 'PRODUIT', width: 70 },
+        { label: 'VENDU', width: 70, align: 'right' },
+        { label: 'STOCK', width: 76, align: 'right' },
+        { label: 'CAPACITÉ', width: 76, align: 'right' },
+        { label: 'NIVEAU', align: 'right' },
+      ],
+      tanks.map((t) => [
+        `${t.name}${t.stock_after <= t.low_level ? ' (stock bas)' : ''}`,
+        t.product_name,
+        liters(t.sold),
+        liters(t.stock_after),
+        liters(t.capacity),
+        t.capacity ? `${Math.round((t.stock_after / t.capacity) * 100)} %` : '—',
+      ]),
+    );
+    const low = tanks.filter((t) => t.stock_after <= t.low_level);
+    if (low.length) report.note(`Stock bas : ${low.map((t) => `${t.name} (seuil ${liters(t.low_level)})`).join(', ')}.`, { bold: true, color: COLORS.BAD });
+  }
 
   // ---- Remarks ----
   const remarks = [

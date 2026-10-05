@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS users (
   name          TEXT NOT NULL,
   login         TEXT NOT NULL UNIQUE COLLATE NOCASE,
   password_hash TEXT NOT NULL,
-  role          TEXT NOT NULL CHECK (role IN ('manager', 'attendant', 'customer')),
+  role          TEXT NOT NULL CHECK (role IN ('manager', 'attendant', 'customer', 'owner')),
   customer_id   INTEGER UNIQUE REFERENCES customers(id),
   active        INTEGER NOT NULL DEFAULT 1,
   created_at    TEXT NOT NULL DEFAULT (datetime('now'))
@@ -393,7 +393,7 @@ const MIGRATIONS = [
 ];
 
 // Bumped with every schema change; recorded in PRAGMA user_version.
-const SCHEMA_VERSION = 14;
+const SCHEMA_VERSION = 15;
 
 function missingColumns(db) {
   return MIGRATIONS.filter(([table, column]) => {
@@ -518,6 +518,30 @@ function migrateSalesKind(db) {
   return true;
 }
 
+// Version 15 adds the owner role (actionnaire: reads everything, changes nothing): the users
+// table is rebuilt with the wider constraint, every row and column kept.
+function migrateUserRoles(db) {
+  const { sql } = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'users'").get();
+  if (sql.includes("'owner'")) return;
+  const count = () => db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
+  const rowsBefore = count();
+  const create = sql.replace(/^CREATE TABLE "?users"?/, 'CREATE TABLE users_new').replace("'customer')", "'customer', 'owner')");
+  if (!create.includes("'owner'")) throw new Error('Migration des utilisateurs : contrainte de rôle introuvable.');
+  db.exec('PRAGMA foreign_keys = OFF');
+  db.exec('BEGIN');
+  try {
+    db.exec(create);
+    db.exec('INSERT INTO users_new SELECT * FROM users; DROP TABLE users; ALTER TABLE users_new RENAME TO users;');
+    if (count() !== rowsBefore) throw new Error('Migration des utilisateurs annulée : des comptes manquent après la copie.');
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  } finally {
+    db.exec('PRAGMA foreign_keys = ON');
+  }
+}
+
 // Purchase requests are short-lived (30 minutes): an outdated table is simply recreated.
 function migrateRequests(db) {
   const row = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'purchase_requests'").get();
@@ -544,6 +568,7 @@ function openDb(file) {
   const salesRebuilt = migrateSalesKind(db);
   if (salesRebuilt) addMissingColumns(db); // the rebuilt table only has the older columns
   migrateRequests(db);
+  migrateUserRoles(db);
   db.exec(`CREATE INDEX IF NOT EXISTS idx_payments_shift ON payments(shift_id);
     CREATE INDEX IF NOT EXISTS idx_expenses_shift ON expenses(shift_id);
     CREATE INDEX IF NOT EXISTS idx_requests_status ON purchase_requests(status);

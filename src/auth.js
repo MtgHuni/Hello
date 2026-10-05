@@ -5,6 +5,7 @@ const { HttpError } = require('./util');
 const scrypt = promisify(crypto.scrypt);
 
 const COOKIE = 'sid';
+const READS = new Set(['GET', 'HEAD']);
 const SESSION_DAYS = 7;
 
 // scrypt runs off the main thread, so a login never blocks the other requests.
@@ -80,6 +81,9 @@ function loadUser(db) {
   return (req, res, next) => {
     const token = readCookie(req, COOKIE);
     req.user = token ? stmt.get(sha256(token)) || null : null;
+    // The owner (actionnaire) reads what the manager reads: on a read request they pass as a
+    // manager; any other request keeps the owner role, which no write route accepts.
+    if (req.user?.role === 'owner') req.user = { ...req.user, owner: true, role: READS.has(req.method) ? 'manager' : 'owner' };
     next();
   };
 }
@@ -87,7 +91,10 @@ function loadUser(db) {
 function requireRole(...roles) {
   return (req, res, next) => {
     if (!req.user) throw new HttpError(401, 'Veuillez vous connecter.');
-    if (roles.length && !roles.includes(req.user.role)) throw new HttpError(403, 'Accès refusé.');
+    if (roles.length && !roles.includes(req.user.role)) {
+      if (req.user.owner) throw new HttpError(403, 'Lecture seule : l’actionnaire consulte sans rien modifier.', 'read_only');
+      throw new HttpError(403, 'Accès refusé.');
+    }
     next();
   };
 }

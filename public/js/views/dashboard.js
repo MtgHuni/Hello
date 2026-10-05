@@ -1,4 +1,4 @@
-import { flags } from '../ui.js';
+import { flags, edit } from '../ui.js';
 import { api } from '../api.js';
 import { h, fmt, kpi, cardHeader, tankGauge, pageHeader, button, setContent, priceTotem } from '../ui.js';
 import { icon } from '../icons.js';
@@ -15,7 +15,7 @@ export async function renderDashboard(page, { state, navigate }) {
       `${hello}, ${state.user.name.split(' ')[0]}`,
       fmt.longDay(d.today),
       d.openShifts[0] ? button('État du poste', () => navigate(`postes/${d.openShifts[0].id}/etat`), { iconName: 'chart' }) : null,
-      button('Nouvelle livraison', () => navigate('cuves'), { variant: 'secondary', iconName: 'truck' }),
+      edit(button('Nouvelle livraison', () => navigate('cuves'), { variant: 'secondary', iconName: 'truck' })),
     ),
 
     priceTotem(products.filter((p) => p.active).map((p) => ({ id: p.id, name: p.name, price: p.price, subscriberPrice: p.subscriber_price }))),

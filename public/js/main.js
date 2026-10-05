@@ -38,11 +38,14 @@ const NAV = {
   ],
   customer: [['', 'Mon compte', 'user', renderAccount]],
 };
+// The owner (actionnaire): every screen of the manager, to read, but the pump.
+NAV.owner = NAV.manager.filter(([path]) => path !== 'pompe');
 
 const DETAIL_ROUTES = {
   manager: { postes: renderShiftDetail, clients: renderCustomerDetail, reglages: renderJournal },
   attendant: { historique: renderShiftDetail },
 };
+DETAIL_ROUTES.owner = DETAIL_ROUTES.manager;
 
 const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -66,6 +69,7 @@ async function boot() {
     state.user = me.user;
     state.settings = me.settings;
     flags.combos = me.settings.combosEnabled !== false;
+    flags.readonly = me.user.role === 'owner';
     document.title = me.settings.stationName;
     route();
   } catch (err) {
@@ -108,7 +112,7 @@ function accountMenu() {
 
 // ---------- Persistent shell: side rail on wide screens, top bar + bottom tabs on phones ----------
 
-const ROLE_LABEL = { manager: 'Gérant', attendant: 'Pompiste', customer: 'Client' };
+const ROLE_LABEL = { manager: 'Gérant', attendant: 'Pompiste', customer: 'Client', owner: 'Actionnaire' };
 // On phones the tab bar keeps four destinations; the others sit behind « Plus ».
 const TAB_MAX = 4;
 
@@ -272,7 +276,7 @@ async function route() {
   setActive(entry[0], entry[1]);
 
   const token = ++routeToken;
-  const page = h('div', { class: `page ${role === 'manager' ? '' : 'narrow'}` });
+  const page = h('div', { class: `page ${['manager', 'owner'].includes(role) ? '' : 'narrow'}` });
   const slow = setTimeout(() => {
     if (token === routeToken) shell.slot.replaceChildren(h('div', { class: 'loading' }, spinner()));
   }, 300);

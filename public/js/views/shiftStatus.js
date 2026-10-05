@@ -1,4 +1,5 @@
 import { api } from '../api.js';
+import { flags } from '../ui.js';
 import { h, fmt, pageHeader, card, cardHeader, table, kpi, button, field, setContent, toast, badge } from '../ui.js';
 import { icon } from '../icons.js';
 import { reportCard } from './relay.js';
@@ -28,7 +29,7 @@ export async function renderShiftStatus(page, ctx) {
     shift.readings.map((r) =>
       field({
         name: `m_${r.nozzle_id}`,
-        label: `${r.pump_name} · ${r.nozzle_name}`,
+        label: r.product_name,
         hint: `Dernier relevé : ${fmt.number(lastMeter(r))}`,
         type: 'number',
         step: '0.01',
@@ -61,7 +62,7 @@ export async function renderShiftStatus(page, ctx) {
         !open ? 'clôturé' : shift.station_closed_at ? `station fermée depuis ${fmt.time(shift.station_closed_at)}` : shift.on_duty.length ? `en service : ${shift.on_duty.join(', ')}` : 'personne en service',
       ].join(' · '),
       button('Actualiser', reload, { variant: 'secondary', iconName: 'shifts' }),
-      open
+      open && !flags.readonly
         ? button('Clôturer le poste', () => renderClosing(page, ctx, shift, { mode: 'manager', onBack: reload, onDone: (closed) => (toast(`Poste clôturé · poste n°${closed.next_shift_id} ouvert`), ctx.navigate(`postes/${shift.id}`)) }), {
             variant: shift.closing_due ? '' : 'secondary',
             iconName: 'check',
