@@ -1107,8 +1107,8 @@ dialog.action-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; 
 .quick-action .qa-icon svg { width: 21px; height: 21px; }
 .quick-action.primary { --hue: var(--sign-yellow); --hue-ink: var(--sign-yellow-ink); }
 :root[data-theme='light'] .quick-action.primary { --solid: var(--hue); --on-solid: var(--on-sign); }
-/* By day every icon sits on a white square; on the yellow tile the + stays black to be read. */
-:root[data-theme='light'] .quick-action.primary .qa-icon { background: #fff; color: var(--on-sign); }
+/* By day every icon sits on a white square, in its tile's colour: Crédit's + is yellow. */
+:root[data-theme='light'] .quick-action.primary .qa-icon { background: #fff; color: var(--sign-yellow); }
 .kpi-row { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .kpi-row .card { padding: 18px; }
 .kpi-row .kpi .label { font-size: 13px; }
