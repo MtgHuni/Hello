@@ -103,9 +103,7 @@ export async function renderShiftDetail(page, ctx) {
       shift.status !== 'open' ? reportLink(shift.id) : null,
       isManager && shift.status === 'open' ? button('État du poste', () => ctx.navigate(`postes/${shift.id}/etat`), { variant: 'secondary', iconName: 'chart' }) : null,
       isManager && shift.status === 'open' ? edit(button('Clôturer le poste', closingBy('manager'), { variant: shift.closing_due ? '' : 'secondary', iconName: 'shifts' })) : null,
-      isManager && shift.status === 'closed' ? edit(button('Corriger la clôture', closingBy('correct'), { variant: 'secondary', iconName: 'edit' })) : null,
-      isManager && shift.status === 'closed' ? edit(button('Ajouter un oubli', () => forgotten(ctx, shift, reload), { variant: 'secondary', iconName: 'plus' })) : null,
-      isManager && shift.status !== 'open' && !flags.readonly ? button(shift.manager_comment ? 'Modifier la remarque' : 'Remarque au pompiste', () => remarkDialog(shift, reload), { variant: 'secondary', iconName: 'message' }) : null,
+      isManager && shift.status === 'closed' ? edit(button('Corriger la clôture', () => correctionMenu(ctx, shift, reload, closingBy('correct')), { variant: 'secondary', iconName: 'edit' })) : null,
     ),
     shiftLine(shift.status),
     remarkCard(shift, isManager),
@@ -121,22 +119,109 @@ export async function renderShiftDetail(page, ctx) {
     relaysCard(shift, ctx.state.settings.cashTolerance),
     isManager ? cancellationRequests(shift, () => renderShiftDetail(page, ctx)) : null,
     pumpTestsCard(shift, isManager, reload),
-    shiftSummary(shift, ctx.state.settings.cashTolerance),
+    shiftSummary(shift, ctx.state.settings.cashTolerance, isManager && !flags.readonly ? (kind, item) => operationMenu(ctx, shift, kind, item, reload) : null),
   );
 }
 
-// A forgotten operation, added after the closing: the shift's amounts and variance are recomputed.
-function forgotten(ctx, shift, reload) {
+// Correcting a closed shift: its indexes and money, or a forgotten operation (the shift is then
+// recomputed). An operation entered wrongly is corrected by touching it in its list.
+function correctionMenu(ctx, shift, reload, correctClosing) {
   actionSheet({
-    title: `Ajouter un oubli au poste n°${shift.id} : le poste sera recalculé`,
+    title: `Corriger le poste n°${shift.id}. Pour modifier une opération mal saisie, touchez-la dans sa liste.`,
     actions: [
-      { label: 'Crédit', onClick: () => addCredit(ctx, shift, reload) },
-      { label: 'Règlement client', onClick: () => addPayment(shift, reload) },
-      { label: 'Payé en mobile money', onClick: () => addMomo(shift, reload) },
-      { label: 'Dépense payée en caisse', onClick: () => addExpense(ctx, shift, reload) },
-      { label: 'Test de pompe', onClick: () => addTest(ctx, shift, reload) },
+      { label: 'Index et argent de la clôture', onClick: correctClosing },
+      { label: 'Ajouter un crédit oublié', onClick: () => addCredit(ctx, shift, reload) },
+      { label: 'Ajouter un règlement oublié', onClick: () => addPayment(shift, reload) },
+      { label: 'Ajouter un mobile money oublié', onClick: () => addMomo(shift, reload) },
+      { label: 'Ajouter une dépense oubliée', onClick: () => addExpense(ctx, shift, reload) },
+      { label: 'Ajouter un test de pompe oublié', onClick: () => addTest(ctx, shift, reload) },
     ],
   });
+}
+
+// An operation the attendant entered wrongly: the manager corrects it or cancels it.
+const KIND_TITLE = { sales: 'ce crédit', payments: 'ce règlement', momo: 'ce paiement mobile money', expenses: 'cette dépense' };
+function operationMenu(ctx, shift, kind, item, reload) {
+  if (kind === 'sales' && item.kind !== 'credit') return toast('Un échange de combos ne se modifie pas : annulez-le puis saisissez-le à nouveau.', 'error');
+  actionSheet({
+    title: `${fmt.time(item.created_at)} · ${fmt.money(item.amount)}`,
+    actions: [
+      { label: `Corriger ${KIND_TITLE[kind]}`, onClick: () => editOperation(ctx, shift, kind, item, reload) },
+      {
+        label: `Annuler ${KIND_TITLE[kind]}`,
+        destructive: true,
+        onClick: async () => {
+          if (!(await confirmDialog('Annuler cette opération ?', 'Elle sera retirée du poste (et du compte du client). L’annulation est gardée au journal.', { confirmLabel: 'Annuler l’opération', danger: true }))) return;
+          try {
+            await api.del(`/shifts/${shift.id}/${kind}/${item.id}`);
+            toast('Opération annulée.');
+            reload();
+          } catch (err) {
+            toast(err.message, 'error');
+          }
+        },
+      },
+    ],
+  });
+}
+
+async function editOperation(ctx, shift, kind, item, reload) {
+  const products = [...new Map(shift.readings.map((r) => [r.product_id, r.product_name])).entries()];
+  const customers = kind === 'sales' || kind === 'payments' ? await api.get('/customers?form=1') : [];
+  const customerField = { name: 'customerId', label: 'Client', type: 'select', options: customers.map((c) => [c.id, c.name]), value: item.customer_id, required: true };
+  const forms = {
+    sales: {
+      title: 'Corriger le crédit',
+      fields: [
+        customerField,
+        { name: 'productId', label: 'Produit', type: 'segment', options: products, value: item.product_id },
+        { name: 'unit', label: 'Unité', type: 'segment', options: [['amount', '$'], ['liters', 'L']], value: 'amount' },
+        { name: 'qty', label: 'Quantité', type: 'number', step: '0.01', min: '0.01', value: item.amount, required: true, hint: 'Au prix du poste (prix abonné pour un abonné) : en dollars, les litres suivent ; en litres, le montant suit.' },
+        { name: 'plate', label: 'Plaque', value: item.plate || undefined },
+      ],
+      body: (d) => ({ customerId: Number(d.customerId), productId: Number(d.productId), [d.unit === 'liters' ? 'liters' : 'amount']: Number(d.qty), plate: d.plate }),
+    },
+    payments: {
+      title: 'Corriger le règlement',
+      fields: [
+        customerField,
+        { name: 'amount', label: 'Montant ($)', type: 'number', step: '0.01', min: '0.01', value: item.amount, required: true },
+        { name: 'method', label: 'Mode', type: 'segment', options: [['espèces', 'Espèces'], ['mobile money', 'Mobile money']], value: item.method },
+        { name: 'reference', label: 'Référence', value: item.reference || undefined },
+      ],
+      body: (d) => ({ customerId: Number(d.customerId), amount: Number(d.amount), method: d.method, reference: d.reference }),
+    },
+    momo: {
+      title: 'Corriger le paiement mobile money',
+      fields: [
+        { name: 'productId', label: 'Carburant', type: 'segment', options: products, value: item.product_id },
+        { name: 'liters', label: 'Litres', type: 'number', step: '0.01', min: '0.01', value: item.liters, required: true, hint: 'Le montant suit le prix du poste.' },
+      ],
+      body: (d) => ({ productId: Number(d.productId), liters: Number(d.liters) }),
+    },
+    expenses: {
+      title: 'Corriger la dépense',
+      fields: [
+        { name: 'amount', label: 'Montant ($)', type: 'number', step: '0.01', min: '0.01', value: item.amount, required: true },
+        { name: 'category', label: 'Catégorie', type: 'select', options: ctx.state.settings.expenseCategories.map((c) => [c, c]), value: item.category },
+        { name: 'description', label: 'Description', value: item.description, required: true },
+        { name: 'beneficiary', label: 'Payé à', value: item.beneficiary || undefined },
+      ],
+      body: (d) => d,
+    },
+  }[kind];
+  const ok = await formDialog({
+    title: forms.title,
+    intro: shift.status === 'closed' ? 'Le poste sera recalculé. La correction est gardée au journal.' : 'La correction est gardée au journal.',
+    submitLabel: 'Enregistrer la correction',
+    grid: false,
+    fields: forms.fields,
+    onSubmit: (d) => api.put(`/shifts/${shift.id}/${kind}/${item.id}`, forms.body(d)),
+  });
+  if (ok) {
+    toast('Opération corrigée.');
+    reload();
+  }
 }
 
 // Who worked on the shift, and each relief, evening closing and morning opening with its report.
@@ -282,7 +367,10 @@ function cancellationRequests(shift, reload) {
 }
 
 // Shared by the manager detail page and the attendant's end-of-shift screen.
-export function shiftSummary(shift, tolerance) {
+// onEdit(kind, item): the manager touches an operation to correct or cancel it.
+export function shiftSummary(shift, tolerance, onEdit = null) {
+  const editable = (kind) => (onEdit ? { onRowClick: (item) => onEdit(kind, item) } : {});
+  const touchHint = onEdit ? ' · touchez une ligne pour la corriger' : '';
   const closed = shift.status !== 'open';
   return h(
     'div',
@@ -317,7 +405,7 @@ export function shiftSummary(shift, tolerance) {
     h(
       'section',
       { class: 'card flush' },
-      h('div', { class: 'card-header' }, h('h2', {}, 'Crédits et demandes clients'), h('p', {}, `${shift.sales.length} opération${shift.sales.length > 1 ? 's' : ''}`)),
+      h('div', { class: 'card-header' }, h('h2', {}, 'Crédits et demandes clients'), h('p', {}, `${shift.sales.length} opération${shift.sales.length > 1 ? 's' : ''}${shift.sales.length ? touchHint : ''}`)),
       table(
         [
           { label: 'Heure', render: (s) => fmt.time(s.created_at) },
@@ -339,14 +427,14 @@ export function shiftSummary(shift, tolerance) {
           { label: 'Montant', align: 'right', render: (s) => fmt.money(s.amount) },
         ],
         shift.sales,
-        { empty: 'Aucun crédit sur ce poste.' },
+        { empty: 'Aucun crédit sur ce poste.', ...editable('sales') },
       ),
     ),
     shift.momo.length
       ? h(
           'section',
           { class: 'card flush' },
-          h('div', { class: 'card-header' }, h('h2', {}, 'Payé en mobile money'), h('p', {}, `${shift.momo.length} paiement${shift.momo.length > 1 ? 's' : ''} · ${fmt.money(shift.momo.reduce((t, m) => t + m.amount, 0))}`)),
+          h('div', { class: 'card-header' }, h('h2', {}, 'Payé en mobile money'), h('p', {}, `${shift.momo.length} paiement${shift.momo.length > 1 ? 's' : ''} · ${fmt.money(shift.momo.reduce((t, m) => t + m.amount, 0))}${touchHint}`)),
           table(
             [
               { label: 'Heure', render: (m) => fmt.time(m.created_at) },
@@ -356,6 +444,7 @@ export function shiftSummary(shift, tolerance) {
               { label: 'Montant', align: 'right', render: (m) => fmt.money(m.amount) },
             ],
             shift.momo,
+            editable('momo'),
           ),
         )
       : null,
@@ -363,7 +452,7 @@ export function shiftSummary(shift, tolerance) {
       ? h(
           'section',
           { class: 'card flush' },
-          h('div', { class: 'card-header' }, h('h2', {}, 'Règlements encaissés'), h('p', {}, 'Ajoutés au montant à remettre')),
+          h('div', { class: 'card-header' }, h('h2', {}, 'Règlements encaissés'), h('p', {}, `Ajoutés au montant à remettre${touchHint}`)),
           table(
             [
               { label: 'Heure', render: (p) => fmt.time(p.created_at) },
@@ -373,6 +462,7 @@ export function shiftSummary(shift, tolerance) {
               { label: 'Montant', align: 'right', render: (p) => fmt.money(p.amount) },
             ],
             shift.payments,
+            editable('payments'),
           ),
         )
       : null,
@@ -380,7 +470,7 @@ export function shiftSummary(shift, tolerance) {
       ? h(
           'section',
           { class: 'card flush' },
-          h('div', { class: 'card-header' }, h('h2', {}, 'Dépenses payées en caisse'), h('p', {}, 'Déduites du montant à remettre')),
+          h('div', { class: 'card-header' }, h('h2', {}, 'Dépenses payées en caisse'), h('p', {}, `Déduites du montant à remettre${touchHint}`)),
           table(
             [
               { label: 'Heure', render: (e) => fmt.time(e.created_at) },
@@ -389,6 +479,7 @@ export function shiftSummary(shift, tolerance) {
               { label: 'Montant', align: 'right', render: (e) => fmt.money(e.amount) },
             ],
             shift.expenses,
+            editable('expenses'),
           ),
         )
       : null,

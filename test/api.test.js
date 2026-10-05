@@ -48,6 +48,7 @@ const closeShift = (shift, ends, money) =>
 const dieselOf = (shift) => shift.readings.find((r) => r.product_id === ctx.diesel.id);
 // Timestamps are to the second: steps that must not share one are spaced.
 const nextSecond = () => new Promise((r) => setTimeout(r, 1100));
+const round2 = (n) => Math.round(n * 100) / 100;
 
 test('premier lancement : configuration de la station', async () => {
   assert.strictEqual((await gerant('GET', '/api/setup')).data.needsSetup, true);
@@ -870,6 +871,17 @@ test('clôture en deux temps : les index d’abord, l’argent ensuite', async (
   assert.ok(late.mobile_money > closed.mobile_money, 'le mobile money oublié compte');
   assert.ok((await gerant('GET', '/api/audit?category=postes')).data.some((a) => a.summary.startsWith(`Oubli ajouté au poste n°${open.id}`)));
   assert.strictEqual((await pompiste('POST', `/api/shifts/${open.id}/expenses`, { amount: 1, category: 'Autre', description: 'x' })).status, 409, 'le pompiste n’ajoute rien à un poste clôturé');
+
+  // An operation entered wrongly: the manager corrects it, the closed shift is recomputed.
+  const expense = (await gerant('GET', `/api/shifts/${open.id}`)).data.expenses.find((e) => e.description === 'Oubliée');
+  const fixed = await gerant('PUT', `/api/shifts/${open.id}/expenses/${expense.id}`, { amount: 8, description: 'Oubliée (8 $)' });
+  assert.strictEqual(fixed.status, 200);
+  assert.strictEqual(fixed.data.amount, 8);
+  assert.strictEqual((await gerant('GET', `/api/shifts/${open.id}`)).data.expenses_amount, round2(closed.expenses_amount + 8));
+  const momoRow = (await gerant('GET', `/api/shifts/${open.id}`)).data.momo.at(-1);
+  assert.strictEqual((await gerant('PUT', `/api/shifts/${open.id}/momo/${momoRow.id}`, { liters: 4 })).data.liters, 4);
+  assert.ok((await gerant('GET', '/api/audit?category=postes')).data.some((a) => a.summary.startsWith(`Opération corrigée par le gérant, poste n°${open.id}`)));
+  assert.strictEqual((await pompiste('PUT', `/api/shifts/${open.id}/expenses/${expense.id}`, { amount: 1 })).status, 403, 'le gérant seul corrige');
 });
 
 test('particulier : pas de nouveau crédit avant paiement du précédent ; livre de caisse par entrées ou sorties', async () => {
@@ -881,6 +893,11 @@ test('particulier : pas de nouveau crédit avant paiement du précédent ; livre
   assert.strictEqual(second.data.code, 'has_credit');
   assert.match(second.data.error, /déjà un crédit non payé de 10,00/);
   assert.strictEqual((await gerant('POST', `/api/shifts/${open.id}/sales`, { customerId: c.id, productId: ctx.diesel.id, amount: 5, grantCredit: true })).status, 409, 'personne ne peut l’accorder');
+  // A credit entered wrongly: 10 $ instead of 4 $, corrected by the manager.
+  const sale = (await gerant('GET', `/api/shifts/${open.id}`)).data.sales.find((s) => s.customer_id === c.id);
+  const corrected = (await gerant('PUT', `/api/shifts/${open.id}/sales/${sale.id}`, { amount: 4 })).data;
+  assert.strictEqual(corrected.amount, 4);
+  assert.strictEqual((await customer(c.id)).customer.balance, 4, 'le solde du client suit');
 
   for (const part of ['all', 'in', 'out']) {
     const pdf = await gerant('GET', `/api/cashbook.pdf?part=${part}&from=2026-01-01&to=2026-12-31`);

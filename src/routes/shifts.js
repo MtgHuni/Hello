@@ -7,7 +7,7 @@ const declared = (s) => round((s.cash || 0) + (s.change_left || 0) + (s.mobile_m
 const { fail, num, str, oneOf, round, dateParam, transaction, money, clientRef } = require('../util');
 const { requireRole } = require('../auth');
 const { customerBalance } = require('./customers');
-const { createSale } = require('../sales');
+const { createSale, updateSale } = require('../sales');
 const { refreshCustomer } = require('../loyalty');
 const { shiftReportPdf } = require('../shiftReport');
 const { applyScheduledPrices } = require('../prices');
@@ -591,6 +591,52 @@ module.exports = function shiftRoutes(db) {
       if (shift.status === 'closed') reconcile(shift.id);
     });
     res.status(204).end();
+  });
+
+  // Manager: corrects an operation entered wrongly (open or closed shift). The closed shift is
+  // reconciled again; the journal keeps the operation before and after.
+  router.put('/shifts/:id/:kind/:itemId', requireRole('manager'), (req, res) => {
+    const shift = db.prepare('SELECT * FROM shifts WHERE id = ?').get(req.params.id);
+    if (!shift) fail(404, 'Poste introuvable.');
+    const { table, item } = cancellable(req, shift);
+    const b = req.body || {};
+    const after = transaction(db, () => {
+      if (table === 'sales') updateSale(db, item, b);
+      else if (table === 'payments') {
+        const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(Number(b.customerId ?? item.customer_id));
+        if (!customer) fail(400, 'Client inconnu.');
+        const amount = round(num(b.amount ?? item.amount, 'Le montant', { min: 0.01, max: 1e8 }));
+        const method = oneOf(b.method ?? item.method, 'Le mode de règlement', ['espèces', 'mobile money']);
+        const reference = b.reference === undefined ? item.reference : str(b.reference, 'La référence', { required: false, max: 100 });
+        db.prepare('UPDATE payments SET customer_id = ?, amount = ?, method = ?, reference = ? WHERE id = ?').run(customer.id, amount, method, reference, item.id);
+        refreshCustomer(db, customer.id);
+        if (customer.id !== item.customer_id) refreshCustomer(db, item.customer_id);
+      } else if (table === 'expenses') {
+        const category = oneOf(b.category ?? item.category, 'La catégorie', EXPENSE_CATEGORIES);
+        const amount = round(num(b.amount ?? item.amount, 'Le montant', { min: 0.01, max: 1e7 }));
+        const description = str(b.description ?? item.description, 'La description', { max: 300 });
+        const beneficiary = b.beneficiary === undefined ? item.beneficiary : str(b.beneficiary, 'Le bénéficiaire', { required: false, max: 120 });
+        db.prepare('UPDATE expenses SET category = ?, amount = ?, description = ?, beneficiary = ? WHERE id = ?').run(category, amount, description, beneficiary, item.id);
+      } else {
+        const reading = db.prepare('SELECT unit_price, product_id FROM shift_readings WHERE shift_id = ? AND product_id = ? LIMIT 1').get(shift.id, Number(b.productId ?? item.product_id));
+        if (!reading) fail(400, 'Choisissez le carburant.');
+        const liters = round(num(b.liters ?? item.liters, 'Le nombre de litres', { min: 0.01, max: 1e5 }));
+        db.prepare('UPDATE momo_sales SET product_id = ?, liters = ?, unit_price = ?, amount = ? WHERE id = ?').run(reading.product_id, liters, reading.unit_price, round(liters * reading.unit_price), item.id);
+      }
+      if (shift.status === 'closed') reconcile(shift.id);
+      const changed = db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(item.id);
+      audit(db, req, {
+        category: 'postes',
+        action: 'operation_corrected',
+        entity: table,
+        id: item.id,
+        summary: `Opération corrigée par le gérant, poste n°${shift.id} : ${describe(table, item)} → ${describe(table, changed)}`,
+        before: item,
+        after: changed,
+      });
+      return changed;
+    });
+    res.json(after);
   });
 
   // Manager: refuses the cancellation, the operation stays.

@@ -92,4 +92,42 @@ function createSale(db, shift, input) {
   return db.prepare('SELECT * FROM sales WHERE id = ?').get(id);
 }
 
-module.exports = { createSale };
+// The manager corrects a credit entered wrongly (customer, product, quantity, plate): the price
+// follows the shift's (subscriber price for a subscriber), and both customers' balances are
+// recomputed. A correction records what happened: the credit rules are not checked again.
+function updateSale(db, sale, input) {
+  if (sale.kind !== 'credit') fail(409, 'Un échange de combos ne se modifie pas : annulez-le puis saisissez-le à nouveau.');
+  const settings = getSettings(db);
+  const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(Number(input.customerId ?? sale.customer_id));
+  if (!customer) fail(400, 'Client inconnu.');
+  const reading = db.prepare('SELECT * FROM shift_readings WHERE shift_id = ? AND product_id = ? ORDER BY id LIMIT 1').get(sale.shift_id, Number(input.productId ?? sale.product_id));
+  if (!reading) fail(400, 'Ce produit ne fait pas partie du poste.');
+  const unitPrice = customer.type === 'account' ? reading.subscriber_price ?? reading.unit_price : reading.unit_price;
+  let liters;
+  let amount;
+  if (input.amount !== undefined && input.amount !== null && input.amount !== '') {
+    amount = round(num(input.amount, 'Le montant', { min: 0.01, max: 1e7 }));
+    liters = round(amount / unitPrice);
+  } else {
+    liters = round(num(input.liters ?? sale.liters, 'Le nombre de litres', { min: 0.01, max: 100000 }));
+    amount = round(liters * unitPrice);
+  }
+  const plate = input.plate === undefined ? sale.plate : str(input.plate, "L'immatriculation", { required: false, max: 20 });
+  const pointsDue = settings.combosEnabled ? Math.floor(liters * settings.combosPerLiter) : 0;
+  db.prepare('UPDATE sales SET customer_id = ?, nozzle_id = ?, product_id = ?, liters = ?, unit_price = ?, amount = ?, points_due = ?, plate = ? WHERE id = ?').run(
+    customer.id,
+    reading.nozzle_id,
+    reading.product_id,
+    liters,
+    unitPrice,
+    amount,
+    pointsDue,
+    plate,
+    sale.id,
+  );
+  refreshCustomer(db, customer.id);
+  if (customer.id !== sale.customer_id) refreshCustomer(db, sale.customer_id);
+  return db.prepare('SELECT * FROM sales WHERE id = ?').get(sale.id);
+}
+
+module.exports = { createSale, updateSale };
