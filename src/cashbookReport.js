@@ -1,10 +1,12 @@
 // Cash book as a PDF: for each balance (cash, mobile money), the period's summary,
-// one line per day and every movement with the running balance.
+// one line per day and every movement with the running balance. part 'in' or 'out' lists
+// only the entries or only the exits, with their total.
 const { Report, fmt, COLORS } = require('./pdfReport');
 
 const { money, signed, date, dateTime } = fmt;
 
-function cashbookPdf(books, balances, { stationName, from, to, now = new Date() }) {
+function cashbookPdf(books, balances, { stationName, from, to, part = 'all', now = new Date() }) {
+  if (part !== 'all') return movementsPdf(books, { stationName, from, to, part, now });
   const report = new Report({
     title: `Livre de caisse du ${date(from)} au ${date(to)}`,
     stationName,
@@ -55,6 +57,33 @@ function cashbookPdf(books, balances, { stationName, from, to, now = new Date() 
     );
   }
 
+  return report.finish();
+}
+
+function movementsPdf(books, { stationName, from, to, part, now }) {
+  const heading = part === 'in' ? 'Entrées de caisse' : 'Sorties de caisse';
+  const report = new Report({
+    title: `${heading} du ${date(from)} au ${date(to)}`,
+    stationName,
+    heading,
+    subtitle: `Du ${date(from)} au ${date(to)}  ·  espèces et mobile money tenus à part`,
+    now,
+  });
+  report.section('Totaux');
+  for (const b of books) report.line(b.accountLabel, money(b[part]), { bold: true });
+  for (const b of books) {
+    const list = b.movements.filter((m) => m[part] > 0);
+    report.section(b.accountLabel, list.length ? `${list.length} ${part === 'in' ? 'entrée' : 'sortie'}${list.length > 1 ? 's' : ''}` : null);
+    report.table(
+      [
+        { label: 'DATE', width: 96 },
+        { label: 'LIBELLÉ', width: 330 },
+        { label: 'MONTANT', align: 'right' },
+      ],
+      list.map((m) => [dateTime(m.at), m.label, money(m[part])]),
+      { size: 8, empty: `Aucune ${part === 'in' ? 'entrée' : 'sortie'} sur la période.`, totals: list.length ? [['Total', '', money(b[part])]] : [] },
+    );
+  }
   return report.finish();
 }
 

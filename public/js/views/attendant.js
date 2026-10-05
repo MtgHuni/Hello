@@ -348,7 +348,9 @@ function requestQueue(shift, reload) {
         const price = priceOf(r.product_id, r.customer_type) ?? r.current_price;
         const liters = r.liters ?? r.amount / price;
         const amount = r.amount ?? r.liters * price;
-        const overLimit = r.payment === 'credit' && amount > r.available + 0.001;
+        // An individual with an unpaid credit: the new one is an alert, like a limit passed.
+        const owes = r.payment === 'credit' && r.customer_type !== 'account' && r.balance > 0.001;
+        const overLimit = r.payment === 'credit' && (owes || amount > r.available + 0.001);
         return h(
           'div',
           { class: 'queue-card' },
@@ -358,7 +360,7 @@ function requestQueue(shift, reload) {
             'div',
             { class: 'row', style: 'gap:6px' },
             r.payment === 'credit'
-              ? badge(overLimit ? 'Crédit · dépasse le plafond' : 'Crédit', overLimit ? 'serious' : 'info')
+              ? badge(owes ? `Crédit · doit déjà ${fmt.money(r.balance)}` : overLimit ? 'Crédit · dépasse le plafond' : 'Crédit', overLimit ? 'serious' : 'info')
               : r.payment === 'combo'
                 ? badge(`Avec ses combos (${r.loyalty_points})`, 'warning')
                 : null,
@@ -505,9 +507,12 @@ export async function addCredit(ctx, shift, reload) {
     } else if (c) {
       const parts = [c.type === 'account' ? 'Abonné' : 'Particulier'];
       if (flags.combos) parts.push(`${c.points ?? 0} combos${c.points >= comboThreshold ? ` (= ${fmt.money(c.points * comboValue)})` : ''}`);
-      parts.push(c.late ? 'mois précédent impayé' : `crédit disponible ${fmt.money(Math.max(0, c.available ?? 0))}`);
+      // An individual: the balance only; an unpaid credit is shown as an alert.
+      const owes = c.type !== 'account' && c.balance > 0;
+      if (c.type === 'account') parts.push(c.late ? 'mois précédent impayé' : `crédit disponible ${fmt.money(Math.max(0, c.available ?? 0))}`);
+      else parts.push(owes ? `déjà un crédit non payé : ${fmt.money(c.balance)}` : c.balance < 0 ? `avance ${fmt.money(-c.balance)}` : 'solde 0,00 $');
       who.textContent = parts.join(' · ');
-      who.className = c.late ? 'hint-line variance-neg' : 'hint-line';
+      who.className = c.late || owes ? 'hint-line variance-neg' : 'hint-line';
       if (c.plate && !form.elements.plate.value) form.elements.plate.value = c.plate;
     } else {
       who.textContent = 'Touchez un client proposé, ou « Nouveau client » pour le créer.';

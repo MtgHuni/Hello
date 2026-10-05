@@ -228,6 +228,13 @@ export function defaultPeriod() {
   return { from: isoDate(new Date(now.getFullYear(), now.getMonth(), 1)), to: todayISO() };
 }
 
+// The period's purchases (sales on credit or with combos).
+function purchasesKpi(movements) {
+  const sales = movements.filter((m) => m.type === 'sale');
+  const total = Math.round(sales.reduce((t, m) => t + m.amount, 0) * 100) / 100;
+  return kpi('Achats', fmt.money(total), sales.length ? `${sales.length} achat${sales.length > 1 ? 's' : ''} sur la période` : 'Aucun achat sur la période');
+}
+
 // Account statement shared with the client space: KPIs, period picker, movements, print.
 export function statement(acc, period, onPeriod, { onOldDebt } = {}) {
   const c = acc.customer;
@@ -265,9 +272,13 @@ export function statement(acc, period, onPeriod, { onOldDebt } = {}) {
       kpi(
         c.balance < 0 ? 'Avance du client' : 'Solde dû',
         h('span', { class: c.balance > c.credit_limit ? 'variance-neg' : '' }, fmt.money(Math.abs(c.balance))),
-        [c.balance > c.credit_limit ? 'Plafond dépassé' : `Plafond ${fmt.money(c.credit_limit)}`, c.old_debt ? `dont ancienne dette ${fmt.money(c.old_debt)} au départ` : null].filter(Boolean).join(' · '),
+        [
+          c.type !== 'account' ? (c.balance > 0 ? 'Crédit en cours : pas d’autre crédit avant paiement' : null) : c.balance > c.credit_limit ? 'Plafond dépassé' : `Plafond ${fmt.money(c.credit_limit)}`,
+          c.old_debt ? `dont ancienne dette ${fmt.money(c.old_debt)} au départ` : null,
+        ].filter(Boolean).join(' · ') || TYPE_LABEL[c.type],
       ),
-      kpi('Crédit disponible', fmt.money(Math.max(0, c.credit_limit - c.balance)), TYPE_LABEL[c.type]),
+      // An individual: balance and purchases; a subscriber: the credit left under the limit.
+      c.type === 'account' ? kpi('Crédit disponible', fmt.money(Math.max(0, c.credit_limit - c.balance)), TYPE_LABEL[c.type]) : purchasesKpi(acc.movements),
       !flags.combos ? null : kpi(
         'Combos',
         fmt.number(combos.balance),

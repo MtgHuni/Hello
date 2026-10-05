@@ -872,6 +872,26 @@ test('clôture en deux temps : les index d’abord, l’argent ensuite', async (
   assert.strictEqual((await pompiste('POST', `/api/shifts/${open.id}/expenses`, { amount: 1, category: 'Autre', description: 'x' })).status, 409, 'le pompiste n’ajoute rien à un poste clôturé');
 });
 
+test('particulier : un nouveau crédit avant paiement du précédent est une alerte ; livre de caisse par entrées ou sorties', async () => {
+  const open = (await gerant('GET', '/api/shifts/current')).data;
+  const c = (await gerant('POST', '/api/customers/quick', { name: 'Jean Particulier' })).data;
+  assert.strictEqual((await gerant('POST', `/api/shifts/${open.id}/sales`, { customerId: c.id, productId: ctx.diesel.id, amount: 10 })).status, 201);
+  const second = await gerant('POST', `/api/shifts/${open.id}/sales`, { customerId: c.id, productId: ctx.diesel.id, amount: 5 });
+  assert.strictEqual(second.status, 409);
+  assert.strictEqual(second.data.code, 'over_limit');
+  assert.match(second.data.error, /déjà un crédit non payé de 10,00/);
+  const granted = (await gerant('POST', `/api/shifts/${open.id}/sales`, { customerId: c.id, productId: ctx.diesel.id, amount: 5, grantCredit: true })).data;
+  assert.strictEqual(granted.over_limit, 1, 'accordé quand même : signalé au gérant');
+
+  for (const part of ['all', 'in', 'out']) {
+    const pdf = await gerant('GET', `/api/cashbook.pdf?part=${part}&from=2026-01-01&to=2026-12-31`);
+    assert.strictEqual(pdf.status, 200, part);
+    assert.ok(pdf.raw.subarray(0, 5).toString() === '%PDF-');
+  }
+  assert.strictEqual((await gerant('GET', '/api/cashbook.pdf?part=tout')).status, 400);
+  assert.strictEqual((await gerant('GET', '/api/cashbook.pdf?from=2026-02-01&to=2026-01-01')).status, 400);
+});
+
 test('migration : une base ancienne est convertie (loyalty → paid, combos)', () => {
   const fs = require('node:fs');
   const os = require('node:os');

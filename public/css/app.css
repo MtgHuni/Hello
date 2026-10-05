@@ -1141,6 +1141,7 @@ dialog.action-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; 
 .seg-option input:focus-visible + span { box-shadow: inset 0 0 0 1px var(--sign-yellow), 0 0 0 2px var(--focus); }
 .hint-line { min-height: 20px; font-size: 15px; color: var(--text-2); }
 .hint-line.new { color: var(--link); font-weight: 600; }
+.hint-line.variance-neg { color: var(--bad-text); font-weight: 600; }
 
 /* Customer requests queue */
 .queue-card {

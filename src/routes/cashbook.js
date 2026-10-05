@@ -26,10 +26,14 @@ module.exports = function cashbookRoutes(db) {
 
   router.get('/cashbook.pdf', manager, (req, res) => {
     const p = period(req.query);
+    if (p.from > p.to) fail(400, 'La date de début doit précéder la date de fin.');
+    // all: the whole book; in: the entries only; out: the exits only.
+    const part = oneOf(req.query.part || 'all', 'Le contenu', ['all', 'in', 'out']);
     const books = Object.keys(ACCOUNTS).map((account) => cashbook(db, { account, ...p }));
-    const pdf = cashbookPdf(books, balances(db), { stationName: getSettings(db).stationName, ...p });
+    const pdf = cashbookPdf(books, balances(db), { stationName: getSettings(db).stationName, ...p, part });
+    const name = { all: 'livre-de-caisse', in: 'entrees-de-caisse', out: 'sorties-de-caisse' }[part];
     res.set('Content-Type', 'application/pdf');
-    res.set('Content-Disposition', `attachment; filename="livre-de-caisse-${p.from}-au-${p.to}.pdf"`);
+    res.set('Content-Disposition', `attachment; filename="${name}-${p.from}-au-${p.to}.pdf"`);
     res.send(pdf);
   });
 

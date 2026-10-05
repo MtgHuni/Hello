@@ -30,6 +30,30 @@ let view = 'days';
 let preset = 'month';
 let range = presetRange(preset);
 
+// The book as a PDF: the whole book, the entries only or the exits only, over a chosen period.
+async function downloadDialog() {
+  const ok = await formDialog({
+    title: 'Télécharger le livre de caisse',
+    submitLabel: 'Télécharger le PDF',
+    grid: false,
+    fields: [
+      { name: 'part', label: 'Contenu', type: 'segment', options: [['all', 'Tout'], ['in', 'Entrées'], ['out', 'Sorties']], value: 'all' },
+      { name: 'from', label: 'Du', type: 'date', value: range.from, required: true },
+      { name: 'to', label: 'Au', type: 'date', value: range.to, required: true },
+    ],
+    onSubmit: (d) => {
+      if (d.from > d.to) throw new Error('La date de début doit précéder la date de fin.');
+      return d;
+    },
+  });
+  if (!ok) return;
+  const name = { all: 'livre-de-caisse', in: 'entrees-de-caisse', out: 'sorties-de-caisse' }[ok.part];
+  const link = h('a', { href: `/api/cashbook.pdf?part=${ok.part}&from=${ok.from}&to=${ok.to}`, download: `${name}-${ok.from}-au-${ok.to}.pdf`, hidden: true });
+  document.body.append(link);
+  link.click();
+  link.remove();
+}
+
 export async function renderCashbook(page, ctx) {
   const book = await api.get(`/cashbook?account=${account}&from=${range.from}&to=${range.to}`);
   const reload = () => renderCashbook(page, ctx);
@@ -56,7 +80,7 @@ export async function renderCashbook(page, ctx) {
     pageHeader(
       'Caisse',
       'Livre de caisse : espèces et mobile money tenus à part.',
-      pdfLinks(`/api/cashbook.pdf?from=${range.from}&to=${range.to}`, `livre-de-caisse-${range.from}-au-${range.to}.pdf`, { label: 'Livre PDF' }),
+      button('Télécharger', () => downloadDialog(), { variant: 'secondary', iconName: 'download' }),
       edit(button('Compter', () => countDialog(account, current, reload), { variant: 'secondary', iconName: 'check' })),
       edit(button('Mouvement', () => movementDialog(account, reload), { iconName: 'plus' })),
     ),
