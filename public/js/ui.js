@@ -217,9 +217,31 @@ export function pdfLinks(url, filename, { label = 'Rapport PDF', variant = 'seco
   return [link, share];
 }
 
-// A closed shift's PDF report (cash, sales from the indexes, credits, expenses).
+// A single "Partager" button: the phone's share sheet (WhatsApp, e-mail…),
+// or a plain download where the browser cannot share files.
+export function shareButton(url, filename, { variant = 'secondary' } = {}) {
+  const canShare = () => typeof File === 'function' && navigator.canShare?.({ files: [new File([''], 'x.pdf', { type: 'application/pdf' })] });
+  const download = () => h('a', { href: url, download: filename }).click();
+  return button(
+    'Partager',
+    async () => {
+      if (!canShare()) return download();
+      try {
+        const res = await fetch(url, { credentials: 'same-origin' });
+        if (!res.ok) throw new Error();
+        const file = new File([await res.blob()], filename, { type: 'application/pdf' });
+        await navigator.share({ files: [file], title: filename });
+      } catch (err) {
+        if (err?.name !== 'AbortError') toast('Partage impossible : réessayez.', 'error');
+      }
+    },
+    { variant, iconName: 'share' },
+  );
+}
+
+// A closed shift's PDF report (cash, sales from the indexes, credits, expenses), shared.
 export function reportLink(shiftId, variant = 'secondary') {
-  return pdfLinks(`/api/shifts/${shiftId}/report.pdf`, `rapport-poste-${shiftId}.pdf`, { variant });
+  return shareButton(`/api/shifts/${shiftId}/report.pdf`, `rapport-poste-${shiftId}.pdf`, { variant });
 }
 
 // WhatsApp number from a Congolese phone (+243…, 0…, or 9 digits).

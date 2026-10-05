@@ -5,6 +5,7 @@ const { attendantNamesSql } = require('../checkpoints');
 const { requireRole, requireAdmin } = require('../auth');
 const { audit } = require('../audit');
 const { applyScheduledPrices } = require('../prices');
+const { withLiveStock } = require('../liveStock');
 
 const price3 = (n) => Number(n).toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 
@@ -187,7 +188,7 @@ module.exports = function configRoutes(db) {
     FROM tanks t JOIN products p ON p.id = t.product_id`;
 
   router.get('/tanks', manager, (req, res) => {
-    res.json(db.prepare(`${tankSelect} ORDER BY t.id`).all());
+    res.json(withLiveStock(db, db.prepare(`${tankSelect} ORDER BY t.id`).all()));
   });
 
   function tankFields(b, current = {}) {

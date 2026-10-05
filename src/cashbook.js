@@ -183,14 +183,15 @@ function balances(db) {
   return out;
 }
 
-// What the station owes each supplier: deliveries taken on credit minus payments.
+// Every supplier with its contacts, and what the station owes it: deliveries taken on credit minus payments.
 function supplierBalances(db) {
   const rows = new Map();
   const row = (name) => {
     const key = name.trim().toLowerCase();
-    if (!rows.has(key)) rows.set(key, { name: name.trim(), owed: 0, paid: 0, balance: 0, last_delivery_at: null });
+    if (!rows.has(key)) rows.set(key, { id: null, name: name.trim(), phone: null, email: null, owed: 0, paid: 0, balance: 0, last_delivery_at: null });
     return rows.get(key);
   };
+  for (const s of db.prepare('SELECT id, name, phone, email FROM suppliers ORDER BY name COLLATE NOCASE').all()) Object.assign(row(s.name), s);
   for (const d of db.prepare("SELECT supplier, amount, created_at FROM deliveries WHERE payment = 'credit' AND supplier IS NOT NULL ORDER BY id").all()) {
     const r = row(d.supplier);
     r.owed = round(r.owed + d.amount);

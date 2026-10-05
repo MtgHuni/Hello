@@ -1,6 +1,5 @@
 import { api } from '../api.js';
-import { h, fmt, pageHeader, table, segmented, kpi, field, todayISO, isoDate, varianceCell, setContent } from '../ui.js';
-import { icon } from '../icons.js';
+import { h, fmt, pageHeader, table, segmented, kpi, field, todayISO, isoDate, varianceCell, setContent, shareButton } from '../ui.js';
 import { showShiftsOf } from './shifts.js';
 
 export const PRESETS = [
@@ -50,7 +49,7 @@ export async function renderReports(page, ctx) {
       'Rapports',
       range.from === range.to ? fmt.longDay(range.from) : `Du ${fmt.date(range.from)} au ${fmt.date(range.to)}`,
       h('a', { class: 'btn secondary', href: `/api/reports/sales?from=${range.from}&to=${range.to}&format=csv` }, 'Exporter (Excel)'),
-      h('a', { class: 'btn secondary', href: `/api/reports/period.pdf?from=${range.from}&to=${range.to}`, download: '' }, icon('download'), 'Rapport PDF'),
+      shareButton(`/api/reports/period.pdf?from=${range.from}&to=${range.to}`, `rapport-${range.from}_${range.to}.pdf`),
     ),
     h(
       'div',

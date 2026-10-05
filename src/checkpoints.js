@@ -120,9 +120,14 @@ function closingCutoff(db, time = '15:30') {
     .get(time, time, time).t;
 }
 
+// The last index taken on each nozzle: the last checkpoint's, or a later one read at a delivery or a dip.
 const lastMeters = (db, shiftId) => {
   const last = listCheckpoints(db, shiftId).at(-1);
-  return last ? last.meters : null;
+  const meters = new Map(last ? last.meters : []);
+  for (const r of db.prepare('SELECT nozzle_id, MAX(meter) AS meter FROM stock_readings WHERE shift_id = ? GROUP BY nozzle_id').all(shiftId)) {
+    if (!(meters.get(r.nozzle_id) >= r.meter)) meters.set(r.nozzle_id, r.meter);
+  }
+  return meters.size ? meters : null;
 };
 
 module.exports = { momoTotal, closingCutoff, attendantNamesSql, KIND_LABEL, listCheckpoints, checkpointReports, currentPeriod, lastMeters };

@@ -2,6 +2,7 @@ const express = require('express');
 const { fail, num, str, oneOf, round, transaction } = require('../util');
 const { requireRole } = require('../auth');
 const { audit } = require('../audit');
+const { openMeters, soldByTank } = require('../liveStock');
 
 const manager = requireRole('manager');
 
@@ -26,6 +27,39 @@ module.exports = function stockRoutes(db) {
     if (!tank) fail(400, 'Cuve inconnue.');
     return tank;
   };
+
+  // A supplier named on a delivery gets a record (for its contacts), under its first spelling.
+  const supplierName = (name) => {
+    if (!name) return name;
+    db.prepare('INSERT OR IGNORE INTO suppliers (name) VALUES (?)').run(name);
+    return db.prepare('SELECT name FROM suppliers WHERE name = ?').get(name).name;
+  };
+
+  // During the open shift, a delivery or a dip reads the index of the nozzles fed by the tank:
+  // the fuel sold so far comes off the stock (src/liveStock.js). Without an index, the last one taken counts.
+  function stockNow(tank, given) {
+    const list = Array.isArray(given) ? given : [];
+    const meters = openMeters(db);
+    const fresh = new Map();
+    for (const m of meters.filter((x) => x.tankId === tank.id)) {
+      const g = list.find((x) => Number(x.nozzleId) === m.nozzleId);
+      if (g === undefined || g.meter === '' || g.meter == null) continue;
+      const meter = round(num(g.meter, `L’index (${m.label})`, { max: 1e12 }));
+      if (meter < m.latest - 0.001) fail(400, `L’index (${m.label}) ne peut pas être inférieur au dernier relevé (${m.latest}).`);
+      fresh.set(m.nozzleId, meter);
+    }
+    const sold = soldByTank(db, meters, fresh).get(tank.id) || 0;
+    const readings = meters.filter((m) => fresh.has(m.nozzleId)).map((m) => ({ shiftId: m.shiftId, nozzleId: m.nozzleId, meter: fresh.get(m.nozzleId) }));
+    return { sold, live: round(tank.book_stock - sold), readings };
+  }
+  const saveReadings = (readings, source, sourceId) => {
+    for (const r of readings) db.prepare('INSERT INTO stock_readings (shift_id, nozzle_id, meter, source, source_id) VALUES (?, ?, ?, ?, ?)').run(r.shiftId, r.nozzleId, r.meter, source, sourceId);
+  };
+
+  // The indexes to ask at a delivery or a dip: the open shift's nozzles, each with its last index.
+  router.get('/stock/meters', manager, (req, res) => {
+    res.json(openMeters(db).map((m) => ({ nozzleId: m.nozzleId, tankId: m.tankId, label: m.label, latest: m.latest })));
+  });
 
   router.get('/deliveries', manager, (req, res) => {
     res.json(
@@ -55,6 +89,10 @@ module.exports = function stockRoutes(db) {
     const computed = unitCost ? round(unitCost * received) : null;
     const amount = b.amount === undefined || b.amount === '' || b.amount === null ? computed : round(num(b.amount, 'Le montant de la facture', { min: 0.01, max: 1e9 }));
     checkCredit(payment, supplier, amount);
+    const { live, readings } = stockNow(tank, b.meters);
+    if (live + received > tank.capacity + 0.5 && !b.force) {
+      fail(409, `${tank.name} contiendrait ${round(live + received)} L pour une capacité de ${tank.capacity} L (stock actuel ${live} L + ${received} L reçus). Vérifiez l’index et les litres reçus.`, 'over_capacity');
+    }
 
     const id = transaction(db, () => {
       const r = db
@@ -62,8 +100,9 @@ module.exports = function stockRoutes(db) {
           `INSERT INTO deliveries (tank_id, supplier, reference, liters_ordered, liters_received, unit_cost, book_before, user_id, payment, amount, pay_method)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
-        .run(tank.id, supplier, reference, ordered, received, unitCost ?? (amount ? round(amount / received, 4) : null), tank.book_stock, req.user.id, payment, amount, payMethod);
+        .run(tank.id, supplierName(supplier), reference, ordered, received, unitCost ?? (amount ? round(amount / received, 4) : null), live, req.user.id, payment, amount, payMethod);
       db.prepare('UPDATE tanks SET book_stock = ? WHERE id = ?').run(round(tank.book_stock + received), tank.id);
+      saveReadings(readings, 'delivery', Number(r.lastInsertRowid));
       return r.lastInsertRowid;
     });
     res.status(201).json(db.prepare('SELECT * FROM deliveries WHERE id = ?').get(id));
@@ -82,7 +121,7 @@ module.exports = function stockRoutes(db) {
     checkCredit(payment, supplier, amount);
     const after = { payment, pay_method: payMethod, supplier, reference, amount };
     transaction(db, () => {
-      db.prepare('UPDATE deliveries SET payment = ?, pay_method = ?, supplier = ?, reference = ?, amount = ? WHERE id = ?').run(payment, payMethod, supplier, reference, amount, d.id);
+      db.prepare('UPDATE deliveries SET payment = ?, pay_method = ?, supplier = ?, reference = ?, amount = ? WHERE id = ?').run(payment, payMethod, supplierName(supplier), reference, amount, d.id);
       audit(db, req, {
         category: 'donnees',
         action: 'delivery_payment',
@@ -109,19 +148,22 @@ module.exports = function stockRoutes(db) {
     );
   });
 
-  // A dip (physical measurement) is compared with the book stock, then becomes
-  // the new reference: the variance is recorded and the book stock is reset.
+  // A dip (physical measurement) is compared with the stock now, then becomes the new reference:
+  // the variance is recorded and the book stock is reset. During the open shift, the fuel sold so far
+  // stays in the book stock until the closing takes it off.
   router.post('/dips', manager, (req, res) => {
     const tank = getTank(num(req.body?.tankId, 'La cuve', { integer: true, min: 1 }));
     const measured = num(req.body?.measured, 'Le volume mesuré', { max: tank.capacity * 1.05 });
     const note = str(req.body?.note, 'La note', { required: false, max: 300 });
-    const variance = round(measured - tank.book_stock);
+    const { sold, live, readings } = stockNow(tank, req.body?.meters);
+    const variance = round(measured - live);
 
     const id = transaction(db, () => {
       const r = db
         .prepare('INSERT INTO dips (tank_id, measured, book_stock, variance, note, user_id) VALUES (?, ?, ?, ?, ?, ?)')
-        .run(tank.id, measured, tank.book_stock, variance, note, req.user.id);
-      db.prepare('UPDATE tanks SET book_stock = ? WHERE id = ?').run(measured, tank.id);
+        .run(tank.id, measured, live, variance, note, req.user.id);
+      db.prepare('UPDATE tanks SET book_stock = ? WHERE id = ?').run(round(measured + sold), tank.id);
+      saveReadings(readings, 'dip', Number(r.lastInsertRowid));
       return r.lastInsertRowid;
     });
     res.status(201).json(db.prepare('SELECT * FROM dips WHERE id = ?').get(id));

@@ -97,11 +97,48 @@ module.exports = function cashbookRoutes(db) {
   router.get('/suppliers', manager, (req, res) => {
     res.json({
       suppliers: supplierBalances(db),
-      names: db.prepare('SELECT DISTINCT supplier AS name FROM deliveries WHERE supplier IS NOT NULL ORDER BY supplier COLLATE NOCASE').all().map((r) => r.name),
+      names: db.prepare('SELECT name FROM suppliers ORDER BY name COLLATE NOCASE').all().map((r) => r.name),
       payments: db
         .prepare('SELECT p.*, u.name AS user_name FROM supplier_payments p LEFT JOIN users u ON u.id = p.user_id ORDER BY p.id DESC LIMIT 50')
         .all(),
     });
+  });
+
+  // The admin keeps the suppliers' records: name, phone, e-mail. A new name follows on the
+  // deliveries and payments that carry the old one.
+  const supplierFields = (b, current = {}) => ({
+    name: str(b.name ?? current.name, 'Le nom', { max: 100 }),
+    phone: str(b.phone ?? current.phone, 'Le téléphone', { required: false, max: 40 }),
+    email: str(b.email ?? current.email, "L'e-mail", { required: false, max: 120 }),
+  });
+  const sameName = (name, id = 0) => db.prepare('SELECT 1 FROM suppliers WHERE name = ? COLLATE NOCASE AND id != ?').get(name, id);
+
+  router.post('/suppliers', manager, requireAdmin, (req, res) => {
+    const f = supplierFields(req.body || {});
+    if (sameName(f.name)) fail(409, `Le fournisseur « ${f.name} » existe déjà.`, 'duplicate');
+    const id = transaction(db, () => {
+      const r = db.prepare('INSERT INTO suppliers (name, phone, email) VALUES (?, ?, ?)').run(f.name, f.phone, f.email);
+      audit(db, req, { category: 'caisse', action: 'supplier_created', entity: 'suppliers', id: Number(r.lastInsertRowid), summary: `Fournisseur ajouté : ${f.name}`, after: f });
+      return Number(r.lastInsertRowid);
+    });
+    res.status(201).json(db.prepare('SELECT * FROM suppliers WHERE id = ?').get(id));
+  });
+
+  router.put('/suppliers/:id', manager, requireAdmin, (req, res) => {
+    const s = db.prepare('SELECT * FROM suppliers WHERE id = ?').get(req.params.id);
+    if (!s) fail(404, 'Fournisseur introuvable.');
+    const f = supplierFields(req.body || {}, s);
+    if (sameName(f.name, s.id)) fail(409, `Le fournisseur « ${f.name} » existe déjà.`, 'duplicate');
+    transaction(db, () => {
+      db.prepare('UPDATE suppliers SET name = ?, phone = ?, email = ? WHERE id = ?').run(f.name, f.phone, f.email, s.id);
+      if (f.name !== s.name) {
+        db.prepare('UPDATE deliveries SET supplier = ? WHERE lower(trim(supplier)) = lower(?)').run(f.name, s.name);
+        db.prepare('UPDATE supplier_payments SET supplier = ? WHERE lower(trim(supplier)) = lower(?)').run(f.name, s.name);
+      }
+      const before = { name: s.name, phone: s.phone, email: s.email };
+      audit(db, req, { category: 'caisse', action: 'supplier_updated', entity: 'suppliers', id: s.id, summary: f.name !== s.name ? `Fournisseur ${s.name} renommé ${f.name}` : `Fournisseur ${f.name} modifié`, before, after: f });
+    });
+    res.json(db.prepare('SELECT * FROM suppliers WHERE id = ?').get(s.id));
   });
 
   router.post('/suppliers/payments', manager, (req, res) => {
@@ -111,7 +148,7 @@ module.exports = function cashbookRoutes(db) {
     const method = oneOf(b.method || 'espèces', 'Le mode de paiement', SUPPLIER_METHODS);
     const reference = str(b.reference, 'La référence', { required: false, max: 100 });
     // Same spelling as on the deliveries, so the debt and its payment meet.
-    const known = db.prepare('SELECT supplier FROM deliveries WHERE supplier = ? COLLATE NOCASE LIMIT 1').get(supplier);
+    const known = db.prepare('SELECT name AS supplier FROM suppliers WHERE name = ? COLLATE NOCASE').get(supplier);
     const id = transaction(db, () => {
       const r = db
         .prepare('INSERT INTO supplier_payments (supplier, amount, method, reference, user_id) VALUES (?, ?, ?, ?, ?)')

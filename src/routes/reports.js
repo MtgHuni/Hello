@@ -6,6 +6,7 @@ const { balanceSql, subscriberDues, creditAllocation } = require('../loyalty');
 const { balances, supplierBalances } = require('../cashbook');
 const { attendantNamesSql, closingCutoff } = require('../checkpoints');
 const { periodReportPdf } = require('../periodReport');
+const { withLiveStock } = require('../liveStock');
 
 const manager = requireRole('manager');
 
@@ -55,12 +56,15 @@ module.exports = function reportRoutes(db) {
       .all()
       .map((r) => ({ ...r, amount: round(r.amount), liters: round(r.liters) }));
 
-    const tanks = db
-      .prepare(
-        `SELECT t.id, t.name, t.capacity, t.low_level, t.book_stock, p.id AS product_id, p.name AS product_name
-         FROM tanks t JOIN products p ON p.id = t.product_id WHERE t.active = 1 ORDER BY t.id`,
-      )
-      .all();
+    const tanks = withLiveStock(
+      db,
+      db
+        .prepare(
+          `SELECT t.id, t.name, t.capacity, t.low_level, t.book_stock, p.id AS product_id, p.name AS product_name
+           FROM tanks t JOIN products p ON p.id = t.product_id WHERE t.active = 1 ORDER BY t.id`,
+        )
+        .all(),
+    );
 
     const openShifts = db
       .prepare(

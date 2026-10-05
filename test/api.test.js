@@ -924,6 +924,51 @@ test('particulier : pas de nouveau crédit avant paiement du précédent ; livre
   assert.strictEqual((await gerant('GET', '/api/cashbook.pdf?from=2026-02-01&to=2026-01-01')).status, 400);
 });
 
+test('livraison pendant le poste : le carburant déjà vendu (index) sort du stock ; fournisseurs et coordonnées', async () => {
+  const shift = (await gerant('GET', '/api/shifts/current')).data;
+  const diesel = dieselOf(shift);
+  const tank = (await gerant('GET', '/api/tanks')).data.find((t) => t.id === diesel.tank_id);
+  const m = (await gerant('GET', '/api/stock/meters')).data.find((x) => x.nozzleId === diesel.nozzle_id);
+  assert.strictEqual(m.tankId, tank.id);
+
+  // 400 L sold since the opening: without the index the tank would overflow; with it, it fits.
+  const room = round2(tank.capacity - tank.book_stock);
+  const delivery = { tankId: tank.id, litersOrdered: room + 100, litersReceived: room + 100, payment: 'credit', unitCost: 1, supplier: 'Engen Goma' };
+  const over = await gerant('POST', '/api/deliveries', delivery);
+  assert.strictEqual(over.status, 409);
+  assert.strictEqual(over.data.code, 'over_capacity');
+  assert.strictEqual((await gerant('POST', '/api/deliveries', { ...delivery, meters: [{ nozzleId: diesel.nozzle_id, meter: m.latest - 1 }] })).status, 400, 'index en arrière');
+  const meter = round2(m.latest + 400);
+  const ok = await gerant('POST', '/api/deliveries', { ...delivery, meters: [{ nozzleId: diesel.nozzle_id, meter }] });
+  assert.strictEqual(ok.status, 201);
+  assert.strictEqual(ok.data.book_before, round2(tank.book_stock - 400));
+  const stock = async () => (await gerant('GET', '/api/tanks')).data.find((t) => t.id === tank.id).book_stock;
+  assert.strictEqual(await stock(), round2(tank.capacity - 300), 'stock réel : jamais au-dessus de la capacité');
+
+  // A dip during the shift compares with the stock now, and the closing takes the 400 L off only once.
+  const dip = (await gerant('POST', '/api/dips', { tankId: tank.id, measured: round2(tank.capacity - 310) })).data;
+  assert.strictEqual(dip.variance, -10);
+  assert.strictEqual((await closeShift(shift, { [diesel.nozzle_id]: meter - 1 })).status, 400, 'pas sous l’index de la livraison');
+  assert.strictEqual((await closeShift(shift, { [diesel.nozzle_id]: meter })).status, 200);
+  assert.strictEqual(await stock(), round2(tank.capacity - 310));
+
+  // Suppliers: the admin keeps their contacts and may rename them; the debt follows the name.
+  let sup = (await gerant('GET', '/api/suppliers')).data.suppliers.find((s) => s.name === 'Engen Goma');
+  assert.ok(sup.id);
+  assert.strictEqual(sup.balance, room + 100);
+  const chef = client();
+  await chef('POST', '/api/auth/login', { login: 'chef', password: 'gerant123' });
+  assert.strictEqual((await chef('PUT', `/api/suppliers/${sup.id}`, { phone: '0990000000' })).data.code, 'admin_only');
+  assert.strictEqual((await gerant('POST', '/api/suppliers', { name: 'engen goma' })).data.code, 'duplicate');
+  const renamed = await gerant('PUT', `/api/suppliers/${sup.id}`, { name: 'Engen RDC', phone: '+243 990 000 000', email: 'goma@engen.cd' });
+  assert.strictEqual(renamed.status, 200);
+  sup = (await gerant('GET', '/api/suppliers')).data.suppliers.find((s) => s.id === sup.id);
+  assert.deepStrictEqual([sup.name, sup.phone, sup.email, sup.balance], ['Engen RDC', '+243 990 000 000', 'goma@engen.cd', room + 100]);
+  assert.ok((await gerant('GET', '/api/deliveries')).data.some((d) => d.supplier === 'Engen RDC'));
+  assert.strictEqual((await gerant('POST', '/api/suppliers', { name: 'Petro Kivu', phone: '0810000000' })).status, 201);
+  assert.ok((await gerant('GET', '/api/suppliers')).data.names.includes('Petro Kivu'));
+});
+
 test('migration : une base ancienne est convertie (loyalty → paid, combos)', () => {
   const fs = require('node:fs');
   const os = require('node:os');
@@ -960,10 +1005,11 @@ test('migration : une base ancienne est convertie (loyalty → paid, combos)', (
   assert.strictEqual(setting('combos_enabled'), '0', 'version 6 : combos coupés');
   assert.strictEqual(setting('cdf_rate'), undefined, 'version 6 : tout en dollars');
   // Version 11: a validated shift is simply closed.
-  migrated.exec("INSERT INTO users (name, login, password_hash, role) VALUES ('P', 'p', 'x', 'attendant'); INSERT INTO shifts (attendant_id, status) VALUES (1, 'validated'); PRAGMA user_version = 10");
+  migrated.exec("INSERT INTO users (name, login, password_hash, role) VALUES ('P', 'p', 'x', 'attendant'); INSERT INTO shifts (attendant_id, status) VALUES (1, 'validated'); INSERT INTO supplier_payments (supplier, amount, method) VALUES (' Total Goma ', 10, 'espèces'); PRAGMA user_version = 10");
   migrated.close();
   const reopened = openDb(file);
   assert.strictEqual(reopened.prepare('SELECT status FROM shifts').get().status, 'closed', 'version 11 : plus de validation');
+  assert.strictEqual(reopened.prepare('SELECT name FROM suppliers').get().name, 'Total Goma', 'version 18 : fiche fournisseur');
   reopened.close();
   assert.ok(fs.readdirSync(dir).some((f) => f.startsWith('old.db.avant-migration-')), 'copie gardée avant la mise à jour');
   fs.rmSync(dir, { recursive: true, force: true });

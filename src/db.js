@@ -308,6 +308,25 @@ CREATE TABLE IF NOT EXISTS shift_tank_stock (
   stock_after REAL NOT NULL,
   PRIMARY KEY (shift_id, tank_id)
 );
+-- Suppliers and their contacts (deliveries and payments name them by their supplier column).
+CREATE TABLE IF NOT EXISTS suppliers (
+  id         INTEGER PRIMARY KEY,
+  name       TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  phone      TEXT,
+  email      TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+-- Meter indexes read during the open shift by a delivery or a dip: the fuel already sold
+-- (latest index - opening index) is taken off the tank before the closing (src/liveStock.js).
+CREATE TABLE IF NOT EXISTS stock_readings (
+  id         INTEGER PRIMARY KEY,
+  shift_id   INTEGER NOT NULL REFERENCES shifts(id),
+  nozzle_id  INTEGER NOT NULL REFERENCES nozzles(id),
+  meter      REAL NOT NULL,
+  source     TEXT NOT NULL CHECK (source IN ('delivery', 'dip')),
+  source_id  INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 CREATE TABLE IF NOT EXISTS checkpoint_readings (
   checkpoint_id INTEGER NOT NULL REFERENCES shift_checkpoints(id),
   nozzle_id     INTEGER NOT NULL REFERENCES nozzles(id),
@@ -394,7 +413,7 @@ const MIGRATIONS = [
 ];
 
 // Bumped with every schema change; recorded in PRAGMA user_version.
-const SCHEMA_VERSION = 17;
+const SCHEMA_VERSION = 18;
 
 function missingColumns(db) {
   return MIGRATIONS.filter(([table, column]) => {
@@ -586,6 +605,12 @@ function openDb(file) {
     // Credit sales only earn their combos once paid: recompute every balance.
     const { refreshCustomer } = require('./loyalty');
     for (const { id } of db.prepare('SELECT id FROM customers').all()) refreshCustomer(db, id);
+  }
+  if (version < 18) {
+    // Version 18: suppliers get a record (contacts) from the names already used.
+    db.exec(`INSERT OR IGNORE INTO suppliers (name)
+      SELECT TRIM(supplier) FROM deliveries WHERE supplier IS NOT NULL AND TRIM(supplier) != ''
+      UNION SELECT TRIM(supplier) FROM supplier_payments`);
   }
   if (version < 17 && !db.prepare("SELECT 1 FROM users WHERE role = 'admin'").get()) {
     // Version 17: the account that set the station up (the first manager) becomes the admin.

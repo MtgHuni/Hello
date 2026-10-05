@@ -1,11 +1,11 @@
 import { api } from '../api.js';
-import { flags, edit } from '../ui.js';
-import { h, fmt, pageHeader, cardHeader, table, segmented, tankGauge, button, formDialog, confirmDialog, toast, badge, setContent } from '../ui.js';
+import { flags, edit, adminEdit, canAdmin } from '../ui.js';
+import { h, fmt, pageHeader, cardHeader, table, segmented, tankGauge, button, formDialog, confirmDialog, actionSheet, field, toast, badge, setContent } from '../ui.js';
 
 let tab = 'deliveries';
 
 export async function renderTanks(page, ctx) {
-  const [tanks, products, deliveries, dips, sup] = await Promise.all([api.get('/tanks'), api.get('/products'), api.get('/deliveries'), api.get('/dips'), api.get('/suppliers')]);
+  const [tanks, products, deliveries, dips, sup, meters] = await Promise.all([api.get('/tanks'), api.get('/products'), api.get('/deliveries'), api.get('/dips'), api.get('/suppliers'), api.get('/stock/meters')]);
   const tol = ctx.state.settings.stockTolerance;
   const active = tanks.filter((t) => t.active);
   const reload = () => renderTanks(page, ctx);
@@ -14,8 +14,8 @@ export async function renderTanks(page, ctx) {
     pageHeader(
       'Cuves',
       'Livraisons, jaugeages et stock théorique.',
-      edit(button('Jaugeage', () => dipDialog(active, reload), { variant: 'secondary', iconName: 'ruler' })),
-      edit(button('Livraison', () => deliveryDialog(active, sup.names, reload), { iconName: 'truck' })),
+      edit(button('Jaugeage', () => dipDialog(active, meters, reload), { variant: 'secondary', iconName: 'ruler' })),
+      edit(button('Livraison', () => deliveryDialog(active, sup.names, meters, reload), { iconName: 'truck' })),
     ),
     h(
       'div',
@@ -111,8 +111,27 @@ export async function renderTanks(page, ctx) {
 const PAYMENTS = [['cash', 'Payée comptant'], ['credit', 'À crédit'], ['prepaid', 'Déjà payée']];
 const tankOptions = (tanks) => tanks.map((t) => [t.id, `${t.name} (${t.product_name})`]);
 
-async function deliveryDialog(tanks, supplierNames, reload) {
+// While the shift is open, the index of each nozzle fed by the tank, read at the same moment:
+// the fuel sold since the opening comes off the stock, so the tank never shows more than it holds.
+function meterFields(meters) {
+  const host = h('div', { class: 'stack full' });
+  const show = (tankId) =>
+    setContent(
+      host,
+      meters
+        .filter((m) => m.tankId === Number(tankId))
+        .map((m) =>
+          field({ name: `meter-${m.nozzleId}`, label: `Index ${m.label} maintenant`, type: 'number', step: '0.01', min: String(m.latest), required: true, hint: `Dernier relevé du poste : ${fmt.number(m.latest)}. Le carburant vendu depuis l’ouverture sort du stock.` }),
+        ),
+    );
+  const read = (form) => meters.filter((m) => form.elements[`meter-${m.nozzleId}`]).map((m) => ({ nozzleId: m.nozzleId, meter: Number(form.elements[`meter-${m.nozzleId}`].value) }));
+  return { host, show, read };
+}
+
+async function deliveryDialog(tanks, supplierNames, meters, reload) {
   if (!tanks.length) return toast('Ajoutez d’abord une cuve.', 'error');
+  const index = meterFields(meters);
+  index.show(tanks[0].id);
   const total = h('p', { class: 'hint-line full' });
   // Paid on the spot: out of the cash book. On credit: a debt to the supplier (supplier and amount required).
   const update = (e) => {
@@ -127,7 +146,8 @@ async function deliveryDialog(tanks, supplierNames, reload) {
     title: 'Enregistrer une livraison',
     intro: 'Le volume reçu (mesuré au déchargement) est ajouté au stock de la cuve.',
     fields: [
-      { name: 'tankId', label: 'Cuve', type: 'select', options: tankOptions(tanks), required: true, full: true },
+      { name: 'tankId', label: 'Cuve', type: 'select', options: tankOptions(tanks), required: true, full: true, onInput: (e) => index.show(e.target.value) },
+      { name: 'meters', type: 'node', node: index.host },
       { name: 'litersOrdered', label: 'Litres commandés (bon)', type: 'number', step: '0.01', min: '0', required: true },
       { name: 'litersReceived', label: 'Litres reçus (mesurés)', type: 'number', step: '0.01', min: '0', required: true, onInput: update },
       { name: 'supplier', label: 'Fournisseur', list: 'supplier-names' },
@@ -137,9 +157,16 @@ async function deliveryDialog(tanks, supplierNames, reload) {
       { name: 'payment', label: 'Paiement', type: 'segment', full: true, options: PAYMENTS, onInput: update },
       { name: 'total', type: 'node', node: total },
     ],
-    onSubmit: (d) => {
+    onSubmit: async (d, form) => {
       if (d.payment === 'credit' && !d.unitCost) throw new Error('Indiquez le prix d’achat : c’est ce que la station devra au fournisseur.');
-      return api.post('/deliveries', { ...d, tankId: Number(d.tankId) });
+      const body = { ...d, tankId: Number(d.tankId), meters: index.read(form) };
+      try {
+        return await api.post('/deliveries', body);
+      } catch (err) {
+        if (err.code !== 'over_capacity') throw err;
+        if (!(await confirmDialog('Dépasser la capacité ?', err.message, { confirmLabel: 'Enregistrer quand même', danger: true }))) throw new Error('Corrigez l’index ou les litres reçus.');
+        return api.post('/deliveries', { ...body, force: true });
+      }
     },
   });
   if (ok) {
@@ -168,25 +195,40 @@ async function deliveryPaymentDialog(d, supplierNames, reload) {
   }
 }
 
-// What the station owes its suppliers (deliveries on credit), and their payment.
+// The suppliers with their contacts, what the station owes them (deliveries on credit), and their payment.
+// Touching a row pays the supplier, or lets the admin change its record (name, phone, e-mail).
 function suppliersCard(sup, reload) {
-  const owing = sup.suppliers.filter((s) => s.owed > 0 || s.paid > 0);
-  if (!owing.length) return null;
-  const total = owing.reduce((t, s) => t + Math.max(0, s.balance), 0);
+  const list = sup.suppliers;
+  if (!list.length && !canAdmin()) return null;
+  const total = list.reduce((t, s) => t + Math.max(0, s.balance), 0);
+  const owing = list.filter((s) => s.balance > 0);
+  const contacts = (s) => [s.phone, s.email].filter(Boolean).join(' · ');
+  const touch = (s) => {
+    const actions = [
+      s.balance > 0 ? { label: `Payer ${s.name}`, onClick: () => supplierPaymentDialog(owing, s, reload) } : null,
+      canAdmin() && s.id ? { label: 'Modifier la fiche', onClick: () => supplierDialog(s, reload) } : null,
+    ].filter(Boolean);
+    if (actions.length === 1) actions[0].onClick();
+    else if (actions.length) actionSheet({ title: s.name, actions });
+  };
   return h(
     'section',
     { class: 'card flush section' },
-    cardHeader('Fournisseurs', total ? `${fmt.money(total)} à payer pour des livraisons à crédit` : 'Rien à payer', edit(button('Payer un fournisseur', () => supplierPaymentDialog(owing, null, reload), { variant: 'secondary sm', iconName: 'cash' }))),
+    cardHeader(
+      'Fournisseurs',
+      total ? `${fmt.money(total)} à payer pour des livraisons à crédit` : 'Rien à payer',
+      owing.length ? edit(button('Payer', () => supplierPaymentDialog(owing, null, reload), { variant: 'secondary sm', iconName: 'cash' })) : null,
+      adminEdit(button('Ajouter', () => supplierDialog(null, reload), { variant: 'secondary sm', iconName: 'plus' })),
+    ),
     table(
       [
-        { label: 'Fournisseur', render: (s) => h('strong', {}, s.name) },
+        { label: 'Fournisseur', wrap: true, render: (s) => [h('strong', {}, s.name), contacts(s) ? h('div', { class: 'muted small' }, contacts(s)) : null] },
         { label: 'Livré à crédit', align: 'right', render: (s) => fmt.money(s.owed) },
         { label: 'Payé', align: 'right', render: (s) => fmt.money(s.paid) },
         { label: 'Reste à payer', align: 'right', render: (s) => (s.balance > 0 ? h('strong', { class: 'variance-neg' }, fmt.money(s.balance)) : 'Soldé') },
-        { label: '', align: 'right', render: (s) => (s.balance > 0 && !flags.readonly ? button('Payer', () => supplierPaymentDialog(owing, s, reload), { variant: 'ghost sm' }) : null) },
       ],
-      owing,
-      {},
+      list,
+      { empty: 'Aucun fournisseur.', onRowClick: flags.readonly ? undefined : touch },
     ),
     sup.payments.length
       ? h(
@@ -206,6 +248,25 @@ function suppliersCard(sup, reload) {
         )
       : null,
   );
+}
+
+// The admin's record of a supplier: a new name follows on its deliveries and payments.
+async function supplierDialog(s, reload) {
+  const ok = await formDialog({
+    title: s ? `Modifier ${s.name}` : 'Nouveau fournisseur',
+    intro: s ? 'Le nouveau nom suit sur ses livraisons et ses paiements.' : null,
+    grid: false,
+    fields: [
+      { name: 'name', label: 'Nom', value: s?.name, required: true },
+      { name: 'phone', label: 'Téléphone', type: 'tel', value: s?.phone, inputmode: 'tel' },
+      { name: 'email', label: 'E-mail', type: 'email', value: s?.email, inputmode: 'email' },
+    ],
+    onSubmit: (d) => (s ? api.put(`/suppliers/${s.id}`, d) : api.post('/suppliers', d)),
+  });
+  if (ok) {
+    toast(s ? 'Fournisseur modifié.' : 'Fournisseur ajouté.');
+    reload();
+  }
 }
 
 async function supplierPaymentDialog(suppliers, s, reload) {
@@ -239,18 +300,21 @@ async function removeSupplierPayment(p, reload) {
   }
 }
 
-async function dipDialog(tanks, reload) {
+async function dipDialog(tanks, meters, reload) {
   if (!tanks.length) return toast('Ajoutez d’abord une cuve.', 'error');
+  const index = meterFields(meters);
+  index.show(tanks[0].id);
   const ok = await formDialog({
     title: 'Saisir un jaugeage',
     intro: 'Le volume mesuré est comparé au stock théorique, puis devient la nouvelle référence.',
     grid: false,
     fields: [
-      { name: 'tankId', label: 'Cuve', type: 'select', options: tankOptions(tanks), required: true },
+      { name: 'tankId', label: 'Cuve', type: 'select', options: tankOptions(tanks), required: true, onInput: (e) => index.show(e.target.value) },
+      { name: 'meters', type: 'node', node: index.host },
       { name: 'measured', label: 'Volume mesuré (litres)', type: 'number', step: '0.01', min: '0', required: true },
       { name: 'note', label: 'Note', type: 'textarea' },
     ],
-    onSubmit: (d) => api.post('/dips', { ...d, tankId: Number(d.tankId) }),
+    onSubmit: (d, form) => api.post('/dips', { ...d, tankId: Number(d.tankId), meters: index.read(form) }),
   });
   if (ok) {
     toast('Jaugeage enregistré.');
