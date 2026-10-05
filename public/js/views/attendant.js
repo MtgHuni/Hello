@@ -360,7 +360,7 @@ function requestQueue(shift, reload) {
             'div',
             { class: 'row', style: 'gap:6px' },
             r.payment === 'credit'
-              ? badge(owes ? `Crédit · doit déjà ${fmt.money(r.balance)}` : overLimit ? 'Crédit · dépasse le plafond' : 'Crédit', overLimit ? 'serious' : 'info')
+              ? badge(owes ? `Refusé · doit encore ${fmt.money(r.balance)}` : overLimit ? 'Crédit · dépasse le plafond' : 'Crédit', overLimit ? 'serious' : 'info')
               : r.payment === 'combo'
                 ? badge(`Avec ses combos (${r.loyalty_points})`, 'warning')
                 : null,
@@ -510,7 +510,7 @@ export async function addCredit(ctx, shift, reload) {
       // An individual: the balance only; an unpaid credit is shown as an alert.
       const owes = c.type !== 'account' && c.balance > 0;
       if (c.type === 'account') parts.push(c.late ? 'mois précédent impayé' : `crédit disponible ${fmt.money(Math.max(0, c.available ?? 0))}`);
-      else parts.push(owes ? `déjà un crédit non payé : ${fmt.money(c.balance)}` : c.balance < 0 ? `avance ${fmt.money(-c.balance)}` : 'solde 0,00 $');
+      else parts.push(owes ? `doit encore ${fmt.money(c.balance)} : pas de nouveau crédit avant paiement` : c.balance < 0 ? `avance ${fmt.money(-c.balance)}` : 'solde 0,00 $');
       who.textContent = parts.join(' · ');
       who.className = c.late || owes ? 'hint-line variance-neg' : 'hint-line';
       if (c.plate && !form.elements.plate.value) form.elements.plate.value = c.plate;

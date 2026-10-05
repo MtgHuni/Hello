@@ -66,8 +66,8 @@ function createSale(db, shift, input) {
       const dues = subscriber ? subscriberDues(db, customer.id, settings.subscriberGraceDays) : null;
       let problem = null;
       if (dues?.late) problem = `Abonné en retard : ${money(dues.overdue)} du mois précédent non payés.`;
-      // An individual takes a new credit only once the last one is paid (or the attendant grants it).
-      else if (!subscriber && balance > 0.001) problem = `${customer.name} a déjà un crédit non payé de ${money(balance)}.`;
+      // An individual takes a new credit only once the last one is paid: no one can grant it.
+      else if (!subscriber && balance > 0.001) fail(409, `${customer.name} a déjà un crédit non payé de ${money(balance)} : pas de nouveau crédit avant son paiement.`, 'has_credit');
       else if (!subscriber && amount > customer.credit_limit + 0.001) problem = `Plafond de crédit dépassé : achat de ${money(amount)}, plafond ${money(customer.credit_limit)}.`;
       else if (balance + amount > customer.credit_limit + 0.001) {
         problem = `Plafond de crédit dépassé : encours ${money(balance)}, plafond ${money(customer.credit_limit)}, disponible ${money(Math.max(0, customer.credit_limit - balance))}.`;

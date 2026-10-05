@@ -228,16 +228,10 @@ export function defaultPeriod() {
   return { from: isoDate(new Date(now.getFullYear(), now.getMonth(), 1)), to: todayISO() };
 }
 
-// The period's purchases (sales on credit or with combos).
-function purchasesKpi(movements) {
-  const sales = movements.filter((m) => m.type === 'sale');
-  const total = Math.round(sales.reduce((t, m) => t + m.amount, 0) * 100) / 100;
-  return kpi('Achats', fmt.money(total), sales.length ? `${sales.length} achat${sales.length > 1 ? 's' : ''} sur la période` : 'Aucun achat sur la période');
-}
-
 // Account statement shared with the client space: KPIs, period picker, movements, print.
 export function statement(acc, period, onPeriod, { onOldDebt } = {}) {
   const c = acc.customer;
+  const subscriber = c.type === 'account';
   const from = field({ name: 'from', label: 'Du', type: 'date', value: period.from });
   const to = field({ name: 'to', label: 'Au', type: 'date', value: period.to });
   const apply = () => onPeriod({ from: from.querySelector('input').value, to: to.querySelector('input').value });
@@ -268,7 +262,7 @@ export function statement(acc, period, onPeriod, { onOldDebt } = {}) {
       : null,
     h(
       'div',
-      { class: 'grid grid-4' },
+      { class: `grid ${subscriber ? 'grid-4' : 'grid-2'}` },
       kpi(
         c.balance < 0 ? 'Avance du client' : 'Solde dû',
         h('span', { class: c.balance > c.credit_limit ? 'variance-neg' : '' }, fmt.money(Math.abs(c.balance))),
@@ -277,9 +271,9 @@ export function statement(acc, period, onPeriod, { onOldDebt } = {}) {
           c.old_debt ? `dont ancienne dette ${fmt.money(c.old_debt)} au départ` : null,
         ].filter(Boolean).join(' · ') || TYPE_LABEL[c.type],
       ),
-      // An individual: balance and purchases; a subscriber: the credit left under the limit.
-      c.type === 'account' ? kpi('Crédit disponible', fmt.money(Math.max(0, c.credit_limit - c.balance)), TYPE_LABEL[c.type]) : purchasesKpi(acc.movements),
-      !flags.combos ? null : kpi(
+      // An individual: the balance and the purchases only; a subscriber also the credit left and the combos.
+      subscriber ? kpi('Crédit disponible', fmt.money(Math.max(0, c.credit_limit - c.balance)), TYPE_LABEL[c.type]) : null,
+      !flags.combos || !subscriber ? null : kpi(
         'Combos',
         fmt.number(combos.balance),
         combos.balance >= combos.threshold

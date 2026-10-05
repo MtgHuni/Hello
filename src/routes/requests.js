@@ -43,6 +43,10 @@ module.exports = function requestRoutes(db) {
     if (payment === 'credit' && customer.credit_limit <= 0) {
       fail(400, "Le crédit n'est pas ouvert sur votre compte. Adressez-vous au gérant.");
     }
+    if (payment === 'credit' && customer.type !== 'account') {
+      const owed = customerBalance(db, customer.id);
+      if (owed > 0.001) fail(409, `Vous avez déjà un crédit non payé de ${String(round(owed).toFixed(2)).replace('.', ',')} $ : réglez-le avant un nouvel achat à crédit.`, 'has_credit');
+    }
     const { comboThreshold, combosEnabled } = getSettings(db);
     if (payment === 'combo' && !combosEnabled) fail(400, 'Les combos sont désactivés.');
     if (payment === 'combo' && customer.loyalty_points < comboThreshold) {
