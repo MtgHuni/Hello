@@ -1,6 +1,6 @@
 const express = require('express');
 const { fail, num, str, oneOf, round, dateParam, transaction, money } = require('../util');
-const { requireRole } = require('../auth');
+const { requireRole, requireAdmin } = require('../auth');
 const { audit } = require('../audit');
 const { getSettings } = require('../db');
 const { ACCOUNTS, KINDS, cashbook, balances, supplierBalances } = require('../cashbook');
@@ -38,7 +38,7 @@ module.exports = function cashbookRoutes(db) {
   });
 
   // A movement entered by hand: owner's contribution or withdrawal, mobile money withdrawal…
-  router.post('/cashbook/movements', manager, (req, res) => {
+  router.post('/cashbook/movements', manager, requireAdmin, (req, res) => {
     const b = req.body || {};
     const kind = oneOf(b.kind, 'Le type de mouvement', Object.keys(KINDS).filter((k) => !KINDS[k].old));
     const account = oneOf(b.account || KINDS[kind].accounts[0], 'Le compte', KINDS[kind].accounts);
@@ -65,7 +65,7 @@ module.exports = function cashbookRoutes(db) {
     res.status(201).json({ id, balances: balances(db) });
   });
 
-  router.delete('/cashbook/movements/:id', manager, (req, res) => {
+  router.delete('/cashbook/movements/:id', manager, requireAdmin, (req, res) => {
     const m = db.prepare('SELECT * FROM cash_movements WHERE id = ?').get(req.params.id);
     if (!m) fail(404, 'Mouvement introuvable.');
     transaction(db, () => {
@@ -83,7 +83,7 @@ module.exports = function cashbookRoutes(db) {
   });
 
   // Counting the till: the money really there against the book.
-  router.post('/cashbook/counts', manager, (req, res) => {
+  router.post('/cashbook/counts', manager, requireAdmin, (req, res) => {
     const account = oneOf(req.body?.account || 'cash', 'Le compte', Object.keys(ACCOUNTS));
     const counted = round(num(req.body?.counted, 'Le montant compté', { max: 1e9 }));
     const note = str(req.body?.note, 'La remarque', { required: false, max: 200 });

@@ -84,6 +84,8 @@ function loadUser(db) {
     // The owner (actionnaire) reads what the manager reads: on a read request they pass as a
     // manager; any other request keeps the owner role, which no write route accepts.
     if (req.user?.role === 'owner') req.user = { ...req.user, owner: true, role: READS.has(req.method) ? 'manager' : 'owner' };
+    // The admin is a manager who may also change the settings and the cash book (requireAdmin).
+    if (req.user?.role === 'admin') req.user = { ...req.user, admin: true, role: 'manager' };
     next();
   };
 }
@@ -97,6 +99,13 @@ function requireRole(...roles) {
     }
     next();
   };
+}
+
+// The settings, the team and the cash book: changed by the admin only.
+function requireAdmin(req, res, next) {
+  if (!req.user) throw new HttpError(401, 'Veuillez vous connecter.');
+  if (!req.user.admin) throw new HttpError(403, 'Réservé à l’administrateur : les réglages et la caisse ne se modifient que par lui.', 'admin_only');
+  next();
 }
 
 // Simple in-memory brute-force protection for the login form.
@@ -131,5 +140,6 @@ module.exports = {
   endOtherSessions,
   loadUser,
   requireRole,
+  requireAdmin,
   loginLimiter,
 };

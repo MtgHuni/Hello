@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS users (
   name          TEXT NOT NULL,
   login         TEXT NOT NULL UNIQUE COLLATE NOCASE,
   password_hash TEXT NOT NULL,
-  role          TEXT NOT NULL CHECK (role IN ('manager', 'attendant', 'customer', 'owner')),
+  role          TEXT NOT NULL CHECK (role IN ('manager', 'attendant', 'customer', 'owner', 'admin')),
   customer_id   INTEGER UNIQUE REFERENCES customers(id),
   active        INTEGER NOT NULL DEFAULT 1,
   created_at    TEXT NOT NULL DEFAULT (datetime('now'))
@@ -394,7 +394,7 @@ const MIGRATIONS = [
 ];
 
 // Bumped with every schema change; recorded in PRAGMA user_version.
-const SCHEMA_VERSION = 16;
+const SCHEMA_VERSION = 17;
 
 function missingColumns(db) {
   return MIGRATIONS.filter(([table, column]) => {
@@ -519,15 +519,17 @@ function migrateSalesKind(db) {
   return true;
 }
 
-// Version 15 adds the owner role (actionnaire: reads everything, changes nothing): the users
-// table is rebuilt with the wider constraint, every row and column kept.
+// New roles: the owner (version 15, actionnaire: reads everything, changes nothing) and the
+// admin (version 17: the manager plus the settings and the cash book). The users table is
+// rebuilt with the wider constraint, every row and column kept.
+const ROLES_CHECK = "CHECK (role IN ('manager', 'attendant', 'customer', 'owner', 'admin'))";
 function migrateUserRoles(db) {
   const { sql } = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'users'").get();
-  if (sql.includes("'owner'")) return;
+  if (sql.includes("'admin'")) return;
   const count = () => db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
   const rowsBefore = count();
-  const create = sql.replace(/^CREATE TABLE "?users"?/, 'CREATE TABLE users_new').replace("'customer')", "'customer', 'owner')");
-  if (!create.includes("'owner'")) throw new Error('Migration des utilisateurs : contrainte de rôle introuvable.');
+  const create = sql.replace(/^CREATE TABLE "?users"?/, 'CREATE TABLE users_new').replace(/CHECK \(role IN \([^)]*\)\)/, ROLES_CHECK);
+  if (!create.includes("'admin'")) throw new Error('Migration des utilisateurs : contrainte de rôle introuvable.');
   db.exec('PRAGMA foreign_keys = OFF');
   db.exec('BEGIN');
   try {
@@ -584,6 +586,10 @@ function openDb(file) {
     // Credit sales only earn their combos once paid: recompute every balance.
     const { refreshCustomer } = require('./loyalty');
     for (const { id } of db.prepare('SELECT id FROM customers').all()) refreshCustomer(db, id);
+  }
+  if (version < 17 && !db.prepare("SELECT 1 FROM users WHERE role = 'admin'").get()) {
+    // Version 17: the account that set the station up (the first manager) becomes the admin.
+    db.exec("UPDATE users SET role = 'admin' WHERE id = (SELECT MIN(id) FROM users WHERE role = 'manager')");
   }
   if (version < 16) {
     // Version 16: a closing may come before the money is counted; every earlier closing was counted.

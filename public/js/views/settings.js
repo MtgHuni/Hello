@@ -1,4 +1,4 @@
-import { flags, edit } from '../ui.js';
+import { flags, edit, adminEdit, canAdmin } from '../ui.js';
 import { api } from '../api.js';
 import { h, fmt, pageHeader, card, cardHeader, table, badge, button, formDialog, openDialog, toast, productColor, setContent, buttonRow } from '../ui.js';
 import { icon } from '../icons.js';
@@ -29,7 +29,7 @@ export async function renderSettings(page, ctx) {
           'div',
           { class: 'card-header' },
           h('div', {}, h('h2', {}, 'Produits et prix'), h('p', {}, 'Un nouveau prix s’applique aux postes ouverts après le changement.')),
-          edit(button('Ajouter un produit', () => productDialog(null, reload), { variant: 'ghost', iconName: 'plus' })),
+          adminEdit(button('Ajouter un produit', () => productDialog(null, reload), { variant: 'ghost', iconName: 'plus' })),
         ),
         table(
           [
@@ -44,7 +44,7 @@ export async function renderSettings(page, ctx) {
             {
               label: '',
               align: 'right',
-              render: (p) => h('span', { class: 'btn-row inline', style: `--cols:${flags.readonly ? 1 : 2}` }, button('Historique', () => priceHistory(p), { variant: 'secondary sm' }), edit(button('Changer le prix', () => productDialog(p, reload), { variant: 'secondary sm' }))),
+              render: (p) => h('span', { class: 'btn-row inline', style: `--cols:${canAdmin() ? 2 : 1}` }, button('Historique', () => priceHistory(p), { variant: 'secondary sm' }), adminEdit(button('Changer le prix', () => productDialog(p, reload), { variant: 'secondary sm' }))),
             },
           ],
           products,
@@ -53,7 +53,7 @@ export async function renderSettings(page, ctx) {
 
       // ---- Meters: one pump, one meter per product ----
       card(
-        cardHeader('Compteurs', 'Un compteur par produit, relié à sa cuve.', pumps[0] ? edit(button('Ajouter un compteur', () => meterDialog(null, tankOptions, reload, pumps[0].id), { variant: 'ghost', iconName: 'plus' })) : null),
+        cardHeader('Compteurs', 'Un compteur par produit, relié à sa cuve.', pumps[0] ? adminEdit(button('Ajouter un compteur', () => meterDialog(null, tankOptions, reload, pumps[0].id), { variant: 'ghost', iconName: 'plus' })) : null),
         meters.length
           ? meters.map((n) =>
               h(
@@ -61,7 +61,7 @@ export async function renderSettings(page, ctx) {
                 { class: 'nozzle-row' },
                 h('span', { class: 'swatch', style: `background:${productColor(n.product_id)};width:12px;height:12px` }),
                 h('div', { class: 'grow' }, h('div', { style: 'font-weight:600' }, n.product_name, n.active ? '' : ' (inactif)'), h('div', { class: 'muted small' }, `${n.tank_name} · index ${fmt.number(n.meter)}`)),
-                edit(button('Modifier', () => meterDialog(n, tankOptions, reload), { variant: 'ghost sm' })),
+                adminEdit(button('Modifier', () => meterDialog(n, tankOptions, reload), { variant: 'ghost sm' })),
               ),
             )
           : h('div', { class: 'empty' }, 'Aucun compteur.'),
@@ -74,8 +74,8 @@ export async function renderSettings(page, ctx) {
         h(
           'div',
           { class: 'card-header' },
-          h('div', {}, h('h2', {}, 'Équipe'), h('p', {}, 'Gérants, pompistes et actionnaires. Les accès clients se créent depuis la fiche client.')),
-          edit(button('Ajouter un membre', () => userDialog(null, ctx, reload), { variant: 'ghost', iconName: 'plus' })),
+          h('div', {}, h('h2', {}, 'Équipe'), h('p', {}, 'Administrateur, gérants, pompistes et actionnaires. Les accès clients se créent depuis la fiche client.')),
+          adminEdit(button('Ajouter un membre', () => userDialog(null, ctx, reload), { variant: 'ghost', iconName: 'plus' })),
         ),
         table(
           [
@@ -83,7 +83,7 @@ export async function renderSettings(page, ctx) {
             { label: 'Identifiant', key: 'login' },
             { label: 'Rôle', render: (u) => ROLES[u.role] },
             { label: 'Statut', render: (u) => (u.active ? badge('Actif', 'good') : badge('Désactivé')) },
-            { label: '', align: 'right', render: (u) => edit(button('Modifier', () => userDialog(u, ctx, reload), { variant: 'secondary sm' })) },
+            { label: '', align: 'right', render: (u) => adminEdit(button('Modifier', () => userDialog(u, ctx, reload), { variant: 'secondary sm' })) },
           ],
           users,
         ),
@@ -91,7 +91,7 @@ export async function renderSettings(page, ctx) {
 
       // ---- Station ----
       card(
-        cardHeader('Station', 'Nom et seuils de contrôle', edit(button('Modifier', () => stationDialog(settings), { variant: 'ghost' }))),
+        cardHeader('Station', 'Nom et seuils de contrôle', adminEdit(button('Modifier', () => stationDialog(settings), { variant: 'ghost' }))),
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Nom'), h('span', {}, settings.stationName)),
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Tolérance d’écart de caisse'), h('span', {}, `± ${fmt.money(settings.cashTolerance)}`)),
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Tolérance d’écart de jaugeage'), h('span', {}, `± ${fmt.liters(settings.stockTolerance)}`)),
@@ -114,7 +114,7 @@ export async function renderSettings(page, ctx) {
 
       // ---- Customers & combos ----
       card(
-        cardHeader('Clients et combos', 'Plafonds de crédit par catégorie et programme de fidélité', edit(button('Modifier', () => customersDialog(settings, reload), { variant: 'ghost' }))),
+        cardHeader('Clients et combos', 'Plafonds de crédit par catégorie et programme de fidélité', adminEdit(button('Modifier', () => customersDialog(settings, reload), { variant: 'ghost' }))),
         h('h3', { style: 'margin:4px 0 2px' }, 'Particuliers'),
         line('Plafond de crédit', fmt.money(settings.individualCreditLimit)),
         h('h3', { style: 'margin:14px 0 2px' }, 'Abonnés'),
@@ -235,7 +235,7 @@ async function meterDialog(n, tankOptions, reload, pumpId) {
   }
 }
 
-const ROLES = { attendant: 'Pompiste', manager: 'Gérant', owner: 'Actionnaire' };
+const ROLES = { attendant: 'Pompiste', manager: 'Gérant', admin: 'Administrateur', owner: 'Actionnaire' };
 
 async function userDialog(u, ctx, reload) {
   const ok = await formDialog({
@@ -243,7 +243,7 @@ async function userDialog(u, ctx, reload) {
     fields: [
       { name: 'name', label: 'Nom', value: u?.name, required: true },
       ...(u ? [] : [{ name: 'login', label: 'Identifiant', required: true }]),
-      { name: 'role', label: 'Rôle', type: 'select', value: u?.role || 'attendant', options: Object.entries(ROLES), hint: 'L’actionnaire consulte tout, sans rien pouvoir modifier.' },
+      { name: 'role', label: 'Rôle', type: 'select', value: u?.role || 'attendant', options: Object.entries(ROLES), hint: 'L’administrateur seul modifie les réglages et la caisse ; l’actionnaire consulte sans rien modifier.' },
       { name: 'password', label: u ? 'Nouveau mot de passe' : 'Mot de passe', type: 'text', required: !u, hint: u ? 'Laisser vide pour ne pas changer' : '8 caractères minimum' },
       ...(u ? [{ name: 'active', label: 'Compte actif', type: 'checkbox', value: !!u.active, full: true }] : []),
     ],

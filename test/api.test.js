@@ -447,6 +447,22 @@ test('actionnaire : consulte tout, ne modifie rien', async () => {
   assert.strictEqual((await awa('POST', '/api/auth/password', { current: 'actionnaire1', password: 'actionnaire2' })).status, 200, 'son propre mot de passe');
 });
 
+test('administrateur : seul à modifier les réglages et la caisse ; le gérant les consulte', async () => {
+  assert.strictEqual((await gerant('GET', '/api/auth/me')).data.user.admin, true, 'le compte créé à l’installation est l’administrateur');
+  assert.strictEqual((await gerant('POST', '/api/users', { name: 'Chef', login: 'chef', password: 'gerant123', role: 'manager' })).status, 201);
+  const chef = client();
+  await chef('POST', '/api/auth/login', { login: 'chef', password: 'gerant123' });
+  for (const url of ['/api/settings', '/api/cashbook', '/api/users', '/api/products']) assert.strictEqual((await chef('GET', url)).status, 200, url);
+  const refused = await chef('PUT', '/api/settings', { stationName: 'Autre' });
+  assert.strictEqual(refused.status, 403);
+  assert.strictEqual(refused.data.code, 'admin_only');
+  assert.strictEqual((await chef('POST', '/api/cashbook/movements', { kind: 'apport', amount: 10 })).status, 403, 'la caisse');
+  assert.strictEqual((await chef('POST', '/api/cashbook/counts', { account: 'cash', counted: 10 })).status, 403);
+  assert.strictEqual((await chef('PUT', `/api/products/${ctx.diesel.id}`, { price: 9 })).status, 403, 'les prix');
+  assert.strictEqual((await chef('POST', '/api/users', { name: 'X', login: 'x', password: 'motdepasse9', role: 'manager' })).status, 403, 'l’équipe');
+  assert.strictEqual((await chef('GET', '/api/shifts')).status, 200, 'le reste du travail du gérant');
+});
+
 test('le gérant clôture à la place du pompiste (mobile money), puis corrige la clôture', async () => {
   const shift = (await gerant('GET', `/api/shifts/${ctx.shift.id}`)).data;
   const nozzle = dieselOf(shift);
@@ -939,6 +955,7 @@ test('migration : une base ancienne est convertie (loyalty → paid, combos)', (
   assert.strictEqual(migrated.prepare('PRAGMA user_version').get().user_version, SCHEMA_VERSION);
   assert.ok(migrated.prepare("SELECT sql FROM sqlite_master WHERE name = 'users'").get().sql.includes("'owner'"), 'version 15 : rôle actionnaire');
   assert.strictEqual(migrated.prepare('SELECT login FROM users').get().login, 'g', 'les comptes sont gardés');
+  assert.strictEqual(migrated.prepare('SELECT role FROM users').get().role, 'admin', 'version 17 : le premier gérant devient l’administrateur');
   const setting = (key) => migrated.prepare('SELECT value FROM settings WHERE key = ?').get(key)?.value;
   assert.strictEqual(setting('combos_enabled'), '0', 'version 6 : combos coupés');
   assert.strictEqual(setting('cdf_rate'), undefined, 'version 6 : tout en dollars');

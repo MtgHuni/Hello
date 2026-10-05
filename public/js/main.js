@@ -70,6 +70,7 @@ async function boot() {
     state.settings = me.settings;
     flags.combos = me.settings.combosEnabled !== false;
     flags.readonly = me.user.role === 'owner';
+    flags.admin = !!me.user.admin;
     document.title = me.settings.stationName;
     route();
   } catch (err) {
@@ -113,6 +114,8 @@ function accountMenu() {
 // ---------- Persistent shell: side rail on wide screens, top bar + bottom tabs on phones ----------
 
 const ROLE_LABEL = { manager: 'Gérant', attendant: 'Pompiste', customer: 'Client', owner: 'Actionnaire' };
+// The admin is a manager with the settings and the cash book.
+const roleLabel = () => (state.user.admin ? 'Administrateur' : ROLE_LABEL[state.user.role]);
 // On phones the tab bar keeps four destinations; the others sit behind « Plus ».
 const TAB_MAX = 4;
 
@@ -135,7 +138,7 @@ function buildShell() {
         'button',
         { class: 'side-foot', type: 'button', 'aria-label': 'Mon compte', onClick: accountMenu },
         h('span', { class: 'avatar' }, initials(state.user.name)),
-        h('span', { class: 'who' }, h('strong', {}, state.user.name), h('span', {}, ROLE_LABEL[role])),
+        h('span', { class: 'who' }, h('strong', {}, state.user.name), h('span', {}, roleLabel())),
         icon('more'),
       ),
       themeButton(),
@@ -207,7 +210,7 @@ function openNavDrawer() {
           'button',
           { class: 'side-foot', type: 'button', 'aria-label': 'Mon compte', onClick: () => (close(), accountMenu()) },
           h('span', { class: 'avatar' }, initials(state.user.name)),
-          h('span', { class: 'who' }, h('strong', {}, state.user.name), h('span', {}, ROLE_LABEL[state.user.role])),
+          h('span', { class: 'who' }, h('strong', {}, state.user.name), h('span', {}, roleLabel())),
           icon('more'),
         ),
       );

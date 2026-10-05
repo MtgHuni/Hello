@@ -2,7 +2,7 @@ const express = require('express');
 const { getSettings, syncCreditLimits } = require('../db');
 const { fail, num, str, bool, transaction } = require('../util');
 const { attendantNamesSql } = require('../checkpoints');
-const { requireRole } = require('../auth');
+const { requireRole, requireAdmin } = require('../auth');
 const { audit } = require('../audit');
 const { applyScheduledPrices } = require('../prices');
 
@@ -41,7 +41,7 @@ module.exports = function configRoutes(db) {
   router.get('/settings', requireRole(), (req, res) => res.json(getSettings(db)));
 
   // Partial update: only the fields sent are changed.
-  router.put('/settings', manager, (req, res) => {
+  router.put('/settings', manager, requireAdmin, (req, res) => {
     const b = req.body || {};
     const cur = getSettings(db);
     const pick = (value, fallback, label, opts) => (value === undefined ? fallback : num(value, label, opts));
@@ -93,7 +93,7 @@ module.exports = function configRoutes(db) {
     );
   });
 
-  router.post('/products', manager, (req, res) => {
+  router.post('/products', manager, requireAdmin, (req, res) => {
     const name = str(req.body?.name, 'Le nom du produit', { max: 50 });
     const price = num(req.body?.price, 'Le prix', { min: 0.001, max: 1000 });
     const subscriberPrice = num(req.body?.subscriberPrice, 'Le prix abonnés', { min: 0.001, max: 1000, required: false }) ?? price;
@@ -106,7 +106,7 @@ module.exports = function configRoutes(db) {
     res.status(201).json(db.prepare('SELECT * FROM products WHERE id = ?').get(id));
   });
 
-  router.put('/products/:id', manager, (req, res) => {
+  router.put('/products/:id', manager, requireAdmin, (req, res) => {
     const product = db.prepare('SELECT * FROM products WHERE id = ?').get(req.params.id);
     if (!product) fail(404, 'Produit introuvable.');
     const name = str(req.body?.name, 'Le nom du produit', { required: false, max: 50 }) ?? product.name;
@@ -249,13 +249,13 @@ module.exports = function configRoutes(db) {
 
   router.get('/pumps', requireRole('manager', 'attendant'), (req, res) => res.json(listPumps()));
 
-  router.post('/pumps', manager, (req, res) => {
+  router.post('/pumps', manager, requireAdmin, (req, res) => {
     const name = str(req.body?.name, 'Le nom de la pompe', { max: 50 });
     db.prepare('INSERT INTO pumps (name) VALUES (?)').run(name);
     res.status(201).json(listPumps());
   });
 
-  router.put('/pumps/:id', manager, (req, res) => {
+  router.put('/pumps/:id', manager, requireAdmin, (req, res) => {
     const pump = db.prepare('SELECT * FROM pumps WHERE id = ?').get(req.params.id);
     if (!pump) fail(404, 'Pompe introuvable.');
     const name = str(req.body?.name, 'Le nom de la pompe', { required: false, max: 50 }) ?? pump.name;
@@ -264,7 +264,7 @@ module.exports = function configRoutes(db) {
     res.json(listPumps());
   });
 
-  router.post('/pumps/:id/nozzles', manager, (req, res) => {
+  router.post('/pumps/:id/nozzles', manager, requireAdmin, (req, res) => {
     if (!db.prepare('SELECT 1 FROM pumps WHERE id = ?').get(req.params.id)) fail(404, 'Pompe introuvable.');
     const name = str(req.body?.name, 'Le nom du pistolet', { max: 50 });
     const tankId = num(req.body?.tankId, 'La cuve', { integer: true, min: 1 });
@@ -279,7 +279,7 @@ module.exports = function configRoutes(db) {
     res.status(201).json(listPumps());
   });
 
-  router.put('/nozzles/:id', manager, (req, res) => {
+  router.put('/nozzles/:id', manager, requireAdmin, (req, res) => {
     const nozzle = db.prepare('SELECT * FROM nozzles WHERE id = ?').get(req.params.id);
     if (!nozzle) fail(404, 'Compteur introuvable.');
     const name = str(req.body?.name, 'Le nom du pistolet', { required: false, max: 50 }) ?? nozzle.name;

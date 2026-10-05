@@ -8,7 +8,7 @@ const FALLBACK_PRICE = 1.4;
 // force = true : remplit toutes les cuves à `fill` de leur capacité et applique les prix de test.
 // force = false : ne complète que les cuves sous 50 %, et ne touche pas aux prix déjà modifiés.
 function seedTestData(db, { force = false, fill = 0.9 } = {}) {
-  const manager = db.prepare("SELECT id FROM users WHERE role = 'manager' ORDER BY id LIMIT 1").get();
+  const manager = db.prepare("SELECT id FROM users WHERE role IN ('admin', 'manager') ORDER BY id LIMIT 1").get();
   if (!manager) return { skipped: 'Station non configurée : créez d’abord le compte gérant.' };
   // Une station qui a déjà des postes travaille avec de vraies données : on n'y touche plus.
   if (!force && db.prepare('SELECT 1 FROM shifts LIMIT 1').get()) return { skipped: 'Des postes existent déjà : rien n’est ajouté.' };

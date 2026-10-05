@@ -17,15 +17,15 @@ module.exports = function authRoutes(db) {
   const router = express.Router();
   const limiter = loginLimiter();
   const ipLimiter = loginLimiter({ max: 50 }); // all logins from one address, whatever the account
-  // Only a manager account means the station is set up (a customer sign-up does not).
-  const managerCount = () => db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'manager'").get().n;
+  // Only a manager or admin account means the station is set up (a customer sign-up does not).
+  const managerCount = () => db.prepare("SELECT COUNT(*) AS n FROM users WHERE role IN ('manager', 'admin')").get().n;
 
   router.get('/setup', (req, res) => {
     const { stationName, combosEnabled } = getSettings(db);
     res.json({ needsSetup: managerCount() === 0, stationName, combosEnabled });
   });
 
-  // First launch: creates the manager account and a default station
+  // First launch: creates the admin account and a default station
   // (one diesel pump and one petrol pump, each fed by its own tank).
   router.post('/setup', async (req, res) => {
     const b = req.body || {};
@@ -41,7 +41,7 @@ module.exports = function authRoutes(db) {
       if (managerCount() > 0) fail(409, 'La station est déjà configurée.');
       db.prepare("UPDATE settings SET value = ? WHERE key = 'station_name'").run(stationName);
       const user = db
-        .prepare("INSERT INTO users (name, login, password_hash, role) VALUES (?, ?, ?, 'manager')")
+        .prepare("INSERT INTO users (name, login, password_hash, role) VALUES (?, ?, ?, 'admin')")
         .run(name, login, passwordHash);
       const id = Number(user.lastInsertRowid);
 

@@ -2,7 +2,7 @@ import { flags, edit } from '../ui.js';
 import { api } from '../api.js';
 import { shiftLine, h, fmt, pageHeader, card, cardHeader, table, segmented, shiftBadge, varianceCell, kpi, formDialog, confirmDialog, actionSheet, toast, button, badge, setContent, reportLink, buttonRow } from '../ui.js';
 import { icon } from '../icons.js';
-import { renderClosing, addCredit, addPayment, addMomo, addExpense, addTest } from './attendant.js';
+import { renderClosing } from './attendant.js';
 import { reportCard } from './relay.js';
 import { renderShiftStatus } from './shiftStatus.js';
 
@@ -103,7 +103,7 @@ export async function renderShiftDetail(page, ctx) {
       shift.status !== 'open' ? reportLink(shift.id) : null,
       isManager && shift.status === 'open' ? button('État du poste', () => ctx.navigate(`postes/${shift.id}/etat`), { variant: 'secondary', iconName: 'chart' }) : null,
       isManager && shift.status === 'open' ? edit(button('Clôturer le poste', closingBy('manager'), { variant: shift.closing_due ? '' : 'secondary', iconName: 'shifts' })) : null,
-      isManager && shift.status === 'closed' ? edit(button('Corriger la clôture', () => correctionMenu(ctx, shift, reload, closingBy('correct')), { variant: 'secondary', iconName: 'edit' })) : null,
+      isManager && shift.status === 'closed' ? edit(button('Corriger la clôture', closingBy('correct'), { variant: 'secondary', iconName: 'edit' })) : null,
     ),
     shiftLine(shift.status),
     remarkCard(shift, isManager),
@@ -121,22 +121,6 @@ export async function renderShiftDetail(page, ctx) {
     pumpTestsCard(shift, isManager, reload),
     shiftSummary(shift, ctx.state.settings.cashTolerance, isManager && !flags.readonly ? (kind, item) => operationMenu(ctx, shift, kind, item, reload) : null),
   );
-}
-
-// Correcting a closed shift: its indexes and money, or a forgotten operation (the shift is then
-// recomputed). An operation entered wrongly is corrected by touching it in its list.
-function correctionMenu(ctx, shift, reload, correctClosing) {
-  actionSheet({
-    title: `Corriger le poste n°${shift.id}. Pour modifier une opération mal saisie, touchez-la dans sa liste.`,
-    actions: [
-      { label: 'Index et argent de la clôture', onClick: correctClosing },
-      { label: 'Ajouter un crédit oublié', onClick: () => addCredit(ctx, shift, reload) },
-      { label: 'Ajouter un règlement oublié', onClick: () => addPayment(shift, reload) },
-      { label: 'Ajouter un mobile money oublié', onClick: () => addMomo(shift, reload) },
-      { label: 'Ajouter une dépense oubliée', onClick: () => addExpense(ctx, shift, reload) },
-      { label: 'Ajouter un test de pompe oublié', onClick: () => addTest(ctx, shift, reload) },
-    ],
-  });
 }
 
 // An operation the attendant entered wrongly: the manager corrects it or cancels it.
