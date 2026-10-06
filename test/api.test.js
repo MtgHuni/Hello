@@ -548,6 +548,9 @@ test('dépenses et rapport avec marge', async () => {
   assert.strictEqual(pdf.status, 200);
   assert.strictEqual(pdf.raw.subarray(0, 5).toString(), '%PDF-');
   assert.ok(pdf.raw.toString('latin1').includes('(\\311carts par pompiste)'));
+  // The cash book of the period: both accounts and every movement.
+  assert.ok(pdf.raw.toString('latin1').includes('(Mouvements de caisse)'));
+  assert.ok(pdf.raw.toString('latin1').includes('(Mobile money)'));
   assert.strictEqual((await pompiste('GET', `/api/reports/period.pdf?from=${today()}&to=${today()}`)).status, 403);
 
   const res = await fetch(`${baseUrl}/api/reports/sales?from=${today()}&to=${today()}&format=csv`);

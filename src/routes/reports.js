@@ -3,7 +3,7 @@ const { getSettings } = require('../db');
 const { round, dateParam, fail, csvCell, money, transaction } = require('../util');
 const { requireRole } = require('../auth');
 const { balanceSql, subscriberDues, creditAllocation } = require('../loyalty');
-const { balances, supplierBalances } = require('../cashbook');
+const { ACCOUNTS, balances, cashbook, supplierBalances } = require('../cashbook');
 const { attendantNamesSql, closingCutoff } = require('../checkpoints');
 const { periodReportPdf } = require('../periodReport');
 const { withLiveStock } = require('../liveStock');
@@ -418,7 +418,8 @@ module.exports = function reportRoutes(db) {
   router.get('/reports/period.pdf', manager, (req, res) => {
     const { from, to } = period(req);
     const settings = getSettings(db);
-    const pdf = periodReportPdf(salesReport(from, to), {
+    const report = { ...salesReport(from, to), cashbook: Object.keys(ACCOUNTS).map((account) => cashbook(db, { account, from, to })) };
+    const pdf = periodReportPdf(report, {
       stationName: settings.stationName,
       cashTolerance: settings.cashTolerance,
       combosEnabled: settings.combosEnabled,

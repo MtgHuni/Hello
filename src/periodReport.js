@@ -129,6 +129,39 @@ function periodReportPdf(r, { stationName, cashTolerance = 0, combosEnabled, now
     { empty: 'Aucune dépense sur la période.', totals: r.expensesByCategory.length ? [['Total', '', money(t.expenses)]] : [] },
   );
 
+  // ---- Cash book: both accounts over the period, and every movement ----
+  if (r.cashbook) {
+    report.section('Caisse');
+    report.table(
+      [
+        { label: 'COMPTE', width: 120 },
+        { label: 'AU DÉBUT', width: 100, align: 'right' },
+        { label: 'ENTRÉES', width: 100, align: 'right' },
+        { label: 'SORTIES', width: 100, align: 'right' },
+        { label: 'À LA FIN', align: 'right' },
+      ],
+      r.cashbook.map((b) => [b.accountLabel, money(b.opening), money(b.in), money(b.out), money(b.closing)]),
+    );
+    const moves = r.cashbook
+      .flatMap((b) => b.movements.map((m) => ({ ...m, accountLabel: b.accountLabel })))
+      .sort((a, b) => String(a.at).localeCompare(String(b.at)));
+    report.section('Mouvements de caisse');
+    report.table(
+      [
+        { label: 'DATE', width: 82 },
+        { label: 'COMPTE', width: 72 },
+        { label: 'LIBELLÉ', width: 220 },
+        { label: 'ENTRÉE', width: 70, align: 'right' },
+        { label: 'SORTIE', align: 'right' },
+      ],
+      moves.map((m) => [dateTime(m.at), m.accountLabel, m.label, m.in ? money(m.in) : '', m.out ? money(m.out) : '']),
+      {
+        empty: 'Aucun mouvement de caisse sur la période.',
+        totals: moves.length ? [['Total', '', '', money(round(moves.reduce((t, m) => t + (m.in || 0), 0))), money(round(moves.reduce((t, m) => t + (m.out || 0), 0)))]] : [],
+      },
+    );
+  }
+
   // ---- Daily sales (several days only) ----
   if (!single) {
     report.section('Ventes par jour');

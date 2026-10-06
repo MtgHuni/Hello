@@ -21,7 +21,7 @@ const KINDS = {
   momo: [
     ['autre_entree', 'Entrée'],
     ['autre_sortie', 'Sortie'],
-    ['retrait_momo', 'Vers la caisse'],
+    ['retrait_momo', 'Retrait'],
   ],
 };
 
@@ -100,7 +100,7 @@ export async function renderCashbook(page, ctx) {
       'div',
       { class: 'grid grid-2' },
       kpi('Espèces en caisse', fmt.money(cash.balance), countLine(cash)),
-      kpi('Mobile money', fmt.money(momo.balance), `${countLine(momo)} · entre en caisse au retrait`),
+      kpi('Mobile money', fmt.money(momo.balance), countLine(momo)),
     ),
     h(
       'div',
