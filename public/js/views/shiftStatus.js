@@ -5,9 +5,9 @@ import { icon } from '../icons.js';
 import { reportCard } from './relay.js';
 import { renderClosing } from './attendant.js';
 
-// The manager's view of the shift in progress: what was sold up to the last index reading,
-// credits, payments, expenses, the money passed at each relief, and, if the manager reads the
-// meters now, the sales and the money expected at this very moment.
+// The manager's view of the shift in progress, always from its opening indexes: what was sold up to
+// the last index reading, credits, payments, expenses, the money at each relief, and, if the manager
+// reads the meters now, the sales and the money expected at this very moment.
 export async function renderShiftStatus(page, ctx) {
   const shift = await api.get(`/shifts/${ctx.id}`);
   const tol = ctx.state.settings.cashTolerance;
@@ -16,7 +16,6 @@ export async function renderShiftStatus(page, ctx) {
   const last = cps.at(-1);
   const sum = (list, key) => list.reduce((t, x) => t + (x[key] || 0), 0);
   const credits = shift.sales.filter((s) => s.kind === 'credit');
-  const since = (list) => (last ? list.filter((x) => x.created_at > last.at) : list);
   const lastMeter = (r) => last?.nozzles.find((n) => n.nozzle_id === r.nozzle_id)?.to ?? r.start_meter;
   const open = shift.status === 'open';
 
@@ -30,7 +29,7 @@ export async function renderShiftStatus(page, ctx) {
       field({
         name: `m_${r.nozzle_id}`,
         label: r.product_name,
-        hint: `Dernier relevé : ${fmt.number(lastMeter(r))}`,
+        hint: `Ouverture : ${fmt.number(r.start_meter)}${last ? ` · dernier relevé : ${fmt.number(lastMeter(r))}` : ''}`,
         type: 'number',
         step: '0.01',
         min: String(lastMeter(r)),
@@ -41,7 +40,7 @@ export async function renderShiftStatus(page, ctx) {
             if (list.some((x) => x.meter === '')) return setContent(live);
             try {
               const r2 = await api.post(`/shifts/${shift.id}/checkpoints/preview`, { readings: list.map((x) => ({ nozzleId: x.nozzleId, meter: Number(x.meter) })) });
-              setContent(live, reportCard(r2, tol, { preview: true, title: 'En ce moment, depuis le dernier relevé' }));
+              setContent(live, reportCard(r2, tol, { preview: true, title: 'En ce moment, depuis l’ouverture' }));
             } catch (err) {
               setContent(live, h('p', { class: 'variance-neg' }, err.message));
             }
@@ -73,7 +72,7 @@ export async function renderShiftStatus(page, ctx) {
     h(
       'div',
       { class: 'grid grid-4' },
-      kpi('Ventes relevées', fmt.money(sum(cps, 'sold')), last ? `${fmt.liters(sum(cps, 'liters'))} jusqu’au relevé de ${fmt.time(last.at)}` : 'Aucun relevé depuis l’ouverture'),
+      kpi('Ventes relevées', fmt.money(last?.sold || 0), last ? `${fmt.liters(last.liters)} de l’ouverture au relevé de ${fmt.time(last.at)}` : 'Aucun relevé'),
       kpi('Crédits', fmt.money(shift.credit_amount), `${credits.length} crédit${credits.length > 1 ? 's' : ''}${shift.combo_amount ? ` · combos ${fmt.money(shift.combo_amount)}` : ''}`),
       kpi('Règlements reçus', fmt.money(shift.payments_amount), `${shift.payments.length} règlement${shift.payments.length > 1 ? 's' : ''}`),
       kpi('Dépenses', fmt.money(shift.expenses_amount), `${shift.expenses.length} dépense${shift.expenses.length > 1 ? 's' : ''}`),
@@ -85,14 +84,15 @@ export async function renderShiftStatus(page, ctx) {
         cardHeader('Argent', last ? `Au dernier relevé : ${last.label.toLowerCase()} de ${last.by || '—'}, ${fmt.dateTime(last.at)}` : 'Aucun relevé'),
         last
           ? [
-              h('div', { class: 'summary-line' }, h('span', {}, 'Argent remis à ce relevé'), h('span', { class: 'num' }, fmt.money(last.handed))),
-              h('div', { class: 'summary-line' }, h('span', {}, 'Écarts cumulés des relèves'), h('span', { class: 'num' }, fmt.signedMoney(Math.round(sum(cps, 'variance') * 100) / 100))),
+              h('div', { class: 'summary-line' }, h('span', {}, 'Attendu au relevé'), h('span', { class: 'num' }, fmt.money(last.expected))),
+              h('div', { class: 'summary-line' }, h('span', {}, 'Argent au relevé'), h('span', { class: 'num' }, fmt.money(last.handed))),
+              h('div', { class: 'summary-line' }, h('span', {}, 'Écart au relevé'), h('span', { class: `num ${Math.abs(last.variance) > tol ? 'variance-neg' : ''}` }, fmt.signedMoney(last.variance))),
             ]
           : null,
-        h('div', { class: 'summary-line' }, h('span', {}, `Crédits ${last ? 'depuis' : 'du poste'}`), h('span', { class: 'num' }, `− ${fmt.money(sum(since(credits), 'amount'))}`)),
-        h('div', { class: 'summary-line' }, h('span', {}, `Règlements ${last ? 'depuis' : 'du poste'}`), h('span', { class: 'num' }, `+ ${fmt.money(sum(since(shift.payments), 'amount'))}`)),
-        h('div', { class: 'summary-line' }, h('span', {}, `Dépenses ${last ? 'depuis' : 'du poste'}`), h('span', { class: 'num' }, `− ${fmt.money(sum(since(shift.expenses), 'amount'))}`)),
-        h('div', { class: 'summary-line' }, h('span', {}, 'Mobile money reçu (tout le poste)'), h('span', { class: 'num' }, fmt.money(shift.momo_total))),
+        h('div', { class: 'summary-line' }, h('span', {}, 'Crédits du poste'), h('span', { class: 'num' }, `− ${fmt.money(sum(credits, 'amount'))}`)),
+        h('div', { class: 'summary-line' }, h('span', {}, 'Règlements du poste'), h('span', { class: 'num' }, `+ ${fmt.money(sum(shift.payments, 'amount'))}`)),
+        h('div', { class: 'summary-line' }, h('span', {}, 'Dépenses du poste'), h('span', { class: 'num' }, `− ${fmt.money(sum(shift.expenses, 'amount'))}`)),
+        h('div', { class: 'summary-line' }, h('span', {}, 'Mobile money du poste'), h('span', { class: 'num' }, fmt.money(shift.momo_total))),
       ),
       open && !shift.station_closed_at ? card(cardHeader('Relever les index maintenant', null), meters) : null,
     ),

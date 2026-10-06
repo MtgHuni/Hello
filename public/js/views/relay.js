@@ -110,7 +110,7 @@ export function renderCheckpoint(page, ctx, shift, kind, { report } = {}) {
       if (list.some((x) => x.meter === '')) return setContent(preview);
       try {
         const r = await api.post(`/shifts/${shift.id}/checkpoints/preview`, { kind, readings: list.map((x) => ({ nozzleId: x.nozzleId, meter: Number(x.meter) })) });
-        setContent(preview, reportCard(r, tol, { preview: true, title: morning ? 'Pendant la nuit' : 'Votre période' }));
+        setContent(preview, reportCard(r, tol, { preview: true, title: 'Depuis l’ouverture du poste' }));
       } catch (err) {
         setContent(preview, h('p', { class: 'variance-neg' }, err.message));
       }
@@ -129,7 +129,7 @@ export function renderCheckpoint(page, ctx, shift, kind, { report } = {}) {
           field({
             name: `m_${r.nozzle_id}`,
             label: r.product_name,
-            hint: `Dernier relevé : ${fmt.number(lastMeter(r))}`,
+            hint: `Ouverture : ${fmt.number(r.start_meter)}${last ? ` · dernier relevé : ${fmt.number(lastMeter(r))}` : ''}`,
             type: 'number',
             step: '0.01',
             min: String(lastMeter(r)),

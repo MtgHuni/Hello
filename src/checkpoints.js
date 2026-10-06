@@ -1,8 +1,8 @@
 // Checkpoints inside a shift: a relief (relève: an attendant hands over to the next), the
 // evening closing (fermeture, 19 h: the shift stays open overnight) and the morning opening
-// (ouverture). Each records every nozzle's index and the money passed on. The period between
-// two checkpoints gets a mini report: litres and sales from the indexes, the operations entered,
-// and the money the attendant should have on them.
+// (ouverture). Each records every nozzle's index and the money passed on. Each gets a report
+// counted from the shift's opening (its start indexes): litres and sales from the indexes, the
+// operations entered, and the money that should be in the till at that moment.
 const { round } = require('./util');
 
 const attendantNamesSql = `(SELECT group_concat(name, ', ') FROM (SELECT u2.name FROM shift_attendants a JOIN users u2 ON u2.id = a.user_id
@@ -25,14 +25,11 @@ function listCheckpoints(db, shiftId) {
   return rows.map((c) => ({ ...c, at: c.created_at, meters: new Map(read.all(c.id).map((r) => [r.nozzle_id, r.meter])) }));
 }
 
-// The period that ends at `end` ({ at, meters: Map, cash, mobile_money, kind, user_name }),
-// starting at the previous checkpoint, or at the shift's opening (its start indexes, no money).
-function periodReport(db, shift, readings, previous, end) {
-  // The shift starts with the change left at the previous closing.
-  const from = previous || { at: shift.opened_at, meters: new Map(readings.map((r) => [r.nozzle_id, r.start_meter])), cash: shift.change_received || 0 };
-  // From the shift's opening, what was entered in its first second counts too.
-  const after = previous ? '>' : '>=';
-  const inPeriod = (table) => db.prepare(`SELECT * FROM ${table} WHERE shift_id = ? AND created_at ${after} ? AND created_at <= ? ORDER BY id`).all(shift.id, from.at, end.at);
+// From the shift's opening (its start indexes and the change it received) to `end`
+// ({ at, meters: Map, cash, mobile_money, kind, user_name }).
+function periodReport(db, shift, readings, end) {
+  const from = { at: shift.opened_at, meters: new Map(readings.map((r) => [r.nozzle_id, r.start_meter])), cash: shift.change_received || 0 };
+  const inPeriod = (table) => db.prepare(`SELECT * FROM ${table} WHERE shift_id = ? AND created_at >= ? AND created_at <= ? ORDER BY id`).all(shift.id, from.at, end.at);
 
   // Fuel drawn for an approved pump test went back into the tank: not sold.
   const tests = inPeriod('pump_tests').filter((t) => t.status === 'approved');
@@ -69,7 +66,7 @@ function periodReport(db, shift, readings, previous, end) {
     by: end.user_name || null,
     from_at: from.at,
     at: end.at,
-    from_kind: previous?.kind || 'opening',
+    from_kind: 'opening',
     nozzles,
     liters: round(nozzles.reduce((t, n) => t + n.liters, 0)),
     tested: round(nozzles.reduce((t, n) => t + n.tested, 0)),
@@ -95,18 +92,15 @@ function periodReport(db, shift, readings, previous, end) {
   };
 }
 
-// Every checkpoint of a shift with the report of the period it closes.
+// Every checkpoint of a shift with its report, from the shift's opening.
 function checkpointReports(db, shift, readings) {
-  const list = listCheckpoints(db, shift.id);
-  return list.map((c, i) => ({ id: c.id, ...periodReport(db, shift, readings, list[i - 1], c) }));
+  return listCheckpoints(db, shift.id).map((c) => ({ id: c.id, ...periodReport(db, shift, readings, c) }));
 }
 
-// The period still running (since the last checkpoint), with the indexes given now.
+// The shift so far (from its opening), with the indexes given now.
 function currentPeriod(db, shift, readings, meters, money = {}) {
-  const list = listCheckpoints(db, shift.id);
-  const last = list.at(-1);
   const at = db.prepare("SELECT datetime('now') AS t").get().t;
-  return periodReport(db, shift, readings, last || null, { kind: money.kind, at, meters, cash: money.cash, user_name: money.userName });
+  return periodReport(db, shift, readings, { kind: money.kind, at, meters, cash: money.cash, user_name: money.userName });
 }
 
 // The last daily closing time that has passed (UTC timestamp), e.g. today 15:30 after 15:30.

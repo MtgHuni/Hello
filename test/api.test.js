@@ -727,7 +727,11 @@ test('relève, fermeture du soir et ouverture du matin : le poste continue', asy
   const momo = (await bea('POST', `/api/shifts/${shift.id}/momo`, { productId: diesel.product_id, liters: 5 })).data.amount;
   const evening = await bea('POST', `/api/shifts/${shift.id}/checkpoints`, { kind: 'fermeture', readings: at(30), cash: Math.round((preview.expected + 10 * diesel.unit_price - momo) * 100) / 100 });
   assert.strictEqual(evening.status, 201);
-  assert.strictEqual(evening.data.report.received, preview.expected);
+  // Every report counts from the shift's opening: its indexes, the change it received, all its operations.
+  assert.strictEqual(evening.data.report.received, 0);
+  assert.strictEqual(evening.data.report.liters, 30, 'depuis l’ouverture du poste');
+  assert.strictEqual(evening.data.report.credits, 6);
+  assert.strictEqual(evening.data.report.nozzles.find((n) => n.nozzle_id === diesel.nozzle_id).from, diesel.start_meter);
   assert.strictEqual(evening.data.report.mobile_money, momo);
   assert.strictEqual(evening.data.report.expected_cash, evening.data.report.cash);
   assert.strictEqual(evening.data.report.variance, 0);
@@ -741,7 +745,7 @@ test('relève, fermeture du soir et ouverture du matin : le poste continue', asy
   assert.strictEqual(state.lastReport.kind, 'fermeture');
   const morning = await pompiste('POST', `/api/shifts/${shift.id}/checkpoints`, { kind: 'ouverture', readings: at(30), cash: evening.data.report.cash });
   assert.strictEqual(morning.status, 201);
-  assert.strictEqual(morning.data.report.liters, 0);
+  assert.strictEqual(morning.data.report.liters, 30, 'depuis l’ouverture du poste');
   assert.strictEqual(morning.data.report.variance, 0);
   assert.strictEqual(morning.data.shift.station_closed_at, null);
   assert.deepStrictEqual(morning.data.shift.on_duty, ['Paul']);
