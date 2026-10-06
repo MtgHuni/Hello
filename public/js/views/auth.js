@@ -10,9 +10,9 @@ function filmPanel() {
   if (still) return h('div', { class: 'auth-film' });
   const video = h(
     'video',
-    { class: 'auth-video', muted: true, playsinline: true, loop: true, preload: 'auto', poster: '/media/mtg-totem-poster.jpg', 'aria-hidden': 'true', tabindex: '-1' },
-    h('source', { src: '/media/mtg-totem.webm', type: 'video/webm' }),
-    h('source', { src: '/media/mtg-totem.mp4', type: 'video/mp4' }),
+    { class: 'auth-video', muted: true, playsinline: true, loop: true, preload: 'auto', poster: '/media/mtg-totem-poster.jpg?v=mtg', 'aria-hidden': 'true', tabindex: '-1' },
+    h('source', { src: '/media/mtg-totem.webm?v=mtg', type: 'video/webm' }),
+    h('source', { src: '/media/mtg-totem.mp4?v=mtg', type: 'video/mp4' }),
   );
   video.muted = true;
   // The poster is the panel's background: the video only fades in once it really plays,
