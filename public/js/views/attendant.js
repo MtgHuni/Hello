@@ -826,6 +826,9 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
   const payments = shift.payments_amount || 0;
   const expenses = shift.expenses_amount || 0;
   const combos = shift.combo_amount || 0;
+  // Cash book movements made in the till (an entry +, an exit −).
+  const moves = shift.movements || [];
+  const moved = shift.movements_amount || 0;
   // Mobile money is not counted: it is the total entered as it was paid.
   const momo = shift.momo_total || 0;
   // Change left at the previous closing: it is part of what is handed over.
@@ -863,7 +866,7 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
     // Subscribers' higher price is cashed on top of the pump price.
     const surcharge = shift.sales.reduce((t, x) => t + (x.amount - x.liters * (shift.readings.find((r) => r.nozzle_id === x.nozzle_id)?.unit_price ?? 0)), 0);
     total += surcharge;
-    const expected = received + total - credit - combos + payments - expenses;
+    const expected = received + total - credit - combos + payments - expenses + moved;
     const value = (name) => Number(form.elements[name]?.value) || 0;
     const declared = value('cash') + momo;
     lines.total.textContent = complete ? fmt.money(total) : '—';
@@ -916,6 +919,7 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
       combos ? h('div', { class: 'summary-line' }, h('span', {}, 'Échangé contre des combos'), h('span', { class: 'num' }, `− ${fmt.money(combos)}`)) : null,
       payments ? h('div', { class: 'summary-line' }, h('span', {}, 'Règlements reçus'), h('span', { class: 'num' }, `+ ${fmt.money(payments)}`)) : null,
       expenses ? h('div', { class: 'summary-line' }, h('span', {}, 'Dépenses payées'), h('span', { class: 'num' }, `− ${fmt.money(expenses)}`)) : null,
+      moves.map((m) => h('div', { class: 'summary-line' }, h('span', {}, m.signed > 0 ? `Entrée de la caisse · ${m.note || m.label}` : `Sortie de la caisse · ${m.note || m.label}`), h('span', { class: 'num' }, `${m.signed > 0 ? '+' : '−'} ${fmt.money(Math.abs(m.signed))}`))),
       h('div', { class: 'summary-line' }, h('span', {}, 'À remettre'), lines.expected),
       momo ? h('div', { class: 'summary-line' }, h('span', {}, 'Reçu en mobile money'), h('span', { class: 'num' }, `− ${fmt.money(momo)}`)) : null,
       showMoney

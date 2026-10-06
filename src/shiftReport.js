@@ -119,13 +119,14 @@ function shiftReportPdf(shift, { stationName, combosEnabled, cashTolerance = 0, 
   }
 
   // ---- Cash ----
-  report.section('Caisse', 'À remettre = monnaie reçue + ventes par les index − crédits − combos + règlements reçus − dépenses.');
+  report.section('Caisse', 'À remettre = monnaie reçue + ventes par les index − crédits − combos + règlements reçus − dépenses ± mouvements de la caisse.');
   if (shift.change_received) report.line('Monnaie reçue à l’ouverture (poste précédent)', money(shift.change_received));
   report.line('Ventes calculées par les index', money(shift.total_amount));
   report.line('− Ventes à crédit', money(shift.credit_amount));
   if (combosEnabled || shift.combo_amount) report.line('− Carburant échangé contre des combos', money(shift.combo_amount));
   report.line('+ Règlements de clients reçus', money(shift.payments_amount));
   report.line('− Dépenses payées par la caisse', money(shift.expenses_amount));
+  for (const m of shift.movements || []) report.line(`${m.signed < 0 ? '−' : '+'} ${m.label}`, money(Math.abs(m.signed)));
   report.line('À remettre', money(shift.expected_amount), { bold: true });
   if (!shift.counted_at) report.note('Argent pas encore compté par le gérant : l’écart sera calculé au comptage.', { bold: true, color: COLORS.BAD });
   else {

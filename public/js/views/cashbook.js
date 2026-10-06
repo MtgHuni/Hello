@@ -205,9 +205,10 @@ async function movementDialog(acc, reload) {
       { name: 'kind', label: 'Mouvement', type: 'segment', full: true, options: KINDS[acc], value: 'autre_entree' },
       { name: 'amount', label: 'Montant ($)', type: 'number', step: '0.01', min: '0.01', required: true },
       { name: 'note', label: 'Motif', required: true, placeholder: 'Ex. : apport du propriétaire, monnaie, bordereau n°…' },
-    ],
+      acc === 'cash' ? { name: 'toShift', label: 'Dans l’argent du poste en cours', type: 'checkbox', value: true, full: true } : null,
+    ].filter(Boolean),
     submitLabel: 'Enregistrer',
-    onSubmit: (d) => api.post('/cashbook/movements', { ...d, account: acc }),
+    onSubmit: (d) => api.post('/cashbook/movements', { ...d, account: acc, toShift: acc === 'cash' && !!d.toShift && d.kind !== 'retrait_momo' }),
   });
   if (ok) {
     toast('Mouvement enregistré.');

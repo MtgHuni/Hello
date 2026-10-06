@@ -46,19 +46,26 @@ module.exports = function cashbookRoutes(db) {
     const note = str(b.note, 'La remarque', { required: false, max: 200 });
     const date = kind === 'opening' ? dateParam(b.date, 'La date') : null;
     if (date && date > today()) fail(400, 'Le solde de départ ne peut pas être daté dans le futur.');
+    // Made in the open shift's till: counted in what the attendants hand over.
+    let shiftId = null;
+    if (b.toShift === true && account === 'cash' && kind !== 'opening' && KINDS[kind].sign !== 0) {
+      const open = db.prepare("SELECT id FROM shifts WHERE status = 'open' ORDER BY id DESC LIMIT 1").get();
+      if (!open) fail(409, 'Aucun poste ouvert.', 'no_open_shift');
+      shiftId = open.id;
+    }
     const id = transaction(db, () => {
       const r = db
         .prepare(
-          `INSERT INTO cash_movements (kind, account, amount, note, user_id, created_at)
-           VALUES (?, ?, ?, ?, ?, COALESCE(datetime(? || ' 00:00:00', 'utc'), datetime('now')))`,
+          `INSERT INTO cash_movements (kind, account, amount, note, user_id, shift_id, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, COALESCE(datetime(? || ' 00:00:00', 'utc'), datetime('now')))`,
         )
-        .run(kind, account, amount, note, req.user.id, date);
+        .run(kind, account, amount, note, req.user.id, shiftId, date);
       audit(db, req, {
         category: 'caisse',
         action: `cash_${kind}`,
         entity: 'cash_movements',
         id: Number(r.lastInsertRowid),
-        summary: `${KINDS[kind].label} (${ACCOUNTS[account]}) : ${money(amount)}${note ? `, ${note}` : ''}`,
+        summary: `${KINDS[kind].label} (${ACCOUNTS[account]}) : ${money(amount)}${note ? `, ${note}` : ''}${shiftId ? `, dans la caisse du poste n°${shiftId}` : ''}`,
       });
       return Number(r.lastInsertRowid);
     });
@@ -68,6 +75,8 @@ module.exports = function cashbookRoutes(db) {
   router.delete('/cashbook/movements/:id', manager, requireAdmin, (req, res) => {
     const m = db.prepare('SELECT * FROM cash_movements WHERE id = ?').get(req.params.id);
     if (!m) fail(404, 'Mouvement introuvable.');
+    const shift = m.shift_id && db.prepare('SELECT status FROM shifts WHERE id = ?').get(m.shift_id);
+    if (shift && shift.status !== 'open') fail(409, `Le poste n°${m.shift_id} est clôturé : ce mouvement fait partie de son rapprochement.`, 'shift_closed');
     transaction(db, () => {
       db.prepare('DELETE FROM cash_movements WHERE id = ?').run(m.id);
       audit(db, req, {

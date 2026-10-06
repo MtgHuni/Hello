@@ -1032,6 +1032,31 @@ test('livraison payée avec l’argent du poste : une dépense du poste ouvert',
   assert.deepStrictEqual((await gerant('GET', '/api/auth/me')).data.settings.supplierNames.includes('Engen RDC'), true);
 });
 
+test('une entrée de la caisse dans l’argent du poste compte dans ce qu’il remet', async () => {
+  let shift = (await gerant('GET', '/api/shifts/current')).data;
+  const cashBalance = async () => (await gerant('GET', '/api/cashbook')).data.balances.cash.balance;
+  const before = await cashBalance();
+  const entry = await gerant('POST', '/api/cashbook/movements', { kind: 'autre_entree', account: 'cash', amount: 50, note: 'Monnaie', toShift: true });
+  assert.strictEqual(entry.status, 201);
+  await gerant('POST', '/api/cashbook/movements', { kind: 'autre_sortie', account: 'cash', amount: 20, note: 'Course', toShift: true });
+  await gerant('POST', '/api/cashbook/movements', { kind: 'autre_entree', account: 'cash', amount: 5, note: 'Coffre' });
+  shift = (await gerant('GET', `/api/shifts/${shift.id}`)).data;
+  assert.deepStrictEqual([shift.movements.length, shift.movements_amount], [2, 30]);
+
+  const closing = await closeShift(shift, {});
+  assert.strictEqual(closing.status, 200, JSON.stringify(closing.data));
+  let closed = (await gerant('GET', `/api/shifts/${shift.id}`)).data;
+  const base = round2(closed.change_received + closed.total_amount - closed.credit_amount - closed.combo_amount + closed.payments_amount - closed.expenses_amount);
+  assert.strictEqual(closed.expected_amount, round2(base + 30), 'entrée + 50, sortie − 20');
+  const cash = Math.max(0, round2(closed.expected_amount - closed.mobile_money));
+  assert.strictEqual((await gerant('POST', `/api/shifts/${shift.id}/count`, { cash, changeLeft: 0 })).status, 200);
+  closed = (await gerant('GET', `/api/shifts/${shift.id}`)).data;
+  assert.strictEqual(closed.variance, round2(cash + closed.mobile_money - closed.expected_amount));
+  // The book: the movements at their time, then the shift brings in the rest (no double count).
+  assert.strictEqual(await cashBalance(), round2(before + 5 + cash + closed.expenses_amount));
+  assert.strictEqual((await gerant('DELETE', `/api/cashbook/movements/${entry.data.id}`)).data.code, 'shift_closed');
+});
+
 test('alertes : chacun masque une alerte ou coupe un type, pour lui seul', async () => {
   const dash = (await gerant('GET', '/api/dashboard')).data;
   const first = dash.alerts[0];

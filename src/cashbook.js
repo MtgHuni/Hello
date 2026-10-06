@@ -3,7 +3,7 @@
 // already records (closed shifts, payments and expenses outside a shift, deliveries paid on
 // the spot, supplier payments); the manager adds the rest by hand (cash_movements).
 const { round, money, fail } = require('./util');
-const { attendantNamesSql } = require('./checkpoints');
+const { attendantNamesSql, shiftMovements, movementsTotal } = require('./checkpoints');
 
 const ACCOUNTS = { cash: 'Espèces', momo: 'Mobile money' };
 // Payment methods that move one of the two balances.
@@ -44,8 +44,9 @@ function allEntries(db) {
     // The cash handed over (the change left with the attendants stays with them), plus what was
     // spent from it during the shift: those expenses go out on their own lines.
     const paidIn = s.cash;
-    const detail = [s.counted_at ? null : 'argent à compter', s.change_left ? `monnaie laissée aux pompistes ${money(s.change_left)}` : null, s.spent ? `avec les dépenses du poste (${money(s.spent)})` : null].filter(Boolean).join(', ');
-    push({ ...base, account: 'cash', in: round(paidIn + s.spent), label: `Clôture du poste n°${s.id} (${s.attendant})${detail ? ` : ${detail}` : ''}` });
+    const moved = movementsTotal(shiftMovements(db, s.id));
+    const detail = [s.counted_at ? null : 'argent à compter', s.change_left ? `monnaie laissée aux pompistes ${money(s.change_left)}` : null, s.spent ? `avec les dépenses du poste (${money(s.spent)})` : null, moved ? `sans les mouvements de caisse déjà comptés (${money(moved)})` : null].filter(Boolean).join(', ');
+    push({ ...base, account: 'cash', in: round(paidIn + s.spent - moved), label: `Clôture du poste n°${s.id} (${s.attendant})${detail ? ` : ${detail}` : ''}` });
     push({ ...base, account: 'momo', in: s.mobile_money, label: `Mobile money du poste n°${s.id} (${s.attendant})` });
   }
 
@@ -95,10 +96,10 @@ function allEntries(db) {
     push({ at: p.at, day: p.day, account: ACCOUNT_OF_METHOD[p.method], out: p.amount, label: `Paiement au fournisseur ${p.supplier}${p.reference ? ` (${p.reference})` : ''}`, source: 'supplier_payment', id: p.id, link: '#/cuves' });
   }
 
-  for (const m of db.prepare("SELECT id, created_at AS at, date(created_at, 'localtime') AS day, kind, account, amount, note FROM cash_movements").all()) {
+  for (const m of db.prepare("SELECT id, created_at AS at, date(created_at, 'localtime') AS day, kind, account, amount, note, shift_id FROM cash_movements").all()) {
     const kind = KINDS[m.kind];
     if (!kind) continue;
-    const label = `${kind.label}${m.note ? ` : ${m.note}` : ''}`;
+    const label = `${kind.label}${m.note ? ` : ${m.note}` : ''}${m.shift_id ? ` (caisse du poste n°${m.shift_id})` : ''}`;
     const base = { at: m.at, day: m.day, source: 'movement', id: m.id, kind: m.kind };
     if (m.kind === 'retrait_momo') {
       push({ ...base, account: 'momo', out: m.amount, label });

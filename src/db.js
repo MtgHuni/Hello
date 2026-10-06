@@ -500,10 +500,12 @@ const MIGRATIONS = [
   ['customers', 'email_verified_at', 'TEXT'],
   // A delivery paid with the open shift's money: its expense on that shift (version 23).
   ['deliveries', 'expense_id', 'INTEGER REFERENCES expenses(id)'],
+  // A cash book entry or exit made in the open shift's till: part of what it hands over (version 24).
+  ['cash_movements', 'shift_id', 'INTEGER REFERENCES shifts(id)'],
 ];
 
 // Bumped with every schema change; recorded in PRAGMA user_version.
-const SCHEMA_VERSION = 23;
+const SCHEMA_VERSION = 24;
 
 function missingColumns(db) {
   return MIGRATIONS.filter(([table, column]) => {

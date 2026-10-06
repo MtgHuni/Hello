@@ -1118,6 +1118,7 @@ dialog.action-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; 
 .pump-option:has(input:checked) { border-color: var(--sign-yellow); box-shadow: inset 0 0 0 1px var(--sign-yellow); background: color-mix(in oklab, var(--sign-yellow) var(--sign-tint), var(--surface)); }
 .pump-option.disabled { opacity: 0.45; cursor: default; }
 .summary-line { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; font-size: 17px; font-variant-numeric: tabular-nums; }
+.summary-line .num { white-space: nowrap; }
 .summary-line.total { border-top: 1px solid var(--separator); margin-top: 4px; padding-top: 14px; font-weight: 600; }
 .big-result { text-align: center; padding: 10px 0 4px; }
 .big-result .value { font-family: var(--font-display); font-size: 56px; font-weight: 600; letter-spacing: -0.005em; font-variant-numeric: tabular-nums; animation: fade-up 0.6s var(--ease) both; }

@@ -13,7 +13,7 @@ const { refreshCustomer } = require('../loyalty');
 const { shiftReportPdf } = require('../shiftReport');
 const { applyScheduledPrices } = require('../prices');
 const { audit } = require('../audit');
-const { momoTotal, closingCutoff, attendantNamesSql, checkpointReports, currentPeriod, lastMeters } = require('../checkpoints');
+const { momoTotal, closingCutoff, attendantNamesSql, checkpointReports, currentPeriod, lastMeters, shiftMovements, movementsTotal } = require('../checkpoints');
 
 const staff = requireRole('manager', 'attendant');
 
@@ -73,6 +73,8 @@ module.exports = function shiftRoutes(db) {
       )
       .all(id);
     shift.momo_total = momoTotal(db, id);
+    shift.movements = shiftMovements(db, id);
+    shift.movements_amount = movementsTotal(shift.movements);
     shift.liters_by_product = litersByProduct([id]).get(Number(id)) || [];
     shift.pending_cancellations = pendingCancellations(id);
     shift.attendants = db
@@ -705,8 +707,10 @@ module.exports = function shiftRoutes(db) {
     const paymentsAmount = round(db.prepare('SELECT COALESCE(SUM(amount), 0) AS v FROM payments WHERE shift_id = ?').get(shiftId).v);
     const expensesAmount = round(db.prepare('SELECT COALESCE(SUM(amount), 0) AS v FROM expenses WHERE shift_id = ?').get(shiftId).v);
     // To hand over = change received at the opening + fuel sold − sold on credit − exchanged for
-    //               combos + account payments received − expenses paid from the till.
-    const expected = round((shift.change_received || 0) + totalAmount - creditAmount - comboAmount + paymentsAmount - expensesAmount);
+    //               combos + account payments received − expenses paid from the till
+    //               ± cash book movements made in the till.
+    const moved = movementsTotal(shiftMovements(db, shiftId));
+    const expected = round((shift.change_received || 0) + totalAmount - creditAmount - comboAmount + paymentsAmount - expensesAmount + moved);
     // Mobile money is not counted: it is the total of what was entered as paid by mobile money.
     const mobileMoney = momoTotal(db, shiftId);
     db.prepare(
