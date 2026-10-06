@@ -11,8 +11,8 @@ function stationPhone(phone) {
   if (!phone) return null;
   const tel = phone.replace(/[^\d+]/g, '');
   const wa = whatsappNumber(phone);
-  const link = (label, href, iconName, external) =>
-    h('a', { href, 'aria-label': label, title: label, ...(external ? { target: '_blank', rel: 'noopener' } : {}) }, icon(iconName));
+  const link = (label, href, glyph, external) =>
+    h('a', { href, 'aria-label': label, title: label, ...(external ? { target: '_blank', rel: 'noopener' } : {}) }, glyph);
   return h(
     'footer',
     { class: 'client-contact' },
@@ -20,9 +20,10 @@ function stationPhone(phone) {
     h(
       'div',
       { class: 'client-contact-links' },
-      link('SMS', `sms:${tel}`, 'message'),
-      wa ? link('WhatsApp', `https://wa.me/${wa}`, 'whatsapp', true) : null,
-      link('Appeler', `tel:${tel}`, 'phone'),
+      link('SMS', `sms:${tel}`, icon('message')),
+      // The WhatsApp logo itself (public/media/whatsapp.png, used as a mask so it takes the text colour).
+      wa ? link('WhatsApp', `https://wa.me/${wa}`, h('span', { class: 'logo-whatsapp', 'aria-hidden': 'true' }), true) : null,
+      link('Appeler', `tel:${tel}`, icon('phone')),
     ),
   );
 }

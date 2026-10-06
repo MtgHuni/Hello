@@ -996,6 +996,7 @@ dialog.action-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; 
 .client-contact-links a { display: inline-grid; place-items: center; width: 44px; height: 44px; color: var(--text-2); transition: color 0.15s; }
 .client-contact-links a:hover, .client-contact-links a:focus-visible { color: var(--text); }
 .client-contact-links svg { width: 24px; height: 24px; }
+.logo-whatsapp { display: block; width: 24px; height: 24px; background: currentColor; -webkit-mask: url(/media/whatsapp.png) center / contain no-repeat; mask: url(/media/whatsapp.png) center / contain no-repeat; }
 /* A card with a title and its one action (« Saisir le solde de départ », « Compter l’argent »…):
    on a phone the action goes under the title, the full width of the card, like every grouped button. */
 @media (max-width: 640px) {
