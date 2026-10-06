@@ -68,6 +68,7 @@
   --focus: #ffc414;
   --brand: #ffc414;
   --mtg-blue: #1e9bf0; /* the blue of the MTG logo */
+  --mtg-blue-ink: #1e9bf0;
 
   /* Signs: each action and each header is lit in its own colour (solid, and ink on a tint). */
   --sign-yellow: #ffc414;
@@ -171,6 +172,7 @@
   --focus: #a87300;
   --brand: #e0a800;
   --mtg-blue: #0b84d6;
+  --mtg-blue-ink: #0a6fb5; /* white text and links on paper */
   --sign-yellow: #f5b800;
   --sign-yellow-hover: #ffc414;
   --sign-yellow-press: #d9a200;
@@ -434,11 +436,11 @@ dialog.nav-dialog { inset: 0; margin: 0; width: 100vw; max-width: 100vw; height:
   align-items: center;
   gap: 2px;
   margin: 28px 0 -28px -4px;
-  color: var(--text-2);
+  color: var(--mtg-blue-ink);
   font-size: 15px;
-  font-weight: 500;
+  font-weight: 600;
 }
-.back:hover { color: var(--text); text-decoration: none; }
+.back:hover { color: color-mix(in oklab, var(--mtg-blue-ink) 80%, var(--text)); text-decoration: none; }
 .back svg { width: 18px; height: 18px; stroke-width: 2.2; }
 
 /* ---------- Panels ---------- */
@@ -677,10 +679,10 @@ tfoot td { font-weight: 600; border-top: 1px solid var(--separator); border-bott
 /* The main action is yellow; the others take turns sky, violet, orange, so no two neighbours
    look the same; a destructive one is red. Only the colour changes, never the build. */
 .btn {
-  --hue: var(--sign-yellow);
-  --hue-ink: var(--sign-yellow-ink);
+  --hue: var(--text);
+  --hue-ink: var(--text);
   --solid: var(--hue);
-  --on-solid: var(--on-sign);
+  --on-solid: var(--bg);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -709,10 +711,17 @@ tfoot td { font-weight: 600; border-top: 1px solid var(--separator); border-bott
 .btn.secondary:nth-child(3n + 3 of .btn.secondary) { --hue: var(--sign-orange); --hue-ink: var(--sign-orange-ink); }
 .btn.ghost { padding-left: 12px; padding-right: 12px; }
 .btn.danger, .btn.destructive { --hue: var(--red); --hue-ink: var(--bad-text); }
+.btn:not(.secondary, .ghost, .danger, .destructive, .cancel, .return):hover { background: color-mix(in oklab, var(--solid) 84%, var(--bg)); }
+/* Annuler / Fermer: the ground itself, outlined; a destructive cancel stays red. */
+.btn.cancel { --solid: var(--surface); --on-solid: var(--text); border-color: color-mix(in oklab, var(--text) 22%, transparent); }
+.btn.cancel:hover { background: var(--fill-3); }
+/* Retour: the blue of the MTG logo. */
+.btn.return { --hue: var(--mtg-blue); --hue-ink: var(--mtg-blue-ink); --on-solid: var(--on-sign); }
 /* Day: deep fills with white ink (the yellow keeps its dark ink). */
 /* Day: every sign writes in white, the yellow ones too (user's choice). */
 :root[data-theme='light'] :is(.btn, .card.remark-card) { --on-solid: #fff; }
-:root[data-theme='light'] :is(.btn.secondary, .btn.ghost, .btn.danger, .btn.destructive, .card:not(.remark-card)) { --solid: var(--hue-ink); --on-solid: #fff; }
+:root[data-theme='light'] :is(.btn.secondary, .btn.ghost, .btn.danger, .btn.destructive, .btn.return, .card:not(.remark-card)) { --solid: var(--hue-ink); --on-solid: #fff; }
+:root[data-theme='light'] .btn.cancel { --solid: var(--surface); --on-solid: var(--text); }
 :root[data-theme='light'] .card-header .btn:is(.secondary, .ghost) { --solid: var(--surface); --on-solid: var(--text); }
 .more-link { display: inline-flex; align-items: center; gap: 2px; font-size: 15px; font-weight: 600; white-space: nowrap; }
 .more-link svg { width: 16px; height: 16px; stroke-width: 2.2; margin-top: 1px; }
@@ -1083,10 +1092,10 @@ dialog.action-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; 
 .auth-card .lead { color: var(--text-2); font-size: 17px; line-height: 1.45; margin: 12px 0 32px; }
 .auth-card.wide { width: min(620px, 100%); }
 /* Sign-in screens: the action in porcelain (ink in day mode), beside the film's lit panels. */
-.auth-card .btn:not(.secondary, .ghost) { --solid: var(--text); --on-solid: var(--bg); }
 .auth-card { --focus: var(--text); --accent: var(--text); }
 .auth-footer { margin-top: 24px; color: var(--text-2); font-size: 15px; }
 .auth-forgot { align-self: flex-end; min-height: 44px; display: inline-flex; align-items: center; margin: -6px 0 -4px; color: var(--text-2); font-size: 15px; font-weight: 600; text-decoration: underline; text-underline-offset: 0.18em; }
+.auth-footer a.back-link { color: var(--mtg-blue-ink); }
 .auth-footer a { font-weight: 600; text-decoration: underline; text-underline-offset: 0.18em; }
 
 /* ---------- Attendant ---------- */

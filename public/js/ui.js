@@ -633,7 +633,7 @@ export function confirmDialog(title, text, { confirmLabel = 'Confirmer', danger 
           h(
             'div',
             { class: 'alert-actions' },
-            button('Annuler', () => { close(); resolve(false); }, { variant: 'secondary' }),
+            button('Annuler', () => { close(); resolve(false); }, { variant: 'cancel' }),
             button(confirmLabel, () => { close(); resolve(true); }, { variant: danger ? 'destructive' : '' }),
           ),
         ),

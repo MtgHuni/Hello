@@ -928,7 +928,7 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
     h(
       'div',
       { class: 'grid grid-2' },
-      button('Retour', () => (onBack ? onBack() : renderAttendant(page, ctx)), { variant: 'large secondary' }),
+      button('Retour', () => (onBack ? onBack() : renderAttendant(page, ctx)), { variant: 'large return' }),
       button(correcting ? 'Corriger la clôture' : counting ? 'Enregistrer le comptage' : 'Clôturer le poste', null, { variant: 'large', type: 'submit' }),
     ),
   ].filter(Boolean));

@@ -61,7 +61,7 @@ function authMessage({ title, lead, action }) {
 }
 
 const backToLogin = (root, stationName, onDone, label = 'Retour à la connexion') =>
-  h('a', { href: '#', onClick: (e) => (e.preventDefault(), history.replaceState(null, '', '/'), renderLogin(root, stationName, onDone)) }, label);
+  h('a', { href: '#', class: 'back-link', onClick: (e) => (e.preventDefault(), history.replaceState(null, '', '/'), renderLogin(root, stationName, onDone)) }, label);
 
 // « Mot de passe oublié » : a link by mail, to the account's confirmed address.
 export function renderForgot(root, stationName, onDone) {

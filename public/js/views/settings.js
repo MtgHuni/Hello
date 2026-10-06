@@ -192,7 +192,7 @@ function mailLog(rows) {
             ),
           )
         : h('div', { class: 'empty' }, 'Aucun mail pour l’instant.'),
-      h('div', { class: 'dialog-actions' }, button('Fermer', close, { variant: 'secondary' })),
+      h('div', { class: 'dialog-actions' }, button('Fermer', close, { variant: 'cancel' })),
     ),
   );
 }
@@ -274,7 +274,7 @@ async function priceHistory(p) {
         ],
         rows,
       ),
-      h('div', { class: 'dialog-actions' }, button('Fermer', close, { variant: 'secondary' })),
+      h('div', { class: 'dialog-actions' }, button('Fermer', close, { variant: 'cancel' })),
     ),
   );
 }

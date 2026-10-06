@@ -152,7 +152,7 @@ export function renderCheckpoint(page, ctx, shift, kind, { report } = {}) {
     h(
       'div',
       { class: 'grid grid-2' },
-      morning ? h('span') : button('Retour', () => renderAttendant(page, ctx), { variant: 'large secondary' }),
+      morning ? h('span') : button('Retour', () => renderAttendant(page, ctx), { variant: 'large return' }),
       button(k.submit, null, { variant: 'large', type: 'submit' }),
     ),
   ];
