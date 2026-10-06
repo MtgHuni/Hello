@@ -308,6 +308,13 @@ CREATE TABLE IF NOT EXISTS shift_tank_stock (
   stock_after REAL NOT NULL,
   PRIMARY KEY (shift_id, tank_id)
 );
+-- Relief reports each attendant has seen: the others get the report on their phone, even on duty.
+CREATE TABLE IF NOT EXISTS checkpoint_seen (
+  checkpoint_id INTEGER NOT NULL REFERENCES shift_checkpoints(id),
+  user_id       INTEGER NOT NULL REFERENCES users(id),
+  seen_at       TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (checkpoint_id, user_id)
+);
 -- The dashboard's alerts as each user wants them (src/alerts.js): types switched off, alerts hidden
 -- until their text changes.
 CREATE TABLE IF NOT EXISTS alert_prefs (
@@ -427,7 +434,7 @@ const MIGRATIONS = [
 ];
 
 // Bumped with every schema change; recorded in PRAGMA user_version.
-const SCHEMA_VERSION = 19;
+const SCHEMA_VERSION = 20;
 
 function missingColumns(db) {
   return MIGRATIONS.filter(([table, column]) => {
@@ -619,6 +626,11 @@ function openDb(file) {
     // Credit sales only earn their combos once paid: recompute every balance.
     const { refreshCustomer } = require('./loyalty');
     for (const { id } of db.prepare('SELECT id FROM customers').all()) refreshCustomer(db, id);
+  }
+  if (version < 20) {
+    // Version 20: the reliefs made before are taken as seen by every attendant.
+    db.exec(`INSERT OR IGNORE INTO checkpoint_seen (checkpoint_id, user_id)
+      SELECT c.id, u.id FROM shift_checkpoints c CROSS JOIN users u WHERE u.role = 'attendant'`);
   }
   if (version < 18) {
     // Version 18: suppliers get a record (contacts) from the names already used.

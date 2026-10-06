@@ -717,6 +717,12 @@ test('relève, fermeture du soir et ouverture du matin : le poste continue', asy
   const relief = await pompiste('POST', `/api/shifts/${shift.id}/checkpoints`, { kind: 'releve', readings: at(20), cash: preview.expected });
   assert.strictEqual(relief.status, 201);
   assert.strictEqual(relief.data.report.variance, 0);
+  // Béa is on duty too: she gets Paul's mini report on her phone, once; Paul does not.
+  const unseen = (await bea('GET', '/api/shifts/reports/unseen')).data;
+  assert.deepStrictEqual(unseen.map((r) => [r.id, r.kind, r.by]), [[relief.data.report.id, 'releve', 'Paul']]);
+  assert.deepStrictEqual((await pompiste('GET', '/api/shifts/reports/unseen')).data, []);
+  assert.strictEqual((await bea('POST', `/api/shifts/reports/${relief.data.report.id}/seen`)).status, 200);
+  assert.deepStrictEqual((await bea('GET', '/api/shifts/reports/unseen')).data, []);
   assert.strictEqual((await pompiste('POST', `/api/shifts/${shift.id}/sales`, { customerId: kambale.id, nozzleId: diesel.nozzle_id, amount: 1 })).data.code, 'not_on_duty', 'parti en pause');
   assert.strictEqual((await pompiste('POST', `/api/shifts/${shift.id}/checkpoints`, { kind: 'releve', readings: at(10) })).status, 403);
   await nextSecond();

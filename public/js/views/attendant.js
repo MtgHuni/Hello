@@ -3,7 +3,7 @@ import { api } from '../api.js';
 import { priceTotem, shiftLine, h, fmt, pageHeader, card, cardHeader, table, shiftBadge, varianceCell, button, formDialog, confirmDialog, toast, field, productColor, badge, kpi, parseServerDate, setContent, reportLink, busy, newRef, buttonRow, noticeDialog } from '../ui.js';
 import { icon } from '../icons.js';
 import { shiftSummary } from './shifts.js';
-import { renderJoin, renderCheckpoint } from './relay.js';
+import { renderJoin, renderCheckpoint, reportCard } from './relay.js';
 
 // One shift for the station, always open: the attendant takes it (or continues it after a relief),
 // opens the station in the morning, or, the very first time, opens the first shift.
@@ -231,7 +231,7 @@ function renderOpenShift(page, ctx, shift, remarks = null) {
       ),
       // Fuel drawn for a test and poured back into the tank: not sold once the manager approves.
       button('Test de pompe (remis en cuve)', (e) => busy(e.currentTarget, () => addTest(ctx, shift, reload)), { variant: 'secondary block', iconName: 'pump' }),
-      requestQueue(shift, reload),
+      requestQueue(shift, reload, ctx.state.settings.cashTolerance),
       h(
         'div',
         { class: 'grid kpi-row' },
@@ -294,7 +294,7 @@ function renderOpenShift(page, ctx, shift, remarks = null) {
 
 // ---------- Purchases started by customers on their phone ----------
 // Polled every few seconds; the attendant confirms with one tap.
-function requestQueue(shift, reload) {
+function requestQueue(shift, reload, tol) {
   const offline = h('p', { class: 'offline-strip', role: 'status', hidden: true });
   const list = h('div', { class: 'stack', style: 'gap:10px' });
   const host = h('div', { class: 'stack', style: 'gap:10px' }, offline, list);
@@ -395,7 +395,8 @@ function requestQueue(shift, reload) {
     if (!document.hidden && !inFlight) {
       inFlight = true;
       try {
-        const rows = await api.get('/requests/pending');
+        const [rows, reports] = await Promise.all([api.get('/requests/pending'), api.get('/shifts/reports/unseen').catch(() => [])]);
+        showReports(reports);
         failures = 0;
         lastOk = Date.now();
         offline.hidden = true;
@@ -418,6 +419,22 @@ function requestQueue(shift, reload) {
     }
     timer = setTimeout(poll, failures ? Math.min(30000, 4000 * 2 ** failures) : 4000);
   }
+  // A relief made by another attendant: its mini report on every phone of the shift, once each.
+  let showing = false;
+  async function showReports(reports) {
+    if (showing || !reports.length) return;
+    showing = true;
+    try {
+      for (const r of reports) {
+        navigator.vibrate?.([80, 60, 80]);
+        await noticeDialog(`${r.label}${r.by ? ` de ${r.by}` : ''}`, reportCard(r, tol, { title: fmt.dateTime(r.at) }), { level: 'warning', iconName: 'shifts', wide: true });
+        await api.post(`/shifts/reports/${r.id}/seen`, {}).catch(() => {});
+      }
+    } finally {
+      showing = false;
+    }
+  }
+
   // Check right away when the phone screen comes back on.
   const onVisible = () => {
     if (!document.hidden) poll();

@@ -322,8 +322,34 @@ module.exports = function shiftRoutes(db) {
     const shift = db.prepare('SELECT * FROM shifts WHERE id = ?').get(req.params.id);
     if (!shift || shift.status !== 'open') fail(409, 'Ce poste n’est plus ouvert.');
     if (shift.station_closed_at) fail(409, 'La station est fermée : faites d’abord l’ouverture.', 'station_closed');
-    if (req.user.role === 'attendant') join(shift.id, req.user.id);
+    if (req.user.role === 'attendant') {
+      join(shift.id, req.user.id);
+      // Taking the shift shows its last report: the reliefs before are seen.
+      db.prepare('INSERT OR IGNORE INTO checkpoint_seen (checkpoint_id, user_id) SELECT id, ? FROM shift_checkpoints WHERE shift_id = ?').run(req.user.id, shift.id);
+    }
     res.json(shiftDetail(shift.id));
+  });
+
+  // A relief made by another attendant: every attendant gets its mini report on their phone, once.
+  router.get('/shifts/reports/unseen', staff, (req, res) => {
+    const id = openShiftId();
+    if (!id || req.user.role !== 'attendant') return res.json([]);
+    const ids = db
+      .prepare(
+        `SELECT c.id FROM shift_checkpoints c WHERE c.shift_id = ? AND c.kind = 'releve' AND COALESCE(c.user_id, 0) != ?
+           AND NOT EXISTS (SELECT 1 FROM checkpoint_seen s WHERE s.checkpoint_id = c.id AND s.user_id = ?) ORDER BY c.id`,
+      )
+      .all(id, req.user.id, req.user.id)
+      .map((r) => r.id);
+    if (!ids.length) return res.json([]);
+    res.json(shiftDetail(id).checkpoints.filter((c) => ids.includes(c.id)));
+  });
+
+  router.post('/shifts/reports/:checkpointId/seen', staff, (req, res) => {
+    const cp = db.prepare('SELECT id FROM shift_checkpoints WHERE id = ?').get(req.params.checkpointId);
+    if (!cp) fail(404, 'Rapport introuvable.');
+    db.prepare('INSERT OR IGNORE INTO checkpoint_seen (checkpoint_id, user_id) VALUES (?, ?)').run(cp.id, req.user.id);
+    res.json({ ok: true });
   });
 
   // Indexes given at a checkpoint: every nozzle, never below the last index taken.
