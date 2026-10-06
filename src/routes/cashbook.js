@@ -3,7 +3,7 @@ const { fail, num, str, oneOf, round, dateParam, transaction, money } = require(
 const { requireRole, requireAdmin } = require('../auth');
 const { audit } = require('../audit');
 const { getSettings } = require('../db');
-const { ACCOUNTS, KINDS, cashbook, balances, supplierBalances, supplierExpenses } = require('../cashbook');
+const { ACCOUNTS, KINDS, cashbook, balances, supplierBalances, supplierExpenses, shiftSign } = require('../cashbook');
 const { cashbookPdf } = require('../cashbookReport');
 
 const manager = requireRole('manager');
@@ -48,7 +48,7 @@ module.exports = function cashbookRoutes(db, { mailer } = {}) {
     if (date && date > today()) fail(400, 'Le solde de départ ne peut pas être daté dans le futur.');
     // Made in the open shift's till: counted in what the attendants hand over.
     let shiftId = null;
-    if (b.toShift === true && account === 'cash' && kind !== 'opening' && KINDS[kind].sign !== 0) {
+    if (b.toShift === true && shiftSign(kind, account) !== 0) {
       const open = db.prepare("SELECT id FROM shifts WHERE status = 'open' ORDER BY id DESC LIMIT 1").get();
       if (!open) fail(409, 'Aucun poste ouvert.', 'no_open_shift');
       shiftId = open.id;
@@ -77,7 +77,7 @@ module.exports = function cashbookRoutes(db, { mailer } = {}) {
   router.post('/cashbook/movements/:id/shift', manager, requireAdmin, (req, res) => {
     const m = db.prepare('SELECT * FROM cash_movements WHERE id = ?').get(req.params.id);
     if (!m) fail(404, 'Mouvement introuvable.');
-    if (m.account !== 'cash' || m.kind === 'opening' || !KINDS[m.kind]?.sign) fail(400, 'Seules les entrées et sorties d’espèces vont dans l’argent d’un poste.');
+    if (!shiftSign(m.kind, m.account)) fail(400, 'Seules les entrées et sorties d’espèces et les retraits de mobile money vont dans l’argent d’un poste.');
     const link = req.body?.link !== false;
     const shift = link
       ? db.prepare('SELECT id, status FROM shifts WHERE opened_at <= ? AND (closed_at IS NULL OR closed_at > ?) ORDER BY id DESC LIMIT 1').get(m.created_at, m.created_at)

@@ -1067,6 +1067,13 @@ test('une entrée de la caisse dans l’argent du poste compte dans ce qu’il r
   assert.strictEqual(await cashBalance(), round2(before + cash + closed.expenses_amount), 'les 5 $ sont désormais dans l’argent remis, comptés une fois');
   await gerant('POST', `/api/cashbook/movements/${coffre.id}/shift`, { link: false });
   assert.strictEqual((await gerant('GET', `/api/shifts/${shift.id}`)).data.expected_amount, round2(base + 30));
+
+  // Mobile money withdrawn into the open shift's till: more cash to hand over.
+  const open = (await gerant('GET', '/api/shifts/current')).data;
+  await gerant('POST', '/api/cashbook/movements', { kind: 'retrait_momo', account: 'momo', amount: 15, note: 'Retrait agent', toShift: true });
+  await gerant('POST', '/api/cashbook/movements', { kind: 'frais_momo', account: 'momo', amount: 1, toShift: true });
+  const now = (await gerant('GET', `/api/shifts/${open.id}`)).data;
+  assert.deepStrictEqual([now.movements.length, now.movements_amount], [1, 15]);
 });
 
 test('alertes : chacun masque une alerte ou coupe un type, pour lui seul', async () => {

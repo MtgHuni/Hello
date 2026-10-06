@@ -17,11 +17,11 @@ function momoTotal(db, shiftId) {
 
 // Cash book movements made in a shift's till (cash_movements.shift_id): + an entry, − an exit.
 function shiftMovements(db, shiftId, from = '0000', to = '9999') {
-  const { KINDS } = require('./cashbook');
+  const { KINDS, shiftSign } = require('./cashbook');
   return db
     .prepare('SELECT * FROM cash_movements WHERE shift_id = ? AND created_at >= ? AND created_at <= ? ORDER BY id')
     .all(shiftId, from, to)
-    .map((m) => ({ ...m, label: `${KINDS[m.kind]?.label || m.kind}${m.note ? ` : ${m.note}` : ''}`, signed: round((KINDS[m.kind]?.sign || 0) * m.amount) }));
+    .map((m) => ({ ...m, label: `${KINDS[m.kind]?.label || m.kind}${m.note ? ` : ${m.note}` : ''}`, signed: round(shiftSign(m.kind, m.account) * m.amount) }));
 }
 const movementsTotal = (list) => round(list.reduce((t, m) => t + m.signed, 0));
 

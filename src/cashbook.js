@@ -24,6 +24,14 @@ const KINDS = {
 };
 
 
+// What a manual movement does to the money of a shift's till: an entry or exit of the cash ±,
+// mobile money withdrawn into the cash +; nothing otherwise (0: it cannot go in a shift).
+function shiftSign(kind, account) {
+  if (kind === 'retrait_momo') return 1;
+  if (account !== 'cash' || kind === 'opening') return 0;
+  return KINDS[kind]?.sign || 0;
+}
+
 // Every entry of both balances, oldest first: { account, at, day, in, out, label, source, id, link }.
 function allEntries(db) {
   const entries = [];
@@ -101,7 +109,7 @@ function allEntries(db) {
     if (!kind) continue;
     const label = `${kind.label}${m.note ? ` : ${m.note}` : ''}${m.shift_id ? ` (caisse du poste n°${m.shift_id})` : ''}`;
     // An entry or exit of the cash can be put in (or taken out of) the money of a shift.
-    const shiftable = m.account === 'cash' && m.kind !== 'opening' && kind.sign !== 0;
+    const shiftable = shiftSign(m.kind, m.account) !== 0;
     const base = { at: m.at, day: m.day, source: 'movement', id: m.id, kind: m.kind, shift_id: m.shift_id, shiftable };
     if (m.kind === 'retrait_momo') {
       push({ ...base, account: 'momo', out: m.amount, label });
@@ -230,4 +238,4 @@ function supplierBalances(db) {
   return [...rows.values()].map((r) => ({ ...r, balance: round(r.owed - r.paid) })).sort((a, b) => b.balance - a.balance || a.name.localeCompare(b.name));
 }
 
-module.exports = { ACCOUNTS, ACCOUNT_OF_METHOD, KINDS, cashbook, balances, supplierBalances, supplierExpenses, supplierOf };
+module.exports = { ACCOUNTS, ACCOUNT_OF_METHOD, KINDS, shiftSign, cashbook, balances, supplierBalances, supplierExpenses, supplierOf };
