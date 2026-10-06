@@ -1,20 +1,31 @@
 import { flags } from '../ui.js';
 import { api } from '../api.js';
-import { priceTotem, h, fmt, pageHeader, button, formDialog, confirmDialog, toast, spinner, setContent, noticeDialog } from '../ui.js';
+import { priceTotem, h, fmt, pageHeader, button, formDialog, confirmDialog, toast, spinner, setContent, noticeDialog, buttonRow, whatsappNumber } from '../ui.js';
 import { icon } from '../icons.js';
 import { statement, statementShare, defaultPeriod } from './customers.js';
 
 // Client space: start a fill-up from the phone while waiting in line,
 // then follow its confirmation by the attendant; account statement below.
-// The station's number at the bottom of the client space: one tap to call.
+// The station's number at the bottom of the client space: call, WhatsApp or SMS in one tap.
 function stationPhone(phone) {
   if (!phone) return null;
   const shown = phone.replace(/^\+243(\d{3})(\d{3})(\d{3})$/, '+243 $1 $2 $3');
+  const tel = phone.replace(/[^\d+]/g, '');
+  const wa = whatsappNumber(phone);
+  const link = (label, href, iconName, external) => h('a', { class: 'btn secondary', href, ...(external ? { target: '_blank', rel: 'noopener' } : {}) }, icon(iconName), label);
   return h(
     'div',
     { class: 'client-contact section' },
     h('p', {}, 'Pour toute question ou plus d’informations, contactez-nous :'),
-    h('a', { href: `tel:${phone.replace(/[^\d+]/g, '')}` }, icon('phone'), shown),
+    h('div', { class: 'client-contact-number' }, shown),
+    buttonRow(
+      [
+        link('Appeler', `tel:${tel}`, 'phone'),
+        wa ? link('WhatsApp', `https://wa.me/${wa}`, 'message', true) : null,
+        link('SMS', `sms:${tel}`, 'message'),
+      ],
+      { inline: true },
+    ),
   );
 }
 
