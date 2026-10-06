@@ -32,6 +32,7 @@ const PATHS = {
   card: 'M2 5h20v14H2zM2 10h20',
   phone: 'M7 2h10v20H7zM11 18h2',
   share: 'M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7M16 6l-4-4-4 4M12 2v13',
+  whatsapp: 'M3.5 20.5l1.3-4.1A8.5 8.5 0 1 1 8 19.4zM9.2 8.3c-.2 3.4 3.1 6.7 6.5 6.5l.9-1.5-2.1-1-1 .9c-1.2-.6-2.1-1.5-2.7-2.7l.9-1-1-2.1z',
 };
 
 export function icon(name) {

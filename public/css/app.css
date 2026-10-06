@@ -991,8 +991,10 @@ dialog.action-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; 
 .alert-actions .btn { width: 100%; }
 /* The station's number at the bottom of the client space. */
 .client-contact { margin-top: 40px; padding: 20px 0 8px; border-top: 1px solid var(--hairline); text-align: center; }
-.client-contact p { max-width: 36ch; margin: 0 auto; color: var(--text-2); font-size: 14px; line-height: 1.6; text-wrap: balance; }
-.client-contact a { color: var(--text); white-space: nowrap; font-variant-numeric: tabular-nums; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--text-3); }
+.client-contact p { max-width: 36ch; margin: 0 auto 14px; color: var(--text-2); font-size: 14px; line-height: 1.6; text-wrap: balance; }
+.client-contact-links { display: flex; justify-content: center; gap: 12px; }
+.client-contact-links .btn { width: 48px; min-width: 48px; height: 48px; min-height: 48px; padding: 0; }
+.client-contact-links .btn svg { width: 22px; height: 22px; }
 /* A card with a title and its one action (« Saisir le solde de départ », « Compter l’argent »…):
    on a phone the action goes under the title, the full width of the card, like every grouped button. */
 @media (max-width: 640px) {

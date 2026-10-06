@@ -209,7 +209,6 @@ export async function renderCustomerDetail(page, ctx) {
         [TYPE_LABEL[c.type], c.type === 'account' && c.payment_day ? `paie avant le ${c.payment_day} du mois` : null, c.phone, c.email, c.plate].filter(Boolean).join(' · '),
         edit(button('Règlement', () => paymentDialog(c, reload), { iconName: 'card' })),
         edit(button('Ancienne dette', () => oldDebtDialog(c, reload), { variant: 'secondary', iconName: 'plus' })),
-        statementShare(`/api/customers/${c.id}/statement.pdf`, period),
         edit(button('Modifier', () => customerDialog(c, ctx, reload), { variant: 'secondary', iconName: 'edit' })),
         edit(button(c.login ? 'Accès client' : 'Créer un accès', () => loginDialog(c, ctx, reload), { variant: 'secondary', iconName: 'user' })),
       ),
@@ -233,7 +232,7 @@ export async function renderCustomerDetail(page, ctx) {
           Object.assign(period, p);
           load();
         },
-        { onOldDebt: flags.readonly ? null : (m) => removeOldDebt(c, m, reload) },
+        { shareUrl: `/api/customers/${c.id}/statement.pdf`, onOldDebt: flags.readonly ? null : (m) => removeOldDebt(c, m, reload) },
       ),
     );
   };
@@ -245,32 +244,8 @@ export function defaultPeriod() {
   return { from: isoDate(new Date(now.getFullYear(), now.getMonth(), 1)), to: todayISO() };
 }
 
-// « Partager » the statement as a PDF: asks the period first (the one on screen by default).
-export function statementShare(url, period) {
-  return button(
-    'Partager',
-    async () => {
-      const ok = await formDialog({
-        title: 'Partager le relevé',
-        submitLabel: 'Partager',
-        grid: false,
-        fields: [
-          { name: 'from', label: 'Du', type: 'date', value: period.from, required: true },
-          { name: 'to', label: 'Au', type: 'date', value: period.to, required: true },
-        ],
-        onSubmit: (d) => {
-          if (d.from > d.to) throw new Error('La date de début doit précéder la date de fin.');
-          return d;
-        },
-      });
-      if (ok) sharePdf(`${url}?from=${ok.from}&to=${ok.to}`, `releve-${ok.from}-au-${ok.to}.pdf`);
-    },
-    { variant: 'secondary', iconName: 'share' },
-  );
-}
-
 // Account statement shared with the client space: KPIs, period picker, movements.
-export function statement(acc, period, onPeriod, { onOldDebt, clientSpace = false } = {}) {
+export function statement(acc, period, onPeriod, { onOldDebt, clientSpace = false, shareUrl } = {}) {
   const c = acc.customer;
   const subscriber = c.type === 'account';
   const from = field({ name: 'from', label: 'Du', type: 'date', value: period.from });
@@ -328,7 +303,16 @@ export function statement(acc, period, onPeriod, { onOldDebt, clientSpace = fals
         'div',
         { class: 'card-header' },
         h('div', {}, h('h2', {}, 'Relevé de compte'), h('p', {}, `Solde au début de la période : ${fmt.money(acc.opening)}`)),
-        h('div', { class: 'row no-print', style: 'align-items:flex-end' }, from, to),
+        h(
+          'div',
+          { class: 'row no-print', style: 'align-items:flex-end' },
+          from,
+          to,
+          // « Partager » the statement as a PDF over the period chosen here.
+          shareUrl
+            ? button('Partager', () => sharePdf(`${shareUrl}?from=${period.from}&to=${period.to}`, `releve-${period.from}-au-${period.to}.pdf`), { variant: 'secondary', iconName: 'share' })
+            : null,
+        ),
       ),
       table(
         [

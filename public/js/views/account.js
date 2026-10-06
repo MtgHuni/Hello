@@ -1,19 +1,29 @@
 import { flags } from '../ui.js';
 import { api } from '../api.js';
-import { priceTotem, h, fmt, pageHeader, button, formDialog, confirmDialog, toast, spinner, setContent, noticeDialog } from '../ui.js';
+import { priceTotem, h, fmt, pageHeader, button, formDialog, confirmDialog, toast, spinner, setContent, noticeDialog, whatsappNumber } from '../ui.js';
 import { icon } from '../icons.js';
-import { statement, statementShare, defaultPeriod } from './customers.js';
+import { statement, defaultPeriod } from './customers.js';
 
 // Client space: start a fill-up from the phone while waiting in line,
 // then follow its confirmation by the attendant; account statement below.
-// The footer of the client space: the usual contact line, the station's number in it.
+// The footer of the client space: the usual contact line, then SMS, WhatsApp and call as small logos.
 function stationPhone(phone) {
   if (!phone) return null;
-  const shown = phone.replace(/^\+243(\d{3})(\d{3})(\d{3})$/, '+243 $1 $2 $3');
+  const tel = phone.replace(/[^\d+]/g, '');
+  const wa = whatsappNumber(phone);
+  const link = (label, href, iconName, external) =>
+    h('a', { class: 'btn secondary', href, 'aria-label': label, title: label, ...(external ? { target: '_blank', rel: 'noopener' } : {}) }, icon(iconName));
   return h(
     'footer',
     { class: 'client-contact' },
-    h('p', {}, 'Pour toute question ou plus d’informations, contactez-nous au ', h('a', { href: `tel:${phone.replace(/[^\d+]/g, '')}` }, shown), '.'),
+    h('p', {}, 'Pour toute question ou plus d’informations, contactez-nous'),
+    h(
+      'div',
+      { class: 'client-contact-links' },
+      link('SMS', `sms:${tel}`, 'message'),
+      wa ? link('WhatsApp', `https://wa.me/${wa}`, 'whatsapp', true) : null,
+      link('Appeler', `tel:${tel}`, 'phone'),
+    ),
   );
 }
 
@@ -38,7 +48,7 @@ export async function renderAccount(page, ctx) {
           Object.assign(period, p);
           loadStatement();
         },
-        { clientSpace: true },
+        { clientSpace: true, shareUrl: '/api/me/statement.pdf' },
       ),
     );
   };
@@ -185,6 +195,6 @@ export async function renderAccount(page, ctx) {
   const products = (await api.get('/products').catch(() => [])).filter((p) => p.active);
   const subscriber = acc.customer.type === 'account';
   const totem = priceTotem(products.map((p) => ({ id: p.id, name: p.name, price: subscriber ? p.subscriber_price : p.price })));
-  setContent(page, pageHeader(acc.customer.name, null, statementShare('/api/me/statement.pdf', period)), totem, fillHost, combosHost, statementHost, stationPhone(ctx?.state?.settings?.stationPhone));
+  setContent(page, pageHeader(acc.customer.name), totem, fillHost, combosHost, statementHost, stationPhone(ctx?.state?.settings?.stationPhone));
   await refreshRequest();
 }

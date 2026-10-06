@@ -61,7 +61,7 @@ Requires Node ≥ 22.13 (built-in `node:sqlite`, hence `--disable-warning=Experi
 - Forms from the attendant's phone send a `clientRef`: sending it again returns the first record (unique `client_ref` on sales, payments, expenses).
 - Journal: `audit(db, req, {...})` in `src/audit.js` writes `audit_log` (category, summary, before/after JSON, reason). Call it for any change a manager should be able to trace; an accepted cancellation keeps the deleted row there.
 - Scheduled prices (`products.next_price*`) are applied by `applyScheduledPrices()` (`src/prices.js`) at shift opening and when prices are listed.
-- PDF reports are built on `src/pdfReport.js` (`Report`: section, line, table, paragraph, finish) over `src/pdf.js`: shift, period (with the cash book of the period: both accounts' balances and every movement, from `cashbook()`) and customer statement (`?from&to`, or `?month`; « Partager » asks the period, `statementShare()` → `sharePdf()` in `ui.js`).
+- PDF reports are built on `src/pdfReport.js` (`Report`: section, line, table, paragraph, finish) over `src/pdf.js`: shift, period (with the cash book of the period: both accounts' balances and every movement, from `cashbook()`) and customer statement (`?from&to`, or `?month`; « Partager » in the statement card shares the period shown, `shareUrl` of `statement()` → `sharePdf()` in `ui.js`).
 - Cancelling an operation (sale, mobile money entry, payment, expense):
   - the attendant only asks: `POST /shifts/:id/:kind/:itemId/cancel`, which sets `cancel_requested_*`;
   - the manager decides: `DELETE` cancels it, `POST …/keep` keeps it;
