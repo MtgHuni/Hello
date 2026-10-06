@@ -1,6 +1,6 @@
-import { flags, edit, adminEdit } from '../ui.js';
+import { flags, edit } from '../ui.js';
 import { api } from '../api.js';
-import { h, fmt, pageHeader, card, cardHeader, table, segmented, kpi, badge, button, formDialog, confirmDialog, toast, field, todayISO, isoDate, setContent, pdfLinks, whatsappNumber } from '../ui.js';
+import { h, fmt, pageHeader, card, cardHeader, table, segmented, kpi, badge, button, formDialog, confirmDialog, toast, field, todayISO, isoDate, setContent, pdfLinks, whatsappNumber, noticeDialog, buttonRow } from '../ui.js';
 import { icon } from '../icons.js';
 
 let typeFilter = 'all';
@@ -211,8 +211,7 @@ export async function renderCustomerDetail(page, ctx) {
         edit(button('Ancienne dette', () => oldDebtDialog(c, reload), { variant: 'secondary', iconName: 'plus' })),
         pdfLinks(`/api/customers/${c.id}/statement.pdf?month=${period.from.slice(0, 7)}`, `releve-${period.from.slice(0, 7)}.pdf`, { label: 'Relevé PDF' }),
         edit(button('Modifier', () => customerDialog(c, ctx, reload), { variant: 'secondary', iconName: 'edit' })),
-        edit(button(c.login ? 'Accès client' : 'Créer un accès', () => loginDialog(c, reload), { variant: 'secondary', iconName: 'user' })),
-        c.login ? null : adminEdit(button('Relier un compte', () => linkDialog(c, reload), { variant: 'secondary', iconName: 'userPlus' })),
+        edit(button(c.login ? 'Accès client' : 'Créer un accès', () => loginDialog(c, ctx, reload), { variant: 'secondary', iconName: 'user' })),
       ),
       c.needs_review
         ? h(
@@ -373,39 +372,52 @@ async function removeOldDebt(c, m, reload) {
   }
 }
 
-// The admin links a customer's own sign-up (its login and what it holds) to this record.
-async function linkDialog(c, reload) {
-  const accounts = (await api.get('/customer-accounts')).filter((a) => a.customer_id !== c.id);
-  if (!accounts.length) return toast('Aucun compte client à relier.', 'error');
-  // The sign-ups still to check come first, then the closest name or phone.
-  const near = (a) => (a.needs_review ? 2 : 0) + ((a.phone && c.phone && a.phone.replace(/\D/g, '').slice(-9) === c.phone.replace(/\D/g, '').slice(-9)) || (a.customer_name || '').toLowerCase() === c.name.toLowerCase() ? 1 : 0);
-  accounts.sort((a, b) => near(b) - near(a));
-  const label = (a) => [a.customer_name || a.user_name, a.login, a.balance ? `solde ${fmt.money(a.balance)}` : null, a.sales ? `${a.sales} achat${a.sales > 1 ? 's' : ''}` : null].filter(Boolean).join(' · ');
-  const ok = await formDialog({
-    title: `Relier un compte à ${c.name}`,
-    grid: false,
-    fields: [{ name: 'userId', label: 'Compte client', type: 'select', options: accounts.map((a) => [a.user_id, label(a)]), required: true }],
-    submitLabel: 'Relier',
-    onSubmit: (d) => api.post(`/customers/${c.id}/link`, { userId: Number(d.userId) }),
-  });
-  if (ok) {
-    toast(`Compte relié à ${c.name}.`);
-    reload();
-  }
-}
+// The customer's login: their phone by default, and the default password, which they change later.
+const DEFAULT_PASSWORD = '12345678';
 
-async function loginDialog(c, reload) {
+async function loginDialog(c, ctx, reload) {
+  const sent = {};
   const ok = await formDialog({
     title: c.login ? 'Accès à l’espace client' : 'Créer un accès client',
     grid: false,
     fields: [
-      { name: 'login', label: 'Identifiant', value: c.login || '', required: true },
-      { name: 'password', label: c.login ? 'Nouveau mot de passe' : 'Mot de passe', type: 'text', required: true },
+      { name: 'login', label: 'Identifiant', value: c.login || (c.phone || '').replace(/[\s.-]/g, ''), required: true },
+      { name: 'password', label: c.login ? 'Nouveau mot de passe' : 'Mot de passe', type: 'text', value: DEFAULT_PASSWORD, required: true },
     ],
-    onSubmit: (d) => api.post(`/customers/${c.id}/login`, d),
+    submitLabel: 'Enregistrer et partager',
+    onSubmit: async (d) => {
+      Object.assign(sent, d);
+      return api.post(`/customers/${c.id}/login`, d);
+    },
   });
-  if (ok) {
-    toast('Accès client enregistré.');
-    reload();
-  }
+  if (!ok) return;
+  reload();
+  shareAccess(c, sent, ctx?.state?.settings?.stationName || 'la station');
+}
+
+// Sends the customer the link, their login and password: by WhatsApp or SMS to their phone,
+// or through the phone's share sheet; they can change the password in their space.
+function shareAccess(c, { login, password }, stationName) {
+  const text = [
+    `Bonjour ${c.name}, voici votre espace client ${stationName} : ${location.origin}`,
+    `Identifiant : ${login}`,
+    `Mot de passe : ${password}`,
+    'Vous pouvez changer ce mot de passe dans votre espace : touchez vos initiales en haut à droite, puis « Changer le mot de passe ».',
+  ].join('\n');
+  const number = whatsappNumber(c.phone);
+  const link = (label, href, iconName) => h('a', { class: 'btn secondary', href, target: '_blank', rel: 'noopener' }, icon(iconName), label);
+  const canShare = typeof navigator.share === 'function';
+  return noticeDialog('Accès client enregistré', [
+    h('p', {}, `Identifiant : `, h('strong', {}, login), h('br'), 'Mot de passe : ', h('strong', {}, password)),
+    h(
+      'div',
+      { class: 'notice-share' },
+      buttonRow([
+        number ? link('WhatsApp', `https://wa.me/${number}?text=${encodeURIComponent(text)}`, 'message') : null,
+        number ? link('SMS', `sms:+${number}?&body=${encodeURIComponent(text)}`, 'phone') : null,
+        canShare ? button('Partager', () => navigator.share({ text }).catch(() => {}), { variant: 'secondary', iconName: 'share' }) : null,
+        button('Copier', () => navigator.clipboard?.writeText(text).then(() => toast('Message copié.'), () => toast('Copie impossible.', 'error')), { variant: 'secondary', iconName: 'edit' }),
+      ]),
+    ),
+  ], { okLabel: 'Terminé', level: 'good', iconName: 'check' });
 }
