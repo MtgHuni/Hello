@@ -106,16 +106,9 @@ export async function renderSettings(page, ctx) {
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Téléphone (espace client)'), h('span', {}, settings.stationPhone || '—')),
       ),
 
-      // ---- Mails (src/mail.js): sending through Resend ----
+      // ---- Mails (src/mail.js): what is sent today and this month, against Resend's limits ----
       card(
-        cardHeader(
-          'Mails',
-          mail.configured ? `Envoyés par Resend depuis ${mail.from}` : 'L’envoi n’est pas encore branché : les mails sont seulement notés ci-dessous',
-        ),
-        h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Envoi'), h('span', {}, mail.configured ? badge('Branché', 'good') : badge('Pas encore branché', 'warning'))),
-        h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Expéditeur'), h('span', {}, mail.from)),
-        h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Les réponses vont à'), h('span', {}, mail.replyTo || 'l’expéditeur')),
-        h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Les liens ouvrent'), h('span', {}, mail.appUrl)),
+        cardHeader('Mails'),
         ...[['day', 'Aujourd’hui'], ['month', 'Ce mois']].map(([period, label]) => {
           const { count, limit } = mail.usage[period];
           const near = count >= limit * 0.8;
@@ -126,18 +119,6 @@ export async function renderSettings(page, ctx) {
             h('span', {}, `${count} / ${limit.toLocaleString('fr-FR')}`, near ? h('span', {}, ' ', badge(count >= limit ? 'Limite atteinte' : 'Presque à la limite', count >= limit ? 'critical' : 'warning')) : null),
           );
         }),
-        h(
-          'div',
-          { class: 'summary-line' },
-          h('span', { class: 'muted' }, 'Ces 30 derniers jours'),
-          h('span', {}, [`${mail.counts.sent || 0} envoyé${(mail.counts.sent || 0) > 1 ? 's' : ''}`, mail.counts.failed ? `${mail.counts.failed} en échec` : null, mail.counts.skipped ? `${mail.counts.skipped} notés sans envoi` : null].filter(Boolean).join(' · ')),
-        ),
-        h(
-          'p',
-          { class: 'muted small', style: 'margin:12px 0 16px' },
-          'Chacun choisit ses mails et donne son adresse dans son menu (ses initiales) → « Mes mails » ; une adresse ne sert qu’une fois confirmée par le lien reçu. Les clients reçoivent reçus, pleins à crédit, relevé du mois, rappels de paiement et nouveaux prix à l’adresse de leur fiche, avec un lien pour arrêter chaque sorte de mail. « Mot de passe oublié » envoie un lien valable une heure. Resend permet 100 mails par jour et 3 000 par mois : une alerte prévient à 80 %.',
-        ),
-        buttonRow([button('Derniers mails', () => mailLog(mail.log), { variant: 'secondary', iconName: 'message' })]),
       ),
 
       // ---- Data: backup and journal (the admin's) ----
@@ -169,30 +150,6 @@ export async function renderSettings(page, ctx) {
         line('Seuil d’échange', `${fmt.number(settings.comboThreshold)} combos (= ${fmt.money(settings.comboThreshold * settings.comboValue)})`),
         h('p', { class: 'muted small', style: 'margin-top:8px' }, 'Une vente à crédit ne rapporte ses combos qu’une fois entièrement payée.')] : []),
       ),
-    ),
-  );
-}
-
-const MAIL_STATUS = { sent: ['Envoyé', 'good'], queued: ['En cours', 'info'], failed: ['Échec', 'critical'], skipped: ['Noté', null] };
-
-function mailLog(rows) {
-  openDialog((close) =>
-    h(
-      'div',
-      { class: 'sheet dialog-body' },
-      h('h2', {}, 'Derniers mails'),
-      // One line per mail (a table would scroll sideways on a phone).
-      rows.length
-        ? rows.map((r) =>
-            h(
-              'div',
-              { class: 'nozzle-row' },
-              h('div', { class: 'grow' }, h('div', { style: 'font-weight:600' }, r.subject), h('div', { class: 'muted small' }, `${r.to_addr} · ${fmt.dateTime(r.created_at)}`), r.error ? h('div', { class: 'muted small' }, r.error) : null),
-              badge(...(MAIL_STATUS[r.status] || [r.status])),
-            ),
-          )
-        : h('div', { class: 'empty' }, 'Aucun mail pour l’instant.'),
-      h('div', { class: 'dialog-actions' }, button('Fermer', close, { variant: 'cancel' })),
     ),
   );
 }
