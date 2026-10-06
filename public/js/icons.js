@@ -50,16 +50,23 @@ export function icon(name) {
   return svg;
 }
 
-// Station mark: a fuel drop, drawn filled so it holds at 16px.
+// The MTG monogram (MTG Industrie's logo, redrawn): the letters in the text colour, the M's
+// leg and the G's dot in MTG blue. Same drawing as the phone icons and the mail header.
+const MTG_INK = ["M0 0H76L211 182L347 0H812V62H390L222 298H197L80 138V348H0Z","M495 62H583V348H495Z","M962.1 78.7A180 180 0 1 0 992 178L912 178A100 100 0 1 1 895.4 122.8Z","M897 178H992V300H897Z"];
+const MTG_BLUE = ["M295 286L405 138V348H295Z","M760 178a52 52 0 1 0 104 0a52 52 0 1 0-104 0Z"];
 export function brandMark() {
   const ns = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(ns, 'svg');
-  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('viewBox', '0 -3 992 364');
   svg.setAttribute('class', 'brand-mark');
   svg.setAttribute('aria-hidden', 'true');
-  const path = document.createElementNS(ns, 'path');
-  path.setAttribute('d', 'M12 2.5c.4 0 .7.2 1 .5 2.4 3 6 7.6 6 11.2A7 7 0 0 1 5 14.2C5 10.6 8.6 6 11 3c.3-.3.6-.5 1-.5zm-3.2 11.8a.9.9 0 0 0-1.8.1 5 5 0 0 0 4.2 4.9.9.9 0 1 0 .3-1.8 3.2 3.2 0 0 1-2.7-3.2z');
-  path.setAttribute('fill', 'currentColor');
-  svg.append(path);
+  for (const [list, fill] of [[MTG_INK, 'currentColor'], [MTG_BLUE, 'var(--mtg-blue)']]) {
+    for (const d of list) {
+      const path = document.createElementNS(ns, 'path');
+      path.setAttribute('d', d);
+      path.setAttribute('fill', fill);
+      svg.append(path);
+    }
+  }
   return svg;
 }

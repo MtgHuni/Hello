@@ -88,7 +88,10 @@ function renderMail(mail, station) {
     mail.unsubscribeUrl ? `<a href="${esc(mail.unsubscribeUrl)}" style="color:${C.muted};text-decoration:underline">Ne plus recevoir ces mails</a>` : null,
     mail.manageUrl ? `<a href="${esc(mail.manageUrl)}" style="color:${C.muted};text-decoration:underline">Gérer mes mails</a>` : null,
   ].filter(Boolean);
-  const logo = station.appUrl ? `<img src="${esc(station.appUrl)}/media/mail-logo.png" width="28" height="28" alt="" style="display:block;border:0">` : '';
+  // The MTG Station logo (public/media/mail-logo.png, drawn at twice its size); its name if images are off.
+  const logo = station.appUrl
+    ? `<img src="${esc(station.appUrl)}/media/mail-logo.png" width="124" height="73" alt="${esc(station.name)}" style="display:block;border:0;font:800 22px/1 ${DISPLAY};letter-spacing:.04em;text-transform:uppercase;color:#f5f4ef">`
+    : `<span style="font:800 22px/1 ${DISPLAY};letter-spacing:.04em;text-transform:uppercase;color:#f5f4ef">${esc(station.name)}</span>`;
 
   const html = `<!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light only"><title>${esc(mail.title)}</title></head>
@@ -96,12 +99,7 @@ function renderMail(mail, station) {
 <div style="display:none;max-height:0;overflow:hidden;opacity:0">${esc(mail.preheader || mail.title)}</div>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.page}"><tr><td align="center" style="padding:24px 12px">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;border-collapse:separate;background:${C.card};border-radius:14px;overflow:hidden">
-    <tr><td style="background:${C.night};padding:18px 24px">
-      <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-        ${logo ? `<td style="padding-right:12px">${logo}</td>` : ''}
-        <td style="font:800 22px/1 ${DISPLAY};letter-spacing:.04em;text-transform:uppercase;color:#f5f4ef">${esc(station.name)}</td>
-      </tr></table>
-    </td></tr>
+    <tr><td style="background:${C.night};padding:22px 28px">${logo}</td></tr>
     <tr><td style="font-size:0;line-height:0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
       <td width="50%" height="6" style="background:${C.gasoil};font-size:0;line-height:0">&nbsp;</td>
       <td width="50%" height="6" style="background:${C.essence};font-size:0;line-height:0">&nbsp;</td>
