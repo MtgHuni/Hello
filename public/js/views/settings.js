@@ -41,11 +41,16 @@ export async function renderSettings(page, ctx) {
             },
             { label: 'Prix abonnés', align: 'right', render: (p) => fmt.price(p.subscriber_price) },
             { label: 'Statut', render: (p) => (p.active ? badge('Actif', 'good') : badge('Inactif')) },
-            {
-              label: '',
-              align: 'right',
-              render: (p) => h('span', { class: 'btn-row inline', style: `--cols:${canAdmin() ? 2 : 1}` }, button('Historique', () => priceHistory(p), { variant: 'secondary sm' }), adminEdit(button('Changer le prix', () => productDialog(p, reload), { variant: 'secondary sm' }))),
-            },
+            // The manager only reads the settings: no button at all.
+            ...(canAdmin()
+              ? [
+                  {
+                    label: '',
+                    align: 'right',
+                    render: (p) => h('span', { class: 'btn-row inline', style: '--cols:2' }, button('Historique', () => priceHistory(p), { variant: 'secondary sm' }), button('Changer le prix', () => productDialog(p, reload), { variant: 'secondary sm' })),
+                  },
+                ]
+              : []),
           ],
           products,
         ),
@@ -83,7 +88,7 @@ export async function renderSettings(page, ctx) {
             { label: 'Identifiant', key: 'login' },
             { label: 'Rôle', render: (u) => ROLES[u.role] },
             { label: 'Statut', render: (u) => (u.active ? badge('Actif', 'good') : badge('Désactivé')) },
-            { label: '', align: 'right', render: (u) => adminEdit(button('Modifier', () => userDialog(u, ctx, reload), { variant: 'secondary sm' })) },
+            ...(canAdmin() ? [{ label: '', align: 'right', render: (u) => button('Modifier', () => userDialog(u, ctx, reload), { variant: 'secondary sm' }) }] : []),
           ],
           users,
         ),
@@ -98,8 +103,8 @@ export async function renderSettings(page, ctx) {
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Heure de clôture du poste'), h('span', {}, settings.closingTime || '15:30')),
       ),
 
-      // ---- Data: backup and journal ----
-      card(
+      // ---- Data: backup and journal (the admin's) ----
+      !canAdmin() ? null : card(
         cardHeader('Données', flags.readonly ? 'Journal des changements' : 'Sauvegarde complète de la base et journal des changements'),
         edit(h(
           'p',

@@ -1006,6 +1006,37 @@ test('alertes : chacun masque une alerte ou coupe un type, pour lui seul', async
   assert.strictEqual((await gerant('GET', '/api/dashboard')).data.alerts.length, dash.alerts.length);
 });
 
+test('compte client relié par l’administrateur à la fiche créée à la pompe', async () => {
+  const open = (await gerant('GET', '/api/shifts/current')).data;
+  // At the pump: a name only, and a credit.
+  const pump = (await gerant('POST', '/api/customers/quick', { name: 'Patrick Mumbere' })).data;
+  assert.strictEqual((await gerant('POST', `/api/shifts/${open.id}/sales`, { customerId: pump.id, productId: ctx.diesel.id, amount: 10 })).status, 201);
+  // The customer signs up on their own phone: a second record, with a pending request.
+  const patrick = client();
+  assert.strictEqual((await patrick('POST', '/api/register', { name: 'Patrick M.', phone: '+243 970 555 666', password: 'patrick-2026' })).status, 201);
+  const request = (await patrick('POST', '/api/me/requests', { productId: ctx.diesel.id, amount: 3 })).data;
+  const own = db.prepare("SELECT customer_id FROM users WHERE login = '+243970555666'").get().customer_id;
+  assert.notStrictEqual(own, pump.id);
+
+  const chef = client();
+  await chef('POST', '/api/auth/login', { login: 'chef', password: 'gerant123' });
+  const account = (await gerant('GET', '/api/customer-accounts')).data.find((a) => a.login === '+243970555666');
+  assert.strictEqual(account.customer_id, own);
+  assert.strictEqual((await chef('POST', `/api/customers/${pump.id}/link`, { userId: account.user_id })).data.code, 'admin_only');
+
+  const linked = await gerant('POST', `/api/customers/${pump.id}/link`, { userId: account.user_id });
+  assert.strictEqual(linked.status, 200);
+  assert.strictEqual(linked.data.login, '+243970555666');
+  assert.strictEqual(linked.data.phone, '+243970555666', 'le téléphone de l’inscription complète la fiche');
+  assert.strictEqual(db.prepare('SELECT 1 FROM customers WHERE id = ?').get(own), undefined, 'la fiche d’inscription est fusionnée');
+  assert.strictEqual(db.prepare('SELECT customer_id FROM purchase_requests WHERE id = ?').get(request.id).customer_id, pump.id);
+  // The customer now sees the pump record: its credit, and the same login.
+  assert.strictEqual((await patrick('GET', '/api/me/account')).data.customer.id, pump.id);
+  assert.strictEqual((await patrick('GET', '/api/me/account')).data.customer.balance, 10);
+  assert.strictEqual((await gerant('POST', `/api/customers/${pump.id}/link`, { userId: account.user_id })).data.code, 'has_login');
+  assert.ok((await gerant('GET', '/api/audit?category=clients')).data.some((a) => a.summary.includes('relié à Patrick Mumbere')));
+});
+
 test('migration : une base ancienne est convertie (loyalty → paid, combos)', () => {
   const fs = require('node:fs');
   const os = require('node:os');

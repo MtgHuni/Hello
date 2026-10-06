@@ -1,4 +1,4 @@
-import { flags, edit } from '../ui.js';
+import { flags, edit, adminEdit } from '../ui.js';
 import { api } from '../api.js';
 import { h, fmt, pageHeader, card, cardHeader, table, segmented, kpi, badge, button, formDialog, confirmDialog, toast, field, todayISO, isoDate, setContent, pdfLinks, whatsappNumber } from '../ui.js';
 import { icon } from '../icons.js';
@@ -212,6 +212,7 @@ export async function renderCustomerDetail(page, ctx) {
         pdfLinks(`/api/customers/${c.id}/statement.pdf?month=${period.from.slice(0, 7)}`, `releve-${period.from.slice(0, 7)}.pdf`, { label: 'Relevé PDF' }),
         edit(button('Modifier', () => customerDialog(c, ctx, reload), { variant: 'secondary', iconName: 'edit' })),
         edit(button(c.login ? 'Accès client' : 'Créer un accès', () => loginDialog(c, reload), { variant: 'secondary', iconName: 'user' })),
+        c.login ? null : adminEdit(button('Relier un compte', () => linkDialog(c, reload), { variant: 'secondary', iconName: 'userPlus' })),
       ),
       c.needs_review
         ? h(
@@ -370,6 +371,27 @@ async function removeOldDebt(c, m, reload) {
     reload();
   } catch (err) {
     toast(err.message, 'error');
+  }
+}
+
+// The admin links a customer's own sign-up (its login and what it holds) to this record.
+async function linkDialog(c, reload) {
+  const accounts = (await api.get('/customer-accounts')).filter((a) => a.customer_id !== c.id);
+  if (!accounts.length) return toast('Aucun compte client à relier.', 'error');
+  // The sign-ups still to check come first, then the closest name or phone.
+  const near = (a) => (a.needs_review ? 2 : 0) + ((a.phone && c.phone && a.phone.replace(/\D/g, '').slice(-9) === c.phone.replace(/\D/g, '').slice(-9)) || (a.customer_name || '').toLowerCase() === c.name.toLowerCase() ? 1 : 0);
+  accounts.sort((a, b) => near(b) - near(a));
+  const label = (a) => [a.customer_name || a.user_name, a.login, a.balance ? `solde ${fmt.money(a.balance)}` : null, a.sales ? `${a.sales} achat${a.sales > 1 ? 's' : ''}` : null].filter(Boolean).join(' · ');
+  const ok = await formDialog({
+    title: `Relier un compte à ${c.name}`,
+    grid: false,
+    fields: [{ name: 'userId', label: 'Compte client', type: 'select', options: accounts.map((a) => [a.user_id, label(a)]), required: true }],
+    submitLabel: 'Relier',
+    onSubmit: (d) => api.post(`/customers/${c.id}/link`, { userId: Number(d.userId) }),
+  });
+  if (ok) {
+    toast(`Compte relié à ${c.name}.`);
+    reload();
   }
 }
 

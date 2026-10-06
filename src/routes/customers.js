@@ -1,6 +1,6 @@
 const express = require('express');
 const { fail, num, str, oneOf, bool, round, dateParam, transaction } = require('../util');
-const { requireRole, hashPassword, checkPasswordStrength } = require('../auth');
+const { requireRole, requireAdmin, hashPassword, checkPasswordStrength } = require('../auth');
 const { audit } = require('../audit');
 const { statementPdf } = require('../statementReport');
 const { getSettings, syncCreditLimits } = require('../db');
@@ -332,6 +332,57 @@ function customerRoutes(db) {
       );
     }
     res.json({ ok: true });
+  });
+
+  // Customer accounts (client space logins), for the admin to link one to the record the attendant made.
+  router.get('/customer-accounts', manager, (req, res) => {
+    res.json(
+      db
+        .prepare(
+          `SELECT u.id AS user_id, u.login, u.name AS user_name, u.created_at, c.id AS customer_id, c.name AS customer_name, c.phone, c.needs_review,
+             ROUND(${balanceSql('c.id')}, 2) AS balance,
+             (SELECT COUNT(*) FROM sales WHERE customer_id = c.id) AS sales
+           FROM users u LEFT JOIN customers c ON c.id = u.customer_id
+           WHERE u.role = 'customer' ORDER BY u.id DESC`,
+        )
+        .all(),
+    );
+  });
+
+  // A customer signed up on their own (a new record) while the attendant had already created them at
+  // the pump: the admin links the login to the pump record. What the sign-up record holds (requests,
+  // credits, payments, old debts, phone…) moves to it, then the sign-up record is removed.
+  router.post('/customers/:id/link', manager, requireAdmin, (req, res) => {
+    const target = db.prepare('SELECT * FROM customers WHERE id = ?').get(req.params.id);
+    if (!target) fail(404, 'Client introuvable.');
+    if (db.prepare('SELECT 1 FROM users WHERE customer_id = ?').get(target.id)) fail(409, `${target.name} a déjà un accès client.`, 'has_login');
+    const user = db.prepare("SELECT * FROM users WHERE id = ? AND role = 'customer'").get(Number(req.body?.userId));
+    if (!user) fail(400, 'Choisissez un compte client.');
+    const from = user.customer_id ? db.prepare('SELECT * FROM customers WHERE id = ?').get(user.customer_id) : null;
+    transaction(db, () => {
+      if (from) {
+        for (const table of ['sales', 'payments', 'old_debts', 'purchase_requests']) {
+          db.prepare(`UPDATE ${table} SET customer_id = ? WHERE customer_id = ?`).run(target.id, from.id);
+        }
+        // The pump record keeps its own details and takes the missing ones from the sign-up.
+        db.prepare(
+          `UPDATE customers SET phone = COALESCE(phone, ?), email = COALESCE(email, ?), address = COALESCE(address, ?), plate = COALESCE(plate, ?) WHERE id = ?`,
+        ).run(from.phone, from.email, from.address, from.plate, target.id);
+      }
+      db.prepare('UPDATE users SET customer_id = ?, name = ? WHERE id = ?').run(target.id, target.name, user.id);
+      if (from) db.prepare('DELETE FROM customers WHERE id = ?').run(from.id);
+      refreshCustomer(db, target.id);
+      audit(db, req, {
+        category: 'clients',
+        action: 'customer_linked',
+        entity: 'customers',
+        id: target.id,
+        summary: `Compte client « ${user.login} » relié à ${target.name}${from ? ` (fiche d’inscription « ${from.name} » fusionnée)` : ''}`,
+        before: from ? { customer: from } : null,
+        after: { user_id: user.id, customer_id: target.id },
+      });
+    });
+    res.json(db.prepare(`${listSql} WHERE c.id = ?`).get(target.id));
   });
 
   // Client space: a customer only ever sees their own account.
