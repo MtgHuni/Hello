@@ -111,12 +111,21 @@ export async function renderSettings(page, ctx) {
         cardHeader(
           'Mails',
           mail.configured ? `Envoyés par Resend depuis ${mail.from}` : 'L’envoi n’est pas encore branché : les mails sont seulement notés ci-dessous',
-          adminEdit(button('Mail d’essai', () => testMail(), { variant: 'ghost', iconName: 'message' })),
         ),
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Envoi'), h('span', {}, mail.configured ? badge('Branché', 'good') : badge('Pas encore branché', 'warning'))),
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Expéditeur'), h('span', {}, mail.from)),
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Les réponses vont à'), h('span', {}, mail.replyTo || 'l’expéditeur')),
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Les liens ouvrent'), h('span', {}, mail.appUrl)),
+        ...[['day', 'Aujourd’hui'], ['month', 'Ce mois']].map(([period, label]) => {
+          const { count, limit } = mail.usage[period];
+          const near = count >= limit * 0.8;
+          return h(
+            'div',
+            { class: 'summary-line' },
+            h('span', { class: 'muted' }, label),
+            h('span', {}, `${count} / ${limit.toLocaleString('fr-FR')}`, near ? h('span', {}, ' ', badge(count >= limit ? 'Limite atteinte' : 'Presque à la limite', count >= limit ? 'critical' : 'warning')) : null),
+          );
+        }),
         h(
           'div',
           { class: 'summary-line' },
@@ -126,7 +135,7 @@ export async function renderSettings(page, ctx) {
         h(
           'p',
           { class: 'muted small', style: 'margin:12px 0 16px' },
-          'Chacun choisit ses mails et donne son adresse dans son menu (ses initiales) → « Mes mails » ; une adresse ne sert qu’une fois confirmée par le lien reçu. Les clients reçoivent reçus, pleins à crédit, relevé du mois, rappels de paiement et nouveaux prix à l’adresse de leur fiche, avec un lien pour arrêter chaque sorte de mail. « Mot de passe oublié » envoie un lien valable une heure.',
+          'Chacun choisit ses mails et donne son adresse dans son menu (ses initiales) → « Mes mails » ; une adresse ne sert qu’une fois confirmée par le lien reçu. Les clients reçoivent reçus, pleins à crédit, relevé du mois, rappels de paiement et nouveaux prix à l’adresse de leur fiche, avec un lien pour arrêter chaque sorte de mail. « Mot de passe oublié » envoie un lien valable une heure. Resend permet 100 mails par jour et 3 000 par mois : une alerte prévient à 80 %.',
         ),
         buttonRow([button('Derniers mails', () => mailLog(mail.log), { variant: 'secondary', iconName: 'message' })]),
       ),
@@ -186,15 +195,6 @@ function mailLog(rows) {
       h('div', { class: 'dialog-actions' }, button('Fermer', close, { variant: 'secondary' })),
     ),
   );
-}
-
-async function testMail() {
-  try {
-    const r = await api.post('/mail/test');
-    toast(r.configured ? `Mail d’essai envoyé à ${r.to}` : `Mail d’essai noté pour ${r.to} : l’envoi n’est pas encore branché`);
-  } catch (err) {
-    toast(err.message, 'error');
-  }
 }
 
 async function stationDialog(s) {

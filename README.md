@@ -65,6 +65,7 @@ Variables d'environnement :
 | `RESEND_API_KEY` | Clé [Resend](https://resend.com) : sans elle, les mails sont notés (Réglages → Mails) mais pas envoyés | — |
 | `MAIL_FROM` | Expéditeur des mails, sur un domaine vérifié dans Resend | `MTG Station <station@mtgindustrie.com>` |
 | `MAIL_REPLY_TO` | Adresse où vont les réponses des clients | l’expéditeur |
+| `MAIL_DAY_LIMIT` / `MAIL_MONTH_LIMIT` | Limites d’envoi du forfait Resend : alerte au tableau de bord dès 80 % | `100` / `3000` (forfait gratuit) |
 | `APP_URL` | Adresse de l’application, pour les liens des mails | l’adresse par laquelle on l’a ouverte |
 | `MAIL_DEBUG` | `1` : affiche dans le terminal les mails non envoyés | — |
 

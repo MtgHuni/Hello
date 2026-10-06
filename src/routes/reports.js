@@ -8,6 +8,7 @@ const { attendantNamesSql, closingCutoff } = require('../checkpoints');
 const { periodReportPdf } = require('../periodReport');
 const { withLiveStock } = require('../liveStock');
 const { ALERT_TYPES, userAlerts } = require('../alerts');
+const { mailUsage } = require('../mail');
 
 const manager = requireRole('manager');
 
@@ -140,6 +141,19 @@ module.exports = function reportRoutes(db) {
             link: `#/clients/${c.id}`,
           });
         }
+      }
+      // Mails: from 80 % of the day's or the month's limit.
+      const usage = mailUsage(db);
+      for (const [period, label] of [['day', 'aujourd’hui'], ['month', 'ce mois']]) {
+        const { count, limit } = usage[period];
+        if (count < limit * 0.8) continue;
+        alerts.push({
+          type: 'mails_limite',
+          key: `mails_limite:${period}`,
+          level: count >= limit ? 'critical' : 'warning',
+          text: `Mails : ${count} envoyés ${label} sur ${limit.toLocaleString('fr-FR')} permis`,
+          link: '#/reglages',
+        });
       }
       const combos = db
         .prepare('SELECT COALESCE(SUM(loyalty_points), 0) AS total, COALESCE(SUM(loyalty_points >= ?), 0) AS redeemable FROM customers WHERE active = 1')

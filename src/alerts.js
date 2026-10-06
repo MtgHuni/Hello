@@ -13,6 +13,7 @@ const ALERT_TYPES = {
   credit_retard: 'Crédit accordé à un abonné en retard',
   clients_a_completer: 'Clients créés à la pompe, à compléter',
   fournisseurs: 'Dettes envers les fournisseurs',
+  mails_limite: 'Limite d’envoi des mails presque atteinte',
 };
 
 // alerts: [{ type, key, level, text, link }] -> what this user sees, and everything to manage them.

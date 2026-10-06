@@ -1,7 +1,8 @@
 const express = require('express');
 const { fail, str, transaction } = require('../util');
-const { requireRole, requireAdmin, hashPassword, checkPasswordStrength, startSession, loginLimiter } = require('../auth');
+const { requireRole, hashPassword, checkPasswordStrength, startSession, loginLimiter } = require('../auth');
 const { MAIL_KINDS, CUSTOMER_KINDS } = require('../mailer');
+const { mailUsage } = require('../mail');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -125,6 +126,7 @@ function mailRoutes(db, { mailer }) {
       from: cfg.from,
       replyTo: cfg.replyTo || null,
       appUrl: mailer.appUrl(),
+      usage: mailUsage(db),
       counts: Object.fromEntries(
         db.prepare("SELECT status, COUNT(*) AS n FROM mail_log WHERE created_at >= datetime('now', '-30 days') GROUP BY status").all().map((r) => [r.status, r.n]),
       ),
@@ -132,12 +134,6 @@ function mailRoutes(db, { mailer }) {
     });
   });
 
-  router.post('/mail/test', requireRole('manager'), requireAdmin, (req, res) => {
-    const a = mailer.account(req.user.id);
-    if (!a.email) fail(400, 'Ajoutez d’abord votre adresse dans « Mes mails ».', 'no_email');
-    mailer.sendTest(a.id);
-    res.json({ ok: true, to: a.email, configured: mailer.mail.configured() });
-  });
 
   return router;
 }

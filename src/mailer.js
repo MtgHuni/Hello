@@ -278,26 +278,6 @@ function createMailer(db, mail) {
     return true;
   }
 
-  function sendTest(userId) {
-    const a = account(userId);
-    if (!a?.email) return false;
-    send(
-      a.email,
-      {
-        subject: `Mail d’essai — ${station().name}`,
-        eyebrow: 'Essai',
-        title: 'Les mails fonctionnent',
-        blocks: [
-          { p: `Bonjour ${firstName(a.name)},` },
-          { p: `Ce mail d’essai a été demandé depuis les réglages de ${station().name}. S’il est arrivé dans votre boîte de réception, l’envoi est prêt.` },
-          { rows: [['Envoyé le', fmt.dateTime(new Date())], ['Expéditeur', mail.config().from]] },
-        ],
-      },
-      { kind: 'essai', userId: a.id },
-    );
-    return true;
-  }
-
   return {
     MAIL_KINDS,
     CUSTOMER_KINDS,
@@ -323,7 +303,6 @@ function createMailer(db, mail) {
     passwordChanged,
     noteLogin,
     sendAccess,
-    sendTest,
     services: {}, // PDF builders the routes provide (src/app.js)
   };
 }

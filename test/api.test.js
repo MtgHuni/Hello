@@ -1184,8 +1184,16 @@ test('mails : adresse confirmée, mot de passe oublié, reçus, rapports, alerte
   const status = (await gerant('GET', '/api/mail/status')).data;
   assert.strictEqual(status.configured, false);
   assert.ok(status.log.length > 5 && status.log.every((l) => l.status === 'skipped'));
-  assert.strictEqual((await gerant('POST', '/api/mail/test')).data.to, 'gerant@example.com');
   assert.ok(outbox.length > before);
+  assert.strictEqual((await gerant('POST', '/api/mail/test')).status, 404, 'plus de mail d’essai');
+
+  // Near the sending limit: an alert on the dashboard.
+  assert.strictEqual(status.usage.day.limit, 100);
+  const insert = db.prepare("INSERT INTO mail_log (kind, to_addr, subject, status) VALUES ('rapport', 'x@example.com', 'x', 'sent')");
+  for (let i = status.usage.day.count; i < 85; i++) insert.run();
+  const alert = (await gerant('GET', '/api/dashboard')).data.alerts.find((a) => a.type === 'mails_limite');
+  assert.deepStrictEqual([alert.level, alert.text], ['warning', 'Mails : 85 envoyés aujourd’hui sur 100 permis']);
+  db.prepare("DELETE FROM mail_log WHERE subject = 'x'").run();
 });
 
 test('migration : une base ancienne est convertie (loyalty → paid, combos)', () => {

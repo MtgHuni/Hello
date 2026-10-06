@@ -18,7 +18,18 @@ function mailConfig() {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Mails sent (or on their way) today and this month, against the provider's limits.
+function mailUsage(db) {
+  const limit = (name, fallback) => Math.max(1, Number(process.env[name]) || fallback);
+  const count = (where) => db.prepare(`SELECT COUNT(*) AS n FROM mail_log WHERE status IN ('sent', 'queued') AND ${where}`).get().n;
+  return {
+    day: { count: count("date(created_at, 'localtime') = date('now', 'localtime')"), limit: limit('MAIL_DAY_LIMIT', 100) },
+    month: { count: count("strftime('%Y-%m', created_at, 'localtime') = strftime('%Y-%m', 'now', 'localtime')"), limit: limit('MAIL_MONTH_LIMIT', 3000) },
+  };
+}
+
 function createMail(db) {
+  db.prepare("DELETE FROM mail_log WHERE kind = 'essai'").run();
   const insert = db.prepare('INSERT INTO mail_log (kind, to_addr, subject, status, user_id, customer_id) VALUES (?, ?, ?, ?, ?, ?)');
   const done = db.prepare("UPDATE mail_log SET status = 'sent', provider_id = ? WHERE id = ?");
   const failed = db.prepare("UPDATE mail_log SET status = 'failed', error = ? WHERE id = ?");
@@ -73,4 +84,4 @@ function createMail(db) {
   return { queue, flush, outbox, configured: () => !!mailConfig().key, config: mailConfig };
 }
 
-module.exports = { createMail, mailConfig };
+module.exports = { createMail, mailConfig, mailUsage };
