@@ -1,16 +1,15 @@
-// The look of every mail: the station's night totem (black band, gasoil green and essence red
-// stripe, yellow action slab) on a light page that every mail app shows the same way.
+// The look of every mail, as the big senders do it: the text on a plain white page; only the
+// header (the MTG Station logo on the night tile, a link to the site, gasoil and essence stripe),
+// the buttons and the contact icons are tiles.
 // Tables and inline styles only: that is what Gmail, Outlook and phone mail apps all read.
 // Each mail is built from blocks; the same blocks give the plain-text version.
 
 const C = {
-  page: '#ecebe6',
-  card: '#ffffff',
+  page: '#ffffff',
   night: '#0a0a0b',
   ink: '#1d1d20',
   muted: '#6b6a66',
   line: '#e6e5e0',
-  yellow: '#ffc414',
   gasoil: '#23c46b',
   essence: '#f0313a',
   good: '#178a4a',
@@ -27,7 +26,7 @@ function blockHtml(b) {
   if (b.p != null) return `<p style="margin:0 0 16px;font:16px/1.55 ${BODY};color:${C.ink}">${esc(b.p)}</p>`;
   if (b.amount) {
     const color = LEVEL[b.amount.level] || C.ink;
-    return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:4px 0 20px;border-collapse:separate;background:#f6f5f1;border-radius:10px"><tr><td style="padding:18px 20px">
+    return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:4px 0 22px;border-collapse:collapse;border-top:1px solid ${C.line}"><tr><td style="padding:16px 0 0">
       <div style="font:600 13px/1.3 ${BODY};color:${C.muted};text-transform:uppercase;letter-spacing:.06em">${esc(b.amount.label)}</div>
       <div style="font:700 40px/1.1 ${DISPLAY};color:${color};margin-top:6px">${esc(b.amount.value)}</div>
       ${b.amount.sub ? `<div style="font:14px/1.4 ${BODY};color:${C.muted};margin-top:4px">${esc(b.amount.sub)}</div>` : ''}
@@ -55,12 +54,12 @@ function blockHtml(b) {
     return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;border-collapse:collapse">${items}</table>`;
   }
   if (b.button) {
-    return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 22px"><tr><td style="background:${C.yellow};border-radius:8px">
-      <a href="${esc(b.button.url)}" style="display:inline-block;padding:14px 24px;font:700 16px/1.2 ${BODY};color:${C.night};text-decoration:none;border-radius:8px">${esc(b.button.label)}</a>
+    return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 24px"><tr><td style="background:${C.night};border-radius:10px">
+      <a href="${esc(b.button.url)}" style="display:inline-block;padding:15px 26px;font:600 16px/1.2 ${BODY};color:#ffffff;text-decoration:none;border-radius:10px">${esc(b.button.label)}</a>
     </td></tr></table>`;
   }
   if (b.code) {
-    return `<div style="margin:0 0 20px;padding:14px 18px;background:#f6f5f1;border-radius:10px;font:15px/1.7 ${BODY};color:${C.ink}">${b.code
+    return `<div style="margin:0 0 20px;font:15px/1.8 ${BODY};color:${C.ink}">${b.code
       .map(([label, value]) => `${esc(label)} : <strong style="font-size:16px;letter-spacing:.02em">${esc(value)}</strong>`)
       .join('<br>')}</div>`;
   }
@@ -88,30 +87,48 @@ function renderMail(mail, station) {
     mail.unsubscribeUrl ? `<a href="${esc(mail.unsubscribeUrl)}" style="color:${C.muted};text-decoration:underline">Ne plus recevoir ces mails</a>` : null,
     mail.manageUrl ? `<a href="${esc(mail.manageUrl)}" style="color:${C.muted};text-decoration:underline">Gérer mes mails</a>` : null,
   ].filter(Boolean);
-  // The MTG Station logo (public/media/mail-logo.png, drawn at twice its size); its name if images are off.
+  // The MTG Station logo (public/media/mail-logo.png, drawn at twice its size), a link to the site;
+  // its name if images are off.
+  const logoImg = `<img src="${esc(station.appUrl)}/media/mail-logo.png" width="104" height="61" alt="${esc(station.name)}" style="display:block;border:0;font:800 22px/1 ${DISPLAY};letter-spacing:.04em;text-transform:uppercase;color:#f5f4ef">`;
   const logo = station.appUrl
-    ? `<img src="${esc(station.appUrl)}/media/mail-logo.png" width="124" height="73" alt="${esc(station.name)}" style="display:block;border:0;font:800 22px/1 ${DISPLAY};letter-spacing:.04em;text-transform:uppercase;color:#f5f4ef">`
+    ? `<a href="${esc(station.appUrl)}" style="display:inline-block;text-decoration:none">${logoImg}</a>`
     : `<span style="font:800 22px/1 ${DISPLAY};letter-spacing:.04em;text-transform:uppercase;color:#f5f4ef">${esc(station.name)}</span>`;
+  // SMS, WhatsApp and call, each on its night tile (public/media/mail-*.png).
+  const tel = (station.phone || '').replace(/[^\d+]/g, '');
+  let wa = tel.replace(/\D/g, '');
+  if (wa.startsWith('00')) wa = wa.slice(2);
+  if (wa.startsWith('0')) wa = `243${wa.slice(1)}`;
+  else if (wa.length === 9) wa = `243${wa}`;
+  const icon = (href, file, label) =>
+    `<td style="padding:0 12px 0 0"><a href="${esc(href)}" style="text-decoration:none"><img src="${esc(station.appUrl)}/media/${file}.png" width="40" height="40" alt="${label}" style="display:block;border:0;border-radius:9px;font:600 12px/40px ${BODY};color:${C.muted}"></a></td>`;
+  const icons =
+    tel && station.appUrl
+      ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:14px 0 18px"><tr>${icon(`sms:${tel}`, 'mail-sms', 'SMS')}${wa.length >= 11 ? icon(`https://wa.me/${wa}`, 'mail-whatsapp', 'WhatsApp') : ''}${icon(`tel:${tel}`, 'mail-appel', 'Appeler')}</tr></table>`
+      : '';
 
   const html = `<!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light only"><title>${esc(mail.title)}</title></head>
 <body style="margin:0;padding:0;background:${C.page}">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0">${esc(mail.preheader || mail.title)}</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.page}"><tr><td align="center" style="padding:24px 12px">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;border-collapse:separate;background:${C.card};border-radius:14px;overflow:hidden">
-    <tr><td style="background:${C.night};padding:22px 28px">${logo}</td></tr>
-    <tr><td style="font-size:0;line-height:0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-      <td width="50%" height="6" style="background:${C.gasoil};font-size:0;line-height:0">&nbsp;</td>
-      <td width="50%" height="6" style="background:${C.essence};font-size:0;line-height:0">&nbsp;</td>
-    </tr></table></td></tr>
-    <tr><td style="padding:30px 28px 12px">
-      ${mail.eyebrow ? `<div style="font:700 12px/1.3 ${BODY};letter-spacing:.1em;text-transform:uppercase;color:${C.muted};margin-bottom:8px">${esc(mail.eyebrow)}</div>` : ''}
-      <h1 style="margin:0 0 18px;font:700 30px/1.1 ${DISPLAY};color:${C.night}">${esc(mail.title)}</h1>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.page}"><tr><td align="center" style="padding:28px 16px 36px">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px">
+    <tr><td style="background:${C.night};border-radius:14px;overflow:hidden">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+        <tr><td style="padding:20px 24px 18px">${logo}</td></tr>
+        <tr><td style="font-size:0;line-height:0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+          <td width="50%" height="5" style="background:${C.gasoil};font-size:0;line-height:0">&nbsp;</td>
+          <td width="50%" height="5" style="background:${C.essence};font-size:0;line-height:0">&nbsp;</td>
+        </tr></table></td></tr>
+      </table>
+    </td></tr>
+    <tr><td style="padding:34px 4px 6px">
+      <h1 style="margin:0 0 20px;font:700 30px/1.1 ${DISPLAY};color:${C.night}">${esc(mail.title)}</h1>
       ${mail.blocks.map(blockHtml).join('\n')}
     </td></tr>
-    <tr><td style="padding:18px 28px 26px;border-top:1px solid ${C.line}">
-      <p style="margin:0 0 6px;font:13px/1.5 ${BODY};color:${C.muted}">${esc(contact)}</p>
-      <p style="margin:0;font:13px/1.5 ${BODY};color:${C.muted}">${esc(station.name)} · Goma${links.length ? ` · ${links.join(' · ')}` : ''}</p>
+    <tr><td style="padding:22px 4px 0;border-top:1px solid ${C.line}">
+      <p style="margin:0;font:14px/1.5 ${BODY};color:${C.ink}">${esc(icons ? 'Pour toute question ou plus d’informations, contactez-nous' : contact)}</p>
+      ${icons}
+      <p style="margin:${icons ? 0 : '10px'} 0 0;font:12px/1.6 ${BODY};color:${C.muted}">${esc(station.name)} · Goma${links.length ? `<br>${links.join(' · ')}` : ''}</p>
     </td></tr>
   </table>
 </td></tr></table>
