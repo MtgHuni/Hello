@@ -128,7 +128,7 @@ async function renderReceivables(page, ctx) {
   setContent(
     page,
     h('a', { class: 'back no-print', href: '#/clients' }, icon('back'), 'Clients'),
-    pageHeader('Créances', 'Ce que les clients doivent, par ancienneté. Les règlements soldent d’abord les crédits les plus anciens.'),
+    pageHeader('Créances', null),
     h(
       'div',
       { class: 'grid grid-4' },
@@ -203,7 +203,7 @@ export async function renderCustomerDetail(page, ctx) {
               'div',
               { style: 'flex:1;min-width:220px' },
               h('h3', {}, 'Fiche à compléter'),
-              h('p', { class: 'muted', style: 'font-size:15px;margin-top:2px' }, `Créé à la pompe${c.created_by_name ? ` par ${c.created_by_name}` : ''} avec le nom seulement. Ajoutez le téléphone, l’immatriculation et le type (particulier ou abonné).`),
+              h('p', { class: 'muted', style: 'font-size:15px;margin-top:2px' }, `Créé à la pompe${c.created_by_name ? ` par ${c.created_by_name}` : ''}`),
             ),
             edit(button('Compléter la fiche', () => customerDialog(c, ctx, reload), { iconName: 'edit' })),
           )
@@ -246,7 +246,7 @@ export function statement(acc, period, onPeriod, { onOldDebt } = {}) {
       ? h(
           'section',
           { class: 'card', style: dues.late ? 'box-shadow:inset 0 0 0 2px var(--red)' : '' },
-          cardHeader('Paiement mensuel (abonné)', 'Le total du mois se paie en fin de mois'),
+          cardHeader('Paiement mensuel (abonné)', null),
           dues.overdue > 0
             ? h(
                 'div',
@@ -256,7 +256,6 @@ export function statement(acc, period, onPeriod, { onOldDebt } = {}) {
               )
             : null,
           h('div', { class: 'summary-line' }, h('span', {}, 'Mois en cours', h('span', { class: 'muted small' }, ` — à payer avant le ${fmt.date(dues.nextDeadline)}`)), h('strong', {}, fmt.money(dues.currentMonth))),
-          dues.late ? h('p', { class: 'muted small', style: 'margin-top:8px' }, 'Le crédit est suspendu jusqu’au paiement du mois précédent.') : null,
         )
       : null,
     h(
@@ -313,7 +312,7 @@ export function statement(acc, period, onPeriod, { onOldDebt } = {}) {
 async function paymentDialog(c, reload) {
   const ok = await formDialog({
     title: `Règlement — ${c.name}`,
-    intro: `${c.balance < 0 ? `Avance actuelle : ${fmt.money(-c.balance)}` : `Solde dû actuel : ${fmt.money(c.balance)}`}. Un montant au-delà du solde devient une avance ; une dette d’avant l’application s’ajoute avec « Ancienne dette ».`,
+    intro: `${c.balance < 0 ? `Avance actuelle : ${fmt.money(-c.balance)}` : `Solde dû actuel : ${fmt.money(c.balance)}`}`,
     fields: [
       { name: 'amount', label: 'Montant ($)', type: 'number', step: '0.01', min: '0.01', required: true, value: c.balance > 0 ? c.balance : '' },
       { name: 'method', label: 'Mode', type: 'select', options: ['espèces', 'mobile money'].map((m) => [m, m[0].toUpperCase() + m.slice(1)]) },
@@ -331,7 +330,6 @@ async function paymentDialog(c, reload) {
 async function oldDebtDialog(c, reload) {
   const ok = await formDialog({
     title: `Ancienne dette — ${c.name}`,
-    intro: 'Ce que le client devait avant l’application, d’après le cahier. Elle s’ajoute à son solde et les règlements la soldent en premier.',
     grid: false,
     fields: [
       { name: 'amount', label: 'Montant ($)', type: 'number', step: '0.01', min: '0.01', required: true },
@@ -347,7 +345,7 @@ async function oldDebtDialog(c, reload) {
 }
 
 async function removeOldDebt(c, m, reload) {
-  if (!(await confirmDialog('Retirer cette ancienne dette ?', `${fmt.money(m.amount)} · ${m.label}. Le retrait est gardé au journal.`, { confirmLabel: 'Retirer', danger: true }))) return;
+  if (!(await confirmDialog('Retirer cette ancienne dette ?', `${fmt.money(m.amount)} · ${m.label}`, { confirmLabel: 'Retirer', danger: true }))) return;
   try {
     const r = await api.del(`/customers/${c.id}/old-debts/${m.id}`);
     toast(`Ancienne dette retirée. Nouveau solde : ${fmt.money(r.balance)}`);
@@ -360,11 +358,10 @@ async function removeOldDebt(c, m, reload) {
 async function loginDialog(c, reload) {
   const ok = await formDialog({
     title: c.login ? 'Accès à l’espace client' : 'Créer un accès client',
-    intro: 'Le client pourra consulter ses achats, son solde et imprimer ses relevés. Communiquez-lui ces identifiants.',
     grid: false,
     fields: [
       { name: 'login', label: 'Identifiant', value: c.login || '', required: true },
-      { name: 'password', label: c.login ? 'Nouveau mot de passe' : 'Mot de passe', type: 'text', required: true, hint: '8 caractères minimum' },
+      { name: 'password', label: c.login ? 'Nouveau mot de passe' : 'Mot de passe', type: 'text', required: true },
     ],
     onSubmit: (d) => api.post(`/customers/${c.id}/login`, d),
   });

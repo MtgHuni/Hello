@@ -22,7 +22,7 @@ export async function renderJournal(page, ctx) {
   setContent(
     page,
     h('a', { class: 'back no-print', href: '#/reglages' }, icon('back'), 'Réglages'),
-    pageHeader('Journal', 'Qui a changé quoi, et quand. Une opération annulée y reste visible.'),
+    pageHeader('Journal', null),
     h(
       'section',
       { class: 'card flush' },

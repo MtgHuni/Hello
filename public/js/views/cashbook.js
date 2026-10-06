@@ -79,7 +79,7 @@ export async function renderCashbook(page, ctx) {
     page,
     pageHeader(
       'Caisse',
-      'Livre de caisse : espèces et mobile money tenus à part.',
+      null,
       button('Télécharger', () => downloadDialog(), { variant: 'secondary', iconName: 'download' }),
       adminEdit(button('Compter', () => countDialog(account, current, reload), { variant: 'secondary', iconName: 'check' })),
       adminEdit(button('Mouvement', () => movementDialog(account, reload), { iconName: 'plus' })),
@@ -92,7 +92,6 @@ export async function renderCashbook(page, ctx) {
             'div',
             { style: 'flex:1;min-width:220px' },
             h('h3', {}, 'Solde de départ'),
-            h('p', { class: 'muted', style: 'font-size:15px;margin-top:2px' }, 'Comptez l’argent en caisse et le solde du mobile money, et saisissez-les : le livre part de là. Ce qui a été enregistré avant ce comptage ne compte plus dans le solde.'),
           ),
           button('Saisir le solde de départ', () => openingDialog(book.balances, reload), { iconName: 'edit' }),
         )
@@ -144,7 +143,7 @@ export async function renderCashbook(page, ctx) {
             reload();
           },
         ),
-        h('p', {}, view === 'detail' ? 'Touchez un mouvement saisi à la main pour le retirer' : `${book.accountLabel} · du ${fmt.date(range.from)} au ${fmt.date(range.to)}`),
+        h('p', {}, `${book.accountLabel} · du ${fmt.date(range.from)} au ${fmt.date(range.to)}`),
       ),
       view === 'days'
         ? table(
@@ -178,7 +177,6 @@ export async function renderCashbook(page, ctx) {
 async function openingDialog(balances, reload) {
   const ok = await formDialog({
     title: 'Solde de départ',
-    intro: 'Ce que vous avez compté. Le livre repart de ces montants à la date choisie.',
     fields: [
       { name: 'cash', label: 'Espèces en caisse ($)', type: 'number', step: '0.01', min: '0', required: !balances.cash.hasOpening, hidden: balances.cash.hasOpening },
       { name: 'momo', label: 'Solde du mobile money ($)', type: 'number', step: '0.01', min: '0', required: !balances.momo.hasOpening, hidden: balances.momo.hasOpening },
@@ -202,10 +200,6 @@ async function movementDialog(acc, reload) {
   const label = ACCOUNTS.find(([v]) => v === acc)[1];
   const ok = await formDialog({
     title: `Mouvement · ${label}`,
-    intro:
-      acc === 'momo'
-        ? 'De l’argent qui entre ou qui sort du mobile money. « Vers la caisse » : retiré du mobile money, il entre dans les espèces.'
-        : 'De l’argent qui entre ou qui sort de la caisse. Les postes, dépenses, règlements et paiements aux fournisseurs s’inscrivent tout seuls.',
     grid: false,
     fields: [
       { name: 'kind', label: 'Mouvement', type: 'segment', full: true, options: KINDS[acc], value: 'autre_entree' },
@@ -225,7 +219,7 @@ async function countDialog(acc, current, reload) {
   const label = ACCOUNTS.find(([v]) => v === acc)[1];
   const ok = await formDialog({
     title: `Compter · ${label}`,
-    intro: `Solde du livre : ${fmt.money(current.balance)}. Saisissez ce que vous avez réellement compté ; l’écart est gardé.`,
+    intro: `Solde du livre : ${fmt.money(current.balance)}`,
     grid: false,
     autofocus: true,
     fields: [
@@ -243,7 +237,7 @@ async function countDialog(acc, current, reload) {
 }
 
 async function removeMovement(m, reload) {
-  if (!(await confirmDialog('Retirer ce mouvement ?', `${m.label} · ${fmt.money(m.in || m.out)}. Le retrait est gardé au journal.`, { confirmLabel: 'Retirer', danger: true }))) return;
+  if (!(await confirmDialog('Retirer ce mouvement ?', `${m.label} · ${fmt.money(m.in || m.out)}`, { confirmLabel: 'Retirer', danger: true }))) return;
   try {
     await api.del(`/cashbook/movements/${m.id}`);
     toast('Mouvement retiré.');

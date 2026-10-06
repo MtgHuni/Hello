@@ -86,6 +86,7 @@ Requires Node ≥ 22.13 (built-in `node:sqlite`, hence `--disable-warning=Experi
 - CSS: tokens, components and both themes are in `public/css/app.css`; reuse its classes rather than inline styles. Fuel colours go through `productColor(id)` / `--gasoil`, `--essence`. Inter and Barlow Condensed are self-hosted in `public/fonts/`.
 - Brand film: the HyperFrames source is `videos/mtg-totem-sting/`; the rendered WebM/MP4 and poster live in `public/media/`. Re-render and re-encode after changing it.
 - Sheets are flex columns: `.sheet-body` scrolls (`min-height: 0`) so that `.sheet-footer` stays visible. Use `dvh` units, because iOS Safari's `vh` includes its toolbars.
+- No explanatory text outside Réglages (the user asked for it): no form `intro` or field `hint` that explains, no card or page subtitle that describes how things work, confirmations without a sentence of explanation. Show data and statuses only (names, amounts, dates, « En retard »…).
 - The attendant screen is used on a phone with a queue of customers waiting, so keep it to as few taps as possible.
 
 ## Deployment

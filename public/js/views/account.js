@@ -32,7 +32,7 @@ export async function renderAccount(page) {
     else if (seenConnected) return clearInterval(timer);
     const r = await api.get('/me/requests/current').catch(() => undefined);
     if (r === undefined) return;
-    if (!r && wasPending) toast('Votre demande a expiré : personne ne l’a traitée en 30 minutes. Vous pouvez la refaire.', 'error');
+    if (!r && wasPending) toast('Demande expirée', 'error');
     wasPending = r?.status === 'pending';
     drawRequest(r);
     clearInterval(timer);
@@ -49,10 +49,10 @@ export async function renderAccount(page) {
           'section',
           { class: 'card fill-card' },
           spinner(),
-          h('div', { class: 'muted' }, 'En attente de confirmation par le pompiste'),
+          h('div', { class: 'muted' }, 'En attente du pompiste'),
           h('div', { class: 'big' }, r.amount ? fmt.money(r.amount) : fmt.liters(r.liters)),
           h('div', {}, `${r.product_name} · ${{ credit: 'à crédit', combo: 'avec mes combos', paid: 'payé' }[r.payment] ?? ''}${r.plate ? ` · ${r.plate}` : ''}`),
-          h('p', { class: 'muted small', style: 'margin-top:10px' }, `Donnez votre nom au pompiste : ${r.customer_name}`),
+
           h(
             'div',
             { style: 'margin-top:16px' },
@@ -76,7 +76,7 @@ export async function renderAccount(page) {
         h('h2', {}, confirmed ? 'Plein confirmé' : 'Demande refusée'),
         confirmed
           ? h('div', { class: 'big' }, `${fmt.liters(r.sale_liters)} · ${fmt.money(r.sale_amount)}`)
-          : h('p', { class: 'muted', style: 'margin-top:6px' }, r.note || 'Adressez-vous au pompiste.'),
+          : r.note ? h('p', { class: 'muted', style: 'margin-top:6px' }, r.note) : null,
         confirmed
           ? h('div', {}, `${!flags.combos ? '' : r.sale_points ? `+${r.sale_points} combos · ` : r.sale_combos ? `−${r.sale_combos} combos · ` : r.payment === 'credit' ? 'combos au paiement du crédit · ' : ''}confirmé par ${r.handled_by_name}`)
           : null,
@@ -104,9 +104,9 @@ export async function renderAccount(page) {
         'p',
         { class: 'muted', style: 'font-size:15px' },
         balance >= threshold
-          ? `Vos combos valent ${fmt.money(value)} de carburant : choisissez « Mes combos » au moment d’acheter du carburant.`
-          : `Encore ${fmt.number(threshold - balance)} combos pour pouvoir les échanger contre du carburant.`,
-        pending ? ` ${fmt.number(pending)} combos arriveront quand votre crédit sera payé.` : '',
+          ? `= ${fmt.money(value)} de carburant`
+          : `Encore ${fmt.number(threshold - balance)} combos avant l’échange`,
+        pending ? ` · +${fmt.number(pending)} au paiement du crédit` : '',
       ),
     );
   }
@@ -134,8 +134,7 @@ export async function renderAccount(page) {
     const ok = await formDialog({
       title: 'Acheter du carburant',
       submitLabel: 'Envoyer au pompiste',
-      intro: 'Préparez votre achat pendant que vous attendez : le pompiste n’aura plus qu’à confirmer.',
-      grid: false,
+        grid: false,
       fields: [
         { name: 'productId', label: 'Carburant', type: 'segment', options: products.map((p) => [p.id, `${p.name} · ${fmt.price(priceOf(p))}`]), onInput: update },
         { name: 'unit', label: 'Je veux', type: 'segment', options: [['amount', 'Un montant ($)'], ['liters', 'Des litres']], onInput: update },
@@ -171,6 +170,6 @@ export async function renderAccount(page) {
   const subscriber = acc.customer.type === 'account';
   const totem = priceTotem(products.map((p) => ({ id: p.id, name: p.name, price: subscriber ? p.subscriber_price : p.price })));
   const month = new Date().toLocaleDateString('sv-SE').slice(0, 7);
-  setContent(page, pageHeader(acc.customer.name, 'Votre espace client', pdfLinks(`/api/me/statement.pdf?month=${month}`, `releve-${month}.pdf`, { label: 'Mon relevé PDF' })), totem, fillHost, combosHost, statementHost, h('p', { class: 'muted small section' }, 'Une question sur votre compte ? Adressez-vous au gérant de la station.'));
+  setContent(page, pageHeader(acc.customer.name, null, pdfLinks(`/api/me/statement.pdf?month=${month}`, `releve-${month}.pdf`, { label: 'Mon relevé PDF' })), totem, fillHost, combosHost, statementHost);
   await refreshRequest();
 }

@@ -91,7 +91,7 @@ async function changePassword() {
     grid: false,
     fields: [
       { name: 'current', label: 'Mot de passe actuel', type: 'password', required: true, autocomplete: 'current-password' },
-      { name: 'password', label: 'Nouveau mot de passe', type: 'password', required: true, autocomplete: 'new-password', hint: '8 caractères minimum' },
+      { name: 'password', label: 'Nouveau mot de passe', type: 'password', required: true, autocomplete: 'new-password' },
     ],
     onSubmit: (d) => api.post('/auth/password', d),
   });

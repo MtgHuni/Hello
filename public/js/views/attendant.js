@@ -31,7 +31,7 @@ async function renderStart(page, ctx, remarkCards = []) {
         ? h(
             'div',
             { class: 'stack', style: 'gap:10px' },
-            h('p', { class: 'muted' }, 'Index de départ, relevés automatiquement'),
+            h('p', { class: 'muted' }, 'Index de départ'),
             nozzles.map((n) =>
               h('div', { class: 'summary-line' }, h('span', {}, h('span', { class: 'swatch', style: `background:${productColor(n.product_id)}` }), n.product_name), h('span', { class: 'num' }, fmt.number(n.meter))),
             ),
@@ -53,7 +53,7 @@ async function renderStart(page, ctx, remarkCards = []) {
   });
 
   setContent(page, 
-    pageHeader('Ouvrir le poste', 'Le premier poste de la station : il couvre l’essence et le gasoil. Ensuite, chaque clôture ouvre le suivant.'),
+    pageHeader('Ouvrir le poste', null),
     remarkCards,
     card(form),
   );
@@ -91,7 +91,7 @@ function remarkCarousel(remarks, ctx, reload) {
       ),
     ),
   );
-  if (!many) return h('section', { class: 'card flush remark-card' }, cardHeader('Remarque du gérant', 'À lire, puis « C’est noté »'), track);
+  if (!many) return h('section', { class: 'card flush remark-card' }, cardHeader('Remarque du gérant', null), track);
 
   const count = h('span', { class: 'remark-count', 'aria-live': 'polite' }, `1 / ${remarks.length}`);
   const dots = h('div', { class: 'remark-dots', 'aria-hidden': 'true' }, remarks.map((_, i) => h('span', { class: i ? '' : 'on' })));
@@ -114,7 +114,7 @@ function remarkCarousel(remarks, ctx, reload) {
   return h(
     'section',
     { class: 'card flush remark-card', 'aria-roledescription': 'carrousel' },
-    cardHeader(`${remarks.length} remarques du gérant`, 'Faites glisser pour lire la suivante', h('div', { class: 'remark-nav' }, prev, count, next)),
+    cardHeader(`${remarks.length} remarques du gérant`, null, h('div', { class: 'remark-nav' }, prev, count, next)),
     track,
     dots,
   );
@@ -133,7 +133,7 @@ async function cancelEntry(ctx, x, reload) {
     } else {
       const ok = await formDialog({
         title: 'Demander l’annulation',
-        intro: `${x.title} · ${x.amount}. Le gérant doit accepter l’annulation : l’opération reste comptée jusque-là.`,
+        intro: `${x.title} · ${x.amount}`,
         grid: false,
         fields: [{ name: 'reason', label: 'Raison', placeholder: 'Erreur de saisie, client parti…' }],
         submitLabel: 'Envoyer au gérant',
@@ -241,7 +241,7 @@ function renderOpenShift(page, ctx, shift, remarks = null) {
         kpi('Dépenses', fmt.money(shift.expenses_amount)),
       ),
       card(
-        cardHeader('Opérations du poste', 'Crédits, mobile money, règlements, dépenses et tests de pompe : les ventes sont calculées par les index.'),
+        cardHeader('Opérations du poste', null),
         entries.length
           ? entries.map((x) =>
               h(
@@ -265,7 +265,7 @@ function renderOpenShift(page, ctx, shift, remarks = null) {
           : h('p', { class: 'muted' }, 'Aucune opération pour le moment.'),
       ),
       card(
-        cardHeader('Prix et index', shift.checkpoints.length ? 'Prix du poste et dernier index relevé' : 'Prix et index relevés à l’ouverture du poste'),
+        cardHeader('Prix et index', null),
         shift.readings.map((r) =>
           h(
             'div',
@@ -316,7 +316,7 @@ function requestQueue(shift, reload) {
     } catch (err) {
       if (err.code === 'has_credit') return creditBlocked(r.customer_id, err.message);
       if (err.code !== 'over_limit') throw err;
-      if (!(await confirmDialog('Accorder le crédit ?', `${err.message} Si vous accordez ce crédit, il sera signalé au gérant avec votre nom.`, { confirmLabel: 'Accorder' }))) return;
+      if (!(await confirmDialog('Accorder le crédit ?', err.message, { confirmLabel: 'Accorder' }))) return;
       await api.post(`/requests/${r.id}/confirm`, { ...adjust, grantCredit: true });
       toast('Crédit accordé et signalé au gérant');
     }
@@ -327,7 +327,6 @@ function requestQueue(shift, reload) {
     await formDialog({
       title: `Ajuster — ${r.customer_name}`,
       submitLabel: 'Confirmer la vente',
-      intro: 'Saisissez la quantité réellement servie.',
       grid: false,
       fields: [{ name: 'liters', label: 'Litres servis', type: 'number', step: '0.01', min: '0.01', required: true, value: r.liters ?? (r.amount && priceOf(r.product_id, r.customer_type) ? Math.round((r.amount / priceOf(r.product_id, r.customer_type)) * 100) / 100 : '') }],
       onSubmit: (d) => confirmRequest(r, { liters: d.liters }),
@@ -486,7 +485,7 @@ export async function creditBlocked(customerId, fallback) {
   const info = await api.get(`/customers/${customerId}/unpaid`).catch(() => null);
   if (!info) return noticeDialog('Pas de nouveau crédit', h('p', {}, fallback || 'Ce client doit encore un crédit : pas de nouveau crédit avant son paiement.'));
   return noticeDialog('Pas de nouveau crédit', [
-    h('p', {}, `${info.name} doit encore `, h('strong', {}, fmt.money(info.balance)), '. Un particulier prend un nouveau crédit seulement après avoir payé le précédent.'),
+    h('p', {}, `${info.name} doit encore `, h('strong', {}, fmt.money(info.balance)), '.'),
     h(
       'ul',
       { class: 'notice-list' },
@@ -535,7 +534,7 @@ export async function addCredit(ctx, shift, reload) {
       who.textContent = '';
       who.className = 'hint-line';
     } else if (choice && !choice.id) {
-      who.textContent = `Nouveau client « ${choice.name} » : il sera créé à l’enregistrement.`;
+      who.textContent = `Nouveau client « ${choice.name} »`;
       who.className = 'hint-line new';
     } else if (c) {
       const parts = [c.type === 'account' ? 'Abonné' : 'Particulier'];
@@ -552,7 +551,7 @@ export async function addCredit(ctx, shift, reload) {
       }
       if (c.plate && !form.elements.plate.value) form.elements.plate.value = c.plate;
     } else {
-      who.textContent = 'Touchez un client proposé, ou « Nouveau client » pour le créer.';
+      who.textContent = '';
       who.className = 'hint-line';
     }
     const price = priceOf(form.elements.productId.value, c);
@@ -607,7 +606,7 @@ export async function addCredit(ctx, shift, reload) {
           throw new Error('Crédit non enregistré : le client doit encore son crédit précédent.');
         }
         if (err.code !== 'over_limit') throw err;
-        const grant = await confirmDialog('Accorder le crédit ?', `${err.message} Si vous accordez ce crédit, il sera signalé au gérant avec votre nom.`, { confirmLabel: 'Accorder' });
+        const grant = await confirmDialog('Accorder le crédit ?', err.message, { confirmLabel: 'Accorder' });
         if (!grant) throw new Error('Crédit non enregistré : refusé.');
         return api.post(`/shifts/${shift.id}/sales`, { ...body, grantCredit: true });
       }
@@ -628,9 +627,9 @@ export async function addPayment(shift, reload) {
   const oldField = h(
     'div',
     {},
-    field({ name: 'oldDebt', label: 'Ancienne dette, d’avant l’application ($)', type: 'number', step: '0.01', min: '0.01', placeholder: 'Vide = le montant payé', hint: 'D’après le cahier : ce que le client devait avant ce règlement.' }),
+    field({ name: 'oldDebt', label: 'Ancienne dette, d’avant l’application ($)', type: 'number', step: '0.01', min: '0.01', placeholder: 'Vide = le montant payé' }),
   );
-  const advanceNote = h('p', { class: 'hint-line', hidden: true }, 'Le surplus est gardé pour le client : ses prochains crédits seront déduits de cette avance.');
+  const advanceNote = h('p', { class: 'hint-line', hidden: true }, 'Le surplus devient une avance.');
   const oldBox = h(
     'div',
     { class: 'stack', style: 'gap:12px', hidden: true },
@@ -658,12 +657,12 @@ export async function addPayment(shift, reload) {
     owes.textContent = !c
       ? ''
       : !c.id
-        ? 'Nouveau client : il sera créé avec ce règlement.'
+        ? 'Nouveau client'
         : c.balance > 0
-          ? `Doit ${fmt.money(c.balance)} dans l’application`
+          ? `Doit ${fmt.money(c.balance)}`
           : c.balance < 0
             ? `A déjà une avance de ${fmt.money(-c.balance)}`
-            : 'Aucune dette dans l’application.';
+            : 'Aucune dette';
   };
   const search = customerSearch(customers, {
     allowNew: true,
@@ -675,13 +674,12 @@ export async function addPayment(shift, reload) {
   const ok = await formDialog({
     title: 'Règlement client',
     submitLabel: 'Encaisser',
-    intro: 'Un client vient payer, même une dette d’avant l’application : l’argent est ajouté à votre caisse. S’il n’existe pas encore, touchez « Nouveau client ».',
     grid: false,
     autofocus: true,
     fields: [
       { name: 'customer', label: 'Client (nom, plaque ou téléphone)', required: true, placeholder: 'Tapez quelques lettres…', onInput: search.onInput },
       { name: 'customerChips', type: 'node', node: h('div', {}, search.chips, owes) },
-      { name: 'amount', label: 'Montant reçu ($)', type: 'number', step: '0.01', min: '0.01', required: true, hint: 'Si le client doit de l’argent, son solde est proposé : changez-le s’il paie une partie.', onInput: (e) => refresh(e.target.form) },
+      { name: 'amount', label: 'Montant reçu ($)', type: 'number', step: '0.01', min: '0.01', required: true, onInput: (e) => refresh(e.target.form) },
       { name: 'oldDebtBox', type: 'node', node: oldBox },
       { name: 'method', label: 'Mode', type: 'segment', options: [['espèces', 'Espèces'], ['mobile money', 'Mobile money']] },
       { name: 'reference', label: 'Référence', placeholder: 'Facultatif (n° de transaction…)' },
@@ -725,7 +723,6 @@ export async function addMomo(shift, reload) {
     autofocus: true,
     title: 'Payé en mobile money',
     submitLabel: 'Enregistrer',
-    intro: 'Les litres servis et le carburant : le montant se calcule au prix du poste. À la clôture, le total s’affiche tout seul.',
     grid: false,
     fields: [
       { name: 'liters', label: 'Litres', type: 'number', step: '0.01', min: '0.01', required: true, onInput: update },
@@ -757,9 +754,6 @@ export async function addTest(ctx, shift, reload) {
   const ok = await formDialog({
     title: 'Test de pompe',
     submitLabel: manager ? 'Enregistrer' : 'Envoyer au gérant',
-    intro: manager
-      ? 'Le carburant sorti pour un test et remis dans la cuve : il ne compte pas comme vendu.'
-      : 'Le carburant sorti pour un test et remis dans la cuve. Le gérant doit le confirmer : il ne comptera alors pas comme vendu.',
     grid: false,
     fields: [
       { name: 'nozzleId', label: 'Produit', type: 'segment', options: shift.readings.map((r) => [String(r.nozzle_id), r.product_name]), value: String(shift.readings[0]?.nozzle_id) },
@@ -781,7 +775,6 @@ export async function addExpense(ctx, shift, reload) {
     autofocus: true,
     title: 'Dépense payée en caisse',
     submitLabel: 'Enregistrer la dépense',
-    intro: 'Elle sera déduite du montant à remettre à la clôture.',
     grid: false,
     fields: [
       { name: 'amount', label: 'Montant ($)', type: 'number', step: '0.01', min: '0.01', required: true },
@@ -868,7 +861,7 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
   // Cards absent in this step are left out (append would write « null »).
   form.append(...[
     showMeters ? card(
-      cardHeader(correcting ? '1. Index de fin' : 'Index de fin', correcting ? 'Relevez le compteur de chaque produit' : 'Relevez les compteurs : le poste se ferme et le suivant s’ouvre aussitôt. Vous compterez l’argent ensuite.'),
+      cardHeader(correcting ? '1. Index de fin' : 'Index de fin', null),
       h(
         'div',
         { class: 'stack' },
@@ -885,7 +878,7 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
       ),
     ) : meterInputs,
     showMoney ? card(
-      cardHeader(correcting ? '2. Caisse' : 'Argent', 'La monnaie laissée aux pompistes reste avec eux pour le poste suivant ; comptez les espèces qu’ils vous remettent. Le mobile money est le total saisi pendant le poste.'),
+      cardHeader(correcting ? '2. Caisse' : 'Argent', null),
       h('div', { class: 'summary-line', style: 'margin-bottom:12px' }, h('span', {}, 'Mobile money reçu'), h('span', { class: 'num' }, fmt.money(momo))),
       h(
         'div',
@@ -948,10 +941,10 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const ask = correcting
-      ? ['Corriger la clôture ?', 'Les index, le stock des cuves et l’écart seront recalculés. La correction est gardée au journal.', 'Corriger']
+      ? ['Corriger la clôture ?', null, 'Corriger']
       : counting
-        ? ['Enregistrer le comptage ?', 'L’écart du poste est calculé et la monnaie laissée passe au poste en cours.', 'Enregistrer']
-        : ['Clôturer le poste ?', 'Le poste se ferme maintenant et le suivant s’ouvre aussitôt avec ces index et les pompistes en service. Vous compterez l’argent ensuite.', 'Clôturer'];
+        ? ['Enregistrer le comptage ?', null, 'Enregistrer']
+        : ['Clôturer le poste ?', null, 'Clôturer'];
     if (!(await confirmDialog(ask[0], ask[1], { confirmLabel: ask[2] }))) return;
     const submit = form.querySelector('button[type=submit]');
     submit.disabled = true;
@@ -997,7 +990,6 @@ function renderClosed(page, ctx, shift) {
           h('div', { class: 'status-icon', style: `background:var(${ok ? '--green' : '--orange'})` }, icon(ok ? 'check' : 'alert')),
           h('div', { class: 'muted' }, 'Écart de caisse'),
           h('div', { class: 'value' }, varianceCell(shift.variance, tol)),
-          h('div', { class: 'muted' }, ok ? 'Votre caisse est juste.' : 'L’écart dépasse la tolérance : le gérant va vérifier.'),
         ),
       ),
       shiftSummary(shift, tol),
@@ -1012,7 +1004,7 @@ export async function renderMyShifts(page, ctx) {
   const shifts = await api.get('/shifts');
   const tol = ctx.state.settings.cashTolerance;
   setContent(page, 
-    pageHeader('Historique', 'Vos derniers postes'),
+    pageHeader('Historique', null),
     h(
       'section',
       { class: 'card flush' },

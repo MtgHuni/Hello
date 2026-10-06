@@ -111,7 +111,7 @@ export async function renderReports(page, ctx) {
       h(
         'section',
         { class: 'card flush' },
-        h('div', { class: 'card-header' }, h('div', {}, h('h2', {}, 'Écarts par pompiste'), h('p', {}, `Manques et surplus comptés à part · tolérance ± ${fmt.money(tol)}`))),
+        h('div', { class: 'card-header' }, h('div', {}, h('h2', {}, 'Écarts par pompiste'), h('p', {}, `Tolérance ± ${fmt.money(tol)}`))),
         table(
           [
             { label: 'Pompiste', key: 'attendant' },
@@ -165,7 +165,7 @@ export async function renderReports(page, ctx) {
     h(
       'section',
       { class: 'card flush section' },
-      h('div', { class: 'card-header' }, h('div', {}, h('h2', {}, 'Cuves'), h('p', {}, 'Perte = écarts de jaugeage négatifs rapportés aux litres vendus'))),
+      h('div', { class: 'card-header' }, h('div', {}, h('h2', {}, 'Cuves'))),
       table(
         [
           { label: 'Cuve', key: 'name' },

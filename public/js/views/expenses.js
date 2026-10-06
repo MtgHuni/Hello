@@ -58,12 +58,12 @@ export async function renderExpenses(page, ctx) {
       kpi('Payées par le gérant', fmt.money(data.total - tillTotal), 'Espèces, mobile money'),
     ),
     data.byCategory.length
-      ? h('section', { class: 'card section' }, h('div', { class: 'card-header' }, h('div', {}, h('h2', {}, 'Par catégorie'), h('p', {}, 'Montant dépensé sur la période'))), categoryBars(data.byCategory))
+      ? h('section', { class: 'card section' }, h('div', { class: 'card-header' }, h('div', {}, h('h2', {}, 'Par catégorie'))), categoryBars(data.byCategory))
       : null,
     h(
       'section',
       { class: 'card flush section' },
-      h('div', { class: 'card-header' }, h('h2', {}, 'Détail'), h('p', {}, 'Touchez une dépense pour la modifier')),
+      h('div', { class: 'card-header' }, h('h2', {}, 'Détail')),
       table(
         [
           { label: 'Date', render: (e) => fmt.date(e.expense_date) },
@@ -109,7 +109,7 @@ function rowActions(e, categories, ctx, reload) {
   if (flags.readonly) return e.shift_id ? ctx.navigate(`postes/${e.shift_id}`) : null;
   if (e.shift_id) {
     actionSheet({
-      title: `Payée avec la caisse du poste n°${e.shift_id} : elle fait partie de son rapprochement et ne peut pas être modifiée ici.`,
+      title: `Dépense du poste n°${e.shift_id}`,
       actions: [{ label: `Voir le poste n°${e.shift_id}`, onClick: () => ctx.navigate(`postes/${e.shift_id}`) }],
     });
     return;

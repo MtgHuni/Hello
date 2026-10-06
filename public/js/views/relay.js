@@ -9,26 +9,20 @@ import { renderAttendant } from './attendant.js';
 const KIND = {
   releve: {
     title: 'Relève',
-    intro: 'Relevez les index et comptez les espèces : le pompiste qui vous remplace recevra ce rapport.',
     money: 'Espèces remises au pompiste suivant ($)',
     submit: 'Passer le relais',
-    confirm: 'Vous quittez le poste : le suivant le continuera avec ces index et cet argent.',
     done: 'Relais passé',
   },
   fermeture: {
     title: 'Fermeture du soir',
-    intro: 'La station ferme, le poste continue demain à l’ouverture. Relevez les index, comptez les espèces et vérifiez vos ventes.',
     money: 'Espèces en caisse à la fermeture ($)',
     submit: 'Fermer la station',
-    confirm: 'Plus rien ne pourra être saisi avant l’ouverture de demain matin.',
     done: 'Station fermée',
   },
   ouverture: {
     title: 'Ouverture du matin',
-    intro: 'Vérifiez les espèces laissées à la fermeture, puis ouvrez : le poste continue avec les index de la fermeture.',
     money: 'Espèces reprises de la fermeture ($)',
     submit: 'Ouvrir la station',
-    confirm: 'Le poste reprend avec ces index et cet argent.',
     done: 'Station ouverte',
   },
 };
@@ -91,7 +85,7 @@ export function renderJoin(page, ctx, state, remarks = []) {
     page,
     pageHeader('Poste en cours', `Poste n°${s.id} · ouvert le ${fmt.dateTime(s.opened_at)}`),
     remarks,
-    h('p', { class: 'muted', style: 'margin-bottom:16px' }, s.on_duty.length ? `En service : ${s.on_duty.join(', ')}` : 'Personne n’est en service pour le moment.'),
+    h('p', { class: 'muted', style: 'margin-bottom:16px' }, s.on_duty.length ? `En service : ${s.on_duty.join(', ')}` : 'Personne en service'),
     state.lastReport ? reportCard(state.lastReport, tol, { title: `Rapport de ${state.lastReport.by || 'la relève'}` }) : null,
     h('div', { style: 'margin-top:20px' }, button(state.lastReport ? 'Continuer le poste' : 'Prendre le poste', go, { variant: 'large block' })),
   );
@@ -127,7 +121,7 @@ export function renderCheckpoint(page, ctx, shift, kind, { report } = {}) {
     morning
       ? h('div', { hidden: true }, shift.readings.map((r) => h('input', { type: 'hidden', name: `m_${r.nozzle_id}`, value: String(lastMeter(r)) })))
       : card(
-      cardHeader('1. Index', 'Relevez le compteur de chaque produit'),
+      cardHeader('1. Index', null),
       h(
         'div',
         { class: 'stack' },
@@ -166,7 +160,7 @@ export function renderCheckpoint(page, ctx, shift, kind, { report } = {}) {
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (!(await confirmDialog(`${k.submit} ?`, k.confirm, { confirmLabel: k.submit }))) return;
+    if (!(await confirmDialog(`${k.submit} ?`, null, { confirmLabel: k.submit }))) return;
     const submit = form.querySelector('button[type=submit]');
     submit.disabled = true;
     try {
@@ -182,7 +176,7 @@ export function renderCheckpoint(page, ctx, shift, kind, { report } = {}) {
       }
       setContent(
         page,
-        pageHeader(k.done, kind === 'fermeture' ? 'Le poste continue demain à l’ouverture.' : 'Le pompiste suivant recevra ce rapport.'),
+        pageHeader(k.done, null),
         reportCard(done.report, tol, { title: 'Votre rapport' }),
         h('div', { style: 'margin-top:20px' }, button('Terminé', () => renderAttendant(page, ctx), { variant: 'large block' })),
       );
@@ -194,7 +188,7 @@ export function renderCheckpoint(page, ctx, shift, kind, { report } = {}) {
 
   setContent(
     page,
-    pageHeader(k.title, `Poste n°${shift.id} · ${k.intro}`),
+    pageHeader(k.title, `Poste n°${shift.id}`),
     morning && report ? h('div', { style: 'margin-bottom:20px' }, reportCard(report, tol, { title: `Fermeture d’hier soir${report.by ? ` · ${report.by}` : ''}` })) : null,
     form,
   );

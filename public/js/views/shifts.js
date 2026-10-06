@@ -42,7 +42,7 @@ export async function renderShifts(page, ctx) {
   };
 
   setContent(page, 
-    pageHeader('Postes', 'Rapprochement des index et de la caisse, pompiste par pompiste.'),
+    pageHeader('Postes', null),
     h(
       'section',
       { class: 'card flush' },
@@ -112,7 +112,7 @@ export async function renderShiftDetail(page, ctx) {
       ? h(
           'section',
           { class: 'card row between', style: 'margin-bottom:20px' },
-          h('div', { style: 'flex:1;min-width:220px' }, h('h3', {}, 'Argent à compter'), h('p', { class: 'muted', style: 'font-size:15px;margin-top:2px' }, 'Le poste est clôturé et le suivant a commencé. Comptez la monnaie laissée et les espèces remises : l’écart se calcule alors.')),
+          h('div', { style: 'flex:1;min-width:220px' }, h('h3', {}, 'Argent à compter')),
           isManager ? edit(button('Compter l’argent', closingBy('count'), { iconName: 'cash' })) : null,
         )
       : null,
@@ -135,7 +135,7 @@ function operationMenu(ctx, shift, kind, item, reload) {
         label: `Annuler ${KIND_TITLE[kind]}`,
         destructive: true,
         onClick: async () => {
-          if (!(await confirmDialog('Annuler cette opération ?', 'Elle sera retirée du poste (et du compte du client). L’annulation est gardée au journal.', { confirmLabel: 'Annuler l’opération', danger: true }))) return;
+          if (!(await confirmDialog('Annuler cette opération ?', null, { confirmLabel: 'Annuler l’opération', danger: true }))) return;
           try {
             await api.del(`/shifts/${shift.id}/${kind}/${item.id}`);
             toast('Opération annulée.');
@@ -160,7 +160,7 @@ async function editOperation(ctx, shift, kind, item, reload) {
         customerField,
         { name: 'productId', label: 'Produit', type: 'segment', options: products, value: item.product_id },
         { name: 'unit', label: 'Unité', type: 'segment', options: [['amount', '$'], ['liters', 'L']], value: 'amount' },
-        { name: 'qty', label: 'Quantité', type: 'number', step: '0.01', min: '0.01', value: item.amount, required: true, hint: 'Au prix du poste (prix abonné pour un abonné) : en dollars, les litres suivent ; en litres, le montant suit.' },
+        { name: 'qty', label: 'Quantité', type: 'number', step: '0.01', min: '0.01', value: item.amount, required: true },
         { name: 'plate', label: 'Plaque', value: item.plate || undefined },
       ],
       body: (d) => ({ customerId: Number(d.customerId), productId: Number(d.productId), [d.unit === 'liters' ? 'liters' : 'amount']: Number(d.qty), plate: d.plate }),
@@ -179,7 +179,7 @@ async function editOperation(ctx, shift, kind, item, reload) {
       title: 'Corriger le paiement mobile money',
       fields: [
         { name: 'productId', label: 'Carburant', type: 'segment', options: products, value: item.product_id },
-        { name: 'liters', label: 'Litres', type: 'number', step: '0.01', min: '0.01', value: item.liters, required: true, hint: 'Le montant suit le prix du poste.' },
+        { name: 'liters', label: 'Litres', type: 'number', step: '0.01', min: '0.01', value: item.liters, required: true },
       ],
       body: (d) => ({ productId: Number(d.productId), liters: Number(d.liters) }),
     },
@@ -196,7 +196,6 @@ async function editOperation(ctx, shift, kind, item, reload) {
   }[kind];
   const ok = await formDialog({
     title: forms.title,
-    intro: shift.status === 'closed' ? 'Le poste sera recalculé. La correction est gardée au journal.' : 'La correction est gardée au journal.',
     submitLabel: 'Enregistrer la correction',
     grid: false,
     fields: forms.fields,
@@ -253,7 +252,6 @@ function remarkCard(shift, isManager) {
 async function remarkDialog(shift, reload) {
   const saved = await formDialog({
     title: `Remarque · poste n°${shift.id}`,
-    intro: `Le pompiste ${shift.attendant_name} la lira dans son historique. Laissez vide pour la retirer.`,
     grid: false,
     autofocus: true,
     fields: [{ name: 'comment', label: 'Remarque', type: 'textarea', value: shift.manager_comment || undefined }],
@@ -288,7 +286,7 @@ function pumpTestsCard(shift, isManager, reload) {
     { class: 'card section', style: 'margin-bottom:20px' },
     cardHeader(
       'Tests de pompe',
-      pending ? `${pending > 1 ? `${pending} tests attendent` : 'Un test attend'} ${flags.readonly ? 'la décision du gérant' : 'votre décision'} : confirmé, le carburant n’est pas compté comme vendu.` : 'Carburant sorti pour un test et remis dans la cuve.',
+      pending ? `${pending > 1 ? `${pending} tests à décider` : '1 test à décider'}` : null,
     ),
     tests.map((t) =>
       h(
@@ -319,7 +317,7 @@ function cancellationRequests(shift, reload) {
   ].filter((i) => i.x.cancel_requested_at);
   if (!items.length) return null;
   const decide = async (i, cancel) => {
-    if (cancel && !(await confirmDialog('Annuler cette opération ?', `${i.title} · ${fmt.money(i.amount)}. Elle sera retirée du poste et du compte du client.`, { confirmLabel: 'Annuler l’opération', danger: true }))) return;
+    if (cancel && !(await confirmDialog('Annuler cette opération ?', `${i.title} · ${fmt.money(i.amount)}`, { confirmLabel: 'Annuler l’opération', danger: true }))) return;
     try {
       const url = `/shifts/${shift.id}/${i.kind}/${i.x.id}`;
       if (cancel) await api.del(url);
@@ -331,7 +329,7 @@ function cancellationRequests(shift, reload) {
     }
   };
   return card(
-    cardHeader('Annulations demandées', `${items.length > 1 ? `${items.length} opérations comptent` : 'Cette opération compte'} encore dans le poste tant que vous n’avez pas décidé.`),
+    cardHeader('Annulations demandées', `${items.length} à décider`),
     items.map((i) =>
       h(
         'div',
@@ -354,7 +352,6 @@ function cancellationRequests(shift, reload) {
 // onEdit(kind, item): the manager touches an operation to correct or cancel it.
 export function shiftSummary(shift, tolerance, onEdit = null) {
   const editable = (kind) => (onEdit ? { onRowClick: (item) => onEdit(kind, item) } : {});
-  const touchHint = onEdit ? ' · touchez une ligne pour la corriger' : '';
   const closed = shift.status !== 'open';
   return h(
     'div',
@@ -389,7 +386,7 @@ export function shiftSummary(shift, tolerance, onEdit = null) {
     h(
       'section',
       { class: 'card flush' },
-      h('div', { class: 'card-header' }, h('h2', {}, 'Crédits et demandes clients'), h('p', {}, `${shift.sales.length} opération${shift.sales.length > 1 ? 's' : ''}${shift.sales.length ? touchHint : ''}`)),
+      h('div', { class: 'card-header' }, h('h2', {}, 'Crédits et demandes clients'), h('p', {}, `${shift.sales.length} opération${shift.sales.length > 1 ? 's' : ''}`)),
       table(
         [
           { label: 'Heure', render: (s) => fmt.time(s.created_at) },
@@ -418,7 +415,7 @@ export function shiftSummary(shift, tolerance, onEdit = null) {
       ? h(
           'section',
           { class: 'card flush' },
-          h('div', { class: 'card-header' }, h('h2', {}, 'Payé en mobile money'), h('p', {}, `${shift.momo.length} paiement${shift.momo.length > 1 ? 's' : ''} · ${fmt.money(shift.momo.reduce((t, m) => t + m.amount, 0))}${touchHint}`)),
+          h('div', { class: 'card-header' }, h('h2', {}, 'Payé en mobile money'), h('p', {}, `${shift.momo.length} paiement${shift.momo.length > 1 ? 's' : ''} · ${fmt.money(shift.momo.reduce((t, m) => t + m.amount, 0))}`)),
           table(
             [
               { label: 'Heure', render: (m) => fmt.time(m.created_at) },
@@ -436,7 +433,7 @@ export function shiftSummary(shift, tolerance, onEdit = null) {
       ? h(
           'section',
           { class: 'card flush' },
-          h('div', { class: 'card-header' }, h('h2', {}, 'Règlements encaissés'), h('p', {}, `Ajoutés au montant à remettre${touchHint}`)),
+          h('div', { class: 'card-header' }, h('h2', {}, 'Règlements encaissés'), h('p', {}, `${shift.payments.length} règlement${shift.payments.length > 1 ? 's' : ''} · ${fmt.money(shift.payments.reduce((t, p) => t + p.amount, 0))}`)),
           table(
             [
               { label: 'Heure', render: (p) => fmt.time(p.created_at) },
@@ -454,7 +451,7 @@ export function shiftSummary(shift, tolerance, onEdit = null) {
       ? h(
           'section',
           { class: 'card flush' },
-          h('div', { class: 'card-header' }, h('h2', {}, 'Dépenses payées en caisse'), h('p', {}, `Déduites du montant à remettre${touchHint}`)),
+          h('div', { class: 'card-header' }, h('h2', {}, 'Dépenses payées en caisse'), h('p', {}, `${shift.expenses.length} dépense${shift.expenses.length > 1 ? 's' : ''} · ${fmt.money(shift.expenses.reduce((t, e) => t + e.amount, 0))}`)),
           table(
             [
               { label: 'Heure', render: (e) => fmt.time(e.created_at) },

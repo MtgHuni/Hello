@@ -39,7 +39,7 @@ export async function renderDashboard(page, { state, navigate }) {
     h(
       'div',
       { class: 'board section' },
-      h('section', { class: 'card board-chart' }, cardHeader('Ventes des 7 derniers jours', `Total ${fmt.money(d.last7.reduce((t, x) => t + x.amount, 0))} · chiffre d’affaires par jour, en dollars`), barChart(d.last7)),
+      h('section', { class: 'card board-chart' }, cardHeader('Ventes des 7 derniers jours', `Total ${fmt.money(d.last7.reduce((t, x) => t + x.amount, 0))}`), barChart(d.last7)),
       h(
         'section',
         { class: 'card board-alerts' },
@@ -53,7 +53,7 @@ export async function renderDashboard(page, { state, navigate }) {
       h(
         'section',
         { class: 'card board-wide' },
-        cardHeader('Niveau des cuves', 'Stock théorique : dernier jaugeage + livraisons − ventes', h('a', { class: 'more-link', href: '#/cuves' }, 'Voir les cuves', icon('chevron'))),
+        cardHeader('Niveau des cuves', null, h('a', { class: 'more-link', href: '#/cuves' }, 'Voir les cuves', icon('chevron'))),
         d.tanks.length ? h('div', { class: 'grid grid-2', style: 'gap:28px' }, d.tanks.map(tankGauge)) : h('div', { class: 'empty' }, 'Aucune cuve configurée.'),
       ),
       facts([
@@ -96,7 +96,6 @@ async function manageAlerts({ all, types }, reload) {
   const shown = all.filter((a) => !a.off);
   const ok = await formDialog({
     title: 'Gérer les alertes',
-    intro: 'Vos choix ne changent que votre tableau de bord. Une alerte masquée revient si elle change.',
     grid: false,
     fields: [
       { name: 'h-now', type: 'node', node: h('h3', { class: 'form-section' }, 'Alertes en cours') },

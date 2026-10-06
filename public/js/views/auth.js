@@ -87,12 +87,12 @@ export function renderRegister(root, stationName, onDone) {
   setContent(root, 
     authForm({
       title: 'Créer mon compte',
-      lead: `Client de ${stationName} : préparez vos pleins depuis votre téléphone${flags.combos ? ' et cumulez des combos' : ''}.`,
+      lead: `Client de ${stationName}`,
       submitLabel: 'Créer mon compte',
       fields: [
         { name: 'name', label: 'Nom complet', required: true, autocomplete: 'name' },
-        { name: 'phone', label: 'Téléphone', type: 'tel', required: true, autocomplete: 'tel', placeholder: '+243 …', hint: 'Il vous servira d’identifiant' },
-        { name: 'password', label: 'Mot de passe', type: 'password', required: true, autocomplete: 'new-password', hint: '8 caractères minimum' },
+        { name: 'phone', label: 'Téléphone', type: 'tel', required: true, autocomplete: 'tel', placeholder: '+243 …' },
+        { name: 'password', label: 'Mot de passe', type: 'password', required: true, autocomplete: 'new-password' },
       ],
       onSubmit: async (d) => {
         await api.post('/register', d);
@@ -108,14 +108,14 @@ export function renderSetup(root, onDone) {
   setContent(root, 
     authForm({
       title: 'Bienvenue',
-      lead: 'Configurons votre station. Vous pourrez tout modifier ensuite dans les réglages.',
+      lead: 'Configurons votre station.',
       submitLabel: 'Créer la station',
       wide: true,
       fields: [
         { name: 'stationName', label: 'Nom de la station', required: true, full: true, placeholder: 'Station du Centre' },
         { name: 'name', label: 'Votre nom', required: true, autocomplete: 'name' },
         { name: 'login', label: 'Identifiant de connexion', required: true, autocomplete: 'username' },
-        { name: 'password', label: 'Mot de passe', type: 'password', required: true, autocomplete: 'new-password', hint: '8 caractères minimum', full: true },
+        { name: 'password', label: 'Mot de passe', type: 'password', required: true, autocomplete: 'new-password', full: true },
         { name: 'dieselPrice', label: 'Prix du gasoil ($/L)', type: 'number', step: '0.001', min: '0', required: true },
         { name: 'petrolPrice', label: "Prix de l'essence ($/L)", type: 'number', step: '0.001', min: '0', required: true },
       ],

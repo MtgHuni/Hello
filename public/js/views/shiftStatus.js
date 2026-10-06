@@ -82,7 +82,7 @@ export async function renderShiftStatus(page, ctx) {
       'div',
       { class: 'grid grid-2 section' },
       card(
-        cardHeader('Argent', last ? `Au dernier relevé : ${last.label.toLowerCase()} de ${last.by || '—'}, ${fmt.dateTime(last.at)}` : 'Aucun relevé : l’argent se calcule avec les index'),
+        cardHeader('Argent', last ? `Au dernier relevé : ${last.label.toLowerCase()} de ${last.by || '—'}, ${fmt.dateTime(last.at)}` : 'Aucun relevé'),
         last
           ? [
               h('div', { class: 'summary-line' }, h('span', {}, 'Argent remis à ce relevé'), h('span', { class: 'num' }, fmt.money(last.handed))),
@@ -93,9 +93,8 @@ export async function renderShiftStatus(page, ctx) {
         h('div', { class: 'summary-line' }, h('span', {}, `Règlements ${last ? 'depuis' : 'du poste'}`), h('span', { class: 'num' }, `+ ${fmt.money(sum(since(shift.payments), 'amount'))}`)),
         h('div', { class: 'summary-line' }, h('span', {}, `Dépenses ${last ? 'depuis' : 'du poste'}`), h('span', { class: 'num' }, `− ${fmt.money(sum(since(shift.expenses), 'amount'))}`)),
         h('div', { class: 'summary-line' }, h('span', {}, 'Mobile money reçu (tout le poste)'), h('span', { class: 'num' }, fmt.money(shift.momo_total))),
-        h('p', { class: 'muted small', style: 'margin-top:10px' }, 'Les ventes depuis le dernier relevé ne se connaissent qu’avec les index : relevez-les avec « Relever les index maintenant » pour voir l’argent qui devrait être en caisse.'),
       ),
-      open && !shift.station_closed_at ? card(cardHeader('Relever les index maintenant', 'Rien n’est enregistré : c’est un contrôle'), meters) : null,
+      open && !shift.station_closed_at ? card(cardHeader('Relever les index maintenant', null), meters) : null,
     ),
     live,
     cps.length

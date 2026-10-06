@@ -13,7 +13,7 @@ export async function renderTanks(page, ctx) {
   setContent(page, 
     pageHeader(
       'Cuves',
-      'Livraisons, jaugeages et stock théorique.',
+      null,
       edit(button('Jaugeage', () => dipDialog(active, meters, reload), { variant: 'secondary', iconName: 'ruler' })),
       edit(button('Livraison', () => deliveryDialog(active, sup.names, meters, reload), { iconName: 'truck' })),
     ),
@@ -121,7 +121,7 @@ function meterFields(meters) {
       meters
         .filter((m) => m.tankId === Number(tankId))
         .map((m) =>
-          field({ name: `meter-${m.nozzleId}`, label: `Index ${m.label} maintenant`, type: 'number', step: '0.01', min: String(m.latest), required: true, hint: `Dernier relevé du poste : ${fmt.number(m.latest)}. Le carburant vendu depuis l’ouverture sort du stock.` }),
+          field({ name: `meter-${m.nozzleId}`, label: `Index ${m.label} maintenant`, type: 'number', step: '0.01', min: String(m.latest), required: true, hint: `Dernier relevé : ${fmt.number(m.latest)}` }),
         ),
     );
   const read = (form) => meters.filter((m) => form.elements[`meter-${m.nozzleId}`]).map((m) => ({ nozzleId: m.nozzleId, meter: Number(form.elements[`meter-${m.nozzleId}`].value) }));
@@ -140,11 +140,10 @@ async function deliveryDialog(tanks, supplierNames, meters, reload) {
     form.elements.supplier.required = credit;
     const received = Number(form.elements.litersReceived.value) || 0;
     const cost = Number(form.elements.unitCost.value) || 0;
-    total.textContent = received && cost ? `Montant : ${fmt.money(received * cost)}${credit ? ' dû au fournisseur' : form.elements.payment.value === 'prepaid' ? ' déjà payé' : ' payé maintenant'}` : credit ? 'Indiquez le prix d’achat : c’est la dette envers le fournisseur.' : '';
+    total.textContent = received && cost ? `Montant : ${fmt.money(received * cost)}${credit ? ' dû au fournisseur' : form.elements.payment.value === 'prepaid' ? ' déjà payé' : ' payé maintenant'}` : '';
   };
   const ok = await formDialog({
     title: 'Enregistrer une livraison',
-    intro: 'Le volume reçu (mesuré au déchargement) est ajouté au stock de la cuve.',
     fields: [
       { name: 'tankId', label: 'Cuve', type: 'select', options: tankOptions(tanks), required: true, full: true, onInput: (e) => index.show(e.target.value) },
       { name: 'meters', type: 'node', node: index.host },
@@ -164,7 +163,7 @@ async function deliveryDialog(tanks, supplierNames, meters, reload) {
         return await api.post('/deliveries', body);
       } catch (err) {
         if (err.code !== 'over_capacity') throw err;
-        if (!(await confirmDialog('Dépasser la capacité ?', err.message, { confirmLabel: 'Enregistrer quand même', danger: true }))) throw new Error('Corrigez l’index ou les litres reçus.');
+        if (!(await confirmDialog('Dépasser la capacité ?', err.message, { confirmLabel: 'Enregistrer quand même', danger: true }))) throw new Error('Livraison non enregistrée.');
         return api.post('/deliveries', { ...body, force: true });
       }
     },
@@ -179,7 +178,7 @@ async function deliveryDialog(tanks, supplierNames, meters, reload) {
 async function deliveryPaymentDialog(d, supplierNames, reload) {
   const ok = await formDialog({
     title: `Livraison du ${fmt.date(d.created_at)}`,
-    intro: `${d.tank_name} · ${fmt.liters(d.liters_received)} reçus. « Déjà payée » : réglée avant l’application, elle ne sort pas de la caisse. « À crédit » : le montant est ce que la station doit encore au fournisseur.`,
+    intro: `${d.tank_name} · ${fmt.liters(d.liters_received)} reçus`,
     fields: [
       { name: 'payment', label: 'Paiement', type: 'segment', full: true, options: PAYMENTS, value: d.payment || 'cash' },
       { name: 'supplier', label: 'Fournisseur', list: 'supplier-names-edit', value: d.supplier || '' },
@@ -254,7 +253,6 @@ function suppliersCard(sup, reload) {
 async function supplierDialog(s, reload) {
   const ok = await formDialog({
     title: s ? `Modifier ${s.name}` : 'Nouveau fournisseur',
-    intro: s ? 'Le nouveau nom suit sur ses livraisons et ses paiements.' : null,
     grid: false,
     fields: [
       { name: 'name', label: 'Nom', value: s?.name, required: true },
@@ -272,7 +270,6 @@ async function supplierDialog(s, reload) {
 async function supplierPaymentDialog(suppliers, s, reload) {
   const ok = await formDialog({
     title: s ? `Payer ${s.name}` : 'Payer un fournisseur',
-    intro: 'Le paiement en espèces ou mobile money sort du livre de caisse.',
     grid: false,
     fields: [
       { name: 'supplier', label: 'Fournisseur', type: 'select', options: suppliers.filter((x) => x.balance > 0).map((x) => [x.name, `${x.name} · reste ${fmt.money(x.balance)}`]), value: s?.name, required: true },
@@ -290,7 +287,7 @@ async function supplierPaymentDialog(suppliers, s, reload) {
 }
 
 async function removeSupplierPayment(p, reload) {
-  if (!(await confirmDialog('Retirer ce paiement ?', `${p.supplier} · ${fmt.money(p.amount)}. La dette revient et le retrait est gardé au journal.`, { confirmLabel: 'Retirer', danger: true }))) return;
+  if (!(await confirmDialog('Retirer ce paiement ?', `${p.supplier} · ${fmt.money(p.amount)}`, { confirmLabel: 'Retirer', danger: true }))) return;
   try {
     await api.del(`/suppliers/payments/${p.id}`);
     toast('Paiement retiré.');
@@ -306,7 +303,6 @@ async function dipDialog(tanks, meters, reload) {
   index.show(tanks[0].id);
   const ok = await formDialog({
     title: 'Saisir un jaugeage',
-    intro: 'Le volume mesuré est comparé au stock théorique, puis devient la nouvelle référence.',
     grid: false,
     fields: [
       { name: 'tankId', label: 'Cuve', type: 'select', options: tankOptions(tanks), required: true, onInput: (e) => index.show(e.target.value) },
