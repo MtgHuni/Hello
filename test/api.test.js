@@ -1258,6 +1258,43 @@ test('mails : adresse confirmée, mot de passe oublié, reçus, rapports, alerte
   db.prepare("DELETE FROM mail_log WHERE subject = 'x'").run();
 });
 
+test('crédit payé pendant son propre poste : une vente payée, ni crédit ni règlement', async () => {
+  const shift = (await gerant('GET', '/api/shifts/current')).data;
+  const nozzle = dieselOf(shift);
+  const totals = async () => {
+    const s = (await gerant('GET', `/api/shifts/${shift.id}`)).data;
+    return { credits: s.credit_amount, payments: round2(s.payments.reduce((t, p) => t + p.amount, 0)), momo: db.prepare("SELECT COALESCE(SUM(amount), 0) AS v FROM momo_sales WHERE shift_id = ?").get(shift.id).v };
+  };
+  const start = await totals();
+
+  // Paid whole, in cash: the credit is a paid sale, no payment written.
+  const a = (await gerant('POST', '/api/customers', { type: 'individual', name: 'Mutombo Paye' })).data;
+  const credit = (await gerant('POST', `/api/shifts/${shift.id}/sales`, { customerId: a.id, nozzleId: nozzle.nozzle_id, amount: 50 })).data;
+  const body = { customerId: a.id, amount: 50, method: 'espèces', clientRef: 'regl-meme-poste-1' };
+  const paid = await gerant('POST', `/api/shifts/${shift.id}/payments`, body);
+  assert.deepStrictEqual([paid.status, paid.data.id, paid.data.settled, paid.data.balance], [201, null, 50, 0]);
+  assert.strictEqual((await gerant('POST', `/api/shifts/${shift.id}/payments`, body)).data.balance, 0, 'renvoyé : rien de plus');
+  assert.strictEqual(db.prepare('SELECT kind FROM sales WHERE id = ?').get(credit.id).kind, 'paid');
+  assert.deepStrictEqual(await totals(), start);
+
+  // Paid in part by mobile money, then more than what is left: split litres, a mobile money entry, the surplus is an advance.
+  const b = (await gerant('POST', '/api/customers', { type: 'individual', name: 'Bahati Partiel' })).data;
+  const big = (await gerant('POST', `/api/shifts/${shift.id}/sales`, { customerId: b.id, nozzleId: nozzle.nozzle_id, amount: 40 })).data;
+  const part = (await gerant('POST', `/api/shifts/${shift.id}/payments`, { customerId: b.id, amount: 10, method: 'mobile money' })).data;
+  assert.deepStrictEqual([part.id, part.settled, part.balance], [null, 10, 30]);
+  const left = db.prepare('SELECT kind, amount, liters FROM sales WHERE id = ?').get(big.id);
+  const split = db.prepare("SELECT liters FROM sales WHERE customer_id = ? AND kind = 'paid'").get(b.id);
+  assert.deepStrictEqual([left.kind, left.amount], ['credit', 30]);
+  assert.ok(Math.abs(left.liters + split.liters - big.liters) < 0.001, 'litres répartis');
+  let now = await totals();
+  assert.deepStrictEqual([now.credits, now.payments, now.momo], [round2(start.credits + 30), start.payments, round2(start.momo + 10)]);
+  const more = (await gerant('POST', `/api/shifts/${shift.id}/payments`, { customerId: b.id, amount: 35, method: 'espèces' })).data;
+  assert.deepStrictEqual([more.settled, more.balance, typeof more.id], [30, -5, 'number']);
+  now = await totals();
+  assert.deepStrictEqual([now.credits, now.payments], [start.credits, round2(start.payments + 5)]);
+  assert.ok((await gerant('GET', '/api/audit?category=postes')).data.some((x) => x.action === 'credit_paid_in_shift'));
+});
+
 test('clients : jamais deux fois le même nom ; un client en double est supprimé, ses opérations vont au bon', async () => {
   const jean = await gerant('POST', '/api/customers', { type: 'individual', name: 'Jean Bosco' });
   assert.strictEqual(jean.status, 201);

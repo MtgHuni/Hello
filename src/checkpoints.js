@@ -98,7 +98,7 @@ function periodReport(db, shift, readings, end) {
     handed,
     variance: round(handed - expected),
     operations: [
-      ...sales.map((s) => ({ at: s.created_at, type: s.kind === 'combo' ? 'Combos' : 'Crédit', label: customerName.get(s.customer_id) || '', amount: s.amount })),
+      ...sales.filter((s) => s.kind !== 'paid').map((s) => ({ at: s.created_at, type: s.kind === 'combo' ? 'Combos' : 'Crédit', label: customerName.get(s.customer_id) || '', amount: s.amount })),
       ...payments.map((p) => ({ at: p.created_at, type: 'Règlement', label: customerName.get(p.customer_id) || '', amount: p.amount })),
       ...expenses.map((e) => ({ at: e.created_at, type: 'Dépense', label: e.description, amount: e.amount })),
       ...moves.map((m) => ({ at: m.created_at, type: 'Caisse', label: m.label, amount: m.signed })),

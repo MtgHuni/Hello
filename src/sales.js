@@ -1,7 +1,7 @@
 const { getSettings } = require('./db');
 const { fail, num, str, oneOf, round, transaction, clientRef } = require('./util');
 const { customerBalance } = require('./routes/customers');
-const { refreshCustomer, subscriberDues } = require('./loyalty');
+const { refreshCustomer, subscriberDues, creditAllocation } = require('./loyalty');
 
 const money = (n) => `${n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $`;
 
@@ -127,4 +127,43 @@ function updateSale(db, sale, input) {
   return db.prepare('SELECT * FROM sales WHERE id = ?').get(sale.id);
 }
 
-module.exports = { createSale, updateSale };
+// A credit paid back during the open shift it was taken in is neither a credit nor a payment of
+// that shift: it becomes a sale paid at the pump (the indexes count it like any other), whole or
+// for the part paid (the litres split in proportion). Paid by mobile money, that part is also a
+// mobile money entry of the shift. Runs inside the payment's transaction; returns what it settled
+// and the rest, which is an ordinary payment.
+function settleInShift(db, shift, customerId, amount, { method, ref, userId }) {
+  if (shift.status !== 'open') return { settled: 0, rest: amount };
+  const unpaid = new Map(creditAllocation(db, customerId).filter((c) => !c.old).map((c) => [c.id, c.unpaid]));
+  const credits = db
+    .prepare("SELECT * FROM sales WHERE shift_id = ? AND customer_id = ? AND kind = 'credit' AND cancel_requested_at IS NULL ORDER BY created_at, id")
+    .all(shift.id, customerId);
+  const combos = getSettings(db).combosEnabled;
+  let rest = amount;
+  let settled = 0;
+  for (const s of credits) {
+    const due = round(Math.min(rest, unpaid.get(s.id) || 0));
+    if (due < 0.01) continue;
+    let liters = s.liters;
+    if (due >= s.amount - 0.005) {
+      db.prepare("UPDATE sales SET kind = 'paid', points = ?, over_limit = 0, settled_ref = ? WHERE id = ?").run(combos ? s.points_due : 0, ref, s.id);
+    } else {
+      liters = round(s.liters * (due / s.amount), 3);
+      const points = Math.floor(s.points_due * (due / s.amount));
+      db.prepare('UPDATE sales SET liters = ?, amount = ?, points_due = ? WHERE id = ?').run(round(s.liters - liters, 3), round(s.amount - due), s.points_due - points, s.id);
+      db.prepare(
+        `INSERT INTO sales (shift_id, customer_id, nozzle_id, product_id, kind, liters, unit_price, amount, points, points_due, plate, source, user_id, settled_ref)
+         VALUES (?, ?, ?, ?, 'paid', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(s.shift_id, s.customer_id, s.nozzle_id, s.product_id, liters, s.unit_price, due, combos ? points : 0, points, s.plate, s.source, userId ?? null, ref);
+    }
+    if (method === 'mobile money') {
+      db.prepare('INSERT INTO momo_sales (shift_id, product_id, liters, unit_price, amount, user_id) VALUES (?, ?, ?, ?, ?, ?)').run(shift.id, s.product_id, liters, s.unit_price, due, userId ?? null);
+    }
+    rest = round(rest - due);
+    settled = round(settled + due);
+    if (rest < 0.01) break;
+  }
+  return { settled, rest };
+}
+
+module.exports = { createSale, updateSale, settleInShift };

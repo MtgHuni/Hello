@@ -8,7 +8,7 @@ const declared = (s) => round((s.cash || 0) + (s.change_left || 0) + (s.mobile_m
 const { fail, num, str, oneOf, round, dateParam, transaction, money, clientRef } = require('../util');
 const { requireRole } = require('../auth');
 const { customerBalance } = require('./customers');
-const { createSale, updateSale } = require('../sales');
+const { createSale, updateSale, settleInShift } = require('../sales');
 const { refreshCustomer } = require('../loyalty');
 const { shiftReportPdf } = require('../shiftReport');
 const { applyScheduledPrices } = require('../prices');
@@ -453,6 +453,8 @@ module.exports = function shiftRoutes(db) {
     const ref = clientRef(req.body?.clientRef);
     const done = ref && db.prepare('SELECT * FROM payments WHERE client_ref = ?').get(ref);
     if (done) return res.status(201).json({ id: done.id, balance: customerBalance(db, done.customer_id) });
+    const settledBefore = ref && db.prepare('SELECT customer_id FROM sales WHERE settled_ref = ?').get(ref);
+    if (settledBefore) return res.status(201).json({ id: null, balance: customerBalance(db, settledBefore.customer_id) });
     const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(Number(req.body?.customerId));
     if (!customer) fail(400, 'Choisissez un client.');
     const amount = round(num(req.body?.amount, 'Le montant', { min: 0.01, max: 1e8 }));
@@ -460,20 +462,30 @@ module.exports = function shiftRoutes(db) {
     const reference = str(req.body?.reference, 'La référence', { required: false, max: 100 });
     // Debt from before the app (the notebook), declared with the payment; the manager checks the record.
     const oldDebt = req.body?.oldDebt ? round(num(req.body.oldDebt, 'L’ancienne dette', { min: 0.01, max: 1e8 })) : 0;
+    let settled = 0;
     const id = transaction(db, () => {
       if (oldDebt) {
         db.prepare('INSERT INTO old_debts (customer_id, amount, shift_id, user_id) VALUES (?, ?, ?, ?)').run(customer.id, oldDebt, shift.id, req.user.id);
         db.prepare('UPDATE customers SET needs_review = 1 WHERE id = ?').run(customer.id);
         audit(db, req, { category: 'clients', action: 'old_debt_declared', entity: 'customers', id: customer.id, summary: `Ancienne dette de ${customer.name} déclarée à la pompe : ${money(oldDebt)} (poste n°${shift.id})` });
       }
-      const r = db
-        .prepare('INSERT INTO payments (customer_id, amount, method, reference, user_id, shift_id, client_ref) VALUES (?, ?, ?, ?, ?, ?, ?)')
-        .run(customer.id, amount, method, reference, req.user.id, shift.id, ref);
+      // A credit of this same shift paid back: a paid sale, not a credit plus a payment.
+      const s = settleInShift(db, shift, customer.id, amount, { method, ref, userId: req.user.id });
+      settled = s.settled;
+      if (settled) {
+        audit(db, req, { category: 'postes', action: 'credit_paid_in_shift', entity: 'customers', id: customer.id, summary: `Crédit de ${customer.name} payé pendant le poste n°${shift.id} : ${money(settled)} ${method}, devenu une vente payée` });
+      }
+      let paymentId = null;
+      if (s.rest >= 0.01) {
+        paymentId = db
+          .prepare('INSERT INTO payments (customer_id, amount, method, reference, user_id, shift_id, client_ref) VALUES (?, ?, ?, ?, ?, ?, ?)')
+          .run(customer.id, s.rest, method, reference, req.user.id, shift.id, ref).lastInsertRowid;
+        lateEntry(req, shift, 'payments', { id: paymentId, amount: s.rest });
+      }
       refreshCustomer(db, customer.id); // paid-off credit sales now earn their combos
-      lateEntry(req, shift, 'payments', { id: r.lastInsertRowid, amount });
-      return r.lastInsertRowid;
+      return paymentId;
     });
-    res.status(201).json({ id: Number(id), balance: customerBalance(db, customer.id) });
+    res.status(201).json({ id: id == null ? null : Number(id), settled, balance: customerBalance(db, customer.id) });
   });
 
   // Fuel paid by mobile money: only the product and the litres, at the shift's price. The shift's

@@ -719,7 +719,8 @@ export async function addPayment(shift, reload) {
   });
   if (ok) {
     forgetCustomers();
-    toast(ok.balance < 0 ? `Règlement encaissé · avance du client ${fmt.money(-ok.balance)}` : `Règlement encaissé · reste dû ${fmt.money(ok.balance)}`);
+    const done = ok.settled && ok.id == null ? 'Crédit payé' : 'Règlement encaissé';
+    toast(ok.balance < 0 ? `${done} · avance du client ${fmt.money(-ok.balance)}` : `${done} · reste dû ${fmt.money(ok.balance)}`);
     reload();
   }
 }
