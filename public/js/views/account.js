@@ -1,8 +1,8 @@
 import { flags } from '../ui.js';
 import { api } from '../api.js';
-import { priceTotem, h, fmt, pageHeader, button, formDialog, confirmDialog, toast, spinner, setContent, pdfLinks, noticeDialog } from '../ui.js';
+import { priceTotem, h, fmt, pageHeader, button, formDialog, confirmDialog, toast, spinner, setContent, noticeDialog } from '../ui.js';
 import { icon } from '../icons.js';
-import { statement, defaultPeriod } from './customers.js';
+import { statement, statementShare, defaultPeriod } from './customers.js';
 
 // Client space: start a fill-up from the phone while waiting in line,
 // then follow its confirmation by the attendant; account statement below.
@@ -10,7 +10,12 @@ import { statement, defaultPeriod } from './customers.js';
 function stationPhone(phone) {
   if (!phone) return null;
   const shown = phone.replace(/^\+243(\d{3})(\d{3})(\d{3})$/, '+243 $1 $2 $3');
-  return h('p', { class: 'client-contact section' }, h('a', { href: `tel:${phone.replace(/[^\d+]/g, '')}` }, icon('phone'), shown));
+  return h(
+    'div',
+    { class: 'client-contact section' },
+    h('p', {}, 'Pour toute question ou plus d’informations, contactez-nous :'),
+    h('a', { href: `tel:${phone.replace(/[^\d+]/g, '')}` }, icon('phone'), shown),
+  );
 }
 
 export async function renderAccount(page, ctx) {
@@ -181,7 +186,6 @@ export async function renderAccount(page, ctx) {
   const products = (await api.get('/products').catch(() => [])).filter((p) => p.active);
   const subscriber = acc.customer.type === 'account';
   const totem = priceTotem(products.map((p) => ({ id: p.id, name: p.name, price: subscriber ? p.subscriber_price : p.price })));
-  const month = new Date().toLocaleDateString('sv-SE').slice(0, 7);
-  setContent(page, pageHeader(acc.customer.name, null, pdfLinks(`/api/me/statement.pdf?month=${month}`, `releve-${month}.pdf`, { label: 'Mon relevé PDF' })), totem, fillHost, combosHost, statementHost, stationPhone(ctx?.state?.settings?.stationPhone));
+  setContent(page, pageHeader(acc.customer.name, null, statementShare('/api/me/statement.pdf', period)), totem, fillHost, combosHost, statementHost, stationPhone(ctx?.state?.settings?.stationPhone));
   await refreshRequest();
 }

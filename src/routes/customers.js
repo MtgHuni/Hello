@@ -248,16 +248,22 @@ function customerRoutes(db) {
   });
 
   // Monthly statement as a PDF: the manager for any customer, a customer for their own account.
+  // A chosen period (from, to), or a whole month (month=AAAA-MM, this month by default).
   function sendStatement(req, res, customerId) {
-    const month = /^\d{4}-\d{2}$/.test(req.query.month || '') ? req.query.month : db.prepare("SELECT strftime('%Y-%m', 'now', 'localtime') AS m").get().m;
-    const from = `${month}-01`;
-    const to = db.prepare("SELECT date(?, '+1 month', '-1 day') AS d").get(from).d;
+    let from = dateParam(req.query.from, 'La date de début');
+    let to = dateParam(req.query.to, 'La date de fin');
+    if (!from || !to) {
+      const month = /^\d{4}-\d{2}$/.test(req.query.month || '') ? req.query.month : db.prepare("SELECT strftime('%Y-%m', 'now', 'localtime') AS m").get().m;
+      from = `${month}-01`;
+      to = db.prepare("SELECT date(?, '+1 month', '-1 day') AS d").get(from).d;
+    }
+    if (from > to) fail(400, 'La date de début doit précéder la date de fin.');
     const acc = account(customerId, from, to);
     const settings = getSettings(db);
-    const pdf = statementPdf(acc, { stationName: settings.stationName, month, graceDays: settings.subscriberGraceDays });
+    const pdf = statementPdf(acc, { stationName: settings.stationName, from, to, graceDays: settings.subscriberGraceDays });
     const slug = acc.customer.name.normalize('NFD').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'client';
     res.set('Content-Type', 'application/pdf');
-    res.set('Content-Disposition', `attachment; filename="releve-${slug}-${month}.pdf"`);
+    res.set('Content-Disposition', `attachment; filename="releve-${slug}-${from}-au-${to}.pdf"`);
     res.send(pdf);
   }
   router.get('/customers/:id/statement.pdf', manager, (req, res) => sendStatement(req, res, Number(req.params.id)));

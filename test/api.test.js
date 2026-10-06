@@ -596,6 +596,10 @@ test('créances par ancienneté, relevé PDF, prix programmé', async () => {
   assert.strictEqual(statement.status, 200);
   assert.strictEqual(statement.raw.subarray(0, 5).toString(), '%PDF-');
   assert.match(statement.raw.toString('latin1'), /\(Solde au d\\351but du mois\)/);
+  const chosen = await gerant('GET', `/api/customers/${garage.id}/statement.pdf?from=${month}-01&to=${today()}`);
+  assert.strictEqual(chosen.status, 200);
+  assert.match(chosen.raw.toString('latin1'), /\(Solde au d\\351but de la p\\351riode\)/);
+  assert.strictEqual((await gerant('GET', `/api/customers/${garage.id}/statement.pdf?from=${today()}&to=${month}-01`)).status, today() === `${month}-01` ? 200 : 400);
   assert.strictEqual((await gerant('GET', '/api/me/statement.pdf')).status, 403);
 
   // A price scheduled for later does not change today's price; once due, the next read applies it.

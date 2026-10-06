@@ -1,6 +1,6 @@
 import { flags, edit } from '../ui.js';
 import { api } from '../api.js';
-import { h, fmt, pageHeader, card, cardHeader, table, segmented, kpi, badge, button, formDialog, confirmDialog, toast, field, todayISO, isoDate, setContent, pdfLinks, whatsappNumber, noticeDialog, buttonRow } from '../ui.js';
+import { h, fmt, pageHeader, card, cardHeader, table, segmented, kpi, badge, button, formDialog, confirmDialog, toast, field, todayISO, isoDate, setContent, sharePdf, whatsappNumber, noticeDialog, buttonRow } from '../ui.js';
 import { icon } from '../icons.js';
 
 let typeFilter = 'all';
@@ -209,7 +209,7 @@ export async function renderCustomerDetail(page, ctx) {
         [TYPE_LABEL[c.type], c.type === 'account' && c.payment_day ? `paie avant le ${c.payment_day} du mois` : null, c.phone, c.email, c.plate].filter(Boolean).join(' · '),
         edit(button('Règlement', () => paymentDialog(c, reload), { iconName: 'card' })),
         edit(button('Ancienne dette', () => oldDebtDialog(c, reload), { variant: 'secondary', iconName: 'plus' })),
-        pdfLinks(`/api/customers/${c.id}/statement.pdf?month=${period.from.slice(0, 7)}`, `releve-${period.from.slice(0, 7)}.pdf`, { label: 'Relevé PDF' }),
+        statementShare(`/api/customers/${c.id}/statement.pdf`, period),
         edit(button('Modifier', () => customerDialog(c, ctx, reload), { variant: 'secondary', iconName: 'edit' })),
         edit(button(c.login ? 'Accès client' : 'Créer un accès', () => loginDialog(c, ctx, reload), { variant: 'secondary', iconName: 'user' })),
       ),
@@ -245,7 +245,31 @@ export function defaultPeriod() {
   return { from: isoDate(new Date(now.getFullYear(), now.getMonth(), 1)), to: todayISO() };
 }
 
-// Account statement shared with the client space: KPIs, period picker, movements, print.
+// « Partager » the statement as a PDF: asks the period first (the one on screen by default).
+export function statementShare(url, period) {
+  return button(
+    'Partager',
+    async () => {
+      const ok = await formDialog({
+        title: 'Partager le relevé',
+        submitLabel: 'Partager',
+        grid: false,
+        fields: [
+          { name: 'from', label: 'Du', type: 'date', value: period.from, required: true },
+          { name: 'to', label: 'Au', type: 'date', value: period.to, required: true },
+        ],
+        onSubmit: (d) => {
+          if (d.from > d.to) throw new Error('La date de début doit précéder la date de fin.');
+          return d;
+        },
+      });
+      if (ok) sharePdf(`${url}?from=${ok.from}&to=${ok.to}`, `releve-${ok.from}-au-${ok.to}.pdf`);
+    },
+    { variant: 'secondary', iconName: 'share' },
+  );
+}
+
+// Account statement shared with the client space: KPIs, period picker, movements.
 export function statement(acc, period, onPeriod, { onOldDebt, clientSpace = false } = {}) {
   const c = acc.customer;
   const subscriber = c.type === 'account';
@@ -304,7 +328,7 @@ export function statement(acc, period, onPeriod, { onOldDebt, clientSpace = fals
         'div',
         { class: 'card-header' },
         h('div', {}, h('h2', {}, 'Relevé de compte'), h('p', {}, `Solde au début de la période : ${fmt.money(acc.opening)}`)),
-        h('div', { class: 'row no-print', style: 'align-items:flex-end' }, from, to, button('Imprimer', () => window.print(), { variant: 'secondary', iconName: 'print' })),
+        h('div', { class: 'row no-print', style: 'align-items:flex-end' }, from, to),
       ),
       table(
         [

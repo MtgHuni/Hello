@@ -1,27 +1,36 @@
-// A customer's monthly statement as a PDF: balance at the start and end of the month,
-// credit purchases and payments, and what a subscriber owes from earlier months.
+// A customer's statement as a PDF over a period (a whole month reads « Relevé d'octobre 2026 »):
+// balance at the start and end, credit purchases and payments, and what a subscriber owes from earlier months.
 const { Report, fmt, COLORS } = require('./pdfReport');
 const { round } = require('./util');
 
 const { money, dateTime } = fmt;
 
-function statementPdf(acc, { stationName, month, graceDays, now = new Date() }) {
+const day = (iso) => new Date(`${iso}T12:00:00Z`);
+
+function statementPdf(acc, { stationName, from, to, graceDays, now = new Date() }) {
   const c = acc.customer;
-  const monthLabel = new Date(`${month}-01T12:00:00Z`).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  const end = day(to);
+  end.setUTCDate(end.getUTCDate() + 1);
+  const wholeMonth = from.endsWith('-01') && from.slice(0, 7) === to.slice(0, 7) && end.getUTCDate() === 1;
+  const short = (iso) => day(iso).toLocaleDateString('fr-FR', { timeZone: 'UTC' });
+  const heading = wholeMonth
+    ? `Relevé de ${day(from).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' })}`
+    : `Relevé du ${short(from)} au ${short(to)}`;
+  const of = wholeMonth ? 'du mois' : 'de la période';
   const report = new Report({
-    title: `Relevé de ${monthLabel} — ${c.name}`,
+    title: `${heading} — ${c.name}`,
     stationName,
-    heading: `Relevé de ${monthLabel}`,
+    heading,
     subtitle: [c.name, c.type === 'account' ? 'abonné' : 'particulier', c.phone, c.plate].filter(Boolean).join('  ·  '),
     now,
   });
   const debits = round(acc.movements.reduce((t, m) => t + m.debit, 0));
 
   report.section('Solde');
-  report.line('Solde au début du mois', money(acc.opening));
-  report.line('+ Achats à crédit du mois', money(debits));
-  report.line('− Règlements du mois', money(acc.totals.payments));
-  report.line('Solde à la fin du mois', money(acc.closing), { bold: true });
+  report.line(`Solde au début ${of}`, money(acc.opening));
+  report.line(`+ Achats à crédit ${of}`, money(debits));
+  report.line(`− Règlements ${of}`, money(acc.totals.payments));
+  report.line(`Solde à la fin ${of}`, money(acc.closing), { bold: true });
   if (acc.dues?.overdue > 0) {
     report.line(
       acc.dues.late ? 'Dû des mois précédents, en retard' : `Dû des mois précédents, à payer avant le ${acc.dues.paymentDay || graceDays} du mois`,
@@ -30,7 +39,7 @@ function statementPdf(acc, { stationName, month, graceDays, now = new Date() }) 
     );
   }
 
-  report.section('Mouvements du mois', 'Les règlements soldent d’abord les achats à crédit les plus anciens.');
+  report.section(`Mouvements ${of}`, 'Les règlements soldent d’abord les achats à crédit les plus anciens.');
   report.table(
     [
       { label: 'DATE', width: 78 },
@@ -40,7 +49,7 @@ function statementPdf(acc, { stationName, month, graceDays, now = new Date() }) 
       { label: 'SOLDE', align: 'right' },
     ],
     acc.movements.map((m) => [dateTime(m.date), m.label, m.debit ? money(m.debit) : '', m.credit ? money(m.credit) : '', money(m.balance)]),
-    { size: 8.5, empty: 'Aucun mouvement ce mois-ci.', totals: acc.movements.length ? [['Total du mois', '', money(debits), money(acc.totals.payments), money(acc.closing)]] : [] },
+    { size: 8.5, empty: 'Aucun mouvement sur cette période.', totals: acc.movements.length ? [[`Total ${of}`, '', money(debits), money(acc.totals.payments), money(acc.closing)]] : [] },
   );
 
   report.note(`Merci de régler votre solde auprès de ${stationName}.`);

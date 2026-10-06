@@ -217,26 +217,27 @@ export function pdfLinks(url, filename, { label = 'Rapport PDF', variant = 'seco
   return [link, share];
 }
 
-// A single "Partager" button: the phone's share sheet (WhatsApp, e-mail…),
-// or a plain download where the browser cannot share files.
-export function shareButton(url, filename, { variant = 'secondary' } = {}) {
-  const canShare = () => typeof File === 'function' && navigator.canShare?.({ files: [new File([''], 'x.pdf', { type: 'application/pdf' })] });
+// A PDF through the phone's share sheet (WhatsApp, e-mail…), or a plain download
+// where the browser cannot share files.
+export async function sharePdf(url, filename) {
+  const canShare = typeof File === 'function' && navigator.canShare?.({ files: [new File([''], 'x.pdf', { type: 'application/pdf' })] });
   const download = () => h('a', { href: url, download: filename }).click();
-  return button(
-    'Partager',
-    async () => {
-      if (!canShare()) return download();
-      try {
-        const res = await fetch(url, { credentials: 'same-origin' });
-        if (!res.ok) throw new Error();
-        const file = new File([await res.blob()], filename, { type: 'application/pdf' });
-        await navigator.share({ files: [file], title: filename });
-      } catch (err) {
-        if (err?.name !== 'AbortError') toast('Partage impossible : réessayez.', 'error');
-      }
-    },
-    { variant, iconName: 'share' },
-  );
+  if (!canShare) return download();
+  try {
+    const res = await fetch(url, { credentials: 'same-origin' });
+    if (!res.ok) throw new Error();
+    const file = new File([await res.blob()], filename, { type: 'application/pdf' });
+    await navigator.share({ files: [file], title: filename });
+  } catch (err) {
+    // The share sheet needs a fresh tap: after a long wait, download instead.
+    if (err?.name === 'NotAllowedError') return download();
+    if (err?.name !== 'AbortError') toast('Partage impossible : réessayez.', 'error');
+  }
+}
+
+// A single "Partager" button for a PDF.
+export function shareButton(url, filename, { variant = 'secondary' } = {}) {
+  return button('Partager', () => sharePdf(url, filename), { variant, iconName: 'share' });
 }
 
 // A closed shift's PDF report (cash, sales from the indexes, credits, expenses), shared.
