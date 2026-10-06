@@ -190,9 +190,24 @@ export function pageHeader(title, subtitle, ...actions) {
   );
 }
 
-// The suppliers' names under a « Payé à » field (an expense « Paiement fournisseur » names one).
-export function supplierList(names = []) {
-  return { name: 'supplierNames', type: 'node', node: h('datalist', { id: 'expense-suppliers' }, names.map((n) => h('option', { value: n }))) };
+// Names already recorded (the suppliers) offered under a text field while it is typed: up to three
+// chips, those starting with the text first; one tap fills the field. Use: { ...field, onInput },
+// then node beside it.
+export function nameChips(names = []) {
+  const norm = (s) => String(s).normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
+  const chips = h('div', { class: 'chips', 'aria-live': 'polite' });
+  const onInput = (e) => {
+    const input = e.target;
+    const q = norm(input.value);
+    chips.replaceChildren();
+    if (!q) return;
+    const found = names
+      .filter((n) => norm(n).includes(q) && norm(n) !== q)
+      .sort((a, b) => norm(b).startsWith(q) - norm(a).startsWith(q))
+      .slice(0, 3);
+    for (const n of found) chips.append(h('button', { type: 'button', class: 'chip', onClick: () => ((input.value = n), chips.replaceChildren(), input.focus()) }, n));
+  };
+  return { onInput, node: { name: 'nameChips', type: 'node', full: true, node: chips } };
 }
 
 export function button(label, onClick, { variant = '', iconName, type = 'button', ...rest } = {}) {

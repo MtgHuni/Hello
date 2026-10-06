@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { flags, edit } from '../ui.js';
-import { h, fmt, pageHeader, table, segmented, kpi, field, button, formDialog, confirmDialog, actionSheet, toast, todayISO, setContent, supplierList } from '../ui.js';
+import { h, fmt, pageHeader, table, segmented, kpi, field, button, formDialog, confirmDialog, actionSheet, toast, todayISO, setContent, nameChips } from '../ui.js';
 import { PRESETS, presetRange } from './reports.js';
 
 const METHODS = [
@@ -140,6 +140,7 @@ function rowActions(e, categories, ctx, reload) {
 }
 
 async function expenseDialog(e, categories, reload) {
+  const payTo = nameChips(supplierNames);
   const ok = await formDialog({
     title: e ? 'Modifier la dépense' : 'Nouvelle dépense',
     submitLabel: 'Enregistrer',
@@ -149,8 +150,8 @@ async function expenseDialog(e, categories, reload) {
       { name: 'category', label: 'Catégorie', type: 'select', options: categories.map((c) => [c, c]), value: e?.category, required: true },
       { name: 'method', label: 'Payée par', type: 'select', options: METHODS, value: e?.method || 'espèces' },
       { name: 'description', label: 'Description', value: e?.description, required: true, full: true, placeholder: 'Ex. : salaire de septembre, carburant du générateur…' },
-      { name: 'beneficiary', label: 'Bénéficiaire', value: e?.beneficiary, placeholder: 'Facultatif', list: 'expense-suppliers' },
-      supplierList(supplierNames),
+      { name: 'beneficiary', label: 'Bénéficiaire', value: e?.beneficiary, placeholder: 'Facultatif', onInput: payTo.onInput },
+      payTo.node,
       { name: 'reference', label: 'Référence / n° de reçu', value: e?.reference, placeholder: 'Facultatif' },
     ],
     onSubmit: (d) => (e ? api.put(`/expenses/${e.id}`, d) : api.post('/expenses', d)),

@@ -3,7 +3,7 @@ const { fail, num, str, oneOf, round, transaction } = require('../util');
 const { requireRole } = require('../auth');
 const { audit } = require('../audit');
 const { openMeters, soldByTank } = require('../liveStock');
-const { FUEL_PURCHASE } = require('../db');
+const { SUPPLIER_PAYMENT } = require('../db');
 
 const manager = requireRole('manager');
 
@@ -16,6 +16,7 @@ function paymentOf(b) {
   return { payment, payMethod: payment === 'cash' || payment === 'shift' ? 'espèces' : null };
 }
 function checkPayment(payment, supplier, amount) {
+  if (payment === 'shift' && !supplier) fail(400, 'Indiquez le fournisseur payé avec l’argent du poste.');
   if (payment === 'shift' && !amount) fail(400, 'Indiquez le prix d’achat : c’est ce qui sort de l’argent du poste.');
   if (payment !== 'credit') return;
   if (!supplier) fail(400, 'Indiquez le fournisseur : la livraison à crédit devient une dette envers lui.');
@@ -68,7 +69,7 @@ module.exports = function stockRoutes(db) {
           `INSERT INTO expenses (expense_date, category, amount, description, beneficiary, method, reference, shift_id, user_id)
            VALUES (date('now', 'localtime'), ?, ?, ?, ?, 'espèces', ?, ?, ?)`,
         )
-        .run(FUEL_PURCHASE, amount, `Livraison ${tank.name}, ${liters} L`, supplier, reference, openShift().id, req.user.id).lastInsertRowid,
+        .run(SUPPLIER_PAYMENT, amount, `Livraison ${tank.name}, ${liters} L`, supplier, reference, openShift().id, req.user.id).lastInsertRowid,
     );
   // The expense of a delivery can only change while its shift is open (a closed shift is reconciled).
   const linkedExpense = (d) => {

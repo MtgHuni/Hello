@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { flags, edit, adminEdit, canAdmin } from '../ui.js';
-import { h, fmt, pageHeader, cardHeader, table, segmented, tankGauge, button, formDialog, confirmDialog, actionSheet, field, toast, badge, setContent } from '../ui.js';
+import { h, fmt, pageHeader, cardHeader, table, segmented, tankGauge, button, formDialog, confirmDialog, actionSheet, field, toast, badge, setContent, nameChips } from '../ui.js';
 
 let tab = 'deliveries';
 
@@ -130,6 +130,7 @@ function meterFields(meters) {
 
 async function deliveryDialog(tanks, supplierNames, meters, reload) {
   if (!tanks.length) return toast('Ajoutez d’abord une cuve.', 'error');
+  const named = nameChips(supplierNames);
   const index = meterFields(meters);
   index.show(tanks[0].id);
   const total = h('p', { class: 'hint-line full' });
@@ -137,7 +138,7 @@ async function deliveryDialog(tanks, supplierNames, meters, reload) {
   const update = (e) => {
     const form = e.target.form;
     const credit = form.elements.payment.value === 'credit';
-    form.elements.supplier.required = credit;
+    form.elements.supplier.required = credit || form.elements.payment.value === 'shift';
     const received = Number(form.elements.litersReceived.value) || 0;
     const cost = Number(form.elements.unitCost.value) || 0;
     total.textContent = received && cost ? `Montant : ${fmt.money(received * cost)}${credit ? ' dû au fournisseur' : form.elements.payment.value === 'prepaid' ? ' déjà payé' : ' payé maintenant'}` : '';
@@ -149,15 +150,16 @@ async function deliveryDialog(tanks, supplierNames, meters, reload) {
       { name: 'meters', type: 'node', node: index.host },
       { name: 'litersOrdered', label: 'Litres commandés (bon)', type: 'number', step: '0.01', min: '0', required: true },
       { name: 'litersReceived', label: 'Litres reçus (mesurés)', type: 'number', step: '0.01', min: '0', required: true, onInput: update },
-      { name: 'supplier', label: 'Fournisseur', list: 'supplier-names' },
+      { name: 'supplier', label: 'Fournisseur', onInput: named.onInput },
+      named.node,
       { name: 'reference', label: 'N° du bon de livraison' },
       { name: 'unitCost', label: 'Prix d’achat ($/L)', type: 'number', step: '0.001', min: '0', onInput: update },
-      { name: 'names', type: 'node', node: h('datalist', { id: 'supplier-names' }, supplierNames.map((n) => h('option', { value: n }))) },
       { name: 'payment', label: 'Paiement', type: 'segment', full: true, options: PAYMENTS, onInput: update },
       { name: 'total', type: 'node', node: total },
     ],
     onSubmit: async (d, form) => {
       if (d.payment === 'credit' && !d.unitCost) throw new Error('Indiquez le prix d’achat : c’est ce que la station devra au fournisseur.');
+      if (d.payment === 'shift' && !d.supplier) throw new Error('Indiquez le fournisseur payé avec l’argent du poste.');
       if (d.payment === 'shift' && !d.unitCost) throw new Error('Indiquez le prix d’achat : c’est ce qui sort de l’argent du poste.');
       const body = { ...d, tankId: Number(d.tankId), meters: index.read(form) };
       try {
@@ -177,15 +179,16 @@ async function deliveryDialog(tanks, supplierNames, meters, reload) {
 
 // The payment of a delivery, corrected afterwards: the litres stay, they made the stock.
 async function deliveryPaymentDialog(d, supplierNames, reload) {
+  const named = nameChips(supplierNames);
   const ok = await formDialog({
     title: `Livraison du ${fmt.date(d.created_at)}`,
     intro: `${d.tank_name} · ${fmt.liters(d.liters_received)} reçus`,
     fields: [
       { name: 'payment', label: 'Paiement', type: 'segment', full: true, options: PAYMENTS, value: d.payment || 'cash' },
-      { name: 'supplier', label: 'Fournisseur', list: 'supplier-names-edit', value: d.supplier || '' },
+      { name: 'supplier', label: 'Fournisseur', value: d.supplier || '', onInput: named.onInput },
+      named.node,
       { name: 'reference', label: 'N° du bon de livraison', value: d.reference || '' },
       { name: 'amount', label: 'Montant ($)', type: 'number', step: '0.01', min: '0', value: d.amount ?? '' },
-      { name: 'names', type: 'node', node: h('datalist', { id: 'supplier-names-edit' }, supplierNames.map((n) => h('option', { value: n }))) },
     ],
     onSubmit: (v) => api.put(`/deliveries/${d.id}`, { payment: v.payment, supplier: v.supplier, reference: v.reference, amount: v.amount }),
   });

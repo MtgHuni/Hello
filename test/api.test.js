@@ -993,11 +993,12 @@ test('livraison payée avec l’argent du poste : une dépense du poste ouvert',
   const tank = (await gerant('GET', '/api/tanks')).data.find((t) => t.id === dieselOf(shift).tank_id);
   const body = { tankId: tank.id, litersOrdered: 5, litersReceived: 5, payment: 'shift', supplier: 'Petro Kivu', reference: 'BL-77' };
   assert.strictEqual((await gerant('POST', '/api/deliveries', body)).status, 400, 'prix d’achat obligatoire');
+  assert.strictEqual((await gerant('POST', '/api/deliveries', { ...body, unitCost: 1, supplier: '' })).status, 400, 'fournisseur obligatoire');
   const d = (await gerant('POST', '/api/deliveries', { ...body, unitCost: 1 })).data;
   const expense = async () => (await gerant('GET', '/api/expenses')).data.expenses.find((e) => e.id === d.expense_id);
   assert.ok(d.expense_id);
   let e = await expense();
-  assert.deepStrictEqual([e.category, e.amount, e.shift_id, e.beneficiary, e.reference, e.method], ['Achat de carburant', 5, shift.id, 'Petro Kivu', 'BL-77', 'espèces']);
+  assert.deepStrictEqual([e.category, e.amount, e.shift_id, e.beneficiary, e.reference, e.method], ['Paiement fournisseur', 5, shift.id, 'Petro Kivu', 'BL-77', 'espèces']);
 
   // The amount follows the delivery; another payment takes the expense off the shift, and back.
   await gerant('PUT', `/api/deliveries/${d.id}`, { payment: 'shift', amount: 6 });
@@ -1012,6 +1013,8 @@ test('livraison payée avec l’argent du poste : une dépense du poste ouvert',
   assert.strictEqual((await gerant('DELETE', `/api/shifts/${shift.id}/expenses/${e.id}`)).status, 204);
   const left = (await gerant('GET', '/api/deliveries')).data.find((x) => x.id === d.id);
   assert.deepStrictEqual([left.payment, left.expense_id], [null, null]);
+  // A delivery's own expense paid that delivery: the supplier owes nothing back.
+  assert.strictEqual((await gerant('GET', '/api/suppliers')).data.suppliers.find((s) => s.name === 'Petro Kivu').balance, 0);
 
   // A supplier paid by an expense of the shift: its debt goes down, its spelling is the record's.
   const balance = async () => (await gerant('GET', '/api/suppliers')).data.suppliers.find((s) => s.name === 'Engen RDC').balance;

@@ -197,9 +197,10 @@ function supplierExpenses(db) {
   const { SUPPLIER_PAYMENT } = require('./db');
   return db
     .prepare(
-      `SELECT e.id, e.created_at, e.beneficiary AS supplier, e.amount, e.shift_id,
+      `SELECT e.id, e.created_at, s.name AS supplier, e.amount, e.shift_id,
          CASE WHEN e.shift_id IS NOT NULL THEN 'dépense du poste n°' || e.shift_id ELSE 'dépense' END AS method
-       FROM expenses e WHERE e.category = ? AND e.beneficiary IS NOT NULL`,
+       FROM expenses e JOIN suppliers s ON lower(trim(s.name)) = lower(trim(e.beneficiary))
+       WHERE e.category = ? AND e.id NOT IN (SELECT expense_id FROM deliveries WHERE expense_id IS NOT NULL)`,
     )
     .all(SUPPLIER_PAYMENT);
 }

@@ -1,6 +1,6 @@
 import { flags, edit } from '../ui.js';
 import { api } from '../api.js';
-import { shiftLine, h, fmt, pageHeader, card, cardHeader, table, segmented, shiftBadge, varianceCell, kpi, formDialog, confirmDialog, actionSheet, toast, button, badge, setContent, reportLink, buttonRow, supplierList } from '../ui.js';
+import { shiftLine, h, fmt, pageHeader, card, cardHeader, table, segmented, shiftBadge, varianceCell, kpi, formDialog, confirmDialog, actionSheet, toast, button, badge, setContent, reportLink, buttonRow, nameChips } from '../ui.js';
 import { icon } from '../icons.js';
 import { renderClosing } from './attendant.js';
 import { reportCard } from './relay.js';
@@ -150,6 +150,7 @@ function operationMenu(ctx, shift, kind, item, reload) {
 }
 
 async function editOperation(ctx, shift, kind, item, reload) {
+  const payTo = nameChips(ctx.state.settings.supplierNames);
   const products = [...new Map(shift.readings.map((r) => [r.product_id, r.product_name])).entries()];
   const customers = kind === 'sales' || kind === 'payments' ? await api.get('/customers?form=1') : [];
   const customerField = { name: 'customerId', label: 'Client', type: 'select', options: customers.map((c) => [c.id, c.name]), value: item.customer_id, required: true };
@@ -189,8 +190,8 @@ async function editOperation(ctx, shift, kind, item, reload) {
         { name: 'amount', label: 'Montant ($)', type: 'number', step: '0.01', min: '0.01', value: item.amount, required: true },
         { name: 'category', label: 'Catégorie', type: 'select', options: ctx.state.settings.expenseCategories.map((c) => [c, c]), value: item.category },
         { name: 'description', label: 'Description', value: item.description, required: true },
-        { name: 'beneficiary', label: 'Payé à', value: item.beneficiary || undefined, list: 'expense-suppliers' },
-        supplierList(ctx.state.settings.supplierNames),
+        { name: 'beneficiary', label: 'Payé à', value: item.beneficiary || undefined, onInput: payTo.onInput },
+        payTo.node,
       ],
       body: (d) => d,
     },

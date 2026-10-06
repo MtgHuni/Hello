@@ -556,14 +556,12 @@ const EXPENSE_CATEGORIES = [
   'Fournitures',
   'Sécurité',
   'Communication',
-  // A delivery paid with the open shift's money (deliveries.expense_id): already in the cost of
+  // Fuel paid to a supplier named in « Payé à »: settles its deliveries on credit (supplierBalances()),
+  // or pays a delivery with the open shift's money (deliveries.expense_id). Already in the cost of
   // the fuel sold, so the reports' net result leaves it out.
-  'Achat de carburant',
-  // Paid to a supplier named in « Payé à »: settles its deliveries on credit (supplierBalances()).
   'Paiement fournisseur',
   'Autre',
 ];
-const FUEL_PURCHASE = 'Achat de carburant';
 const SUPPLIER_PAYMENT = 'Paiement fournisseur';
 
 const DEFAULT_SETTINGS = {
@@ -701,6 +699,8 @@ function openDb(file) {
   // Signs the « stop these mails » links (src/mailer.js): one random secret per station.
   insert.run('mail_secret', require('node:crypto').randomBytes(32).toString('hex'));
   syncCreditLimits(db);
+  // « Achat de carburant » (a few days of 2026-10) became « Paiement fournisseur ».
+  db.prepare("UPDATE expenses SET category = 'Paiement fournisseur' WHERE category = 'Achat de carburant'").run();
   if (salesRebuilt) {
     // Credit sales only earn their combos once paid: recompute every balance.
     const { refreshCustomer } = require('./loyalty');
@@ -773,4 +773,4 @@ function getSettings(db) {
   };
 }
 
-module.exports = { openDb, getSettings, syncCreditLimits, EXPENSE_CATEGORIES, FUEL_PURCHASE, SUPPLIER_PAYMENT, SCHEMA_VERSION };
+module.exports = { openDb, getSettings, syncCreditLimits, EXPENSE_CATEGORIES, SUPPLIER_PAYMENT, SCHEMA_VERSION };
