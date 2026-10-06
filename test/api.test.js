@@ -1012,6 +1012,21 @@ test('livraison payée avec l’argent du poste : une dépense du poste ouvert',
   assert.strictEqual((await gerant('DELETE', `/api/shifts/${shift.id}/expenses/${e.id}`)).status, 204);
   const left = (await gerant('GET', '/api/deliveries')).data.find((x) => x.id === d.id);
   assert.deepStrictEqual([left.payment, left.expense_id], [null, null]);
+
+  // A supplier paid by an expense of the shift: its debt goes down, its spelling is the record's.
+  const balance = async () => (await gerant('GET', '/api/suppliers')).data.suppliers.find((s) => s.name === 'Engen RDC').balance;
+  const owed = await balance();
+  const pay = { category: 'Paiement fournisseur', amount: 40, description: 'Acompte livraison' };
+  assert.strictEqual((await gerant('POST', `/api/shifts/${shift.id}/expenses`, { ...pay, beneficiary: 'Inconnu' })).data.code, 'supplier_unknown');
+  const paid = (await gerant('POST', `/api/shifts/${shift.id}/expenses`, { ...pay, beneficiary: ' engen rdc ' })).data;
+  assert.strictEqual(paid.beneficiary, 'Engen RDC');
+  assert.strictEqual(await balance(), round2(owed - 40));
+  const listed = (await gerant('GET', '/api/suppliers')).data.payments.find((p) => p.expense_id === paid.id);
+  assert.deepStrictEqual([listed.amount, listed.method], [40, `dépense du poste n°${shift.id}`]);
+  // Outside a shift too.
+  await gerant('POST', '/api/expenses', { ...pay, amount: 10, beneficiary: 'Engen RDC' });
+  assert.strictEqual(await balance(), round2(owed - 50));
+  assert.deepStrictEqual((await gerant('GET', '/api/auth/me')).data.settings.supplierNames.includes('Engen RDC'), true);
 });
 
 test('alertes : chacun masque une alerte ou coupe un type, pour lui seul', async () => {

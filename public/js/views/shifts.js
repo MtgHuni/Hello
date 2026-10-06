@@ -1,6 +1,6 @@
 import { flags, edit } from '../ui.js';
 import { api } from '../api.js';
-import { shiftLine, h, fmt, pageHeader, card, cardHeader, table, segmented, shiftBadge, varianceCell, kpi, formDialog, confirmDialog, actionSheet, toast, button, badge, setContent, reportLink, buttonRow } from '../ui.js';
+import { shiftLine, h, fmt, pageHeader, card, cardHeader, table, segmented, shiftBadge, varianceCell, kpi, formDialog, confirmDialog, actionSheet, toast, button, badge, setContent, reportLink, buttonRow, supplierList } from '../ui.js';
 import { icon } from '../icons.js';
 import { renderClosing } from './attendant.js';
 import { reportCard } from './relay.js';
@@ -189,7 +189,8 @@ async function editOperation(ctx, shift, kind, item, reload) {
         { name: 'amount', label: 'Montant ($)', type: 'number', step: '0.01', min: '0.01', value: item.amount, required: true },
         { name: 'category', label: 'Catégorie', type: 'select', options: ctx.state.settings.expenseCategories.map((c) => [c, c]), value: item.category },
         { name: 'description', label: 'Description', value: item.description, required: true },
-        { name: 'beneficiary', label: 'Payé à', value: item.beneficiary || undefined },
+        { name: 'beneficiary', label: 'Payé à', value: item.beneficiary || undefined, list: 'expense-suppliers' },
+        supplierList(ctx.state.settings.supplierNames),
       ],
       body: (d) => d,
     },

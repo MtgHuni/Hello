@@ -190,6 +190,11 @@ export function pageHeader(title, subtitle, ...actions) {
   );
 }
 
+// The suppliers' names under a « Payé à » field (an expense « Paiement fournisseur » names one).
+export function supplierList(names = []) {
+  return { name: 'supplierNames', type: 'node', node: h('datalist', { id: 'expense-suppliers' }, names.map((n) => h('option', { value: n }))) };
+}
+
 export function button(label, onClick, { variant = '', iconName, type = 'button', ...rest } = {}) {
   return h('button', { class: `btn ${variant}`, type, onClick, ...rest }, iconName ? icon(iconName) : null, label);
 }

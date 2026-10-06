@@ -1,6 +1,6 @@
 import { flags } from '../ui.js';
 import { api } from '../api.js';
-import { priceTotem, shiftLine, h, fmt, pageHeader, card, cardHeader, table, shiftBadge, varianceCell, button, formDialog, confirmDialog, toast, field, productColor, badge, kpi, parseServerDate, setContent, reportLink, busy, newRef, buttonRow, noticeDialog } from '../ui.js';
+import { priceTotem, shiftLine, h, fmt, pageHeader, card, cardHeader, table, shiftBadge, varianceCell, button, formDialog, confirmDialog, toast, field, productColor, badge, kpi, parseServerDate, setContent, reportLink, busy, newRef, buttonRow, noticeDialog, supplierList } from '../ui.js';
 import { icon } from '../icons.js';
 import { shiftSummary } from './shifts.js';
 import { renderJoin, renderCheckpoint, reportCard } from './relay.js';
@@ -797,7 +797,8 @@ export async function addExpense(ctx, shift, reload) {
       { name: 'amount', label: 'Montant ($)', type: 'number', step: '0.01', min: '0.01', required: true },
       { name: 'category', label: 'Catégorie', type: 'select', options: ctx.state.settings.expenseCategories.map((c) => [c, c]), value: 'Fournitures' },
       { name: 'description', label: 'Description', required: true, placeholder: 'Ex. : eau, ampoule, transport…' },
-      { name: 'beneficiary', label: 'Payé à', placeholder: 'Facultatif' },
+      { name: 'beneficiary', label: 'Payé à', placeholder: 'Facultatif', list: 'expense-suppliers' },
+      supplierList(ctx.state.settings.supplierNames),
     ],
     onSubmit: (d) => api.post(`/shifts/${shift.id}/expenses`, { ...d, clientRef }),
   });

@@ -2,7 +2,7 @@
 // reaches the till when it is withdrawn (a transfer). Most entries come from what the app
 // already records (closed shifts, payments and expenses outside a shift, deliveries paid on
 // the spot, supplier payments); the manager adds the rest by hand (cash_movements).
-const { round, money } = require('./util');
+const { round, money, fail } = require('./util');
 const { attendantNamesSql } = require('./checkpoints');
 
 const ACCOUNTS = { cash: 'Espèces', momo: 'Mobile money' };
@@ -183,7 +183,29 @@ function balances(db) {
   return out;
 }
 
-// Every supplier with its contacts, and what the station owes it: deliveries taken on credit minus payments.
+// An expense « Paiement fournisseur » names the supplier paid: its record's spelling, or a refusal.
+function supplierOf(db, category, beneficiary) {
+  const { SUPPLIER_PAYMENT } = require('./db');
+  if (category !== SUPPLIER_PAYMENT) return beneficiary;
+  const s = beneficiary && db.prepare('SELECT name FROM suppliers WHERE lower(trim(name)) = lower(trim(?))').get(beneficiary);
+  if (!s) fail(400, 'Indiquez dans « Payé à » le fournisseur payé, tel qu’il est enregistré dans Cuves → Fournisseurs.', 'supplier_unknown');
+  return s.name;
+}
+
+// Expenses that paid a supplier (in the shift's money or outside a shift).
+function supplierExpenses(db) {
+  const { SUPPLIER_PAYMENT } = require('./db');
+  return db
+    .prepare(
+      `SELECT e.id, e.created_at, e.beneficiary AS supplier, e.amount, e.shift_id,
+         CASE WHEN e.shift_id IS NOT NULL THEN 'dépense du poste n°' || e.shift_id ELSE 'dépense' END AS method
+       FROM expenses e WHERE e.category = ? AND e.beneficiary IS NOT NULL`,
+    )
+    .all(SUPPLIER_PAYMENT);
+}
+
+// Every supplier with its contacts, and what the station owes it: deliveries taken on credit minus
+// payments (in Cuves → Fournisseurs, or as an expense « Paiement fournisseur »).
 function supplierBalances(db) {
   const rows = new Map();
   const row = (name) => {
@@ -197,11 +219,11 @@ function supplierBalances(db) {
     r.owed = round(r.owed + d.amount);
     r.last_delivery_at = d.created_at;
   }
-  for (const p of db.prepare('SELECT supplier, amount FROM supplier_payments').all()) {
+  for (const p of [...db.prepare('SELECT supplier, amount FROM supplier_payments').all(), ...supplierExpenses(db)]) {
     const r = row(p.supplier);
     r.paid = round(r.paid + p.amount);
   }
   return [...rows.values()].map((r) => ({ ...r, balance: round(r.owed - r.paid) })).sort((a, b) => b.balance - a.balance || a.name.localeCompare(b.name));
 }
 
-module.exports = { ACCOUNTS, ACCOUNT_OF_METHOD, KINDS, cashbook, balances, supplierBalances };
+module.exports = { ACCOUNTS, ACCOUNT_OF_METHOD, KINDS, cashbook, balances, supplierBalances, supplierExpenses, supplierOf };

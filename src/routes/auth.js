@@ -127,7 +127,9 @@ module.exports = function authRoutes(db, { mailer }) {
 
   router.get('/auth/me', requireRole(), (req, res) => {
     const { owner, ...user } = req.user;
-    res.json({ user: owner ? { ...user, role: 'owner' } : user, settings: getSettings(db) });
+    const settings = getSettings(db);
+    if (user.role !== 'customer') settings.supplierNames = db.prepare('SELECT name FROM suppliers ORDER BY name COLLATE NOCASE').all().map((r) => r.name);
+    res.json({ user: owner ? { ...user, role: 'owner' } : user, settings });
   });
 
   router.post('/auth/password', requireRole(), async (req, res) => {

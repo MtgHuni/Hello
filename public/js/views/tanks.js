@@ -243,7 +243,7 @@ function suppliersCard(sup, reload) {
               { label: 'Montant', align: 'right', render: (p) => fmt.money(p.amount) },
             ],
             sup.payments,
-            { onRowClick: flags.readonly ? undefined : (p) => removeSupplierPayment(p, reload) },
+            { onRowClick: flags.readonly ? undefined : (p) => (p.expense_id ? (location.hash = p.shift_id ? `#/postes/${p.shift_id}` : '#/depenses') : removeSupplierPayment(p, reload)) },
           ),
         )
       : null,

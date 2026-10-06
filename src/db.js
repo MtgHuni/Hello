@@ -559,9 +559,12 @@ const EXPENSE_CATEGORIES = [
   // A delivery paid with the open shift's money (deliveries.expense_id): already in the cost of
   // the fuel sold, so the reports' net result leaves it out.
   'Achat de carburant',
+  // Paid to a supplier named in « Payé à »: settles its deliveries on credit (supplierBalances()).
+  'Paiement fournisseur',
   'Autre',
 ];
 const FUEL_PURCHASE = 'Achat de carburant';
+const SUPPLIER_PAYMENT = 'Paiement fournisseur';
 
 const DEFAULT_SETTINGS = {
   station_name: 'Ma station',
@@ -770,4 +773,4 @@ function getSettings(db) {
   };
 }
 
-module.exports = { openDb, getSettings, syncCreditLimits, EXPENSE_CATEGORIES, FUEL_PURCHASE, SCHEMA_VERSION };
+module.exports = { openDb, getSettings, syncCreditLimits, EXPENSE_CATEGORIES, FUEL_PURCHASE, SUPPLIER_PAYMENT, SCHEMA_VERSION };

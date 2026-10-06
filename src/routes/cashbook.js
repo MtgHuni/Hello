@@ -3,7 +3,7 @@ const { fail, num, str, oneOf, round, dateParam, transaction, money } = require(
 const { requireRole, requireAdmin } = require('../auth');
 const { audit } = require('../audit');
 const { getSettings } = require('../db');
-const { ACCOUNTS, KINDS, cashbook, balances, supplierBalances } = require('../cashbook');
+const { ACCOUNTS, KINDS, cashbook, balances, supplierBalances, supplierExpenses } = require('../cashbook');
 const { cashbookPdf } = require('../cashbookReport');
 
 const manager = requireRole('manager');
@@ -98,9 +98,12 @@ module.exports = function cashbookRoutes(db) {
     res.json({
       suppliers: supplierBalances(db),
       names: db.prepare('SELECT name FROM suppliers ORDER BY name COLLATE NOCASE').all().map((r) => r.name),
-      payments: db
-        .prepare('SELECT p.*, u.name AS user_name FROM supplier_payments p LEFT JOIN users u ON u.id = p.user_id ORDER BY p.id DESC LIMIT 50')
-        .all(),
+      payments: [
+        ...db.prepare('SELECT p.*, u.name AS user_name FROM supplier_payments p LEFT JOIN users u ON u.id = p.user_id ORDER BY p.id DESC LIMIT 50').all(),
+        ...supplierExpenses(db).map((e) => ({ ...e, expense_id: e.id, id: `depense-${e.id}` })),
+      ]
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))
+        .slice(0, 50),
     });
   });
 

@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { flags, edit } from '../ui.js';
-import { h, fmt, pageHeader, table, segmented, kpi, field, button, formDialog, confirmDialog, actionSheet, toast, todayISO, setContent } from '../ui.js';
+import { h, fmt, pageHeader, table, segmented, kpi, field, button, formDialog, confirmDialog, actionSheet, toast, todayISO, setContent, supplierList } from '../ui.js';
 import { PRESETS, presetRange } from './reports.js';
 
 const METHODS = [
@@ -11,7 +11,10 @@ const METHODS = [
 let preset = 'month';
 let range = presetRange(preset);
 
+let supplierNames = [];
+
 export async function renderExpenses(page, ctx) {
+  supplierNames = ctx.state.settings.supplierNames || [];
   const data = await api.get(`/expenses?from=${range.from}&to=${range.to}`);
   const categories = ctx.state.settings.expenseCategories;
   const reload = () => renderExpenses(page, ctx);
@@ -146,7 +149,8 @@ async function expenseDialog(e, categories, reload) {
       { name: 'category', label: 'Catégorie', type: 'select', options: categories.map((c) => [c, c]), value: e?.category, required: true },
       { name: 'method', label: 'Payée par', type: 'select', options: METHODS, value: e?.method || 'espèces' },
       { name: 'description', label: 'Description', value: e?.description, required: true, full: true, placeholder: 'Ex. : salaire de septembre, carburant du générateur…' },
-      { name: 'beneficiary', label: 'Bénéficiaire', value: e?.beneficiary, placeholder: 'Facultatif' },
+      { name: 'beneficiary', label: 'Bénéficiaire', value: e?.beneficiary, placeholder: 'Facultatif', list: 'expense-suppliers' },
+      supplierList(supplierNames),
       { name: 'reference', label: 'Référence / n° de reçu', value: e?.reference, placeholder: 'Facultatif' },
     ],
     onSubmit: (d) => (e ? api.put(`/expenses/${e.id}`, d) : api.post('/expenses', d)),

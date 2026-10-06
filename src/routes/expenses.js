@@ -2,6 +2,7 @@ const express = require('express');
 const { EXPENSE_CATEGORIES } = require('../db');
 const { fail, num, str, oneOf, round, dateParam, csvCell, money } = require('../util');
 const { audit } = require('../audit');
+const { supplierOf } = require('../cashbook');
 const { requireRole } = require('../auth');
 
 const manager = requireRole('manager');
@@ -16,12 +17,13 @@ module.exports = function expenseRoutes(db) {
 
   function fields(b, current = {}) {
     const date = dateParam(b.expenseDate ?? current.expense_date, 'La date') || db.prepare("SELECT date('now', 'localtime') AS d").get().d;
+    const category = oneOf(b.category ?? current.category, 'La catégorie', EXPENSE_CATEGORIES);
     return {
       date,
-      category: oneOf(b.category ?? current.category, 'La catégorie', EXPENSE_CATEGORIES),
+      category,
       amount: round(num(b.amount ?? current.amount, 'Le montant', { min: 0.01, max: 1e8 })),
       description: str(b.description ?? current.description, 'La description', { max: 300 }),
-      beneficiary: str(b.beneficiary ?? current.beneficiary, 'Le bénéficiaire', { required: false, max: 120 }),
+      beneficiary: supplierOf(db, category, str(b.beneficiary ?? current.beneficiary, 'Le bénéficiaire', { required: false, max: 120 })),
       method: oneOf(b.method ?? current.method ?? 'espèces', 'Le mode de paiement', METHODS),
       reference: str(b.reference ?? current.reference, 'La référence', { required: false, max: 100 }),
     };
