@@ -1258,6 +1258,33 @@ test('mails : adresse confirmée, mot de passe oublié, reçus, rapports, alerte
   db.prepare("DELETE FROM mail_log WHERE subject = 'x'").run();
 });
 
+test('clients : jamais deux fois le même nom ; un client en double est supprimé, ses opérations vont au bon', async () => {
+  const jean = await gerant('POST', '/api/customers', { type: 'individual', name: 'Jean Bosco' });
+  assert.strictEqual(jean.status, 201);
+  assert.strictEqual((await gerant('POST', '/api/customers', { type: 'individual', name: ' jean  bósco ' })).data.code, 'duplicate');
+  assert.strictEqual((await pompiste('POST', '/api/customers/quick', { name: 'JEAN BOSCO' })).data.code, 'duplicate');
+
+  // Entered again under another name, with a payment and an old debt.
+  const dup = (await gerant('POST', '/api/customers', { type: 'individual', name: 'Bosco J.', phone: '+243990001122' })).data;
+  await gerant('POST', `/api/customers/${dup.id}/old-debts`, { amount: 30 });
+  await gerant('POST', `/api/customers/${dup.id}/payments`, { amount: 10, method: 'espèces' });
+  assert.strictEqual((await gerant('PUT', `/api/customers/${dup.id}`, { name: 'Jean Bosco' })).data.code, 'duplicate');
+  assert.strictEqual((await customer(dup.id)).customer.operations, 2);
+  assert.strictEqual((await gerant('DELETE', `/api/customers/${dup.id}`)).data.code, 'has_operations');
+  assert.strictEqual((await pompiste('POST', `/api/customers/${dup.id}/merge`, { into: jean.data.id })).status, 403);
+
+  const merged = await gerant('POST', `/api/customers/${dup.id}/merge`, { into: jean.data.id });
+  assert.strictEqual(merged.status, 200);
+  assert.deepStrictEqual([merged.data.balance, merged.data.operations, merged.data.phone], [20, 2, '+243990001122']);
+  assert.strictEqual((await gerant('GET', `/api/customers/${dup.id}`)).status, 404);
+  assert.ok((await gerant('GET', '/api/audit?category=clients')).data.some((a) => a.action === 'customer_merged'));
+
+  // Nothing on it: removed as is.
+  const typo = (await gerant('POST', '/api/customers', { type: 'individual', name: 'Erreur de saisie' })).data;
+  assert.strictEqual((await gerant('DELETE', `/api/customers/${typo.id}`)).status, 200);
+  assert.strictEqual((await gerant('GET', `/api/customers/${typo.id}`)).status, 404);
+});
+
 test('migration : une base ancienne est convertie (loyalty → paid, combos)', () => {
   const fs = require('node:fs');
   const os = require('node:os');

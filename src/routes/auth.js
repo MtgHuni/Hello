@@ -1,6 +1,7 @@
 const express = require('express');
 const { getSettings } = require('../db');
 const { seedTestData } = require('../seed');
+const { customerNamed } = require('./customers');
 const { fail, num, str, transaction } = require('../util');
 const {
   hashPassword,
@@ -105,6 +106,7 @@ module.exports = function authRoutes(db, { mailer }) {
       limiter.fail(key);
       fail(409, 'Un compte existe déjà avec ce numéro. Connectez-vous.');
     }
+    if (customerNamed(db, name)) fail(409, 'Ce nom est déjà pris : ajoutez votre post-nom ou votre prénom.', 'duplicate');
     const userId = transaction(db, () => {
       const customerId = db
         .prepare("INSERT INTO customers (type, name, phone, credit_limit, needs_review) VALUES ('individual', ?, ?, ?, 1)")

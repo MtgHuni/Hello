@@ -1,16 +1,22 @@
 import { flags, edit } from '../ui.js';
 import { api } from '../api.js';
-import { h, fmt, pageHeader, card, cardHeader, table, segmented, kpi, badge, button, formDialog, confirmDialog, toast, field, todayISO, isoDate, setContent, sharePdf, whatsappNumber, noticeDialog, buttonRow } from '../ui.js';
+import { h, fmt, pageHeader, card, cardHeader, table, segmented, kpi, badge, button, formDialog, confirmDialog, toast, field, todayISO, isoDate, setContent, sharePdf, whatsappNumber, noticeDialog, buttonRow, nameChips } from '../ui.js';
 import { icon } from '../icons.js';
 
 let typeFilter = 'all';
 let search = '';
 
 const TYPE_LABEL = { account: 'Abonné', individual: 'Particulier' };
+// Names compared as the server does: without case, accents nor extra spaces.
+const nameKey = (s) => String(s || '').normalize('NFD').replace(/\p{M}/gu, '').replace(/\s+/g, ' ').trim().toLowerCase();
 
 export async function renderCustomers(page, ctx) {
   const customers = await api.get('/customers');
   const listHost = h('div');
+  // Namesakes left from before names had to be unique.
+  const seen = new Map();
+  for (const c of customers) seen.set(nameKey(c.name), (seen.get(nameKey(c.name)) || 0) + 1);
+  const namesake = (c) => seen.get(nameKey(c.name)) > 1;
 
   const draw = () => {
     const q = search.trim().toLowerCase();
@@ -25,7 +31,7 @@ export async function renderCustomers(page, ctx) {
           { label: 'Client', render: (c) => h('div', {}, h('div', { style: 'font-weight:600' }, c.name), h('div', { class: 'muted small' }, [c.phone, c.plate].filter(Boolean).join(' · ') || '—')) },
           {
             label: 'Type',
-            render: (c) => (!c.active ? badge('Désactivé') : c.needs_review ? badge('À compléter', 'warning') : TYPE_LABEL[c.type]),
+            render: (c) => (namesake(c) ? badge('Même nom', 'warning') : !c.active ? badge('Désactivé') : c.needs_review ? badge('À compléter', 'warning') : TYPE_LABEL[c.type]),
           },
           { label: 'Solde dû', align: 'right', render: (c) => (c.balance < 0 ? `Avance ${fmt.money(-c.balance)}` : c.balance ? fmt.money(c.balance) : '—') },
           ...(flags.combos ? [{ label: 'Combos', align: 'right', render: (c) => fmt.number(c.loyalty_points) }] : []),
@@ -211,6 +217,7 @@ export async function renderCustomerDetail(page, ctx) {
         edit(button('Ancienne dette', () => oldDebtDialog(c, reload), { variant: 'secondary', iconName: 'plus' })),
         edit(button('Modifier', () => customerDialog(c, ctx, reload), { variant: 'secondary', iconName: 'edit' })),
         edit(button(c.login ? 'Accès client' : 'Créer un accès', () => loginDialog(c, ctx, reload), { variant: 'secondary', iconName: 'user' })),
+        edit(button('Supprimer', () => removeCustomer(c, ctx), { variant: 'secondary', iconName: 'trash' })),
       ),
       c.needs_review
         ? h(
@@ -352,6 +359,42 @@ async function paymentDialog(c, reload) {
 }
 
 // A debt from before the app (the notebook): added to the balance, settled first by payments.
+// A record entered by mistake: removed as is when it holds nothing; otherwise its operations
+// and its login go to the right customer, chosen among the others.
+async function removeCustomer(c, ctx) {
+  if (!c.operations && !c.login) {
+    if (!(await confirmDialog(`Supprimer ${c.name} ?`, null, { confirmLabel: 'Supprimer', danger: true }))) return;
+    try {
+      await api.del(`/customers/${c.id}`);
+      toast('Client supprimé.');
+      ctx.navigate('clients');
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+    return;
+  }
+  const others = (await api.get('/customers?form=1')).filter((o) => o.id !== c.id);
+  const chips = nameChips(others.map((o) => o.name));
+  const n = c.operations;
+  const ok = await formDialog({
+    title: `Supprimer ${c.name}`,
+    grid: false,
+    fields: [
+      { name: 'into', label: !n ? 'Son accès client va à' : n > 1 ? `Ses ${n} opérations vont à` : 'Son opération va à', required: true, onInput: chips.onInput },
+      chips.node,
+    ],
+    submitLabel: 'Transférer et supprimer',
+    onSubmit: (d) => {
+      const into = others.find((o) => nameKey(o.name) === nameKey(d.into));
+      if (!into) throw new Error('Touchez un client proposé.');
+      return api.post(`/customers/${c.id}/merge`, { into: into.id });
+    },
+  });
+  if (!ok) return;
+  toast(`${c.name} supprimé.`);
+  ctx.navigate(`clients/${ok.id}`);
+}
+
 async function oldDebtDialog(c, reload) {
   const ok = await formDialog({
     title: `Ancienne dette — ${c.name}`,
