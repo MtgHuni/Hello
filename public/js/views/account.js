@@ -1,6 +1,6 @@
 import { flags } from '../ui.js';
 import { api } from '../api.js';
-import { priceTotem, h, fmt, pageHeader, button, formDialog, confirmDialog, toast, spinner, setContent, pdfLinks } from '../ui.js';
+import { priceTotem, h, fmt, pageHeader, button, formDialog, confirmDialog, toast, spinner, setContent, pdfLinks, noticeDialog } from '../ui.js';
 import { icon } from '../icons.js';
 import { statement, defaultPeriod } from './customers.js';
 
@@ -114,10 +114,13 @@ export async function renderAccount(page) {
   async function startFill() {
     const products = (await api.get('/products')).filter((p) => p.active);
     const c = acc.customer;
-    const canCredit = c.credit_limit > 0;
+    // A particulier who still owes a credit gets no other until it is paid.
+    const canCredit = c.type === 'account' || !(c.balance > 0.001);
     const canCombo = flags.combos && acc.combos.balance >= acc.combos.threshold;
     // Paying cash needs no request: the pump's indexes count it.
-    if (!canCredit && !canCombo) return toast('Le crédit n’est pas ouvert sur votre compte : payez directement à la pompe.', 'error');
+    if (!canCredit && !canCombo) {
+      return noticeDialog('Pas de nouveau crédit', h('p', {}, 'Vous devez encore ', h('strong', {}, fmt.money(c.balance)), '. Réglez ce crédit à la station : vous pourrez ensuite préparer un nouvel achat à crédit.'));
+    }
     const priceOf = (p) => (c.type === 'account' ? p.subscriber_price : p.price);
     const estimate = h('div', { class: 'summary-line total' }, h('span', {}, 'Estimation'), h('span', {}, '—'));
     const update = (e) => {

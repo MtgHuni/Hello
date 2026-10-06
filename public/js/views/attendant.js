@@ -1,6 +1,6 @@
 import { flags } from '../ui.js';
 import { api } from '../api.js';
-import { priceTotem, shiftLine, h, fmt, pageHeader, card, cardHeader, table, shiftBadge, varianceCell, button, formDialog, confirmDialog, toast, field, productColor, badge, kpi, parseServerDate, setContent, reportLink, busy, newRef, buttonRow } from '../ui.js';
+import { priceTotem, shiftLine, h, fmt, pageHeader, card, cardHeader, table, shiftBadge, varianceCell, button, formDialog, confirmDialog, toast, field, productColor, badge, kpi, parseServerDate, setContent, reportLink, busy, newRef, buttonRow, noticeDialog } from '../ui.js';
 import { icon } from '../icons.js';
 import { shiftSummary } from './shifts.js';
 import { renderJoin, renderCheckpoint } from './relay.js';
@@ -159,7 +159,7 @@ function renderOpenShift(page, ctx, shift, remarks = null) {
       tag: h(
         'span',
         { class: 'row', style: 'gap:6px' },
-        s.kind === 'credit' ? (s.over_limit ? badge('Crédit hors plafond', 'serious') : badge('Crédit', 'info')) : s.kind === 'combo' ? badge(`Combos −${s.combos_used}`, 'warning') : badge('Payé', 'good'),
+        s.kind === 'credit' ? (s.over_limit ? badge('Crédit malgré le retard', 'serious') : badge('Crédit', 'info')) : s.kind === 'combo' ? badge(`Combos −${s.combos_used}`, 'warning') : badge('Payé', 'good'),
         s.points && flags.combos ? badge(`+${s.points} combos`) : null,
         s.source === 'customer' ? badge('Demande client') : null,
       ),
@@ -314,6 +314,7 @@ function requestQueue(shift, reload) {
       const sale = await api.post(`/requests/${r.id}/confirm`, adjust);
       toast(`${r.customer_name} : ${fmt.liters(sale.liters)} · ${fmt.money(sale.amount)}${flags.combos && sale.points ? ` · +${sale.points} combos` : sale.combos_used ? ` · −${sale.combos_used} combos` : ''}`);
     } catch (err) {
+      if (err.code === 'has_credit') return creditBlocked(r.customer_id, err.message);
       if (err.code !== 'over_limit') throw err;
       if (!(await confirmDialog('Accorder le crédit ?', `${err.message} Si vous accordez ce crédit, il sera signalé au gérant avec votre nom.`, { confirmLabel: 'Accorder' }))) return;
       await api.post(`/requests/${r.id}/confirm`, { ...adjust, grantCredit: true });
@@ -348,9 +349,8 @@ function requestQueue(shift, reload) {
         const price = priceOf(r.product_id, r.customer_type) ?? r.current_price;
         const liters = r.liters ?? r.amount / price;
         const amount = r.amount ?? r.liters * price;
-        // An individual with an unpaid credit: the new one is an alert, like a limit passed.
+        // An individual with an unpaid credit: the request cannot become a credit.
         const owes = r.payment === 'credit' && r.customer_type !== 'account' && r.balance > 0.001;
-        const overLimit = r.payment === 'credit' && (owes || amount > r.available + 0.001);
         return h(
           'div',
           { class: 'queue-card' },
@@ -360,7 +360,7 @@ function requestQueue(shift, reload) {
             'div',
             { class: 'row', style: 'gap:6px' },
             r.payment === 'credit'
-              ? badge(owes ? `Refusé · doit encore ${fmt.money(r.balance)}` : overLimit ? 'Crédit · dépasse le plafond' : 'Crédit', overLimit ? 'serious' : 'info')
+              ? badge(owes ? `Refusé · doit encore ${fmt.money(r.balance)}` : 'Crédit', owes ? 'serious' : 'info')
               : r.payment === 'combo'
                 ? badge(`Avec ses combos (${r.loyalty_points})`, 'warning')
                 : null,
@@ -480,6 +480,38 @@ function customerSearch(customers, { allowNew = false, onPick } = {}) {
 // Credit entered by the attendant (paid sales are not entered: the indexes count them),
 // built for speed: one search field for the customer (name, plate or phone; an unknown
 // name creates the customer), one-tap product and unit, amount in dollars or litres.
+// A particulier who still owes a credit gets no other: a card in the middle of the screen says so,
+// with each credit still unpaid (when, what, how much is left, who entered it).
+export async function creditBlocked(customerId, fallback) {
+  const info = await api.get(`/customers/${customerId}/unpaid`).catch(() => null);
+  if (!info) return noticeDialog('Pas de nouveau crédit', h('p', {}, fallback || 'Ce client doit encore un crédit : pas de nouveau crédit avant son paiement.'));
+  return noticeDialog('Pas de nouveau crédit', [
+    h('p', {}, `${info.name} doit encore `, h('strong', {}, fmt.money(info.balance)), '. Un particulier prend un nouveau crédit seulement après avoir payé le précédent.'),
+    h(
+      'ul',
+      { class: 'notice-list' },
+      info.credits.map((c) =>
+        h(
+          'li',
+          {},
+          h('span', {}, c.old ? 'Ancienne dette (cahier)' : `${fmt.dateTime(c.created_at)} · ${c.product_name} ${fmt.liters(c.liters)}`),
+          h('strong', {}, fmt.money(c.unpaid)),
+          h(
+            'small',
+            {},
+            [
+              c.unpaid < c.amount - 0.001 ? `reste sur ${fmt.money(c.amount)}` : null,
+              c.old ? c.note : `poste n°${c.shift_id}`,
+              !c.old && c.user_name ? `saisi par ${c.user_name}` : null,
+            ].filter(Boolean).join(' · '),
+          ),
+        ),
+      ),
+    ),
+    info.phone ? h('p', { class: 'notice-foot' }, `Téléphone : ${info.phone}`) : null,
+  ]);
+}
+
 export async function addCredit(ctx, shift, reload) {
   const customers = await customersList();
   const clientRef = newRef();
@@ -493,6 +525,7 @@ export async function addCredit(ctx, shift, reload) {
 
   const who = h('p', { class: 'hint-line' });
   const summary = h('div', { class: 'summary-line total' }, h('span', {}, 'Total'), h('span', {}, '—'));
+  let alerted = null;
   const update = (e) => {
     const form = e.target?.form ?? e;
     const text = form.elements.customer.value.trim();
@@ -507,12 +540,16 @@ export async function addCredit(ctx, shift, reload) {
     } else if (c) {
       const parts = [c.type === 'account' ? 'Abonné' : 'Particulier'];
       if (flags.combos) parts.push(`${c.points ?? 0} combos${c.points >= comboThreshold ? ` (= ${fmt.money(c.points * comboValue)})` : ''}`);
-      // An individual: the balance only; an unpaid credit is shown as an alert.
-      const owes = c.type !== 'account' && c.balance > 0;
-      if (c.type === 'account') parts.push(c.late ? 'mois précédent impayé' : `crédit disponible ${fmt.money(Math.max(0, c.available ?? 0))}`);
-      else parts.push(owes ? `doit encore ${fmt.money(c.balance)} : pas de nouveau crédit avant paiement` : c.balance < 0 ? `avance ${fmt.money(-c.balance)}` : 'solde 0,00 $');
+      // An individual who still owes a credit: the alert card, once per customer picked.
+      const owes = c.type !== 'account' && c.balance > 0.001;
+      if (c.type === 'account') parts.push(c.late ? 'mois précédent impayé' : c.balance > 0 ? `doit ${fmt.money(c.balance)} ce mois` : 'à jour');
+      else parts.push(owes ? `doit encore ${fmt.money(c.balance)} : pas de nouveau crédit` : c.balance < 0 ? `avance ${fmt.money(-c.balance)}` : 'solde 0,00 $');
       who.textContent = parts.join(' · ');
       who.className = c.late || owes ? 'hint-line variance-neg' : 'hint-line';
+      if (owes && alerted !== c.id) {
+        alerted = c.id;
+        creditBlocked(c.id);
+      }
       if (c.plate && !form.elements.plate.value) form.elements.plate.value = c.plate;
     } else {
       who.textContent = 'Touchez un client proposé, ou « Nouveau client » pour le créer.';
@@ -565,6 +602,10 @@ export async function addCredit(ctx, shift, reload) {
       try {
         return await api.post(`/shifts/${shift.id}/sales`, body);
       } catch (err) {
+        if (err.code === 'has_credit') {
+          await creditBlocked(customer.id, err.message);
+          throw new Error('Crédit non enregistré : le client doit encore son crédit précédent.');
+        }
         if (err.code !== 'over_limit') throw err;
         const grant = await confirmDialog('Accorder le crédit ?', `${err.message} Si vous accordez ce crédit, il sera signalé au gérant avec votre nom.`, { confirmLabel: 'Accorder' });
         if (!grant) throw new Error('Crédit non enregistré : refusé.');

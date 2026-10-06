@@ -810,6 +810,9 @@ textarea { min-height: 96px; resize: vertical; }
 .form-error { color: var(--bad-text); font-size: 15px; animation: shake 0.45s var(--ease-out); }
 
 /* Switch */
+/* A group title inside a form (e.g. « Alertes en cours », « Types d’alertes »). */
+.form-section { margin: 10px 0 0; font-size: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-3); }
+.form-section:first-child { margin-top: 0; }
 .switch-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding: 4px 2px; cursor: pointer; }
 input.switch {
   position: relative;
@@ -986,6 +989,15 @@ dialog.action-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; 
 .alert p { margin-top: 8px; font-size: 15px; line-height: 1.4; color: var(--text-2); }
 .alert-actions { display: flex; flex-direction: column-reverse; gap: 8px; margin-top: 22px; }
 .alert-actions .btn { width: 100%; }
+/* A blocking notice: the mark on top, the facts as a list (credits still owed…). */
+.notice { width: min(360px, calc(100vw - 32px)); }
+.notice-icon { width: 48px; height: 48px; margin: 0 auto 14px; border-radius: 12px; }
+.notice-icon svg { width: 24px; height: 24px; }
+.notice-list { margin: 16px 0 0; padding: 0; list-style: none; text-align: left; border-top: 1px solid var(--hairline); max-height: 40dvh; overflow-y: auto; }
+.notice-list li { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 10px 0; border-bottom: 1px solid var(--hairline); font-size: 15px; }
+.notice-list li strong { font-variant-numeric: tabular-nums; color: var(--bad-text); }
+.notice-list li small { grid-column: 1 / -1; color: var(--text-3); font-size: 13px; }
+.notice .notice-foot { margin-top: 12px; font-size: 14px; color: var(--text-3); }
 
 .action-sheet {
   width: min(420px, calc(100vw - 24px));

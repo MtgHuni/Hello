@@ -1,12 +1,13 @@
 const express = require('express');
 const { getSettings } = require('../db');
-const { round, dateParam, fail, csvCell, money } = require('../util');
+const { round, dateParam, fail, csvCell, money, transaction } = require('../util');
 const { requireRole } = require('../auth');
 const { balanceSql, subscriberDues, creditAllocation } = require('../loyalty');
 const { balances, supplierBalances } = require('../cashbook');
 const { attendantNamesSql, closingCutoff } = require('../checkpoints');
 const { periodReportPdf } = require('../periodReport');
 const { withLiveStock } = require('../liveStock');
+const { ALERT_TYPES, userAlerts } = require('../alerts');
 
 const manager = requireRole('manager');
 
@@ -26,6 +27,20 @@ module.exports = function reportRoutes(db) {
      GROUP BY 1, sa.product_id`,
   );
   const surcharges = (from, to) => new Map(surchargeStmt.all(from, to).map((r) => [`${r.date}|${r.product_id}`, r.surcharge]));
+
+  // Each manager (or owner) chooses their alerts: types switched off, alerts hidden until they change.
+  router.put('/alerts', requireRole('manager', 'owner'), (req, res) => {
+    const b = req.body || {};
+    const off = (Array.isArray(b.off) ? b.off : []).filter((t) => Object.hasOwn(ALERT_TYPES, t));
+    const hidden = (Array.isArray(b.hidden) ? b.hidden : []).filter((a) => typeof a?.key === 'string' && typeof a?.text === 'string').slice(0, 200);
+    transaction(db, () => {
+      db.prepare('DELETE FROM alert_prefs WHERE user_id = ?').run(req.user.id);
+      db.prepare('DELETE FROM alert_hidden WHERE user_id = ?').run(req.user.id);
+      for (const t of off) db.prepare('INSERT INTO alert_prefs (user_id, type) VALUES (?, ?)').run(req.user.id, t);
+      for (const a of hidden) db.prepare('INSERT OR REPLACE INTO alert_hidden (user_id, key, text) VALUES (?, ?, ?)').run(req.user.id, a.key.slice(0, 100), a.text.slice(0, 500));
+    });
+    res.json({ ok: true });
+  });
 
   router.get('/dashboard', manager, (req, res) => {
     const settings = getSettings(db);
@@ -103,13 +118,15 @@ module.exports = function reportRoutes(db) {
     const alerts = [];
     for (const t of tanks) {
       if (t.book_stock <= t.low_level) {
-        alerts.push({ level: 'critical', text: `${t.name} : stock bas (${round(t.book_stock)} L, seuil ${t.low_level} L)`, link: '#/cuves' });
+        alerts.push({ type: 'stock_bas', key: `stock_bas:${t.id}`, level: 'critical', text: `${t.name} : stock bas (${round(t.book_stock)} L, seuil ${t.low_level} L)`, link: '#/cuves' });
       }
     }
     for (const s of recentlyClosed) {
-      if (!s.counted_at) alerts.push({ level: 'warning', text: `Poste n°${s.id} : argent à compter`, link: `#/postes/${s.id}` });
+      if (!s.counted_at) alerts.push({ type: 'argent_a_compter', key: `argent_a_compter:${s.id}`, level: 'warning', text: `Poste n°${s.id} : argent à compter`, link: `#/postes/${s.id}` });
       else if (Math.abs(s.variance) > settings.cashTolerance) {
         alerts.push({
+          type: 'ecart_caisse',
+          key: `ecart_caisse:${s.id}`,
           level: 'serious',
           text: `Poste n°${s.id} (${s.attendant_name}) : écart de caisse de ${s.variance.toFixed(2).replace('.', ',')} $`,
           link: `#/postes/${s.id}`,
@@ -117,12 +134,12 @@ module.exports = function reportRoutes(db) {
       }
     }
     for (const d of recentDips) {
-      alerts.push({ level: 'serious', text: `${d.tank_name} : écart de jaugeage de ${String(d.variance).replace('.', ',')} L`, link: '#/cuves' });
+      alerts.push({ type: 'ecart_jaugeage', key: `ecart_jaugeage:${d.id}`, level: 'serious', text: `${d.tank_name} : écart de jaugeage de ${String(d.variance).replace('.', ',')} L`, link: '#/cuves' });
     }
-    // Credits granted by attendants beyond the limit, on the open shift or one closed in the last three days.
+    // Credits granted by attendants to a late subscriber, on the open shift or one closed in the last three days.
     const overLimit = db
       .prepare(
-        `SELECT sa.amount, sa.shift_id, c.id AS customer_id, c.name AS customer_name, u.name AS attendant_name
+        `SELECT sa.id, sa.amount, sa.shift_id, c.id AS customer_id, c.name AS customer_name, u.name AS attendant_name
          FROM sales sa JOIN shifts s ON s.id = sa.shift_id JOIN customers c ON c.id = sa.customer_id
          JOIN users u ON u.id = COALESCE(sa.user_id, s.attendant_id)
          WHERE sa.over_limit = 1 AND (s.status = 'open' OR s.closed_at >= datetime('now', '-3 days')) ORDER BY sa.id DESC`,
@@ -130,8 +147,10 @@ module.exports = function reportRoutes(db) {
       .all();
     for (const o of overLimit) {
       alerts.push({
+        type: 'credit_retard',
+        key: `credit_retard:${o.id}`,
         level: 'serious',
-        text: `Crédit hors plafond accordé par ${o.attendant_name} à ${o.customer_name} (${o.amount.toFixed(2).replace('.', ',')} $)`,
+        text: `Crédit accordé par ${o.attendant_name} à ${o.customer_name}, abonné en retard (${o.amount.toFixed(2).replace('.', ',')} $)`,
         link: `#/postes/${o.shift_id}`,
       });
     }
@@ -140,15 +159,12 @@ module.exports = function reportRoutes(db) {
       const dues = subscriberDues(db, c.id, settings.subscriberGraceDays);
       if (dues.late) {
         alerts.push({
+          type: 'abonne_retard',
+          key: `abonne_retard:${c.id}`,
           level: 'critical',
           text: `${c.name} (abonné) n'a pas payé le mois précédent : ${dues.overdue.toFixed(2).replace('.', ',')} $`,
           link: `#/clients/${c.id}`,
         });
-      }
-    }
-    for (const c of customers) {
-      if (c.balance > c.credit_limit) {
-        alerts.push({ level: 'warning', text: `${c.name} dépasse son plafond de crédit`, link: `#/clients/${c.id}` });
       }
     }
     const combos = db
@@ -166,6 +182,8 @@ module.exports = function reportRoutes(db) {
       .all();
     for (const t of db.prepare("SELECT shift_id, COUNT(*) AS n, ROUND(SUM(liters), 2) AS liters FROM pump_tests WHERE status = 'pending' GROUP BY shift_id ORDER BY shift_id").all()) {
       alerts.push({
+        type: 'tests_pompe',
+        key: `tests_pompe:${t.shift_id}`,
         level: 'serious',
         text: `Poste n°${t.shift_id} : ${t.n > 1 ? `${t.n} tests de pompe` : '1 test de pompe'} (${String(t.liters).replace('.', ',')} L remis en cuve) à confirmer`,
         link: `#/postes/${t.shift_id}`,
@@ -173,6 +191,8 @@ module.exports = function reportRoutes(db) {
     }
     for (const c of cancellations) {
       alerts.push({
+        type: 'annulations',
+        key: `annulations:${c.shift_id}`,
         level: 'serious',
         text: `Poste n°${c.shift_id} : ${c.n > 1 ? `${c.n} annulations demandées` : '1 annulation demandée'} par le pompiste, à valider`,
         link: `#/postes/${c.shift_id}`,
@@ -181,17 +201,20 @@ module.exports = function reportRoutes(db) {
     const toReview = db.prepare('SELECT COUNT(*) AS n FROM customers WHERE needs_review = 1 AND active = 1').get().n;
     if (toReview) {
       alerts.push({
+        type: 'clients_a_completer',
+        key: 'clients_a_completer',
         level: 'warning',
         text: `${toReview} nouveau${toReview > 1 ? 'x' : ''} client${toReview > 1 ? 's' : ''} créé${toReview > 1 ? 's' : ''} à la pompe, fiche à compléter`,
         link: '#/clients',
       });
     }
     const due = openShifts.find((s) => s.opened_at < closingCutoff(db, settings.closingTime || '15:30'));
-    if (due) alerts.push({ level: 'serious', text: `Poste n°${due.id} : la clôture de ${settings.closingTime || '15:30'} est à faire`, link: `#/postes/${due.id}` });
+    if (due) alerts.push({ type: 'cloture', key: `cloture:${due.id}`, level: 'serious', text: `Poste n°${due.id} : la clôture de ${settings.closingTime || '15:30'} est à faire`, link: `#/postes/${due.id}` });
     const supplierDebt = round(supplierBalances(db).reduce((t, s) => t + Math.max(0, s.balance), 0));
-    if (supplierDebt > 0) alerts.push({ level: 'warning', text: `${money(supplierDebt)} dus aux fournisseurs (livraisons à crédit)`, link: '#/cuves' });
+    if (supplierDebt > 0) alerts.push({ type: 'fournisseurs', key: 'fournisseurs', level: 'warning', text: `${money(supplierDebt)} dus aux fournisseurs (livraisons à crédit)`, link: '#/cuves' });
     const todayExpenses = round(db.prepare('SELECT COALESCE(SUM(amount), 0) AS v FROM expenses WHERE expense_date = ?').get(today).v);
 
+    const shown = userAlerts(db, req.user.id, alerts);
     res.json({
       today,
       settings,
@@ -217,7 +240,8 @@ module.exports = function reportRoutes(db) {
       todayExpenses,
       toReview,
       combos: { total: combos.total, value: round(combos.total * settings.comboValue), redeemable: combos.redeemable },
-      alerts,
+      alerts: shown.visible,
+      alertsManage: shown.manage,
     });
   });
 

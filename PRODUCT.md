@@ -27,7 +27,7 @@ Success means:
 
 The app is built around one station's real counter. Three things set it apart:
 - one-tap confirmation of purchases prepared by customers;
-- credit with limits per customer category (particulier or abonné), and the monthly settlement for abonnés;
+- credit without a limit: one credit at a time for a particulier, the monthly settlement for abonnés;
 - "combos" (loyalty points) that customers exchange for fuel; the programme can be switched off, and is off for now.
 
 Everything is in US dollars and French, on the Africa/Lubumbashi timezone.
@@ -43,8 +43,8 @@ Everything is in US dollars and French, on the Africa/Lubumbashi timezone.
 - Stack: Node/Express 5 server with built-in SQLite; plain HTML/CSS/JS with no framework and no build step. Deployed on Render.
 - Roles: gérant, pompiste, client.
 - Customer categories:
-  - **particulier**: one fixed credit limit, set in settings;
-  - **abonné**: a higher price per product, a higher limit, and the whole month to pay by month end (after a grace period, credit is blocked).
+  - **particulier**: one credit at a time, no new one before it is paid;
+  - **abonné**: a higher price per product, no limit, and the whole month to pay by month end (after a grace period, credit is blocked).
   - New customers are particuliers. Only the manager makes a customer an abonné.
 - Combos:
   - X combos per litre;
@@ -67,7 +67,7 @@ There are no testimonials, figures, photos or logo. None must be invented.
 
 1. **The queue sets the pace.** Every attendant action fits in a few taps, one-handed, readable in the sun.
 2. **Every dollar is accountable.** Amounts, gaps and credit are always explicit; nothing is hidden or rounded silently.
-3. **Status before decoration.** Pending, late, over the limit, confirmed: states must read instantly.
+3. **Status before decoration.** Pending, late, still owing, confirmed: states must read instantly.
 4. **Light on the device.** The app must stay fast on modest phones and weak networks.
 
 ## Accessibility & Inclusion

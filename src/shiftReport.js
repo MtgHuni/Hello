@@ -59,7 +59,7 @@ function shiftReportPdf(shift, { stationName, combosEnabled, cashTolerance = 0, 
   report.section('Crédits accordés', credits.length ? `${credits.length} vente${credits.length > 1 ? 's' : ''} à crédit` : null);
   report.table(
     saleColumns,
-    credits.map((s) => [time(s.created_at), s.customer_name, s.product_name, liters(s.liters), money(s.amount), [s.over_limit ? 'Hors plafond' : '', pendingNote(s)].filter(Boolean).join(' · ')]),
+    credits.map((s) => [time(s.created_at), s.customer_name, s.product_name, liters(s.liters), money(s.amount), [s.over_limit ? 'Accordé malgré le retard' : '', pendingNote(s)].filter(Boolean).join(' · ')]),
     { totals: [['Total', '', '', liters(round(credits.reduce((t, s) => t + s.liters, 0))), money(shift.credit_amount), '']], empty: 'Aucun crédit sur ce poste.' },
   );
 

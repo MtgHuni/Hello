@@ -18,8 +18,6 @@ const SETTING_LABELS = {
   combo_value: 'valeur d’un combo',
   combo_threshold: 'seuil d’échange',
   combos_enabled: 'programme de combos',
-  individual_credit_limit: 'plafond particuliers',
-  subscriber_credit_limit: 'plafond abonnés',
   subscriber_grace_days: 'délai des abonnés',
   closing_time: 'heure de clôture',
 };
@@ -53,8 +51,6 @@ module.exports = function configRoutes(db) {
       points_per_liter: pick(b.combosPerLiter, cur.combosPerLiter, 'Les combos par litre', { max: 1000 }),
       combo_value: pick(b.comboValue, cur.comboValue, "La valeur d'un combo", { min: 0.0001, max: 1000 }),
       combo_threshold: pick(b.comboThreshold, cur.comboThreshold, "Le seuil d'échange", { min: 1, max: 1e7, integer: true }),
-      individual_credit_limit: pick(b.individualCreditLimit, cur.individualCreditLimit, 'Le plafond des particuliers', { max: 1e8 }),
-      subscriber_credit_limit: pick(b.subscriberCreditLimit, cur.subscriberCreditLimit, 'Le plafond des abonnés', { max: 1e8 }),
       subscriber_grace_days: pick(b.subscriberGraceDays, cur.subscriberGraceDays, 'Le délai de paiement des abonnés', { min: 1, max: 28, integer: true }),
     };
     values.combos_enabled = bool(b.combosEnabled, cur.combosEnabled) ? 1 : 0;

@@ -68,12 +68,9 @@ function createSale(db, shift, input) {
       if (dues?.late) problem = `Abonné en retard : ${money(dues.overdue)} du mois précédent non payés.`;
       // An individual takes a new credit only once the last one is paid: no one can grant it.
       else if (!subscriber && balance > 0.001) fail(409, `${customer.name} a déjà un crédit non payé de ${money(balance)} : pas de nouveau crédit avant son paiement.`, 'has_credit');
-      else if (!subscriber && amount > customer.credit_limit + 0.001) problem = `Plafond de crédit dépassé : achat de ${money(amount)}, plafond ${money(customer.credit_limit)}.`;
-      else if (balance + amount > customer.credit_limit + 0.001) {
-        problem = `Plafond de crédit dépassé : encours ${money(balance)}, plafond ${money(customer.credit_limit)}, disponible ${money(Math.max(0, customer.credit_limit - balance))}.`;
-      }
+      // There is no credit limit: an individual has one credit at a time, a subscriber pays each month.
       if (problem) {
-        // The attendant may still grant the credit, but must confirm it explicitly:
+        // The attendant may still grant the credit to a late subscriber, but must confirm it explicitly:
         // the sale is then flagged and reported to the manager.
         if (input.grantCredit !== true) fail(409, problem, 'over_limit');
         overLimit = 1;

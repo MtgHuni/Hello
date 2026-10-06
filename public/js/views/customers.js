@@ -27,8 +27,7 @@ export async function renderCustomers(page, ctx) {
             label: 'Type',
             render: (c) => (!c.active ? badge('Désactivé') : c.needs_review ? badge('À compléter', 'warning') : TYPE_LABEL[c.type]),
           },
-          { label: 'Solde dû', align: 'right', render: (c) => (c.balance < 0 ? `Avance ${fmt.money(-c.balance)}` : c.balance ? h('span', { class: c.balance > c.credit_limit ? 'variance-neg' : '' }, fmt.money(c.balance)) : '—') },
-          { label: 'Plafond', align: 'right', render: (c) => fmt.money(c.credit_limit) },
+          { label: 'Solde dû', align: 'right', render: (c) => (c.balance < 0 ? `Avance ${fmt.money(-c.balance)}` : c.balance ? fmt.money(c.balance) : '—') },
           ...(flags.combos ? [{ label: 'Combos', align: 'right', render: (c) => fmt.number(c.loyalty_points) }] : []),
           { label: 'Dernier achat', render: (c) => fmt.date(c.last_purchase_at) },
         ],
@@ -204,7 +203,7 @@ export async function renderCustomerDetail(page, ctx) {
               'div',
               { style: 'flex:1;min-width:220px' },
               h('h3', {}, 'Fiche à compléter'),
-              h('p', { class: 'muted', style: 'font-size:15px;margin-top:2px' }, `Créé à la pompe${c.created_by_name ? ` par ${c.created_by_name}` : ''} avec le nom seulement. Ajoutez le téléphone, l’immatriculation et le plafond de crédit.`),
+              h('p', { class: 'muted', style: 'font-size:15px;margin-top:2px' }, `Créé à la pompe${c.created_by_name ? ` par ${c.created_by_name}` : ''} avec le nom seulement. Ajoutez le téléphone, l’immatriculation et le type (particulier ou abonné).`),
             ),
             edit(button('Compléter la fiche', () => customerDialog(c, ctx, reload), { iconName: 'edit' })),
           )
@@ -262,17 +261,16 @@ export function statement(acc, period, onPeriod, { onOldDebt } = {}) {
       : null,
     h(
       'div',
-      { class: `grid ${subscriber ? 'grid-4' : 'grid-2'}` },
+      { class: `grid ${subscriber && flags.combos ? 'grid-3' : 'grid-2'}` },
       kpi(
         c.balance < 0 ? 'Avance du client' : 'Solde dû',
-        h('span', { class: c.balance > c.credit_limit ? 'variance-neg' : '' }, fmt.money(Math.abs(c.balance))),
+        h('span', { class: c.type !== 'account' && c.balance > 0.001 ? 'variance-neg' : '' }, fmt.money(Math.abs(c.balance))),
         [
-          c.type !== 'account' ? (c.balance > 0 ? 'Crédit en cours : pas d’autre crédit avant paiement' : null) : c.balance > c.credit_limit ? 'Plafond dépassé' : `Plafond ${fmt.money(c.credit_limit)}`,
+          c.type !== 'account' && c.balance > 0.001 ? 'Crédit en cours : pas d’autre crédit avant paiement' : null,
           c.old_debt ? `dont ancienne dette ${fmt.money(c.old_debt)} au départ` : null,
         ].filter(Boolean).join(' · ') || TYPE_LABEL[c.type],
       ),
-      // An individual: the balance and the purchases only; a subscriber also the credit left and the combos.
-      subscriber ? kpi('Crédit disponible', fmt.money(Math.max(0, c.credit_limit - c.balance)), TYPE_LABEL[c.type]) : null,
+      // An individual: the balance and the purchases only; a subscriber also the combos.
       !flags.combos || !subscriber ? null : kpi(
         'Combos',
         fmt.number(combos.balance),

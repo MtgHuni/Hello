@@ -91,25 +91,19 @@ test('livraison puis jaugeage', async () => {
   assert.strictEqual(dip.data.variance, -10);
 });
 
-test('catégories de clients : plafonds et prix abonnés réglés dans les paramètres', async () => {
+test('catégories de clients : prix abonnés réglés dans les paramètres, pas de plafond', async () => {
   await gerant('POST', '/api/users', { name: 'Paul', login: 'paul', password: 'pompiste1', role: 'attendant' });
   assert.strictEqual((await pompiste('POST', '/api/auth/login', { login: 'PAUL', password: 'pompiste1' })).status, 200);
   assert.strictEqual((await pompiste('GET', '/api/dashboard')).status, 403);
 
   ctx.fleet = (await gerant('POST', '/api/customers', { type: 'account', name: 'Transports Kivu', creditLimit: 99999 })).data;
   ctx.person = (await gerant('POST', '/api/customers', { type: 'individual', name: 'Marie' })).data;
-  assert.strictEqual(ctx.fleet.credit_limit, 500, 'plafond abonné des paramètres (le plafond envoyé est ignoré)');
-  assert.strictEqual(ctx.person.credit_limit, 50, 'plafond particulier des paramètres');
-
-  await gerant('PUT', '/api/settings', { individualCreditLimit: 60 });
-  assert.strictEqual((await customer(ctx.person.id)).customer.credit_limit, 60, 'un changement de paramètre s’applique à tous');
-  await gerant('PUT', '/api/settings', { individualCreditLimit: 50 });
 
   const product = await gerant('PUT', `/api/products/${ctx.diesel.id}`, { subscriberPrice: 1.4 });
   assert.strictEqual(product.data.subscriber_price, 1.4);
 });
 
-test('poste : prix abonné, crédit sans combos, plafond, rapprochement', async () => {
+test('poste : prix abonné, crédit sans combos, un crédit à la fois, rapprochement', async () => {
   const opened = await pompiste('POST', '/api/shifts', {});
   assert.strictEqual(opened.status, 201);
   const shift = opened.data;
@@ -132,7 +126,7 @@ test('poste : prix abonné, crédit sans combos, plafond, rapprochement', async 
   assert.strictEqual(paid.status, 400);
   assert.strictEqual(paid.data.code, 'paid');
 
-  // Particulier credit: 40 L = 48 $ fits in 50 $; no new credit while he owes it.
+  // Particulier credit: 40 L = 48 $; no new credit while he owes it.
   assert.strictEqual((await sell({ customerId: ctx.person.id, liters: 40, payment: 'credit' })).status, 201);
   const over = await sell({ customerId: ctx.person.id, liters: 5, payment: 'credit' });
   assert.strictEqual(over.status, 409);
@@ -325,14 +319,15 @@ test('pompiste : client rapide (particulier), crédit accordé, règlement et d�
   const quick = await pompiste('POST', '/api/customers/quick', { name: 'Garage Mwami' });
   assert.strictEqual(quick.status, 201);
   assert.strictEqual(quick.data.type, 'individual');
-  assert.strictEqual(quick.data.available, 50);
   assert.strictEqual((await pompiste('POST', '/api/customers/quick', { name: 'garage mwami' })).data.code, 'duplicate');
 
   const sale = { customerId: quick.data.id, nozzleId: nozzle.nozzle_id, liters: 100, payment: 'credit' };
-  const refused = await pompiste('POST', `/api/shifts/${shift.id}/sales`, sale);
-  assert.strictEqual(refused.data.code, 'over_limit');
-  const granted = await pompiste('POST', `/api/shifts/${shift.id}/sales`, { ...sale, grantCredit: true });
-  assert.strictEqual(granted.data.over_limit, 1);
+  // No credit limit any more: a first credit of any amount goes through, unflagged.
+  const granted = await pompiste('POST', `/api/shifts/${shift.id}/sales`, sale);
+  assert.strictEqual(granted.status, 201);
+  assert.strictEqual(granted.data.over_limit, 0);
+  const unpaid = (await pompiste('GET', `/api/customers/${quick.data.id}/unpaid`)).data;
+  assert.deepStrictEqual([unpaid.balance, unpaid.credits.length, unpaid.credits[0].user_name, unpaid.credits[0].liters], [granted.data.amount, 1, 'Paul', 100]);
 
   // The answer was lost and the form sent again: same key, same credit, no duplicate.
   const resend = { customerId: ctx.fleet.id, nozzleId: nozzle.nozzle_id, liters: 1, clientRef: 'pompe-0001-abcd' };
@@ -366,12 +361,10 @@ test('pompiste : client rapide (particulier), crédit accordé, règlement et d�
   assert.strictEqual((await customer(payer.data.id)).balance, -4, 'le crédit est pris sur l’avance');
 
   const dash = (await gerant('GET', '/api/dashboard')).data;
-  assert.ok(dash.alerts.some((a) => a.text.includes('hors plafond')));
   assert.ok(dash.alerts.some((a) => a.text.includes('à compléter')));
 
   const done = await gerant('PUT', `/api/customers/${quick.data.id}`, { phone: '+243 970 000 000', type: 'account' });
   assert.strictEqual(done.data.needs_review, 0);
-  assert.strictEqual(done.data.credit_limit, 500, 'devenu abonné : plafond abonné');
 });
 
 test('client : inscription, demande d’achat confirmée en un geste', async () => {
@@ -967,6 +960,30 @@ test('livraison pendant le poste : le carburant déjà vendu (index) sort du sto
   assert.ok((await gerant('GET', '/api/deliveries')).data.some((d) => d.supplier === 'Engen RDC'));
   assert.strictEqual((await gerant('POST', '/api/suppliers', { name: 'Petro Kivu', phone: '0810000000' })).status, 201);
   assert.ok((await gerant('GET', '/api/suppliers')).data.names.includes('Petro Kivu'));
+});
+
+test('alertes : chacun masque une alerte ou coupe un type, pour lui seul', async () => {
+  const dash = (await gerant('GET', '/api/dashboard')).data;
+  const first = dash.alerts[0];
+  const other = dash.alerts.find((a) => a.type !== first.type);
+  assert.ok(first && other, 'au moins deux types d’alertes');
+  assert.ok(dash.alertsManage.types.some((t) => t.type === other.type && !t.off));
+
+  await gerant('PUT', '/api/alerts', { off: [other.type, 'inconnu'], hidden: [{ key: first.key, text: first.text }] });
+  const after = (await gerant('GET', '/api/dashboard')).data;
+  assert.ok(!after.alerts.some((a) => a.key === first.key || a.type === other.type));
+  assert.ok(after.alertsManage.all.find((a) => a.key === first.key).hidden);
+  assert.ok(after.alertsManage.types.find((t) => t.type === other.type).off);
+  assert.ok(!after.alertsManage.types.some((t) => t.type === 'inconnu'));
+
+  const chef = client();
+  await chef('POST', '/api/auth/login', { login: 'chef', password: 'gerant123' });
+  assert.ok((await chef('GET', '/api/dashboard')).data.alerts.some((a) => a.key === first.key), 'un autre gérant les voit toujours');
+  // A hidden alert comes back when its text changes.
+  db.prepare('UPDATE alert_hidden SET text = ? WHERE key = ?').run('ancien texte', first.key);
+  assert.ok((await gerant('GET', '/api/dashboard')).data.alerts.some((a) => a.key === first.key));
+  await gerant('PUT', '/api/alerts', {});
+  assert.strictEqual((await gerant('GET', '/api/dashboard')).data.alerts.length, dash.alerts.length);
 });
 
 test('migration : une base ancienne est convertie (loyalty → paid, combos)', () => {

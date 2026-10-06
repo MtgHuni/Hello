@@ -640,6 +640,25 @@ export function confirmDialog(title, text, { confirmLabel = 'Confirmer', danger 
   });
 }
 
+// An alert that stops the action: a card in the middle of the screen, a mark, a title, what to know,
+// and one button to close it.
+export function noticeDialog(title, body, { okLabel = 'Compris', level = 'critical', iconName = 'alert' } = {}) {
+  return new Promise((resolve) => {
+    openDialog(
+      (close) =>
+        h(
+          'div',
+          { class: 'alert notice', role: 'alertdialog', 'aria-label': title },
+          h('span', { class: `alert-icon notice-icon ${level}`, 'aria-hidden': 'true' }, icon(iconName)),
+          h('h2', {}, title),
+          body,
+          h('div', { class: 'alert-actions' }, button(okLabel, () => { close(); resolve(); })),
+        ),
+      { kind: 'alert' },
+    );
+  });
+}
+
 // iOS action sheet: grouped choices + a separate Cancel button.
 export function actionSheet({ title, actions }) {
   openDialog(

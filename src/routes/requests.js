@@ -40,9 +40,6 @@ module.exports = function requestRoutes(db) {
     // Paying cash needs no request: the pump's indexes count it. Requests are on credit (or combos).
     if (b.payment === 'paid') fail(400, 'Préparez votre achat à crédit : un achat comptant se paie directement à la pompe.');
     const payment = oneOf(b.payment ?? 'credit', 'Le mode de paiement', ['credit', 'combo']);
-    if (payment === 'credit' && customer.credit_limit <= 0) {
-      fail(400, "Le crédit n'est pas ouvert sur votre compte. Adressez-vous au gérant.");
-    }
     if (payment === 'credit' && customer.type !== 'account') {
       const owed = customerBalance(db, customer.id);
       if (owed > 0.001) fail(409, `Vous avez déjà un crédit non payé de ${String(round(owed).toFixed(2)).replace('.', ',')} $ : réglez-le avant un nouvel achat à crédit.`, 'has_credit');
@@ -98,7 +95,6 @@ module.exports = function requestRoutes(db) {
       .all(shift?.id ?? null, shift?.id ?? null);
     for (const r of rows) {
       r.balance = customerBalance(db, r.customer_id);
-      r.available = round(r.credit_limit - r.balance);
     }
     res.json(rows);
   });

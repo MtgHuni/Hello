@@ -114,12 +114,11 @@ export async function renderSettings(page, ctx) {
 
       // ---- Customers & combos ----
       card(
-        cardHeader('Clients et combos', 'Plafonds de crédit par catégorie et programme de fidélité', adminEdit(button('Modifier', () => customersDialog(settings, reload), { variant: 'ghost' }))),
+        cardHeader('Clients et combos', 'Règles de crédit par catégorie et programme de fidélité', adminEdit(button('Modifier', () => customersDialog(settings, reload), { variant: 'ghost' }))),
         h('h3', { style: 'margin:4px 0 2px' }, 'Particuliers'),
-        line('Plafond de crédit', fmt.money(settings.individualCreditLimit)),
+        line('Crédit', 'Un seul à la fois : le suivant après paiement'),
         h('h3', { style: 'margin:14px 0 2px' }, 'Abonnés'),
         line('Prix au litre', 'Colonne « Prix abonnés » des produits'),
-        line('Plafond de crédit', fmt.money(settings.subscriberCreditLimit)),
         line('Paiement du mois', `avant le ${settings.subscriberGraceDays} du mois suivant`),
         h('h3', { style: 'margin:14px 0 2px' }, 'Combos'),
         line('Programme de combos', settings.combosEnabled ? 'Activé' : 'Désactivé'),
@@ -153,8 +152,6 @@ async function customersDialog(s, reload) {
   const ok = await formDialog({
     title: 'Clients et combos',
     fields: [
-      { name: 'individualCreditLimit', label: 'Plafond particuliers ($)', type: 'number', step: '0.01', min: '0', value: s.individualCreditLimit, required: true },
-      { name: 'subscriberCreditLimit', label: 'Plafond abonnés ($)', type: 'number', step: '0.01', min: '0', value: s.subscriberCreditLimit, required: true },
       { name: 'subscriberGraceDays', label: 'Abonnés : payer avant le (jour du mois)', type: 'number', step: '1', min: '1', value: s.subscriberGraceDays, required: true, hint: 'Après ce jour, un abonné qui doit le mois précédent ne peut plus prendre à crédit' },
       { name: 'combosEnabled', label: 'Programme de combos', type: 'checkbox', value: s.combosEnabled, full: true },
       { name: 'combosPerLiter', label: 'Combos par litre', type: 'number', step: '0.01', min: '0', value: s.combosPerLiter, required: true },

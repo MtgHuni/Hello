@@ -4,7 +4,7 @@ const { requireRole, hashPassword, checkPasswordStrength } = require('../auth');
 const { audit } = require('../audit');
 const { statementPdf } = require('../statementReport');
 const { getSettings, syncCreditLimits } = require('../db');
-const { balanceSql, refreshCustomer, subscriberDues, creditAllocation } = require('../loyalty');
+const { balanceSql, refreshCustomer, subscriberDues, creditAllocation, unpaidCredits } = require('../loyalty');
 
 const manager = requireRole('manager');
 const frNum = (n, digits = 2) => n.toLocaleString('fr-FR', { maximumFractionDigits: digits });
@@ -72,7 +72,7 @@ function customerRoutes(db) {
           s.kind === 'combo'
             ? `${s.product_name} — ${frNum(s.liters)} L échangés contre ${s.combos_used} combos`
             : `${s.product_name} — ${frNum(s.liters)} L à ${frNum(s.unit_price, 3)} $/L${s.plate ? ` (${s.plate})` : ''} — ${
-                s.kind === 'credit' ? `à crédit${s.over_limit ? ' (hors plafond)' : ''}${s.points_due && !s.points ? ', combos à l’encaissement' : ''}` : 'payé'
+                s.kind === 'credit' ? `à crédit${s.over_limit ? ' (accordé malgré le retard)' : ''}${s.points_due && !s.points ? ', combos à l’encaissement' : ''}` : 'payé'
               }`,
         liters: s.liters,
         points: s.points,
@@ -146,7 +146,6 @@ function customerRoutes(db) {
             phone: c.phone,
             points: c.loyalty_points,
             balance: c.balance,
-            available: round(c.credit_limit - c.balance),
             late: c.type === 'account' && c.balance > 0 ? subscriberDues(db, c.id, graceDays).late : false,
           })),
       );
@@ -172,11 +171,10 @@ function customerRoutes(db) {
     const name = str(req.body?.name, 'Le nom du client', { max: 120 });
     const existing = db.prepare('SELECT id FROM customers WHERE name = ? COLLATE NOCASE AND active = 1').get(name);
     if (existing) fail(409, 'Un client porte déjà ce nom : choisissez-le dans la liste.', 'duplicate');
-    const limit = getSettings(db).individualCreditLimit;
     const id = db
-      .prepare("INSERT INTO customers (type, name, credit_limit, needs_review, created_by) VALUES ('individual', ?, ?, 1, ?)")
-      .run(name, limit, req.user.id).lastInsertRowid;
-    res.status(201).json({ id: Number(id), name, type: 'individual', plate: null, points: 0, balance: 0, available: limit, late: false });
+      .prepare("INSERT INTO customers (type, name, needs_review, created_by) VALUES ('individual', ?, 1, ?)")
+      .run(name, req.user.id).lastInsertRowid;
+    res.status(201).json({ id: Number(id), name, type: 'individual', plate: null, points: 0, balance: 0, late: false });
   });
 
   router.post('/customers', manager, (req, res) => {
@@ -258,6 +256,14 @@ function customerRoutes(db) {
   }
   router.get('/customers/:id/statement.pdf', manager, (req, res) => sendStatement(req, res, Number(req.params.id)));
   router.get('/me/statement.pdf', requireRole('customer'), (req, res) => sendStatement(req, res, req.user.customer_id));
+
+  // What a customer still owes, credit by credit (the alert when a particulier asks for another).
+  router.get('/customers/:id/unpaid', requireRole('manager', 'attendant'), (req, res) => {
+    const c = db.prepare('SELECT id, name, type, phone FROM customers WHERE id = ?').get(req.params.id);
+    if (!c) fail(404, 'Client introuvable.');
+    const credits = unpaidCredits(db, c.id);
+    res.json({ ...c, balance: round(credits.reduce((t, x) => t + x.unpaid, 0)), credits });
+  });
 
   router.get('/customers/:id', manager, (req, res) => {
     res.json(account(Number(req.params.id), dateParam(req.query.from, 'La date de début'), dateParam(req.query.to, 'La date de fin')));

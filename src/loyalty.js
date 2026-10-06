@@ -74,4 +74,18 @@ function subscriberDues(db, customerId, graceDays) {
   };
 }
 
-module.exports = { balanceSql, creditAllocation, refreshCustomer, subscriberDues };
+// The credits a customer still owes (oldest first), with what is left to pay on each: what the
+// attendant sees when a particulier asks for a second credit.
+function unpaidCredits(db, customerId) {
+  const sale = db.prepare(
+    `SELECT s.created_at, s.shift_id, s.liters, p.name AS product_name, u.name AS user_name
+     FROM sales s JOIN products p ON p.id = s.product_id JOIN shifts sh ON sh.id = s.shift_id
+     LEFT JOIN users u ON u.id = COALESCE(s.user_id, sh.attendant_id) WHERE s.id = ?`,
+  );
+  const old = db.prepare('SELECT created_at, note FROM old_debts WHERE id = ?');
+  return creditAllocation(db, customerId)
+    .filter((c) => c.unpaid > 0.001)
+    .map((c) => ({ id: c.id, old: !!c.old, amount: c.amount, unpaid: c.unpaid, ...(c.old ? old.get(c.id) : sale.get(c.id)) }));
+}
+
+module.exports = { balanceSql, creditAllocation, refreshCustomer, subscriberDues, unpaidCredits };

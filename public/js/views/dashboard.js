@@ -1,6 +1,6 @@
 import { flags, edit } from '../ui.js';
 import { api } from '../api.js';
-import { h, fmt, kpi, cardHeader, tankGauge, pageHeader, button, setContent, priceTotem } from '../ui.js';
+import { h, fmt, kpi, cardHeader, tankGauge, pageHeader, button, setContent, priceTotem, formDialog, toast } from '../ui.js';
 import { icon } from '../icons.js';
 
 const ALERT_ICON = { critical: 'alert', serious: 'alert', warning: 'info' };
@@ -40,7 +40,16 @@ export async function renderDashboard(page, { state, navigate }) {
       'div',
       { class: 'board section' },
       h('section', { class: 'card board-chart' }, cardHeader('Ventes des 7 derniers jours', `Total ${fmt.money(d.last7.reduce((t, x) => t + x.amount, 0))} · chiffre d’affaires par jour, en dollars`), barChart(d.last7)),
-      h('section', { class: 'card board-alerts' }, cardHeader('Alertes', d.alerts.length ? `${d.alerts.length} point${d.alerts.length > 1 ? 's' : ''} à surveiller` : null), alertList(d.alerts)),
+      h(
+        'section',
+        { class: 'card board-alerts' },
+        cardHeader(
+          'Alertes',
+          [d.alerts.length ? `${d.alerts.length} point${d.alerts.length > 1 ? 's' : ''} à surveiller` : null, masked(d) ? `${masked(d)} masquée${masked(d) > 1 ? 's' : ''}` : null].filter(Boolean).join(' · ') || null,
+          button('Gérer', () => manageAlerts(d.alertsManage, () => renderDashboard(page, { state, navigate })), { variant: 'ghost sm', iconName: 'settings' }),
+        ),
+        alertList(d.alerts),
+      ),
       h(
         'section',
         { class: 'card board-wide' },
@@ -77,6 +86,36 @@ function shiftKpi(s) {
     h('div', { class: 'value sm' }, !s ? 'Aucun' : s.station_closed_at ? 'Station fermée' : s.on_duty || 'Personne'),
     h('div', { class: 'sub' }, s ? `Poste n°${s.id} depuis le ${fmt.dateTime(s.opened_at)} · crédits ${fmt.money(s.credit_so_far)}` : 'Aucun poste ouvert'),
   );
+}
+
+const masked = (d) => d.alertsManage.all.filter((a) => a.off || a.hidden).length;
+
+// Each user chooses their alerts: a whole type switched off, or one alert hidden until it changes
+// (a lower stock, a bigger debt…) or is resolved.
+async function manageAlerts({ all, types }, reload) {
+  const shown = all.filter((a) => !a.off);
+  const ok = await formDialog({
+    title: 'Gérer les alertes',
+    intro: 'Vos choix ne changent que votre tableau de bord. Une alerte masquée revient si elle change.',
+    grid: false,
+    fields: [
+      { name: 'h-now', type: 'node', node: h('h3', { class: 'form-section' }, 'Alertes en cours') },
+      ...(shown.length
+        ? shown.map((a, i) => ({ name: `alert-${i}`, label: a.text, type: 'checkbox', value: !a.hidden }))
+        : [{ name: 'none', type: 'node', node: h('p', { class: 'muted small' }, 'Aucune alerte en ce moment.') }]),
+      { name: 'h-types', type: 'node', node: h('h3', { class: 'form-section' }, 'Types d’alertes') },
+      ...types.map((t) => ({ name: `type-${t.type}`, label: t.label, type: 'checkbox', value: !t.off })),
+    ],
+    onSubmit: (d) =>
+      api.put('/alerts', {
+        off: types.filter((t) => !d[`type-${t.type}`]).map((t) => t.type),
+        hidden: [...shown.filter((a, i) => !d[`alert-${i}`]), ...all.filter((a) => a.off && a.hidden)].map((a) => ({ key: a.key, text: a.text })),
+      }),
+  });
+  if (ok) {
+    toast('Alertes mises à jour.');
+    reload();
+  }
 }
 
 function alertList(alerts) {

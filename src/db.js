@@ -308,6 +308,20 @@ CREATE TABLE IF NOT EXISTS shift_tank_stock (
   stock_after REAL NOT NULL,
   PRIMARY KEY (shift_id, tank_id)
 );
+-- The dashboard's alerts as each user wants them (src/alerts.js): types switched off, alerts hidden
+-- until their text changes.
+CREATE TABLE IF NOT EXISTS alert_prefs (
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  type    TEXT NOT NULL,
+  PRIMARY KEY (user_id, type)
+);
+CREATE TABLE IF NOT EXISTS alert_hidden (
+  user_id    INTEGER NOT NULL REFERENCES users(id),
+  key        TEXT NOT NULL,
+  text       TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, key)
+);
 -- Suppliers and their contacts (deliveries and payments name them by their supplier column).
 CREATE TABLE IF NOT EXISTS suppliers (
   id         INTEGER PRIMARY KEY,
@@ -413,7 +427,7 @@ const MIGRATIONS = [
 ];
 
 // Bumped with every schema change; recorded in PRAGMA user_version.
-const SCHEMA_VERSION = 18;
+const SCHEMA_VERSION = 19;
 
 function missingColumns(db) {
   return MIGRATIONS.filter(([table, column]) => {

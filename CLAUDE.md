@@ -28,8 +28,9 @@ Requires Node ≥ 22.13 (built-in `node:sqlite`, hence `--disable-warning=Experi
   - a database holding data is copied to `<db>.avant-migration-…` before any change;
   - a CHECK constraint change needs a table rebuild, like `migrateSalesKind` / `migrateRequests`.
   - Production data on Render must survive, so add a migration and a migration test.
-- Settings are key/value rows. `getSettings(db)` maps them to camelCase (`combosPerLiter`, `comboValue`, `comboThreshold`, `individualCreditLimit`, `subscriberCreditLimit`, `subscriberGraceDays`, …).
-- `customers.credit_limit` is a copy of the category limit, kept in sync by `syncCreditLimits` after settings or category changes.
+- Settings are key/value rows. `getSettings(db)` maps them to camelCase (`combosPerLiter`, `comboValue`, `comboThreshold`, `subscriberGraceDays`, …).
+- There is no credit limit any more (version 19): `customers.credit_limit` and the `*_credit_limit` settings are left over, unused and not editable. An individual has one credit at a time (`has_credit`; `GET /customers/:id/unpaid` lists what is owed, shown by `creditBlocked()` in `attendant.js` as a centred `noticeDialog`), a subscriber pays each month.
+- Dashboard alerts carry a `type` and a stable `key`; `userAlerts()` (`src/alerts.js`) filters them per user (`alert_prefs`: types switched off, `alert_hidden`: one alert hidden while its text is the same) and `PUT /alerts` saves the choices (« Gérer » on the Alertes card, also for the owner). A new alert needs a type in `ALERT_TYPES`.
 - Naming: customer `type` is `'account'` = abonné (subscriber) and `'individual'` = particulier.
 
 **Core business logic** (shared by several routes):
@@ -37,7 +38,7 @@ Requires Node ≥ 22.13 (built-in `node:sqlite`, hence `--disable-warning=Experi
   - subscriber price;
   - $ ↔ litres conversion at the shift's frozen price;
   - payment `paid` | `credit` | `combo`;
-  - credit limit and late-subscriber checks (`grantCredit` overrides them and sets `over_limit`).
+  - one credit at a time for an individual (`has_credit`, never overridden) and the late-subscriber check (`grantCredit` overrides it and sets `over_limit`, shown « crédit malgré le retard »).
 - `src/loyalty.js`:
   - payments settle credit sales FIFO (`creditAllocation`);
   - a credit sale's combos (`points_due`) only become `points` once fully paid;
