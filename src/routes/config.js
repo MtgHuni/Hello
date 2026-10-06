@@ -20,6 +20,7 @@ const SETTING_LABELS = {
   combos_enabled: 'programme de combos',
   subscriber_grace_days: 'délai des abonnés',
   closing_time: 'heure de clôture',
+  station_phone: 'téléphone de la station',
 };
 
 const manager = requireRole('manager');
@@ -55,6 +56,7 @@ module.exports = function configRoutes(db) {
     };
     values.combos_enabled = bool(b.combosEnabled, cur.combosEnabled) ? 1 : 0;
     values.closing_time = b.closingTime === undefined ? cur.closingTime : str(b.closingTime, 'L’heure de clôture', { max: 5 });
+    values.station_phone = b.stationPhone === undefined ? cur.stationPhone : str(b.stationPhone, 'Le téléphone de la station', { required: false, max: 30 }) || '';
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(values.closing_time)) fail(400, 'L’heure de clôture doit être au format HH:MM (ex. : 15:30).');
     const stored = Object.fromEntries(db.prepare('SELECT key, value FROM settings').all().map((r) => [r.key, r.value]));
     const changed = Object.keys(values).filter((key) => String(values[key]) !== stored[key]);

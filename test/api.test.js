@@ -1035,6 +1035,12 @@ test('compte client relié par l’administrateur à la fiche créée à la pomp
   assert.strictEqual((await patrick('GET', '/api/me/account')).data.customer.balance, 10);
   assert.strictEqual((await gerant('POST', `/api/customers/${pump.id}/link`, { userId: account.user_id })).data.code, 'has_login');
   assert.ok((await gerant('GET', '/api/audit?category=clients')).data.some((a) => a.summary.includes('relié à Patrick Mumbere')));
+  // The station's number at the bottom of the client space: set by the admin.
+  assert.strictEqual((await patrick('GET', '/api/auth/me')).data.settings.stationPhone, '+243974105000');
+  assert.strictEqual((await chef('PUT', '/api/settings', { stationPhone: '+243990000000' })).data.code, 'admin_only');
+  assert.strictEqual((await gerant('PUT', '/api/settings', { stationPhone: '+243 990 000 000' })).status, 200);
+  assert.strictEqual((await patrick('GET', '/api/auth/me')).data.settings.stationPhone, '+243 990 000 000');
+  await gerant('PUT', '/api/settings', { stationPhone: '+243974105000' });
 });
 
 test('migration : une base ancienne est convertie (loyalty → paid, combos)', () => {

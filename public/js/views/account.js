@@ -6,7 +6,14 @@ import { statement, defaultPeriod } from './customers.js';
 
 // Client space: start a fill-up from the phone while waiting in line,
 // then follow its confirmation by the attendant; account statement below.
-export async function renderAccount(page) {
+// The station's number at the bottom of the client space: one tap to call.
+function stationPhone(phone) {
+  if (!phone) return null;
+  const shown = phone.replace(/^\+243(\d{3})(\d{3})(\d{3})$/, '+243 $1 $2 $3');
+  return h('p', { class: 'client-contact section' }, h('a', { href: `tel:${phone.replace(/[^\d+]/g, '')}` }, icon('phone'), shown));
+}
+
+export async function renderAccount(page, ctx) {
   const period = defaultPeriod();
   const fillHost = h('div', { class: 'section', style: 'margin-top:0;margin-bottom:24px' });
   const statementHost = h('div');
@@ -20,10 +27,15 @@ export async function renderAccount(page) {
     acc = await api.get(`/me/account?from=${period.from}&to=${period.to}`);
     setContent(combosHost, flags.combos ? combosCard(acc) : null);
     setContent(statementHost, 
-      statement(acc, period, (p) => {
-        Object.assign(period, p);
-        loadStatement();
-      }),
+      statement(
+        acc,
+        period,
+        (p) => {
+          Object.assign(period, p);
+          loadStatement();
+        },
+        { clientSpace: true },
+      ),
     );
   };
 
@@ -170,6 +182,6 @@ export async function renderAccount(page) {
   const subscriber = acc.customer.type === 'account';
   const totem = priceTotem(products.map((p) => ({ id: p.id, name: p.name, price: subscriber ? p.subscriber_price : p.price })));
   const month = new Date().toLocaleDateString('sv-SE').slice(0, 7);
-  setContent(page, pageHeader(acc.customer.name, null, pdfLinks(`/api/me/statement.pdf?month=${month}`, `releve-${month}.pdf`, { label: 'Mon relevé PDF' })), totem, fillHost, combosHost, statementHost);
+  setContent(page, pageHeader(acc.customer.name, null, pdfLinks(`/api/me/statement.pdf?month=${month}`, `releve-${month}.pdf`, { label: 'Mon relevé PDF' })), totem, fillHost, combosHost, statementHost, stationPhone(ctx?.state?.settings?.stationPhone));
   await refreshRequest();
 }

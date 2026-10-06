@@ -504,6 +504,7 @@ const DEFAULT_SETTINGS = {
   subscriber_credit_limit: '500',
   subscriber_grace_days: '5', // days after month end for subscribers to pay
   closing_time: '15:30', // the manager closes the shift every day at this time
+  station_phone: '+243974105000', // shown at the bottom of the client space
 };
 
 // Rebuilds the sales table when its kind constraint is from an older release
@@ -691,6 +692,7 @@ function getSettings(db) {
     subscriberCreditLimit: Number(s.subscriber_credit_limit),
     subscriberGraceDays: Number(s.subscriber_grace_days),
     closingTime: s.closing_time,
+    stationPhone: s.station_phone || '',
     expenseCategories: EXPENSE_CATEGORIES,
   };
 }

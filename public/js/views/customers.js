@@ -247,7 +247,7 @@ export function defaultPeriod() {
 }
 
 // Account statement shared with the client space: KPIs, period picker, movements, print.
-export function statement(acc, period, onPeriod, { onOldDebt } = {}) {
+export function statement(acc, period, onPeriod, { onOldDebt, clientSpace = false } = {}) {
   const c = acc.customer;
   const subscriber = c.type === 'account';
   const from = field({ name: 'from', label: 'Du', type: 'date', value: period.from });
@@ -279,7 +279,7 @@ export function statement(acc, period, onPeriod, { onOldDebt } = {}) {
       : null,
     h(
       'div',
-      { class: `grid ${subscriber && flags.combos ? 'grid-3' : 'grid-2'}` },
+      { class: `grid ${subscriber && flags.combos && !clientSpace ? 'grid-2' : ''}` },
       kpi(
         c.balance < 0 ? 'Avance du client' : 'Solde dû',
         h('span', { class: c.type !== 'account' && c.balance > 0.001 ? 'variance-neg' : '' }, fmt.money(Math.abs(c.balance))),
@@ -288,15 +288,14 @@ export function statement(acc, period, onPeriod, { onOldDebt } = {}) {
           c.old_debt ? `dont ancienne dette ${fmt.money(c.old_debt)} au départ` : null,
         ].filter(Boolean).join(' · ') || TYPE_LABEL[c.type],
       ),
-      // An individual: the balance and the purchases only; a subscriber also the combos.
-      !flags.combos || !subscriber ? null : kpi(
+      // The balance; a subscriber's combos too (the client space shows them in their own card).
+      !flags.combos || !subscriber || clientSpace ? null : kpi(
         'Combos',
         fmt.number(combos.balance),
         combos.balance >= combos.threshold
           ? `= ${fmt.money(combos.value)} · échangeables`
           : `${fmt.number(combos.threshold - combos.balance)} avant l’échange${combos.pending ? ` · +${fmt.number(combos.pending)} au paiement du crédit` : ''}`,
       ),
-      kpi('Achats sur la période', fmt.money(acc.totals.purchases), fmt.liters(acc.totals.liters)),
     ),
     h(
       'section',
