@@ -271,15 +271,21 @@ module.exports = function shiftRoutes(db) {
   }
 
   // End-of-shift report (PDF): cash, sales from the indexes, credits, expenses, payments.
+  // Also mailed to the team once the money is counted (src/mailJobs.js).
+  function shiftPdf(id) {
+    const settings = getSettings(db);
+    const detail = shiftDetail(id);
+    return {
+      detail,
+      pdf: shiftReportPdf(detail, { stationName: settings.stationName, combosEnabled: settings.combosEnabled, cashTolerance: settings.cashTolerance }),
+    };
+  }
+  router.shiftPdf = shiftPdf;
+
   router.get('/shifts/:id/report.pdf', staff, (req, res) => {
     const own = getOwnShift(req, { open: false });
     if (own.status === 'open') fail(409, 'Le rapport est disponible une fois le poste clôturé.');
-    const settings = getSettings(db);
-    const pdf = shiftReportPdf(shiftDetail(own.id), {
-      stationName: settings.stationName,
-      combosEnabled: settings.combosEnabled,
-      cashTolerance: settings.cashTolerance,
-    });
+    const { pdf } = shiftPdf(own.id);
     res.set('Content-Type', 'application/pdf');
     res.set('Content-Disposition', `attachment; filename="rapport-poste-${own.id}.pdf"`);
     res.send(pdf);

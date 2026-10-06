@@ -400,6 +400,7 @@ async function loginDialog(c, ctx, reload) {
   });
   if (!ok) return;
   reload();
+  if (ok.mailed) toast(`Accès envoyé aussi à ${c.email}`);
   shareAccess(c, sent, ctx?.state?.settings?.stationName || 'la station');
 }
 

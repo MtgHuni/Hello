@@ -62,12 +62,32 @@ Variables d'environnement :
 | `PORT` | Port HTTP | `3000` |
 | `DB_FILE` | Fichier de la base SQLite | `data/station.db` |
 | `TZ` | Fuseau horaire de la station (journées des rapports) | `Africa/Lubumbashi` |
+| `RESEND_API_KEY` | Clé [Resend](https://resend.com) : sans elle, les mails sont notés (Réglages → Mails) mais pas envoyés | — |
+| `MAIL_FROM` | Expéditeur des mails, sur un domaine vérifié dans Resend | `MTG Station <station@mtgindustrie.com>` |
+| `MAIL_REPLY_TO` | Adresse où vont les réponses des clients | l’expéditeur |
+| `APP_URL` | Adresse de l’application, pour les liens des mails | l’adresse par laquelle on l’a ouverte |
+| `MAIL_DEBUG` | `1` : affiche dans le terminal les mails non envoyés | — |
 
 ## Mise en ligne
 
 Le fichier `render.yaml` permet de déployer sur [Render](https://render.com) : *New → Blueprint*, choisir ce dépôt. Il prévoit un disque persistant pour la base de données (offre payante « Starter »). Sans disque persistant, les données seraient perdues à chaque redémarrage : sur un service créé à la main, ajoutez un disque (*Disks*, chemin `/var/data`) et la variable `DB_FILE=/var/data/station.db`. Sur Render, `/api/health` indique `storage: "disque"` ou `"temporaire"`.
 
 Sauvegarde : Réglages → Données → **Télécharger une sauvegarde** (copie complète et cohérente de la base, à garder ailleurs). Ne copiez pas `station.db` seul : en mode WAL, les dernières écritures sont dans `station.db-wal`. Avant chaque mise à jour de la structure de la base, une copie `station.db.avant-migration-…` est gardée à côté.
+
+## Mails
+
+Envoyés par [Resend](https://resend.com) depuis `station@mtgindustrie.com` (`src/mail.js`, sans dépendance), aux couleurs de la station (`src/mailTemplates.js`), avec une version texte. Tant que `RESEND_API_KEY` manque, chaque mail est seulement noté dans Réglages → Mails (« Derniers mails »).
+
+| Pour | Mails |
+|------|-------|
+| Tout compte | Lien « Mot de passe oublié » (écran de connexion ; valable une heure, une seule fois, seulement vers une adresse confirmée), « Mot de passe modifié », « Nouvelle connexion » depuis un appareil inconnu, confirmation d’une nouvelle adresse |
+| Client (adresse de sa fiche) | Accès à l’espace client (« Créer un accès »), reçu de chaque règlement, chaque plein à crédit, relevé du mois en PDF le 1er, rappel avant le jour de paiement d’un abonné puis relance en cas de retard (le lendemain et une semaine après), nouveaux prix. Chaque mail porte un lien « Ne plus recevoir ces mails » |
+| Gérant, administrateur, actionnaire | Rapport PDF de chaque poste une fois l’argent compté, rapport de la semaine (lundi) et du mois (le 1er), nouvelles alertes du tableau de bord (une fois chacune, selon ses choix d’alertes) |
+| Administrateur | Sauvegarde de la base, compressée, le dimanche soir |
+
+Chacun donne son adresse et choisit ses mails dans son menu (ses initiales) → **Mes mails** ; l’administrateur peut saisir l’adresse d’un membre dans Réglages → Équipe. Une adresse de l’équipe ne reçoit rien avant d’être confirmée par le lien reçu. Les envois programmés suivent l’heure de Goma (rapports à 7 h, relevés et rappels à 8 h, sauvegarde à 22 h) ; les reçus et pleins partent une minute après la saisie.
+
+Pour brancher l’envoi : créer un compte Resend, y ajouter le domaine `mtgindustrie.com` et recopier ses enregistrements DNS (SPF, DKIM) chez l’hébergeur du domaine, puis mettre la clé dans `RESEND_API_KEY` sur Render. L’offre gratuite de Resend envoie 100 mails par jour (3 000 par mois).
 
 ## Structure
 

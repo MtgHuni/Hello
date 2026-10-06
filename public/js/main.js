@@ -3,7 +3,7 @@ import { api } from './api.js';
 import { h, errorState, toast, formDialog, actionSheet, openDialog, spinner, initials, applyTheme, toggleTheme, themeButton } from './ui.js';
 import { icon, brandMark } from './icons.js';
 import { enhance } from './motion.js';
-import { renderLogin, renderSetup } from './views/auth.js';
+import { renderLogin, renderSetup, renderForgot, renderReset } from './views/auth.js';
 import { renderDashboard } from './views/dashboard.js';
 import { renderShifts, renderShiftDetail } from './views/shifts.js';
 import { renderAttendant, renderMyShifts } from './views/attendant.js';
@@ -57,14 +57,37 @@ export function navigate(path) {
   location.hash = `#/${path}`;
 }
 
+// Back from a link in a mail (?mail=…): what happened, then the address bar is cleaned.
+const MAIL_NOTICE = {
+  confirme: ['Adresse e-mail confirmée.'],
+  arret: ['Vous ne recevrez plus ces mails.'],
+  'lien-expire': ['Ce lien n’est plus valable.', 'error'],
+};
+let openMailsAfterLogin = false;
+function mailNotice() {
+  const notice = new URLSearchParams(location.search).get('mail');
+  if (!notice) return;
+  history.replaceState(null, '', location.pathname + location.hash);
+  if (notice === 'reglages') openMailsAfterLogin = true;
+  else if (MAIL_NOTICE[notice]) toast(...MAIL_NOTICE[notice]);
+}
+
 async function boot() {
   shell = null;
   lastRoute = null;
+  mailNotice();
   try {
     const setup = await api.get('/setup');
     flags.combos = setup.combosEnabled !== false;
     if (setup.needsSetup) return renderSetup(root, boot);
+    // Links from a mail: a new password (#/mot-de-passe/<lien>), or ask for one.
+    const [section, token] = location.hash.replace(/^#\/?/, '').split('/');
+    if (section === 'mot-de-passe' && token) return renderReset(root, setup.stationName, token, boot);
     const me = await api.get('/auth/me').catch(() => null);
+    if (section === 'mot-de-passe-oublie') {
+      history.replaceState(null, '', '/');
+      if (!me) return renderForgot(root, setup.stationName, boot);
+    }
     if (!me) return renderLogin(root, setup.stationName, boot);
     state.user = me.user;
     state.settings = me.settings;
@@ -72,7 +95,11 @@ async function boot() {
     flags.readonly = me.user.role === 'owner';
     flags.admin = !!me.user.admin;
     document.title = me.settings.stationName;
-    route();
+    await route();
+    if (openMailsAfterLogin) {
+      openMailsAfterLogin = false;
+      myMails();
+    }
   } catch (err) {
     root.replaceChildren(h('div', { class: 'auth' }, errorState(err)));
   }
@@ -105,8 +132,28 @@ try {
   /* stockage indisponible : mode nuit */
 }
 
+// « Mes mails » : the address (confirmed by a link) and the kinds of mail this person gets.
+async function myMails() {
+  const m = await api.get('/me/mail');
+  const ok = await formDialog({
+    title: 'Mes mails',
+    grid: false,
+    fields: [
+      { name: 'email', label: m.email ? (m.verified ? 'Adresse e-mail · confirmée' : 'Adresse e-mail · à confirmer') : 'Adresse e-mail', type: 'email', value: m.email, autocomplete: 'email', inputmode: 'email' },
+      { type: 'node', name: 'kinds-title', node: h('h3', { class: 'form-section' }, 'Je reçois') },
+      ...m.kinds.map((k) => ({ name: `k_${k.kind}`, label: k.label, type: 'checkbox', value: k.on, full: true })),
+    ],
+    onSubmit: (d) => api.put('/me/mail', { email: d.email, kinds: Object.fromEntries(m.kinds.map((k) => [k.kind, !!d[`k_${k.kind}`]])) }),
+  });
+  if (ok) toast(ok.confirmationSent ? `Lien de confirmation envoyé à ${ok.email}` : 'Enregistré');
+}
+
 function accountMenu() {
-  const actions = [{ label: document.documentElement.dataset.theme === 'light' ? 'Passer en mode nuit' : 'Passer en mode jour (plein soleil)', onClick: toggleTheme }, { label: 'Changer le mot de passe', onClick: changePassword }];
+  const actions = [
+    { label: document.documentElement.dataset.theme === 'light' ? 'Passer en mode nuit' : 'Passer en mode jour (plein soleil)', onClick: toggleTheme },
+    { label: 'Mes mails', onClick: myMails },
+    { label: 'Changer le mot de passe', onClick: changePassword },
+  ];
   actions.push({ label: 'Se déconnecter', destructive: true, onClick: logout });
   actionSheet({ title: `${state.user.name} · ${state.settings.stationName}`, actions });
 }

@@ -27,13 +27,14 @@ function filmPanel() {
   return h('div', { class: 'auth-film' }, video);
 }
 
-function authForm({ title, lead, fields, submitLabel, onSubmit, wide, footer }) {
+function authForm({ title, lead, fields, submitLabel, onSubmit, wide, footer, below }) {
   const error = h('p', { class: 'form-error', hidden: true, role: 'alert' });
   const submit = h('button', { class: 'btn large block', type: 'submit' }, submitLabel);
   const form = h(
     'form',
     { class: 'stack' },
     h('div', { class: wide ? 'form-grid' : 'stack' }, fields.map(field)),
+    below || null,
     error,
     submit,
   );
@@ -49,16 +50,83 @@ function authForm({ title, lead, fields, submitLabel, onSubmit, wide, footer }) 
       submit.disabled = false;
     }
   });
-  return h(
-    'div',
-    { class: 'auth' },
-    filmPanel(),
-    h(
-      'div',
-      { class: 'auth-pane' },
-      h('div', { class: `auth-card ${wide ? 'wide' : ''}` }, brandMark(), h('h1', {}, title), h('p', { class: 'lead' }, lead), form, footer ? h('p', { class: 'auth-footer' }, footer) : null),
-    ),
+  return authFrame(h('div', { class: `auth-card ${wide ? 'wide' : ''}` }, brandMark(), h('h1', {}, title), h('p', { class: 'lead' }, lead), form, footer ? h('p', { class: 'auth-footer' }, footer) : null));
+}
+
+const authFrame = (card) => h('div', { class: 'auth' }, filmPanel(), h('div', { class: 'auth-pane' }, card));
+
+// A screen with a message and one way on (link sent, link expired).
+function authMessage({ title, lead, action }) {
+  return authFrame(h('div', { class: 'auth-card' }, brandMark(), h('h1', {}, title), h('p', { class: 'lead' }, lead), action));
+}
+
+const backToLogin = (root, stationName, onDone, label = 'Retour à la connexion') =>
+  h('a', { href: '#', onClick: (e) => (e.preventDefault(), history.replaceState(null, '', '/'), renderLogin(root, stationName, onDone)) }, label);
+
+// « Mot de passe oublié » : a link by mail, to the account's confirmed address.
+export function renderForgot(root, stationName, onDone) {
+  setContent(
+    root,
+    authForm({
+      title: 'Mot de passe oublié',
+      lead: stationName,
+      submitLabel: 'Recevoir un lien',
+      fields: [{ name: 'login', label: 'Identifiant, téléphone ou e-mail', required: true, autocomplete: 'username' }],
+      onSubmit: async (d) => {
+        await api.post('/auth/forgot', d);
+        setContent(
+          root,
+          authMessage({
+            title: 'Vérifiez vos e-mails',
+            lead: 'Si ce compte a une adresse e-mail confirmée, un lien vient d’y être envoyé. Il est valable une heure.',
+            action: h('p', { class: 'auth-footer' }, backToLogin(root, stationName, onDone)),
+          }),
+        );
+      },
+      footer: backToLogin(root, stationName, onDone),
+    }),
   );
+  root.querySelector('input')?.focus();
+}
+
+// The link from the mail: a new password, then the app.
+export async function renderReset(root, stationName, token, onDone) {
+  const { valid } = await api.get(`/auth/reset/${encodeURIComponent(token)}`).catch(() => ({ valid: false }));
+  if (!valid) {
+    return setContent(
+      root,
+      authMessage({
+        title: 'Lien expiré',
+        lead: 'Ce lien a déjà servi ou date de plus d’une heure.',
+        action: h(
+          'div',
+          { class: 'stack' },
+          h('button', { class: 'btn large block', type: 'button', onClick: () => (history.replaceState(null, '', '/'), renderForgot(root, stationName, onDone)) }, 'Recevoir un nouveau lien'),
+          h('p', { class: 'auth-footer' }, backToLogin(root, stationName, onDone)),
+        ),
+      }),
+    );
+  }
+  setContent(
+    root,
+    authForm({
+      title: 'Nouveau mot de passe',
+      lead: stationName,
+      submitLabel: 'Enregistrer et se connecter',
+      fields: [
+        { name: 'password', label: 'Nouveau mot de passe', type: 'password', required: true, autocomplete: 'new-password' },
+        { name: 'confirm', label: 'Le même, encore une fois', type: 'password', required: true, autocomplete: 'new-password' },
+      ],
+      onSubmit: async (d) => {
+        if (d.password !== d.confirm) throw new Error('Les deux mots de passe ne sont pas les mêmes.');
+        await api.post('/auth/reset', { token, password: d.password });
+        history.replaceState(null, '', '/');
+        onDone();
+      },
+      footer: backToLogin(root, stationName, onDone),
+    }),
+  );
+  root.querySelector('input')?.focus();
 }
 
 export function renderLogin(root, stationName, onDone) {
@@ -72,6 +140,7 @@ export function renderLogin(root, stationName, onDone) {
         { name: 'login', label: 'Identifiant ou téléphone', required: true, autocomplete: 'username' },
         { name: 'password', label: 'Mot de passe', type: 'password', required: true, autocomplete: 'current-password' },
       ],
+      below: h('a', { class: 'auth-forgot', href: '#', onClick: (e) => (e.preventDefault(), renderForgot(root, stationName, onDone)) }, 'Mot de passe oublié ?'),
       onSubmit: async (d) => {
         await api.post('/auth/login', d);
         onDone();

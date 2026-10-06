@@ -2,6 +2,7 @@ const express = require('express');
 const { fail, num, str, oneOf, bool, round, dateParam, transaction } = require('../util');
 const { requireRole, hashPassword, checkPasswordStrength } = require('../auth');
 const { audit } = require('../audit');
+const { emailParam } = require('./mail');
 const { statementPdf } = require('../statementReport');
 const { getSettings, syncCreditLimits } = require('../db');
 const { balanceSql, refreshCustomer, subscriberDues, creditAllocation, unpaidCredits } = require('../loyalty');
@@ -15,7 +16,7 @@ function customerBalance(db, customerId) {
   return round(row?.balance || 0);
 }
 
-function customerRoutes(db) {
+function customerRoutes(db, { mailer } = {}) {
   const router = express.Router();
 
   const listSql = `
@@ -159,7 +160,7 @@ function customerRoutes(db) {
       type,
       name: str(b.name ?? current.name, 'Le nom', { max: 120 }),
       phone: str(b.phone ?? current.phone, 'Le téléphone', { required: false, max: 40 }),
-      email: str(b.email ?? current.email, "L'e-mail", { required: false, max: 120 }),
+      email: emailParam(b.email ?? current.email),
       address: str(b.address ?? current.address, "L'adresse", { required: false, max: 300 }),
       plate: str(b.plate ?? current.plate, "L'immatriculation", { required: false, max: 20 }),
       // A subscriber's payment day (1 to 28); a particulier has none.
@@ -199,6 +200,8 @@ function customerRoutes(db) {
     db.prepare(
       'UPDATE customers SET type = ?, name = ?, phone = ?, email = ?, address = ?, plate = ?, payment_day = ?, active = ?, needs_review = 0 WHERE id = ?',
     ).run(f.type, f.name, f.phone, f.email, f.address, f.plate, f.payment_day, active, current.id);
+    // A new address must be confirmed again (it is the one « mot de passe oublié » uses).
+    if ((f.email || null) !== (current.email || null)) db.prepare('UPDATE customers SET email_verified_at = NULL WHERE id = ?').run(current.id);
     syncCreditLimits(db);
     db.prepare('UPDATE users SET active = ? WHERE customer_id = ?').run(active, current.id);
     const TYPE = { account: 'abonné', individual: 'particulier' };
@@ -248,6 +251,16 @@ function customerRoutes(db) {
   });
 
   // Monthly statement as a PDF: the manager for any customer, a customer for their own account.
+  // The statement as a PDF (also mailed to the customer on the 1st, src/mailJobs.js).
+  function customerStatement(customerId, from, to) {
+    const acc = account(customerId, from, to);
+    const settings = getSettings(db);
+    const pdf = statementPdf(acc, { stationName: settings.stationName, from, to, graceDays: settings.subscriberGraceDays });
+    const slug = acc.customer.name.normalize('NFD').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'client';
+    return { acc, pdf, filename: `releve-${slug}-${from}-au-${to}.pdf` };
+  }
+  router.customerStatement = customerStatement;
+
   // A chosen period (from, to), or a whole month (month=AAAA-MM, this month by default).
   function sendStatement(req, res, customerId) {
     let from = dateParam(req.query.from, 'La date de début');
@@ -258,12 +271,9 @@ function customerRoutes(db) {
       to = db.prepare("SELECT date(?, '+1 month', '-1 day') AS d").get(from).d;
     }
     if (from > to) fail(400, 'La date de début doit précéder la date de fin.');
-    const acc = account(customerId, from, to);
-    const settings = getSettings(db);
-    const pdf = statementPdf(acc, { stationName: settings.stationName, from, to, graceDays: settings.subscriberGraceDays });
-    const slug = acc.customer.name.normalize('NFD').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'client';
+    const { pdf, filename } = customerStatement(customerId, from, to);
     res.set('Content-Type', 'application/pdf');
-    res.set('Content-Disposition', `attachment; filename="releve-${slug}-${from}-au-${to}.pdf"`);
+    res.set('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(pdf);
   }
   router.get('/customers/:id/statement.pdf', manager, (req, res) => sendStatement(req, res, Number(req.params.id)));
@@ -337,7 +347,8 @@ function customerRoutes(db) {
         customer.active,
       );
     }
-    res.json({ ok: true });
+    // With an address on the record, the access also goes by mail.
+    res.json({ ok: true, mailed: mailer ? mailer.sendAccess(customer.id, { login, password: req.body.password }) : false });
   });
 
   // Client space: a customer only ever sees their own account.

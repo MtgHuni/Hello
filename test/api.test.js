@@ -5,10 +5,12 @@ const { createApp } = require('../src/app');
 let server;
 let baseUrl;
 let db;
+let locals;
 
 before(async () => {
   const app = createApp({ dbFile: ':memory:' });
   db = app.locals.db;
+  locals = app.locals;
   await new Promise((resolve) => {
     server = app.listen(0, resolve);
   });
@@ -1031,6 +1033,135 @@ test('accès client avec le mot de passe par défaut, changé par le client ; nu
   await gerant('PUT', '/api/settings', { stationPhone: '+243974105000' });
 });
 
+test('mails : adresse confirmée, mot de passe oublié, reçus, rapports, alertes, relevés', async () => {
+  const { mailer, mailJobs } = locals;
+  const outbox = mailer.mail.outbox;
+  const last = (pred) => [...outbox].reverse().find(pred);
+  const linkIn = (m, re) => m?.text.match(re)?.[1];
+  const tick = (now) => mailJobs.tick({ settle: 0, ...(now ? { now } : {}) });
+  tick(); // first tick: nothing from before is sent
+  const before = outbox.length;
+
+  // The admin adds their address: not used until confirmed by the link.
+  const mine = await gerant('PUT', '/api/me/mail', { email: 'Gerant@Example.com' });
+  assert.strictEqual(mine.data.email, 'gerant@example.com');
+  assert.strictEqual(mine.data.verified, false);
+  assert.strictEqual(mine.data.confirmationSent, true);
+  assert.ok(mine.data.kinds.some((k) => k.kind === 'sauvegarde'), 'la sauvegarde, pour l’administrateur');
+  assert.strictEqual((await gerant('PUT', '/api/me/mail', { email: 'pas-une-adresse' })).status, 400);
+  const confirm = last((m) => m.kind === 'confirmation' && m.to === 'gerant@example.com');
+  const verify = linkIn(confirm, /(\/api\/mail\/verify\?t=[\w-]+)/);
+  const opened = await fetch(baseUrl + verify, { redirect: 'manual' });
+  assert.strictEqual(opened.status, 303);
+  assert.strictEqual(opened.headers.get('location'), '/?mail=confirme');
+  assert.strictEqual((await gerant('GET', '/api/me/mail')).data.verified, true);
+  assert.strictEqual((await fetch(baseUrl + verify, { redirect: 'manual' })).headers.get('location'), '/?mail=lien-expire', 'le lien ne sert qu’une fois');
+
+  // Forgotten password: same answer for an unknown login, the link only to a confirmed address.
+  const sent = outbox.length;
+  assert.strictEqual((await client()('POST', '/api/auth/forgot', { login: 'personne' })).status, 200);
+  assert.strictEqual(outbox.length, sent, 'aucun mail pour un compte inconnu');
+  assert.strictEqual((await client()('POST', '/api/auth/forgot', { login: 'GERANT@example.com' })).status, 200);
+  const reset = linkIn(last((m) => m.kind === 'mot_de_passe'), /#\/mot-de-passe\/([\w-]+)/);
+  assert.ok(reset, 'lien de réinitialisation');
+  assert.strictEqual((await client()('GET', `/api/auth/reset/${reset}`)).data.valid, true);
+  assert.strictEqual((await gerant('POST', '/api/auth/reset', { token: reset, password: 'court' })).status, 400);
+  assert.strictEqual((await gerant('POST', '/api/auth/reset', { token: reset, password: 'nouveau-mdp-2026' })).status, 200);
+  assert.strictEqual((await gerant('GET', '/api/auth/me')).status, 200, 'connecté par le lien');
+  assert.strictEqual((await gerant('POST', '/api/auth/reset', { token: reset, password: 'encore-un-autre' })).data.code, 'expired');
+  assert.strictEqual((await client()('POST', '/api/auth/login', { login: 'gerant', password: 'motdepasse1' })).status, 401);
+  assert.ok(last((m) => m.kind === 'securite' && m.subject === 'Votre mot de passe a été modifié'));
+  // A new device for this account: « Nouvelle connexion ».
+  assert.strictEqual((await client()('POST', '/api/auth/login', { login: 'gerant', password: 'nouveau-mdp-2026' })).status, 200);
+  assert.ok(last((m) => m.kind === 'connexion' && m.to === 'gerant@example.com'));
+
+  // A team member's address entered by the admin gets its own confirmation link.
+  const member = await gerant('POST', '/api/users', { name: 'Comptable', login: 'compta', role: 'owner', password: 'compta-2026', email: 'compta@example.com' });
+  assert.strictEqual(member.data.email, 'compta@example.com');
+  assert.ok(last((m) => m.kind === 'confirmation' && m.to === 'compta@example.com'));
+
+  // A customer's receipt, with a link to stop that kind of mail.
+  await gerant('PUT', `/api/customers/${ctx.person.id}`, { email: 'marie@example.com' });
+  await gerant('POST', `/api/customers/${ctx.person.id}/payments`, { amount: 1, method: 'mobile money' });
+  tick();
+  const receipt = last((m) => m.kind === 'recu');
+  assert.strictEqual(receipt.to, 'marie@example.com');
+  assert.match(receipt.text, /Montant reçu : 1,00/);
+  const stop = linkIn(receipt, /Ne plus recevoir ces mails : \S+(\/api\/mail\/stop\S+)/);
+  assert.strictEqual((await fetch(baseUrl + stop.replace(/s=[\w-]+/, 's=faux'), { redirect: 'manual' })).headers.get('location'), '/?mail=lien-expire');
+  assert.strictEqual((await fetch(baseUrl + stop, { redirect: 'manual' })).headers.get('location'), '/?mail=arret');
+  await gerant('POST', `/api/customers/${ctx.person.id}/payments`, { amount: 1, method: 'espèces' });
+  const receipts = outbox.filter((m) => m.kind === 'recu').length;
+  tick();
+  assert.strictEqual(outbox.filter((m) => m.kind === 'recu').length, receipts, 'plus de reçu après « ne plus recevoir »');
+
+  // « Créer un accès » on a customer with an address: the access goes by mail too.
+  const kivu = (await gerant('POST', '/api/customers', { type: 'account', name: 'Kivu Logistique', email: 'kivu@example.com', phone: '0970111222' })).data;
+  assert.strictEqual((await gerant('POST', `/api/customers/${kivu.id}/login`, { login: '0970111222', password: '12345678' })).data.mailed, true);
+  assert.match(last((m) => m.kind === 'acces').text, /Mot de passe : 12345678/);
+
+  // A new alert reaches the team once.
+  const tank = ctx.tanks[0];
+  db.prepare('UPDATE tanks SET low_level = 1e9 WHERE id = ?').run(tank.id);
+  tick();
+  assert.ok(last((m) => m.kind === 'alertes' && m.to === 'gerant@example.com' && /stock bas/.test(m.text)));
+  const alertMails = outbox.filter((m) => m.kind === 'alertes').length;
+  tick();
+  assert.strictEqual(outbox.filter((m) => m.kind === 'alertes').length, alertMails, 'une fois seulement');
+  db.prepare('UPDATE tanks SET low_level = ? WHERE id = ?').run(tank.low_level, tank.id);
+
+  // The shift report, once the money is counted, with its PDF.
+  const open = (await gerant('GET', '/api/dashboard')).data.openShifts[0];
+  const shift = (await gerant('GET', `/api/shifts/${open.id}`)).data;
+  assert.strictEqual((await closeShift(shift, {}, { cash: 0 })).status, 200);
+  tick();
+  const report = last((m) => m.kind === 'rapport_poste');
+  assert.strictEqual(report.subject.startsWith(`Poste n°${shift.id}`), true);
+  assert.deepStrictEqual(report.attachments, [`rapport-poste-${shift.id}.pdf`]);
+
+  // Switched off in « Mes mails »: no more of that kind.
+  await gerant('PUT', '/api/me/mail', { kinds: { rapport_poste: false } });
+  assert.strictEqual((await gerant('GET', '/api/me/mail')).data.kinds.find((k) => k.kind === 'rapport_poste').on, false);
+  await gerant('PUT', '/api/me/mail', { kinds: { rapport_poste: true } });
+
+  // On the 1st (8 a.m. in Goma): last month's report to the team, statements to the customers.
+  const [y, m] = today().split('-').map(Number);
+  const first = new Date(Date.UTC(m === 12 ? y + 1 : y, m === 12 ? 0 : m, 1, 6, 0));
+  tick(first);
+  assert.ok(last((x) => x.kind === 'rapport_mois' && x.attachments[0]?.startsWith('rapport-')), 'rapport du mois');
+  const statement = last((x) => x.kind === 'releve' && x.to === 'marie@example.com');
+  assert.ok(statement?.attachments[0]?.startsWith('releve-marie-'), 'relevé de Marie en PDF');
+  const monthly = outbox.length;
+  tick(first);
+  assert.strictEqual(outbox.length, monthly, 'une seule fois par mois');
+  // Sunday evening: the backup for the admin.
+  const sunday = new Date(Date.UTC(2026, 9, 11, 20, 30));
+  tick(sunday);
+  assert.match(last((x) => x.kind === 'sauvegarde').attachments[0], /^station-2026-10-11\.db\.gz$/);
+
+  // A subscriber who owes last month: a reminder before their payment day.
+  await gerant('PUT', `/api/customers/${ctx.fleet.id}`, { email: 'kivu-transports@example.com' });
+  const owed = db
+    .prepare(
+      `INSERT INTO sales (shift_id, customer_id, nozzle_id, product_id, kind, liters, unit_price, amount, created_at)
+       SELECT shift_id, ?, nozzle_id, product_id, 'credit', 5000, 1, 5000, datetime('now', 'start of month', '-3 days') FROM sales LIMIT 1`,
+    )
+    .run(ctx.fleet.id).lastInsertRowid;
+  db.prepare('UPDATE customers SET payment_day = ? WHERE id = ?').run(new Date().getDate(), ctx.fleet.id);
+  db.exec("DELETE FROM mail_jobs WHERE job LIKE 'rappels:%'"); // the day's run may already have passed
+  tick(new Date(`${today()}T07:00:00Z`));
+  assert.match(last((x) => x.kind === 'rappel' && x.to === 'kivu-transports@example.com').text, /Montant à payer : /);
+  db.prepare('DELETE FROM sales WHERE id = ?').run(owed);
+  db.prepare("UPDATE mail_cursors SET last_id = (SELECT MAX(id) FROM sales) WHERE name = 'sales'").run();
+
+  // Réglages → Mails: not configured here, every mail is noted.
+  const status = (await gerant('GET', '/api/mail/status')).data;
+  assert.strictEqual(status.configured, false);
+  assert.ok(status.log.length > 5 && status.log.every((l) => l.status === 'skipped'));
+  assert.strictEqual((await gerant('POST', '/api/mail/test')).data.to, 'gerant@example.com');
+  assert.ok(outbox.length > before);
+});
+
 test('migration : une base ancienne est convertie (loyalty → paid, combos)', () => {
   const fs = require('node:fs');
   const os = require('node:os');
@@ -1074,6 +1205,8 @@ test('migration : une base ancienne est convertie (loyalty → paid, combos)', (
   assert.strictEqual(reopened.prepare('SELECT name FROM suppliers').get().name, 'Total Goma', 'version 18 : fiche fournisseur');
   assert.strictEqual(reopened.prepare("SELECT payment_day FROM customers WHERE type = 'account'").get().payment_day, 5, 'version 21 : jour de paiement de l’abonné');
   assert.strictEqual(reopened.prepare('SELECT SUM(over_limit) AS n FROM sales').get().n, 0, 'version 21 : plus de « hors plafond » pour un particulier');
+  assert.ok(reopened.prepare("SELECT 1 FROM pragma_table_info('users') WHERE name = 'email'").get(), 'version 22 : e-mail de l’équipe');
+  assert.ok(reopened.prepare("SELECT value FROM settings WHERE key = 'mail_secret'").get().value.length >= 32, 'version 22 : clé des liens de désinscription');
   reopened.close();
   assert.ok(fs.readdirSync(dir).some((f) => f.startsWith('old.db.avant-migration-')), 'copie gardée avant la mise à jour');
   fs.rmSync(dir, { recursive: true, force: true });

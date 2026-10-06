@@ -4,12 +4,13 @@ import { h, fmt, pageHeader, card, cardHeader, table, badge, button, formDialog,
 import { icon } from '../icons.js';
 
 export async function renderSettings(page, ctx) {
-  const [settings, products, pumps, tanks, users] = await Promise.all([
+  const [settings, products, pumps, tanks, users, mail] = await Promise.all([
     api.get('/settings'),
     api.get('/products'),
     api.get('/pumps'),
     api.get('/tanks'),
     api.get('/users'),
+    api.get('/mail/status'),
   ]);
   const reload = () => renderSettings(page, ctx);
   const tankOptions = tanks.filter((t) => t.active).map((t) => [t.id, `${t.name} (${t.product_name})`]);
@@ -86,6 +87,7 @@ export async function renderSettings(page, ctx) {
           [
             { label: 'Nom', key: 'name' },
             { label: 'Identifiant', key: 'login' },
+            { label: 'E-mail', render: (u) => (u.email ? h('span', {}, u.email, u.email_verified_at ? null : h('div', {}, badge('À confirmer', 'warning'))) : '—') },
             { label: 'Rôle', render: (u) => ROLES[u.role] },
             { label: 'Statut', render: (u) => (u.active ? badge('Actif', 'good') : badge('Désactivé')) },
             ...(canAdmin() ? [{ label: '', align: 'right', render: (u) => button('Modifier', () => userDialog(u, ctx, reload), { variant: 'secondary sm' }) }] : []),
@@ -102,6 +104,31 @@ export async function renderSettings(page, ctx) {
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Tolérance d’écart de jaugeage'), h('span', {}, `± ${fmt.liters(settings.stockTolerance)}`)),
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Heure de clôture du poste'), h('span', {}, settings.closingTime || '15:30')),
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Téléphone (espace client)'), h('span', {}, settings.stationPhone || '—')),
+      ),
+
+      // ---- Mails (src/mail.js): sending through Resend ----
+      card(
+        cardHeader(
+          'Mails',
+          mail.configured ? `Envoyés par Resend depuis ${mail.from}` : 'L’envoi n’est pas encore branché : les mails sont seulement notés ci-dessous',
+          adminEdit(button('Mail d’essai', () => testMail(), { variant: 'ghost', iconName: 'message' })),
+        ),
+        h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Envoi'), h('span', {}, mail.configured ? badge('Branché', 'good') : badge('Pas encore branché', 'warning'))),
+        h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Expéditeur'), h('span', {}, mail.from)),
+        h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Les réponses vont à'), h('span', {}, mail.replyTo || 'l’expéditeur')),
+        h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Les liens ouvrent'), h('span', {}, mail.appUrl)),
+        h(
+          'div',
+          { class: 'summary-line' },
+          h('span', { class: 'muted' }, 'Ces 30 derniers jours'),
+          h('span', {}, [`${mail.counts.sent || 0} envoyé${(mail.counts.sent || 0) > 1 ? 's' : ''}`, mail.counts.failed ? `${mail.counts.failed} en échec` : null, mail.counts.skipped ? `${mail.counts.skipped} notés sans envoi` : null].filter(Boolean).join(' · ')),
+        ),
+        h(
+          'p',
+          { class: 'muted small', style: 'margin:12px 0 16px' },
+          'Chacun choisit ses mails et donne son adresse dans son menu (ses initiales) → « Mes mails » ; une adresse ne sert qu’une fois confirmée par le lien reçu. Les clients reçoivent reçus, pleins à crédit, relevé du mois, rappels de paiement et nouveaux prix à l’adresse de leur fiche, avec un lien pour arrêter chaque sorte de mail. « Mot de passe oublié » envoie un lien valable une heure.',
+        ),
+        buttonRow([button('Derniers mails', () => mailLog(mail.log), { variant: 'secondary', iconName: 'message' })]),
       ),
 
       // ---- Data: backup and journal (the admin's) ----
@@ -135,6 +162,39 @@ export async function renderSettings(page, ctx) {
       ),
     ),
   );
+}
+
+const MAIL_STATUS = { sent: ['Envoyé', 'good'], queued: ['En cours', 'info'], failed: ['Échec', 'critical'], skipped: ['Noté', null] };
+
+function mailLog(rows) {
+  openDialog((close) =>
+    h(
+      'div',
+      { class: 'sheet dialog-body' },
+      h('h2', {}, 'Derniers mails'),
+      // One line per mail (a table would scroll sideways on a phone).
+      rows.length
+        ? rows.map((r) =>
+            h(
+              'div',
+              { class: 'nozzle-row' },
+              h('div', { class: 'grow' }, h('div', { style: 'font-weight:600' }, r.subject), h('div', { class: 'muted small' }, `${r.to_addr} · ${fmt.dateTime(r.created_at)}`), r.error ? h('div', { class: 'muted small' }, r.error) : null),
+              badge(...(MAIL_STATUS[r.status] || [r.status])),
+            ),
+          )
+        : h('div', { class: 'empty' }, 'Aucun mail pour l’instant.'),
+      h('div', { class: 'dialog-actions' }, button('Fermer', close, { variant: 'secondary' })),
+    ),
+  );
+}
+
+async function testMail() {
+  try {
+    const r = await api.post('/mail/test');
+    toast(r.configured ? `Mail d’essai envoyé à ${r.to}` : `Mail d’essai noté pour ${r.to} : l’envoi n’est pas encore branché`);
+  } catch (err) {
+    toast(err.message, 'error');
+  }
 }
 
 async function stationDialog(s) {
@@ -248,6 +308,7 @@ async function userDialog(u, ctx, reload) {
       { name: 'name', label: 'Nom', value: u?.name, required: true },
       ...(u ? [] : [{ name: 'login', label: 'Identifiant', required: true }]),
       { name: 'role', label: 'Rôle', type: 'select', value: u?.role || 'attendant', options: Object.entries(ROLES), hint: 'L’administrateur seul modifie les réglages et la caisse ; l’actionnaire consulte sans rien modifier.' },
+      { name: 'email', label: 'Adresse e-mail', type: 'email', value: u?.email || '', full: true, hint: 'Facultative : un lien lui est envoyé pour la confirmer' },
       { name: 'password', label: u ? 'Nouveau mot de passe' : 'Mot de passe', type: 'text', required: !u, hint: u ? 'Laisser vide pour ne pas changer' : '8 caractères minimum' },
       ...(u ? [{ name: 'active', label: 'Compte actif', type: 'checkbox', value: !!u.active, full: true }] : []),
     ],

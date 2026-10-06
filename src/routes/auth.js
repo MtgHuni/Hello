@@ -13,7 +13,7 @@ const {
   loginLimiter,
 } = require('../auth');
 
-module.exports = function authRoutes(db) {
+module.exports = function authRoutes(db, { mailer }) {
   const router = express.Router();
   const limiter = loginLimiter();
   const ipLimiter = loginLimiter({ max: 50 }); // all logins from one address, whatever the account
@@ -65,6 +65,7 @@ module.exports = function authRoutes(db) {
     // DEMO_SEED=1 : les cuves sont remplies dès la création du compte gérant (essais uniquement).
     if (process.env.DEMO_SEED === '1') seedTestData(db);
     startSession(db, req, res, userId);
+    mailer.noteLogin(req, res, userId);
     res.status(201).json({ ok: true });
   });
 
@@ -86,6 +87,7 @@ module.exports = function authRoutes(db) {
     }
     limiter.reset(key);
     startSession(db, req, res, user.id);
+    mailer.noteLogin(req, res, user.id); // « Nouvelle connexion » from a device not seen before
     res.json({ ok: true });
   });
 
@@ -114,6 +116,7 @@ module.exports = function authRoutes(db) {
     });
     limiter.fail(key); // counts towards the per-IP limit, to slow down mass sign-ups
     startSession(db, req, res, userId);
+    mailer.noteLogin(req, res, userId);
     res.status(201).json({ ok: true });
   });
 
@@ -135,6 +138,7 @@ module.exports = function authRoutes(db) {
     const password = checkPasswordStrength(req.body?.password);
     db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(await hashPassword(password), req.user.id);
     endOtherSessions(db, req, req.user.id);
+    mailer.passwordChanged(req.user.id, req);
     res.json({ ok: true });
   });
 

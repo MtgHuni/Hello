@@ -142,4 +142,5 @@ module.exports = {
   requireRole,
   requireAdmin,
   loginLimiter,
+  readCookie,
 };

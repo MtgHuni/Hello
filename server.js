@@ -13,6 +13,9 @@ const app = createApp({ dbFile: DB_FILE });
 // DEMO_SEED=1 : à chaque démarrage, complète les cuves sous 50 % (essais uniquement).
 if (process.env.DEMO_SEED === '1') console.log('Données de test :', JSON.stringify(seedTestData(app.locals.db)));
 
+// Mails after events and on a schedule (src/mailJobs.js): a tick every minute.
+app.locals.mailJobs.start();
+
 app.listen(PORT, () => {
   console.log(`Station service démarrée sur http://localhost:${PORT}`);
 });

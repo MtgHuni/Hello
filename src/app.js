@@ -4,6 +4,9 @@ const { openDb } = require('./db');
 const { loadUser } = require('./auth');
 const { HttpError } = require('./util');
 const { checkStorage, storageOf } = require('./storage');
+const { createMail } = require('./mail');
+const { createMailer } = require('./mailer');
+const { createMailJobs } = require('./mailJobs');
 
 // Everything the app loads comes from its own origin (fonts and film are self-hosted).
 const CSP = [
@@ -19,6 +22,7 @@ const CSP = [
 function createApp({ dbFile }) {
   const db = openDb(dbFile);
   checkStorage(dbFile);
+  const mailer = createMailer(db, createMail(db));
   const app = express();
 
   app.set('trust proxy', 1);
@@ -57,14 +61,29 @@ function createApp({ dbFile }) {
     }
     next();
   });
+  api.use((req, res, next) => {
+    mailer.seeRequest(req); // the address the links in mails point to
+    next();
+  });
   api.use(loadUser(db));
   api.use((req, res, next) => {
     res.setHeader('Cache-Control', 'no-store');
     next();
   });
-  for (const routes of ['auth', 'config', 'stock', 'shifts', 'customers', 'requests', 'expenses', 'users', 'reports', 'admin', 'cashbook']) {
-    api.use(require(`./routes/${routes}`)(db));
+  const routers = {};
+  for (const routes of ['auth', 'mail', 'config', 'stock', 'shifts', 'customers', 'requests', 'expenses', 'users', 'reports', 'admin', 'cashbook']) {
+    routers[routes] = require(`./routes/${routes}`)(db, { mailer });
+    api.use(routers[routes]);
   }
+  // The PDFs and alerts the mails carry come from the routes that build them for the screens.
+  Object.assign(mailer.services, {
+    shiftPdf: routers.shifts.shiftPdf,
+    periodPdf: routers.reports.periodPdf,
+    stationAlerts: routers.reports.stationAlerts,
+    customerStatement: routers.customers.customerStatement,
+  });
+  app.locals.mailer = mailer;
+  app.locals.mailJobs = createMailJobs(db, mailer);
   api.use((req, res) => res.status(404).json({ error: 'Route inconnue.' }));
   app.use('/api', api);
 

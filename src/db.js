@@ -355,6 +355,67 @@ CREATE TABLE IF NOT EXISTS checkpoint_readings (
   PRIMARY KEY (checkpoint_id, nozzle_id)
 );
 
+-- E-mails (src/mail.js): every message, sent or only noted when Resend is not configured.
+CREATE TABLE IF NOT EXISTS mail_log (
+  id          INTEGER PRIMARY KEY,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  kind        TEXT NOT NULL,
+  to_addr     TEXT NOT NULL,
+  subject     TEXT NOT NULL,
+  status      TEXT NOT NULL CHECK (status IN ('queued', 'sent', 'failed', 'skipped')),
+  error       TEXT,
+  provider_id TEXT,
+  user_id     INTEGER REFERENCES users(id),
+  customer_id INTEGER REFERENCES customers(id)
+);
+CREATE INDEX IF NOT EXISTS idx_mail_log_created ON mail_log(created_at);
+-- Mails each person switched off (src/mailer.js MAIL_KINDS): by account, and by customer record
+-- (a customer without a login still gets receipts and statements).
+CREATE TABLE IF NOT EXISTS mail_prefs (
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  kind    TEXT NOT NULL,
+  PRIMARY KEY (user_id, kind)
+);
+CREATE TABLE IF NOT EXISTS customer_mail_prefs (
+  customer_id INTEGER NOT NULL REFERENCES customers(id),
+  kind        TEXT NOT NULL,
+  PRIMARY KEY (customer_id, kind)
+);
+-- One-time links sent by mail: password reset (1 hour), address confirmation (7 days).
+CREATE TABLE IF NOT EXISTS mail_tokens (
+  token_hash  TEXT PRIMARY KEY,
+  kind        TEXT NOT NULL CHECK (kind IN ('reset', 'verify')),
+  user_id     INTEGER REFERENCES users(id),
+  customer_id INTEGER REFERENCES customers(id),
+  email       TEXT,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  expires_at  TEXT NOT NULL,
+  used_at     TEXT
+);
+-- Scheduled mails already done (a report, a statement, a reminder) and how far the event mails
+-- (receipts, credits, prices) have read their table.
+CREATE TABLE IF NOT EXISTS mail_jobs (
+  job     TEXT PRIMARY KEY,
+  done_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS mail_cursors (
+  name    TEXT PRIMARY KEY,
+  last_id INTEGER NOT NULL
+);
+-- Dashboard alerts already mailed to each person: an alert goes once, again only if it comes back.
+CREATE TABLE IF NOT EXISTS mail_alerts_sent (
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  key     TEXT NOT NULL,
+  PRIMARY KEY (user_id, key)
+);
+-- Devices each person signed in from (cookie « did »): a new one sends « Nouvelle connexion ».
+CREATE TABLE IF NOT EXISTS known_devices (
+  user_id     INTEGER NOT NULL REFERENCES users(id),
+  device_hash TEXT NOT NULL,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, device_hash)
+);
+
 -- Journal: who changed what (see src/audit.js).
 CREATE TABLE IF NOT EXISTS audit_log (
   id         INTEGER PRIMARY KEY,
@@ -433,10 +494,14 @@ const MIGRATIONS = [
   ['sales', 'user_id', 'INTEGER REFERENCES users(id)'],
   // Each subscriber's payment day: the month is paid before this day of the next month.
   ['customers', 'payment_day', 'INTEGER'],
+  // E-mail of the team (a customer's is on their record), confirmed by a link (version 22).
+  ['users', 'email', 'TEXT'],
+  ['users', 'email_verified_at', 'TEXT'],
+  ['customers', 'email_verified_at', 'TEXT'],
 ];
 
 // Bumped with every schema change; recorded in PRAGMA user_version.
-const SCHEMA_VERSION = 21;
+const SCHEMA_VERSION = 22;
 
 function missingColumns(db) {
   return MIGRATIONS.filter(([table, column]) => {
@@ -624,6 +689,8 @@ function openDb(file) {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_expenses_ref ON expenses(client_ref) WHERE client_ref IS NOT NULL;`);
   const insert = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
   for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) insert.run(key, value);
+  // Signs the « stop these mails » links (src/mailer.js): one random secret per station.
+  insert.run('mail_secret', require('node:crypto').randomBytes(32).toString('hex'));
   syncCreditLimits(db);
   if (salesRebuilt) {
     // Credit sales only earn their combos once paid: recompute every balance.

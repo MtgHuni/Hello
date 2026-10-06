@@ -1081,6 +1081,7 @@ dialog.action-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; 
 .auth-card .lead { color: var(--text-2); font-size: 17px; line-height: 1.45; margin: 12px 0 32px; }
 .auth-card.wide { width: min(620px, 100%); }
 .auth-footer { margin-top: 24px; color: var(--text-2); font-size: 15px; }
+.auth-forgot { align-self: flex-end; min-height: 44px; display: inline-flex; align-items: center; margin: -6px 0 -4px; color: var(--text-2); font-size: 15px; font-weight: 600; text-decoration: underline; text-underline-offset: 0.18em; }
 .auth-footer a { font-weight: 600; text-decoration: underline; text-underline-offset: 0.18em; }
 
 /* ---------- Attendant ---------- */
