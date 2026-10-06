@@ -90,6 +90,15 @@ Chacun donne son adresse et choisit ses mails dans son menu (ses initiales) → 
 
 Pour brancher l’envoi : créer un compte Resend, y ajouter le domaine `mtgindustrie.com` et recopier ses enregistrements DNS (SPF, DKIM) chez l’hébergeur du domaine, puis mettre la clé dans `RESEND_API_KEY` sur Render. L’offre gratuite de Resend envoie 100 mails par jour (3 000 par mois).
 
+Le logo rond à côté de l’expéditeur, dans la liste des mails, vient du domaine (BIMI), pas du mail : le logo est `public/media/bimi-mtg.svg` (SVG Tiny PS), à déclarer dans le DNS de `mtgindustrie.com` avec une politique DMARC appliquée :
+
+| Nom | Type | Valeur |
+|---|---|---|
+| `_dmarc` | TXT | `v=DMARC1; p=quarantine; pct=100; adkim=r; aspf=r` |
+| `default._bimi` | TXT | `v=BIMI1; l=https://station.mtgindustrie.com/media/bimi-mtg.svg;` |
+
+Yahoo et d’autres l’affichent ainsi ; Apple Mail demande en plus Apple Business Connect (« Branded Mail », gratuit), Gmail un certificat de logo (VMC ou CMC, payant).
+
 ## Structure
 
 ```
