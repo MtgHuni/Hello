@@ -100,7 +100,9 @@ function allEntries(db) {
     const kind = KINDS[m.kind];
     if (!kind) continue;
     const label = `${kind.label}${m.note ? ` : ${m.note}` : ''}${m.shift_id ? ` (caisse du poste n°${m.shift_id})` : ''}`;
-    const base = { at: m.at, day: m.day, source: 'movement', id: m.id, kind: m.kind };
+    // An entry or exit of the cash can be put in (or taken out of) the money of a shift.
+    const shiftable = m.account === 'cash' && m.kind !== 'opening' && kind.sign !== 0;
+    const base = { at: m.at, day: m.day, source: 'movement', id: m.id, kind: m.kind, shift_id: m.shift_id, shiftable };
     if (m.kind === 'retrait_momo') {
       push({ ...base, account: 'momo', out: m.amount, label });
       push({ ...base, account: 'cash', in: m.amount, label });

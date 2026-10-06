@@ -78,6 +78,7 @@ function createApp({ dbFile }) {
   // The PDFs and alerts the mails carry come from the routes that build them for the screens.
   Object.assign(mailer.services, {
     shiftPdf: routers.shifts.shiftPdf,
+    reconcile: routers.shifts.reconcile,
     periodPdf: routers.reports.periodPdf,
     stationAlerts: routers.reports.stationAlerts,
     customerStatement: routers.customers.customerStatement,

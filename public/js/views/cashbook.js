@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { flags, adminEdit, canAdmin } from '../ui.js';
-import { h, fmt, pageHeader, card, cardHeader, table, segmented, kpi, field, button, formDialog, confirmDialog, toast, setContent, pdfLinks } from '../ui.js';
+import { h, fmt, pageHeader, card, cardHeader, table, segmented, kpi, field, button, formDialog, confirmDialog, actionSheet, toast, setContent, pdfLinks } from '../ui.js';
 import { PRESETS, presetRange } from './reports.js';
 
 // Cash book: cash (espèces) and mobile money are two separate balances. Mobile money only
@@ -167,7 +167,7 @@ export async function renderCashbook(page, ctx) {
             [...book.movements].reverse(),
             {
               empty: 'Aucun mouvement sur cette période.',
-              onRowClick: (m) => (m.source === 'movement' && !flags.readonly ? removeMovement(m, reload) : m.link ? ctx.navigate(m.link.slice(2)) : null),
+              onRowClick: (m) => (m.source === 'movement' && !flags.readonly ? movementActions(m, reload) : m.link ? ctx.navigate(m.link.slice(2)) : null),
             },
           ),
     ),
@@ -235,6 +235,27 @@ async function countDialog(acc, current, reload) {
     toast(Math.abs(c.diff) < 0.005 ? 'Comptage juste.' : `Écart de ${fmt.signedMoney(c.diff)} noté.`, Math.abs(c.diff) < 0.005 ? undefined : 'error');
     reload();
   }
+}
+
+// A manual movement: in or out of the money of the shift open at its time, or removed.
+function movementActions(m, reload) {
+  const toShift = async (link) => {
+    try {
+      const r = await api.post(`/cashbook/movements/${m.id}/shift`, { link });
+      toast(link ? `Mis dans l’argent du poste n°${r.shiftId}.` : 'Retiré de l’argent du poste.');
+      reload();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  };
+  if (!m.shiftable) return removeMovement(m, reload);
+  actionSheet({
+    title: `${m.label} · ${fmt.money(m.in || m.out)}`,
+    actions: [
+      m.shift_id ? { label: `Retirer de l’argent du poste n°${m.shift_id}`, onClick: () => toShift(false) } : { label: 'Mettre dans l’argent du poste', onClick: () => toShift(true) },
+      { label: 'Retirer ce mouvement', destructive: true, onClick: () => removeMovement(m, reload) },
+    ],
+  });
 }
 
 async function removeMovement(m, reload) {

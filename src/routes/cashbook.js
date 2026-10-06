@@ -9,7 +9,7 @@ const { cashbookPdf } = require('../cashbookReport');
 const manager = requireRole('manager');
 const SUPPLIER_METHODS = ['espèces', 'mobile money'];
 
-module.exports = function cashbookRoutes(db) {
+module.exports = function cashbookRoutes(db, { mailer } = {}) {
   const router = express.Router();
   const today = () => db.prepare("SELECT date('now', 'localtime') AS d").get().d;
   const period = (q) => {
@@ -70,6 +70,34 @@ module.exports = function cashbookRoutes(db) {
       return Number(r.lastInsertRowid);
     });
     res.status(201).json({ id, balances: balances(db) });
+  });
+
+  // A movement entered without « Dans l'argent du poste »: put in the money of the shift that was
+  // open at its time (or taken out of it). A closed shift is reconciled again.
+  router.post('/cashbook/movements/:id/shift', manager, requireAdmin, (req, res) => {
+    const m = db.prepare('SELECT * FROM cash_movements WHERE id = ?').get(req.params.id);
+    if (!m) fail(404, 'Mouvement introuvable.');
+    if (m.account !== 'cash' || m.kind === 'opening' || !KINDS[m.kind]?.sign) fail(400, 'Seules les entrées et sorties d’espèces vont dans l’argent d’un poste.');
+    const link = req.body?.link !== false;
+    const shift = link
+      ? db.prepare('SELECT id, status FROM shifts WHERE opened_at <= ? AND (closed_at IS NULL OR closed_at > ?) ORDER BY id DESC LIMIT 1').get(m.created_at, m.created_at)
+      : m.shift_id && db.prepare('SELECT id, status FROM shifts WHERE id = ?').get(m.shift_id);
+    if (link && !shift) fail(409, 'Aucun poste n’était ouvert à l’heure de ce mouvement.', 'no_shift');
+    if (!shift) return res.json({ shiftId: null, balances: balances(db) });
+    transaction(db, () => {
+      db.prepare('UPDATE cash_movements SET shift_id = ? WHERE id = ?').run(link ? shift.id : null, m.id);
+      if (shift.status !== 'open') mailer.services.reconcile(shift.id);
+      audit(db, req, {
+        category: 'caisse',
+        action: link ? 'cash_movement_to_shift' : 'cash_movement_from_shift',
+        entity: 'cash_movements',
+        id: m.id,
+        summary: `${KINDS[m.kind].label} de ${money(m.amount)}${m.note ? ` (${m.note})` : ''} ${link ? 'mis dans' : 'retiré de'} l’argent du poste n°${shift.id}`,
+        before: { shift_id: m.shift_id },
+        after: { shift_id: link ? shift.id : null },
+      });
+    });
+    res.json({ shiftId: link ? shift.id : null, balances: balances(db) });
   });
 
   router.delete('/cashbook/movements/:id', manager, requireAdmin, (req, res) => {

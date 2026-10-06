@@ -284,6 +284,7 @@ module.exports = function shiftRoutes(db) {
     };
   }
   router.shiftPdf = shiftPdf;
+  router.reconcile = reconcile;
 
   router.get('/shifts/:id/report.pdf', staff, (req, res) => {
     const own = getOwnShift(req, { open: false });

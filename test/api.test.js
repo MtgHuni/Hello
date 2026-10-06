@@ -1043,6 +1043,7 @@ test('une entrée de la caisse dans l’argent du poste compte dans ce qu’il r
   shift = (await gerant('GET', `/api/shifts/${shift.id}`)).data;
   assert.deepStrictEqual([shift.movements.length, shift.movements_amount], [2, 30]);
 
+  await nextSecond();
   const closing = await closeShift(shift, {});
   assert.strictEqual(closing.status, 200, JSON.stringify(closing.data));
   let closed = (await gerant('GET', `/api/shifts/${shift.id}`)).data;
@@ -1055,6 +1056,17 @@ test('une entrée de la caisse dans l’argent du poste compte dans ce qu’il r
   // The book: the movements at their time, then the shift brings in the rest (no double count).
   assert.strictEqual(await cashBalance(), round2(before + 5 + cash + closed.expenses_amount));
   assert.strictEqual((await gerant('DELETE', `/api/cashbook/movements/${entry.data.id}`)).data.code, 'shift_closed');
+
+  // A movement entered without the switch, put afterwards in the money of the shift open at its time.
+  const coffre = (await gerant('GET', '/api/cashbook')).data.movements.find((m) => m.source === 'movement' && m.label.startsWith('Entrée : Coffre'));
+  assert.deepStrictEqual([coffre.shiftable, coffre.shift_id], [true, null]);
+  const linked = await gerant('POST', `/api/cashbook/movements/${coffre.id}/shift`, { link: true });
+  assert.strictEqual(linked.data.shiftId, shift.id);
+  closed = (await gerant('GET', `/api/shifts/${shift.id}`)).data;
+  assert.strictEqual(closed.expected_amount, round2(base + 35), 'reconcilié avec la nouvelle entrée');
+  assert.strictEqual(await cashBalance(), round2(before + cash + closed.expenses_amount), 'les 5 $ sont désormais dans l’argent remis, comptés une fois');
+  await gerant('POST', `/api/cashbook/movements/${coffre.id}/shift`, { link: false });
+  assert.strictEqual((await gerant('GET', `/api/shifts/${shift.id}`)).data.expected_amount, round2(base + 30));
 });
 
 test('alertes : chacun masque une alerte ou coupe un type, pour lui seul', async () => {
