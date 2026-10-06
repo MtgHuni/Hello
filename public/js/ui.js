@@ -510,6 +510,7 @@ export function field(f) {
       required: f.required,
       step: f.step,
       min: f.min,
+      max: f.max,
       // A placeholder is always set so the floating label can tell an empty field (:placeholder-shown).
       placeholder: f.placeholder || ' ',
       autocomplete: f.autocomplete || 'off',

@@ -431,10 +431,12 @@ const MIGRATIONS = [
   ['shifts', 'counted_at', 'TEXT'], // the money counted after the closing (null: still to count)
   // Who entered the credit (several attendants share a shift).
   ['sales', 'user_id', 'INTEGER REFERENCES users(id)'],
+  // Each subscriber's payment day: the month is paid before this day of the next month.
+  ['customers', 'payment_day', 'INTEGER'],
 ];
 
 // Bumped with every schema change; recorded in PRAGMA user_version.
-const SCHEMA_VERSION = 20;
+const SCHEMA_VERSION = 21;
 
 function missingColumns(db) {
   return MIGRATIONS.filter(([table, column]) => {
@@ -626,6 +628,12 @@ function openDb(file) {
     // Credit sales only earn their combos once paid: recompute every balance.
     const { refreshCustomer } = require('./loyalty');
     for (const { id } of db.prepare('SELECT id FROM customers').all()) refreshCustomer(db, id);
+  }
+  if (version < 21) {
+    // Version 21: every subscriber gets the station's payment day; the old « over the limit » flags
+    // of particuliers mean nothing now that there is no credit limit.
+    db.prepare("UPDATE customers SET payment_day = ? WHERE type = 'account' AND payment_day IS NULL").run(Number(db.prepare("SELECT value FROM settings WHERE key = 'subscriber_grace_days'").get()?.value) || 5);
+    db.exec("UPDATE sales SET over_limit = 0 WHERE over_limit = 1 AND customer_id IN (SELECT id FROM customers WHERE type = 'individual')");
   }
   if (version < 20) {
     // Version 20: the reliefs made before are taken as seen by every attendant.

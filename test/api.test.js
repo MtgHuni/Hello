@@ -283,7 +283,7 @@ test('échange de combos contre du carburant, déduit de la caisse', async () =>
   await gerant('PUT', '/api/settings', { comboThreshold: 100 });
 });
 
-test('abonnés : le mois précédent doit être payé après le délai', async () => {
+test('abonnés : le mois précédent doit être payé avant le jour de paiement de chaque abonné', async () => {
   ctx.shift = (await pompiste('GET', '/api/shifts/current')).data;
   const nozzle = dieselOf(ctx.shift);
   const sale = (await pompiste('POST', `/api/shifts/${ctx.shift.id}/sales`, { nozzleId: nozzle.nozzle_id, customerId: ctx.fleet.id, liters: 10, payment: 'credit' })).data;
@@ -291,9 +291,15 @@ test('abonnés : le mois précédent doit être payé après le délai', async (
   db.prepare("UPDATE sales SET created_at = datetime('now', 'start of month', '-40 days') WHERE customer_id = ? AND id != ?").run(ctx.fleet.id, sale.id);
   db.prepare("UPDATE sales SET created_at = datetime('now', 'start of month', '-3 days') WHERE id = ?").run(sale.id);
 
+  // Each subscriber has their own payment day; the station's setting is only the default of new ones.
   const graceDays = 1;
-  await gerant('PUT', '/api/settings', { subscriberGraceDays: graceDays });
+  assert.strictEqual((await gerant('PUT', `/api/customers/${ctx.fleet.id}`, { paymentDay: 31 })).status, 400);
+  assert.strictEqual((await gerant('PUT', `/api/customers/${ctx.fleet.id}`, { paymentDay: graceDays })).data.payment_day, graceDays);
+  await gerant('PUT', '/api/settings', { subscriberGraceDays: 20 });
   const fleet = await customer(ctx.fleet.id);
+  assert.strictEqual(fleet.customer.payment_day, graceDays, 'le réglage ne change pas un abonné existant');
+  assert.strictEqual(fleet.dues.paymentDay, graceDays);
+  assert.strictEqual((await customer(ctx.person.id)).customer.payment_day, null, 'un particulier n’a pas de jour de paiement');
   assert.strictEqual(fleet.dues.overdue, 14);
   const late = new Date().getDate() > graceDays;
   assert.strictEqual(fleet.dues.late, late);
@@ -310,6 +316,7 @@ test('abonnés : le mois précédent doit être payé après le délai', async (
   await gerant('POST', `/api/customers/${ctx.fleet.id}/payments`, { amount: 100, method: 'espèces' });
   assert.strictEqual((await customer(ctx.fleet.id)).dues.overdue, 0);
   await gerant('PUT', '/api/settings', { subscriberGraceDays: 5 });
+  await gerant('PUT', `/api/customers/${ctx.fleet.id}`, { paymentDay: 5 });
 });
 
 test('pompiste : client rapide (particulier), crédit accordé, règlement et dépense', async () => {
@@ -1032,11 +1039,13 @@ test('migration : une base ancienne est convertie (loyalty → paid, combos)', (
   assert.strictEqual(setting('combos_enabled'), '0', 'version 6 : combos coupés');
   assert.strictEqual(setting('cdf_rate'), undefined, 'version 6 : tout en dollars');
   // Version 11: a validated shift is simply closed.
-  migrated.exec("INSERT INTO users (name, login, password_hash, role) VALUES ('P', 'p', 'x', 'attendant'); INSERT INTO shifts (attendant_id, status) VALUES (1, 'validated'); INSERT INTO supplier_payments (supplier, amount, method) VALUES (' Total Goma ', 10, 'espèces'); PRAGMA user_version = 10");
+  migrated.exec("INSERT INTO users (name, login, password_hash, role) VALUES ('P', 'p', 'x', 'attendant'); INSERT INTO shifts (attendant_id, status) VALUES (1, 'validated'); INSERT INTO supplier_payments (supplier, amount, method) VALUES (' Total Goma ', 10, 'espèces'); INSERT INTO customers (type, name) VALUES ('account', 'Abonné ancien'); UPDATE sales SET over_limit = 1; PRAGMA user_version = 10");
   migrated.close();
   const reopened = openDb(file);
   assert.strictEqual(reopened.prepare('SELECT status FROM shifts').get().status, 'closed', 'version 11 : plus de validation');
   assert.strictEqual(reopened.prepare('SELECT name FROM suppliers').get().name, 'Total Goma', 'version 18 : fiche fournisseur');
+  assert.strictEqual(reopened.prepare("SELECT payment_day FROM customers WHERE type = 'account'").get().payment_day, 5, 'version 21 : jour de paiement de l’abonné');
+  assert.strictEqual(reopened.prepare('SELECT SUM(over_limit) AS n FROM sales').get().n, 0, 'version 21 : plus de « hors plafond » pour un particulier');
   reopened.close();
   assert.ok(fs.readdirSync(dir).some((f) => f.startsWith('old.db.avant-migration-')), 'copie gardée avant la mise à jour');
   fs.rmSync(dir, { recursive: true, force: true });

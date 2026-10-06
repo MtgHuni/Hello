@@ -24,7 +24,7 @@ function statementPdf(acc, { stationName, month, graceDays, now = new Date() }) 
   report.line('Solde à la fin du mois', money(acc.closing), { bold: true });
   if (acc.dues?.overdue > 0) {
     report.line(
-      acc.dues.late ? 'Dû des mois précédents, en retard' : `Dû des mois précédents, à payer avant le ${graceDays} du mois`,
+      acc.dues.late ? 'Dû des mois précédents, en retard' : `Dû des mois précédents, à payer avant le ${acc.dues.paymentDay || graceDays} du mois`,
       money(acc.dues.overdue),
       { bold: true, color: acc.dues.late ? COLORS.BAD : COLORS.INK },
     );

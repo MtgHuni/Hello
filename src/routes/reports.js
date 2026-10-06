@@ -142,7 +142,7 @@ module.exports = function reportRoutes(db) {
         `SELECT sa.id, sa.amount, sa.shift_id, c.id AS customer_id, c.name AS customer_name, u.name AS attendant_name
          FROM sales sa JOIN shifts s ON s.id = sa.shift_id JOIN customers c ON c.id = sa.customer_id
          JOIN users u ON u.id = COALESCE(sa.user_id, s.attendant_id)
-         WHERE sa.over_limit = 1 AND (s.status = 'open' OR s.closed_at >= datetime('now', '-3 days')) ORDER BY sa.id DESC`,
+         WHERE sa.over_limit = 1 AND c.type = 'account' AND (s.status = 'open' OR s.closed_at >= datetime('now', '-3 days')) ORDER BY sa.id DESC`,
       )
       .all();
     for (const o of overLimit) {

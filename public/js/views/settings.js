@@ -119,7 +119,7 @@ export async function renderSettings(page, ctx) {
         line('Crédit', 'Un seul à la fois : le suivant après paiement'),
         h('h3', { style: 'margin:14px 0 2px' }, 'Abonnés'),
         line('Prix au litre', 'Colonne « Prix abonnés » des produits'),
-        line('Paiement du mois', `avant le ${settings.subscriberGraceDays} du mois suivant`),
+        line('Jour de paiement', `réglé sur chaque abonné (par défaut : avant le ${settings.subscriberGraceDays})`),
         h('h3', { style: 'margin:14px 0 2px' }, 'Combos'),
         line('Programme de combos', settings.combosEnabled ? 'Activé' : 'Désactivé'),
         ...(settings.combosEnabled ? [line('Combos gagnés par litre', fmt.number(settings.combosPerLiter)),
@@ -152,7 +152,7 @@ async function customersDialog(s, reload) {
   const ok = await formDialog({
     title: 'Clients et combos',
     fields: [
-      { name: 'subscriberGraceDays', label: 'Abonnés : payer avant le (jour du mois)', type: 'number', step: '1', min: '1', value: s.subscriberGraceDays, required: true, hint: 'Après ce jour, un abonné qui doit le mois précédent ne peut plus prendre à crédit' },
+      { name: 'subscriberGraceDays', label: 'Jour de paiement par défaut des nouveaux abonnés', type: 'number', step: '1', min: '1', value: s.subscriberGraceDays, required: true, hint: 'Chaque abonné a son propre jour, modifiable sur sa fiche. Après ce jour, un abonné qui doit le mois précédent ne peut plus prendre à crédit.' },
       { name: 'combosEnabled', label: 'Programme de combos', type: 'checkbox', value: s.combosEnabled, full: true },
       { name: 'combosPerLiter', label: 'Combos par litre', type: 'number', step: '0.01', min: '0', value: s.combosPerLiter, required: true },
       { name: 'comboValue', label: 'Valeur d’un combo ($)', type: 'number', step: '0.0001', min: '0.0001', value: s.comboValue, required: true },

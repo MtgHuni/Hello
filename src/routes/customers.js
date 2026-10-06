@@ -162,6 +162,11 @@ function customerRoutes(db) {
       email: str(b.email ?? current.email, "L'e-mail", { required: false, max: 120 }),
       address: str(b.address ?? current.address, "L'adresse", { required: false, max: 300 }),
       plate: str(b.plate ?? current.plate, "L'immatriculation", { required: false, max: 20 }),
+      // A subscriber's payment day (1 to 28); a particulier has none.
+      payment_day:
+        type === 'account'
+          ? num(b.paymentDay ?? current.payment_day ?? getSettings(db).subscriberGraceDays, 'Le jour de paiement', { min: 1, max: 28, integer: true })
+          : null,
     };
   }
 
@@ -180,8 +185,8 @@ function customerRoutes(db) {
   router.post('/customers', manager, (req, res) => {
     const f = customerFields(req.body || {});
     const id = db
-      .prepare('INSERT INTO customers (type, name, phone, email, address, plate) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(f.type, f.name, f.phone, f.email, f.address, f.plate).lastInsertRowid;
+      .prepare('INSERT INTO customers (type, name, phone, email, address, plate, payment_day) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(f.type, f.name, f.phone, f.email, f.address, f.plate, f.payment_day).lastInsertRowid;
     syncCreditLimits(db);
     res.status(201).json(db.prepare(`${listSql} WHERE c.id = ?`).get(id));
   });
@@ -192,14 +197,15 @@ function customerRoutes(db) {
     const f = customerFields(req.body || {}, current);
     const active = bool(req.body?.active, !!current.active) ? 1 : 0;
     db.prepare(
-      'UPDATE customers SET type = ?, name = ?, phone = ?, email = ?, address = ?, plate = ?, active = ?, needs_review = 0 WHERE id = ?',
-    ).run(f.type, f.name, f.phone, f.email, f.address, f.plate, active, current.id);
+      'UPDATE customers SET type = ?, name = ?, phone = ?, email = ?, address = ?, plate = ?, payment_day = ?, active = ?, needs_review = 0 WHERE id = ?',
+    ).run(f.type, f.name, f.phone, f.email, f.address, f.plate, f.payment_day, active, current.id);
     syncCreditLimits(db);
     db.prepare('UPDATE users SET active = ? WHERE customer_id = ?').run(active, current.id);
     const TYPE = { account: 'abonné', individual: 'particulier' };
     const changes = [
       f.type !== current.type ? `${TYPE[current.type]} → ${TYPE[f.type]}` : null,
       active !== current.active ? (active ? 'réactivé' : 'désactivé') : null,
+      f.payment_day && f.payment_day !== current.payment_day ? `paiement avant le ${f.payment_day}${current.payment_day ? ` (avant : le ${current.payment_day})` : ''}` : null,
     ].filter(Boolean);
     if (changes.length) {
       audit(db, req, {
@@ -208,8 +214,8 @@ function customerRoutes(db) {
         entity: 'customers',
         id: current.id,
         summary: `Client ${f.name} : ${changes.join(', ')}`,
-        before: { type: current.type, active: current.active },
-        after: { type: f.type, active },
+        before: { type: current.type, active: current.active, payment_day: current.payment_day },
+        after: { type: f.type, active, payment_day: f.payment_day },
       });
     }
     res.json(db.prepare(`${listSql} WHERE c.id = ?`).get(current.id));

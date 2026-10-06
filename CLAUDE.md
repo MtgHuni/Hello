@@ -28,7 +28,7 @@ Requires Node ≥ 22.13 (built-in `node:sqlite`, hence `--disable-warning=Experi
   - a database holding data is copied to `<db>.avant-migration-…` before any change;
   - a CHECK constraint change needs a table rebuild, like `migrateSalesKind` / `migrateRequests`.
   - Production data on Render must survive, so add a migration and a migration test.
-- Settings are key/value rows. `getSettings(db)` maps them to camelCase (`combosPerLiter`, `comboValue`, `comboThreshold`, `subscriberGraceDays`, …).
+- Settings are key/value rows. `getSettings(db)` maps them to camelCase (`combosPerLiter`, `comboValue`, `comboThreshold`, `subscriberGraceDays`, …). `subscriberGraceDays` is only the default payment day of a new subscriber: each subscriber has `customers.payment_day` (version 21, null for a particulier), read by `subscriberDues()`.
 - There is no credit limit any more (version 19): `customers.credit_limit` and the `*_credit_limit` settings are left over, unused and not editable. An individual has one credit at a time (`has_credit`; `GET /customers/:id/unpaid` lists what is owed, shown by `creditBlocked()` in `attendant.js` as a centred `noticeDialog`), a subscriber pays each month.
 - Dashboard alerts carry a `type` and a stable `key`; `userAlerts()` (`src/alerts.js`) filters them per user (`alert_prefs`: types switched off, `alert_hidden`: one alert hidden while its text is the same) and `PUT /alerts` saves the choices (« Gérer » on the Alertes card, also for the owner). A new alert needs a type in `ALERT_TYPES`.
 - Naming: customer `type` is `'account'` = abonné (subscriber) and `'individual'` = particulier.

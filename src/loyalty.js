@@ -45,9 +45,10 @@ function refreshCustomer(db, customerId) {
   ).run(customerId, customerId);
 }
 
-// Subscribers pay the whole month at the end of the month (within a few grace days):
-// what is still unpaid from previous months is overdue and blocks new credit.
-function subscriberDues(db, customerId, graceDays) {
+// Subscribers pay the whole month before their payment day of the next month (`customers.payment_day`,
+// else the station's default): what is still unpaid from previous months is overdue and blocks new credit.
+function subscriberDues(db, customerId, defaultDay) {
+  const graceDays = db.prepare('SELECT payment_day FROM customers WHERE id = ?').get(customerId)?.payment_day || defaultDay;
   const today = db
     .prepare(
       `SELECT date('now', 'localtime', 'start of month') AS month_start,
@@ -70,6 +71,7 @@ function subscriberDues(db, customerId, graceDays) {
     currentMonth: round(currentMonth),
     overdueDeadline: today.overdue_deadline,
     nextDeadline: today.next_deadline,
+    paymentDay: graceDays,
     late: overdue > 0.001 && today.day > graceDays,
   };
 }

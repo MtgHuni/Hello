@@ -94,6 +94,24 @@ async function customerDialog(customer, ctx, onDone) {
           ['account', 'Abonné'],
         ],
         full: true,
+        onInput: (e) => {
+          const day = e.target.form.elements.paymentDay;
+          const account = e.target.value === 'account';
+          day.closest('.field').hidden = !account;
+          day.required = account;
+        },
+      },
+      {
+        name: 'paymentDay',
+        label: 'Jour de paiement du mois',
+        type: 'number',
+        step: '1',
+        min: '1',
+        max: '28',
+        value: customer?.payment_day ?? ctx?.state?.settings?.subscriberGraceDays ?? 5,
+        hidden: (customer?.type || 'individual') !== 'account',
+        required: customer?.type === 'account',
+        full: true,
       },
       { name: 'name', label: 'Nom ou raison sociale', value: customer?.name, required: true, full: true },
       { name: 'phone', label: 'Téléphone', value: customer?.phone, type: 'tel' },
@@ -188,7 +206,7 @@ export async function renderCustomerDetail(page, ctx) {
       h('a', { class: 'back no-print', href: '#/clients' }, icon('back'), 'Clients'),
       pageHeader(
         c.name,
-        [TYPE_LABEL[c.type], c.phone, c.email, c.plate].filter(Boolean).join(' · '),
+        [TYPE_LABEL[c.type], c.type === 'account' && c.payment_day ? `paie avant le ${c.payment_day} du mois` : null, c.phone, c.email, c.plate].filter(Boolean).join(' · '),
         edit(button('Règlement', () => paymentDialog(c, reload), { iconName: 'card' })),
         edit(button('Ancienne dette', () => oldDebtDialog(c, reload), { variant: 'secondary', iconName: 'plus' })),
         pdfLinks(`/api/customers/${c.id}/statement.pdf?month=${period.from.slice(0, 7)}`, `releve-${period.from.slice(0, 7)}.pdf`, { label: 'Relevé PDF' }),
