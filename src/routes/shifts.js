@@ -609,6 +609,8 @@ module.exports = function shiftRoutes(db) {
     transaction(db, () => {
       // A sale confirmed from a customer's request: the request is cancelled with it.
       if (table === 'sales') db.prepare("UPDATE purchase_requests SET sale_id = NULL, status = 'cancelled' WHERE sale_id = ?").run(item.id);
+      // A delivery paid with this expense: its payment is to be given again.
+      if (table === 'expenses') db.prepare('UPDATE deliveries SET expense_id = NULL, payment = NULL, pay_method = NULL WHERE expense_id = ?').run(item.id);
       db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(item.id);
       audit(db, req, {
         category: 'annulations',

@@ -498,10 +498,12 @@ const MIGRATIONS = [
   ['users', 'email', 'TEXT'],
   ['users', 'email_verified_at', 'TEXT'],
   ['customers', 'email_verified_at', 'TEXT'],
+  // A delivery paid with the open shift's money: its expense on that shift (version 23).
+  ['deliveries', 'expense_id', 'INTEGER REFERENCES expenses(id)'],
 ];
 
 // Bumped with every schema change; recorded in PRAGMA user_version.
-const SCHEMA_VERSION = 22;
+const SCHEMA_VERSION = 23;
 
 function missingColumns(db) {
   return MIGRATIONS.filter(([table, column]) => {
@@ -554,8 +556,12 @@ const EXPENSE_CATEGORIES = [
   'Fournitures',
   'Sécurité',
   'Communication',
+  // A delivery paid with the open shift's money (deliveries.expense_id): already in the cost of
+  // the fuel sold, so the reports' net result leaves it out.
+  'Achat de carburant',
   'Autre',
 ];
+const FUEL_PURCHASE = 'Achat de carburant';
 
 const DEFAULT_SETTINGS = {
   station_name: 'Ma station',
@@ -764,4 +770,4 @@ function getSettings(db) {
   };
 }
 
-module.exports = { openDb, getSettings, syncCreditLimits, EXPENSE_CATEGORIES, SCHEMA_VERSION };
+module.exports = { openDb, getSettings, syncCreditLimits, EXPENSE_CATEGORIES, FUEL_PURCHASE, SCHEMA_VERSION };

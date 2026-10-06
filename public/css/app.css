@@ -1082,6 +1082,8 @@ dialog.action-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; 
 .auth-card h1 { font-size: 64px; }
 .auth-card .lead { color: var(--text-2); font-size: 17px; line-height: 1.45; margin: 12px 0 32px; }
 .auth-card.wide { width: min(620px, 100%); }
+/* Sign-in screens: the action in porcelain (ink in day mode), beside the film's lit panels. */
+.auth-card .btn:not(.secondary, .ghost) { --solid: var(--text); --on-solid: var(--bg); }
 .auth-footer { margin-top: 24px; color: var(--text-2); font-size: 15px; }
 .auth-forgot { align-self: flex-end; min-height: 44px; display: inline-flex; align-items: center; margin: -6px 0 -4px; color: var(--text-2); font-size: 15px; font-weight: 600; text-decoration: underline; text-underline-offset: 0.18em; }
 .auth-footer a { font-weight: 600; text-decoration: underline; text-underline-offset: 0.18em; }
@@ -1155,6 +1157,8 @@ dialog.action-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; 
 .seg-field legend { padding: 0 0 8px 2px; font-size: 17px; font-weight: 600; color: var(--text); }
 .seg-options { display: flex; gap: 10px; flex-wrap: wrap; }
 .seg-option { position: relative; flex: 1 1 0; min-width: 84px; cursor: pointer; }
+/* Four choices: two equal rows rather than three and one. */
+.seg-options:has(> .seg-option:nth-child(4):last-child) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .seg-option input { position: absolute; opacity: 0; pointer-events: none; width: 1px; height: 1px; }
 .seg-option span {
   display: flex;

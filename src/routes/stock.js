@@ -3,17 +3,20 @@ const { fail, num, str, oneOf, round, transaction } = require('../util');
 const { requireRole } = require('../auth');
 const { audit } = require('../audit');
 const { openMeters, soldByTank } = require('../liveStock');
+const { FUEL_PURCHASE } = require('../db');
 
 const manager = requireRole('manager');
 
-// Paid on the spot in cash (out of the cash book), taken on credit (a debt to the supplier), or
+// Paid on the spot in cash (out of the cash book), with the open shift's money (an expense of that
+// shift, deducted from what the attendants hand over), taken on credit (a debt to the supplier), or
 // already paid before the app (neither: it only made the stock).
-const PAYMENT_LABEL = { cash: 'payée comptant', credit: 'à crédit', prepaid: 'déjà payée' };
+const PAYMENT_LABEL = { cash: 'payée comptant', shift: 'payée avec l’argent du poste', credit: 'à crédit', prepaid: 'déjà payée' };
 function paymentOf(b) {
   const payment = oneOf(b.payment || 'cash', 'Le paiement', Object.keys(PAYMENT_LABEL));
-  return { payment, payMethod: payment === 'cash' ? 'espèces' : null };
+  return { payment, payMethod: payment === 'cash' || payment === 'shift' ? 'espèces' : null };
 }
-function checkCredit(payment, supplier, amount) {
+function checkPayment(payment, supplier, amount) {
+  if (payment === 'shift' && !amount) fail(400, 'Indiquez le prix d’achat : c’est ce qui sort de l’argent du poste.');
   if (payment !== 'credit') return;
   if (!supplier) fail(400, 'Indiquez le fournisseur : la livraison à crédit devient une dette envers lui.');
   if (!amount) fail(400, 'Indiquez le montant dû : c’est ce que la station devra au fournisseur.');
@@ -52,6 +55,28 @@ module.exports = function stockRoutes(db) {
     const readings = meters.filter((m) => fresh.has(m.nozzleId)).map((m) => ({ shiftId: m.shiftId, nozzleId: m.nozzleId, meter: fresh.get(m.nozzleId) }));
     return { sold, live: round(tank.book_stock - sold), readings };
   }
+  // A delivery paid with the shift's money is an expense of the open shift.
+  const openShift = () => {
+    const shift = db.prepare("SELECT * FROM shifts WHERE status = 'open' ORDER BY id DESC LIMIT 1").get();
+    if (!shift) fail(409, 'Aucun poste ouvert : la livraison ne peut pas être payée avec l’argent du poste.', 'no_open_shift');
+    return shift;
+  };
+  const shiftExpense = (req, { tank, liters, supplier, reference, amount }) =>
+    Number(
+      db
+        .prepare(
+          `INSERT INTO expenses (expense_date, category, amount, description, beneficiary, method, reference, shift_id, user_id)
+           VALUES (date('now', 'localtime'), ?, ?, ?, ?, 'espèces', ?, ?, ?)`,
+        )
+        .run(FUEL_PURCHASE, amount, `Livraison ${tank.name}, ${liters} L`, supplier, reference, openShift().id, req.user.id).lastInsertRowid,
+    );
+  // The expense of a delivery can only change while its shift is open (a closed shift is reconciled).
+  const linkedExpense = (d) => {
+    const e = d.expense_id && db.prepare('SELECT e.*, s.status AS shift_status FROM expenses e JOIN shifts s ON s.id = e.shift_id WHERE e.id = ?').get(d.expense_id);
+    if (e && e.shift_status !== 'open') fail(409, `Le poste n°${e.shift_id} est clôturé : corrigez la dépense depuis sa fiche.`, 'shift_closed');
+    return e;
+  };
+
   const saveReadings = (readings, source, sourceId) => {
     for (const r of readings) db.prepare('INSERT INTO stock_readings (shift_id, nozzle_id, meter, source, source_id) VALUES (?, ?, ?, ?, ?)').run(r.shiftId, r.nozzleId, r.meter, source, sourceId);
   };
@@ -88,7 +113,8 @@ module.exports = function stockRoutes(db) {
     const { payment, payMethod } = paymentOf(b);
     const computed = unitCost ? round(unitCost * received) : null;
     const amount = b.amount === undefined || b.amount === '' || b.amount === null ? computed : round(num(b.amount, 'Le montant de la facture', { min: 0.01, max: 1e9 }));
-    checkCredit(payment, supplier, amount);
+    checkPayment(payment, supplier, amount);
+    if (payment === 'shift') openShift();
     const { live, readings } = stockNow(tank, b.meters);
     if (live + received > tank.capacity + 0.5 && !b.force) {
       fail(409, `${tank.name} contiendrait ${round(live + received)} L pour une capacité de ${tank.capacity} L (stock actuel ${live} L + ${received} L reçus). Vérifiez l’index et les litres reçus.`, 'over_capacity');
@@ -101,6 +127,10 @@ module.exports = function stockRoutes(db) {
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(tank.id, supplierName(supplier), reference, ordered, received, unitCost ?? (amount ? round(amount / received, 4) : null), live, req.user.id, payment, amount, payMethod);
+      if (payment === 'shift') {
+        const expenseId = shiftExpense(req, { tank, liters: received, supplier: supplierName(supplier), reference, amount });
+        db.prepare('UPDATE deliveries SET expense_id = ? WHERE id = ?').run(expenseId, r.lastInsertRowid);
+      }
       db.prepare('UPDATE tanks SET book_stock = ? WHERE id = ?').run(round(tank.book_stock + received), tank.id);
       saveReadings(readings, 'delivery', Number(r.lastInsertRowid));
       return r.lastInsertRowid;
@@ -118,10 +148,21 @@ module.exports = function stockRoutes(db) {
     const supplier = b.supplier === undefined ? d.supplier : str(b.supplier, 'Le fournisseur', { required: false, max: 100 });
     const reference = b.reference === undefined ? d.reference : str(b.reference, 'La référence', { required: false, max: 100 });
     const amount = b.amount === undefined ? d.amount : b.amount === '' || b.amount === null ? null : round(num(b.amount, 'Le montant', { min: 0.01, max: 1e9 }));
-    checkCredit(payment, supplier, amount);
+    checkPayment(payment, supplier, amount);
+    const expense = linkedExpense(d);
     const after = { payment, pay_method: payMethod, supplier, reference, amount };
     transaction(db, () => {
-      db.prepare('UPDATE deliveries SET payment = ?, pay_method = ?, supplier = ?, reference = ?, amount = ? WHERE id = ?').run(payment, payMethod, supplierName(supplier), reference, amount, d.id);
+      let expenseId = d.expense_id;
+      if (payment === 'shift' && expense) {
+        db.prepare('UPDATE expenses SET amount = ?, beneficiary = ?, reference = ? WHERE id = ?').run(amount, supplierName(supplier), reference, expense.id);
+      } else if (payment === 'shift') {
+        const tank = db.prepare('SELECT * FROM tanks WHERE id = ?').get(d.tank_id);
+        expenseId = shiftExpense(req, { tank, liters: d.liters_received, supplier: supplierName(supplier), reference, amount });
+      } else if (expense) {
+        expenseId = null;
+      }
+      db.prepare('UPDATE deliveries SET payment = ?, pay_method = ?, supplier = ?, reference = ?, amount = ?, expense_id = ? WHERE id = ?').run(payment, payMethod, supplierName(supplier), reference, amount, expenseId, d.id);
+      if (expense && payment !== 'shift') db.prepare('DELETE FROM expenses WHERE id = ?').run(expense.id);
       audit(db, req, {
         category: 'donnees',
         action: 'delivery_payment',

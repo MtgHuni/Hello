@@ -1,5 +1,5 @@
 const express = require('express');
-const { getSettings } = require('../db');
+const { getSettings, FUEL_PURCHASE } = require('../db');
 const { round, dateParam, fail, csvCell, money, transaction } = require('../util');
 const { requireRole } = require('../auth');
 const { balanceSql, subscriberDues, creditAllocation } = require('../loyalty');
@@ -398,7 +398,8 @@ module.exports = function reportRoutes(db) {
     return {
       from,
       to,
-      totals: { ...money, payments, expenses, grossMargin, net: round(grossMargin - expenses), costKnown, costOfSales: round(costOfSales) },
+      // Fuel bought with a shift's money is already in the cost of sales.
+      totals: { ...money, payments, expenses, grossMargin, net: round(grossMargin - expenses + (expensesByCategory.find((e) => e.category === FUEL_PURCHASE)?.amount || 0)), costKnown, costOfSales: round(costOfSales) },
       byDay,
       byProduct,
       byAttendant,

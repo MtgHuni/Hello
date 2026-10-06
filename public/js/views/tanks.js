@@ -79,7 +79,7 @@ export async function renderTanks(page, ctx) {
                 },
               },
               { label: 'Montant', align: 'right', render: (d) => (d.amount ? fmt.money(d.amount) : d.unit_cost ? fmt.money(d.unit_cost * d.liters_received) : '—') },
-              { label: 'Paiement', render: (d) => (d.payment === 'credit' ? badge('À crédit', 'warning') : d.payment === 'prepaid' ? 'Déjà payée' : d.payment === 'cash' ? 'Comptant' : '—') },
+              { label: 'Paiement', render: (d) => (d.payment === 'credit' ? badge('À crédit', 'warning') : d.payment === 'prepaid' ? 'Déjà payée' : d.payment === 'shift' ? 'Argent du poste' : d.payment === 'cash' ? 'Caisse' : '—') },
             ],
             deliveries,
             { empty: 'Aucune livraison enregistrée.', onRowClick: flags.readonly ? undefined : (d) => deliveryPaymentDialog(d, sup.names, reload) },
@@ -108,7 +108,7 @@ export async function renderTanks(page, ctx) {
   );
 }
 
-const PAYMENTS = [['cash', 'Payée comptant'], ['credit', 'À crédit'], ['prepaid', 'Déjà payée']];
+const PAYMENTS = [['cash', 'Caisse'], ['shift', 'Argent du poste'], ['credit', 'À crédit'], ['prepaid', 'Déjà payée']];
 const tankOptions = (tanks) => tanks.map((t) => [t.id, `${t.name} (${t.product_name})`]);
 
 // While the shift is open, the index of each nozzle fed by the tank, read at the same moment:
@@ -158,6 +158,7 @@ async function deliveryDialog(tanks, supplierNames, meters, reload) {
     ],
     onSubmit: async (d, form) => {
       if (d.payment === 'credit' && !d.unitCost) throw new Error('Indiquez le prix d’achat : c’est ce que la station devra au fournisseur.');
+      if (d.payment === 'shift' && !d.unitCost) throw new Error('Indiquez le prix d’achat : c’est ce qui sort de l’argent du poste.');
       const body = { ...d, tankId: Number(d.tankId), meters: index.read(form) };
       try {
         return await api.post('/deliveries', body);

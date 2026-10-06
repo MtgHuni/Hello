@@ -988,6 +988,32 @@ test('livraison pendant le poste : le carburant déjà vendu (index) sort du sto
   assert.ok((await gerant('GET', '/api/suppliers')).data.names.includes('Petro Kivu'));
 });
 
+test('livraison payée avec l’argent du poste : une dépense du poste ouvert', async () => {
+  const shift = (await gerant('GET', '/api/shifts/current')).data;
+  const tank = (await gerant('GET', '/api/tanks')).data.find((t) => t.id === dieselOf(shift).tank_id);
+  const body = { tankId: tank.id, litersOrdered: 5, litersReceived: 5, payment: 'shift', supplier: 'Petro Kivu', reference: 'BL-77' };
+  assert.strictEqual((await gerant('POST', '/api/deliveries', body)).status, 400, 'prix d’achat obligatoire');
+  const d = (await gerant('POST', '/api/deliveries', { ...body, unitCost: 1 })).data;
+  const expense = async () => (await gerant('GET', '/api/expenses')).data.expenses.find((e) => e.id === d.expense_id);
+  assert.ok(d.expense_id);
+  let e = await expense();
+  assert.deepStrictEqual([e.category, e.amount, e.shift_id, e.beneficiary, e.reference, e.method], ['Achat de carburant', 5, shift.id, 'Petro Kivu', 'BL-77', 'espèces']);
+
+  // The amount follows the delivery; another payment takes the expense off the shift, and back.
+  await gerant('PUT', `/api/deliveries/${d.id}`, { payment: 'shift', amount: 6 });
+  assert.strictEqual((await expense()).amount, 6);
+  const cash = (await gerant('PUT', `/api/deliveries/${d.id}`, { payment: 'cash' })).data;
+  assert.strictEqual(cash.expense_id, null);
+  assert.strictEqual(await expense(), undefined);
+  const again = (await gerant('PUT', `/api/deliveries/${d.id}`, { payment: 'shift' })).data;
+  e = (await gerant('GET', '/api/expenses')).data.expenses.find((x) => x.id === again.expense_id);
+  assert.deepStrictEqual([e.amount, e.shift_id], [6, shift.id]);
+  // The expense cancelled from the shift: the delivery waits for its payment.
+  assert.strictEqual((await gerant('DELETE', `/api/shifts/${shift.id}/expenses/${e.id}`)).status, 204);
+  const left = (await gerant('GET', '/api/deliveries')).data.find((x) => x.id === d.id);
+  assert.deepStrictEqual([left.payment, left.expense_id], [null, null]);
+});
+
 test('alertes : chacun masque une alerte ou coupe un type, pour lui seul', async () => {
   const dash = (await gerant('GET', '/api/dashboard')).data;
   const first = dash.alerts[0];
