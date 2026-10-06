@@ -395,8 +395,8 @@ async function loginDialog(c, ctx, reload) {
   shareAccess(c, sent, ctx?.state?.settings?.stationName || 'la station');
 }
 
-// Sends the customer the link, their login and password: by WhatsApp or SMS to their phone,
-// or through the phone's share sheet; they can change the password in their space.
+// Sends the customer the link, their login and password through the phone's own share sheet
+// (WhatsApp, SMS…; a copy where the browser cannot share); they change the password in their space.
 function shareAccess(c, { login, password }, stationName) {
   const text = [
     `Bonjour ${c.name}, voici votre espace client ${stationName} : ${location.origin}`,
@@ -404,20 +404,12 @@ function shareAccess(c, { login, password }, stationName) {
     `Mot de passe : ${password}`,
     'Vous pouvez changer ce mot de passe dans votre espace : touchez vos initiales en haut à droite, puis « Changer le mot de passe ».',
   ].join('\n');
-  const number = whatsappNumber(c.phone);
-  const link = (label, href, iconName) => h('a', { class: 'btn secondary', href, target: '_blank', rel: 'noopener' }, icon(iconName), label);
-  const canShare = typeof navigator.share === 'function';
+  const share = () =>
+    typeof navigator.share === 'function'
+      ? navigator.share({ title: `Espace client ${stationName}`, text }).catch(() => {})
+      : navigator.clipboard?.writeText(text).then(() => toast('Message copié.'), () => toast('Copie impossible.', 'error'));
   return noticeDialog('Accès client enregistré', [
     h('p', {}, `Identifiant : `, h('strong', {}, login), h('br'), 'Mot de passe : ', h('strong', {}, password)),
-    h(
-      'div',
-      { class: 'notice-share' },
-      buttonRow([
-        number ? link('WhatsApp', `https://wa.me/${number}?text=${encodeURIComponent(text)}`, 'message') : null,
-        number ? link('SMS', `sms:+${number}?&body=${encodeURIComponent(text)}`, 'phone') : null,
-        canShare ? button('Partager', () => navigator.share({ text }).catch(() => {}), { variant: 'secondary', iconName: 'share' }) : null,
-        button('Copier', () => navigator.clipboard?.writeText(text).then(() => toast('Message copié.'), () => toast('Copie impossible.', 'error')), { variant: 'secondary', iconName: 'edit' }),
-      ]),
-    ),
+    h('div', { class: 'notice-share' }, buttonRow([button('Partager', share, { variant: 'secondary', iconName: 'share' })])),
   ], { okLabel: 'Terminé', level: 'good', iconName: 'check' });
 }

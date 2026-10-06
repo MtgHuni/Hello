@@ -1011,7 +1011,7 @@ dialog.action-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; 
 .notice.wide > .card { margin-top: 16px; text-align: left; }
 .notice.wide .card-header p { color: color-mix(in oklab, var(--on-solid) 78%, var(--solid)); font-size: 14px; margin-top: 3px; }
 .notice-share { margin-top: 18px; }
-.notice-share .btn-row { margin: 0; }
+.notice-share .btn-row { display: grid; width: 100%; margin: 0; }
 .notice .notice-foot { margin-top: 12px; font-size: 14px; color: var(--text-3); }
 
 .action-sheet {
