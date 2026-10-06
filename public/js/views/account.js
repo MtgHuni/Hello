@@ -12,7 +12,7 @@ function stationPhone(phone) {
   const tel = phone.replace(/[^\d+]/g, '');
   const wa = whatsappNumber(phone);
   const link = (label, href, iconName, external) =>
-    h('a', { class: 'btn secondary', href, 'aria-label': label, title: label, ...(external ? { target: '_blank', rel: 'noopener' } : {}) }, icon(iconName));
+    h('a', { href, 'aria-label': label, title: label, ...(external ? { target: '_blank', rel: 'noopener' } : {}) }, icon(iconName));
   return h(
     'footer',
     { class: 'client-contact' },
