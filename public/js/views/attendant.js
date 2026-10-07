@@ -900,18 +900,6 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
         }),
       ),
     ) : meterInputs,
-    showMoney ? card(
-      cardHeader(correcting ? '2. Caisse' : 'Argent', null),
-      h('div', { class: 'summary-line', style: 'margin-bottom:12px' }, h('span', {}, 'Mobile money reçu'), h('span', { class: 'num' }, fmt.money(momo))),
-      h(
-        'div',
-        { class: 'form-grid' },
-        field({ name: 'changeLeft', label: 'Monnaie laissée aux pompistes ($)', type: 'number', step: '0.01', min: '0', value: first(shift.change_left, received || undefined), onInput: recompute }),
-        field({ name: 'cash', label: 'Espèces remises ($)', type: 'number', step: '0.01', min: '0', required: true, value: first(shift.cash, undefined), onInput: recompute }),
-        field({ name: 'notes', label: 'Remarque (facultatif)', type: 'textarea', full: true, value: first(shift.notes, undefined) }),
-      ),
-    ) : null,
-    correcting ? card(field({ name: 'reason', label: 'Motif de la correction', required: true, full: true, placeholder: 'Ex. : index mal lu, billets oubliés' })) : null,
     card(
       cardHeader('Rapprochement'),
       received ? h('div', { class: 'summary-line' }, h('span', {}, 'Monnaie reçue à l’ouverture'), h('span', { class: 'num' }, `+ ${fmt.money(received)}`)) : null,
@@ -932,6 +920,18 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
           ]
         : null,
     ),
+    showMoney ? card(
+      cardHeader(correcting ? '2. Caisse' : 'Argent', null),
+      h('div', { class: 'summary-line', style: 'margin-bottom:12px' }, h('span', {}, 'Mobile money reçu'), h('span', { class: 'num' }, fmt.money(momo))),
+      h(
+        'div',
+        { class: 'form-grid' },
+        field({ name: 'changeLeft', label: 'Monnaie laissée aux pompistes ($)', type: 'number', step: '0.01', min: '0', value: first(shift.change_left, received || undefined), onInput: recompute }),
+        field({ name: 'cash', label: 'Espèces remises ($)', type: 'number', step: '0.01', min: '0', required: true, value: first(shift.cash, undefined), onInput: recompute }),
+        field({ name: 'notes', label: 'Remarque (facultatif)', type: 'textarea', full: true, value: first(shift.notes, undefined) }),
+      ),
+    ) : null,
+    correcting ? card(field({ name: 'reason', label: 'Motif de la correction', required: true, full: true, placeholder: 'Ex. : index mal lu, billets oubliés' })) : null,
     h(
       'div',
       { class: 'grid grid-2' },
