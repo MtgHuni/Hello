@@ -1588,3 +1588,32 @@ test('demander à l’appli : Claude lit la base en lecture seule, sans les secr
     await gerant('PUT', '/api/settings', { askMonthLimit: 50 });
   }
 });
+
+test('abonné : un prix propre par carburant, pour ses crédits, ses demandes et son espace', async () => {
+  const shift = (await gerant('GET', '/api/shifts/current')).data;
+  await pompiste('POST', `/api/shifts/${shift.id}/join`, {});
+  const reading = shift.readings[0];
+  const sub = (await gerant('POST', '/api/customers', { type: 'account', name: 'Kahindo Transport', phone: '0970333444' })).data;
+  const person = (await gerant('POST', '/api/customers', { type: 'individual', name: 'Particulier Prix' })).data;
+  assert.strictEqual((await gerant('PUT', `/api/customers/${person.id}/prices`, { prices: { [reading.product_id]: 1 } })).data.code, 'not_subscriber');
+  const set = await gerant('PUT', `/api/customers/${sub.id}/prices`, { prices: { [reading.product_id]: 1.2345 } });
+  assert.strictEqual(set.status, 200, JSON.stringify(set.data));
+  const mine = set.data.prices.find((p) => p.product_id === reading.product_id);
+  assert.deepStrictEqual([mine.price, mine.own], [1.235, true]);
+  // The credit at the pump: their price, not the subscribers' one.
+  const sale = await pompiste('POST', `/api/shifts/${shift.id}/sales`, { customerId: sub.id, productId: reading.product_id, liters: 10, payment: 'credit', clientRef: `prix-${sub.id}` });
+  assert.strictEqual(sale.status, 201, JSON.stringify(sale.data));
+  assert.deepStrictEqual([sale.data.unit_price, sale.data.amount], [1.235, 12.35]);
+  // The attendant's list and the record carry it; the journal keeps the change.
+  assert.strictEqual((await pompiste('GET', '/api/customers?form=1')).data.find((c) => c.id === sub.id).prices[reading.product_id], 1.235);
+  assert.ok((await gerant('GET', `/api/customers/${sub.id}`)).data.prices.some((p) => p.own && p.price === 1.235));
+  assert.ok(db.prepare("SELECT 1 FROM audit_log WHERE action = 'customer_prices'").get());
+  // Back to the subscribers' price.
+  const back = await gerant('PUT', `/api/customers/${sub.id}/prices`, { prices: { [reading.product_id]: '' } });
+  assert.strictEqual(back.data.prices.find((p) => p.product_id === reading.product_id).own, false);
+  // Merged into another record: the price goes with it.
+  await gerant('PUT', `/api/customers/${sub.id}/prices`, { prices: { [reading.product_id]: 1.5 } });
+  const twin = (await gerant('POST', '/api/customers', { type: 'account', name: 'Kahindo Transport Sarl' })).data;
+  assert.strictEqual((await gerant('POST', `/api/customers/${sub.id}/merge`, { into: twin.id })).status, 200);
+  assert.strictEqual((await gerant('GET', `/api/customers/${twin.id}`)).data.prices.find((p) => p.product_id === reading.product_id).price, 1.5);
+});

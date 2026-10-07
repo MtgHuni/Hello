@@ -148,7 +148,7 @@ export async function renderAccount(page, ctx) {
     if (!canCredit && !canCombo) {
       return noticeDialog('Pas de nouveau crédit', h('p', {}, 'Vous devez encore ', h('strong', {}, fmt.money(c.balance)), '. Réglez ce crédit à la station : vous pourrez ensuite préparer un nouvel achat à crédit.'));
     }
-    const priceOf = (p) => (c.type === 'account' ? p.subscriber_price : p.price);
+    const priceOf = (p) => acc.prices?.find((x) => x.product_id === p.id)?.price ?? (c.type === 'account' ? p.subscriber_price : p.price);
     const estimate = h('div', { class: 'summary-line total' }, h('span', {}, 'Estimation'), h('span', {}, '—'));
     const update = (e) => {
       const form = e.target.form;
@@ -192,10 +192,8 @@ export async function renderAccount(page, ctx) {
   }
 
   await loadStatement();
-  // Les prix du jour, au tarif du client (abonné ou particulier).
-  const products = (await api.get('/products').catch(() => [])).filter((p) => p.active);
-  const subscriber = acc.customer.type === 'account';
-  const totem = priceTotem(products.map((p) => ({ id: p.id, name: p.name, price: subscriber ? p.subscriber_price : p.price })));
+  // Les prix du jour, au tarif du client : son prix à lui pour un abonné qui en a un.
+  const totem = priceTotem((acc.prices || []).map((p) => ({ id: p.product_id, name: p.name, price: p.price })));
   setContent(page, pageHeader(acc.customer.name), totem, fillHost, combosHost, statementHost, stationPhone(ctx?.state?.settings?.stationPhone));
   await refreshRequest();
 }

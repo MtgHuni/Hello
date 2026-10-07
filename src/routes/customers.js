@@ -6,6 +6,7 @@ const { emailParam } = require('./mail');
 const { statementPdf } = require('../statementReport');
 const { getSettings, syncCreditLimits } = require('../db');
 const { balanceSql, refreshCustomer, subscriberDues, creditAllocation, unpaidCredits } = require('../loyalty');
+const { customerPriceList, price3 } = require('../prices');
 
 const manager = requireRole('manager');
 const frNum = (n, digits = 2) => n.toLocaleString('fr-FR', { maximumFractionDigits: digits });
@@ -126,6 +127,7 @@ function customerRoutes(db, { mailer } = {}) {
     const settings = getSettings(db);
     return {
       customer,
+      prices: customerPriceList(db, customer), // what they pay per fuel, their own price for a subscriber
       balance: customerBalance(db, customer.id), // today, whatever the period shown
       dues: customer.type === 'account' ? subscriberDues(db, customer.id, settings.subscriberGraceDays) : null,
       combos: {
@@ -151,6 +153,9 @@ function customerRoutes(db, { mailer } = {}) {
     const rows = db.prepare(`${listSql} ORDER BY c.name COLLATE NOCASE`).all();
     if (req.user.role === 'attendant' || req.query.form === '1') {
       const graceDays = getSettings(db).subscriberGraceDays;
+      // Subscribers' own prices, by fuel: the credit form shows the amount they will pay.
+      const own = new Map();
+      for (const r of db.prepare('SELECT customer_id, product_id, price FROM customer_prices').all()) own.set(r.customer_id, { ...own.get(r.customer_id), [r.product_id]: r.price });
       // Attendants only need what the sale form shows.
       return res.json(
         rows
@@ -164,6 +169,7 @@ function customerRoutes(db, { mailer } = {}) {
             points: c.loyalty_points,
             balance: c.balance,
             late: c.type === 'account' && c.balance > 0 ? subscriberDues(db, c.id, graceDays).late : false,
+            prices: c.type === 'account' ? own.get(c.id) || null : null,
           })),
       );
     }
@@ -305,6 +311,31 @@ function customerRoutes(db, { mailer } = {}) {
     res.json({ ...c, balance: round(credits.reduce((t, x) => t + x.unpaid, 0)), credits });
   });
 
+  // A subscriber's own prices: { prices: { <productId>: price, or empty for the subscribers' price } }.
+  router.put('/customers/:id/prices', manager, (req, res) => {
+    const c = db.prepare('SELECT id, name, type FROM customers WHERE id = ?').get(req.params.id);
+    if (!c) fail(404, 'Client introuvable.');
+    if (c.type !== 'account') fail(409, 'Un prix propre se donne seulement à un abonné.', 'not_subscriber');
+    const given = req.body?.prices && typeof req.body.prices === 'object' ? req.body.prices : {};
+    const before = customerPriceList(db, c);
+    const show = (list) => list.map((p) => `${p.name} ${price3(p.price)}${p.own ? '' : ' (prix abonnés)'}`).join(', ');
+    transaction(db, () => {
+      for (const p of before) {
+        if (!Object.hasOwn(given, String(p.product_id))) continue;
+        const v = given[p.product_id];
+        if (v == null || v === '') db.prepare('DELETE FROM customer_prices WHERE customer_id = ? AND product_id = ?').run(c.id, p.product_id);
+        else
+          db.prepare(
+            `INSERT INTO customer_prices (customer_id, product_id, price, user_id) VALUES (?, ?, ?, ?)
+             ON CONFLICT (customer_id, product_id) DO UPDATE SET price = excluded.price, user_id = excluded.user_id, updated_at = datetime('now')`,
+          ).run(c.id, p.product_id, Math.round(num(v, `Le prix ${p.name}`, { min: 0.001, max: 1000 }) * 1000) / 1000, req.user.id);
+      }
+      const after = customerPriceList(db, c);
+      audit(db, req, { category: 'clients', action: 'customer_prices', entity: 'customers', id: c.id, summary: `Prix de ${c.name} : ${show(after)} $/L`, before, after });
+    });
+    res.json({ prices: customerPriceList(db, c) });
+  });
+
   router.get('/customers/:id', manager, (req, res) => {
     res.json(account(Number(req.params.id), dateParam(req.query.from, 'La date de début'), dateParam(req.query.to, 'La date de fin')));
   });
@@ -352,6 +383,7 @@ function customerRoutes(db, { mailer } = {}) {
     if (c.operations || c.login) fail(409, 'Ce client a des opérations : choisissez à qui les transférer.', 'has_operations');
     transaction(db, () => {
       db.prepare('DELETE FROM customer_mail_prefs WHERE customer_id = ?').run(c.id);
+      db.prepare('DELETE FROM customer_prices WHERE customer_id = ?').run(c.id);
       db.prepare('DELETE FROM mail_tokens WHERE customer_id = ?').run(c.id);
       db.prepare('UPDATE mail_log SET customer_id = NULL WHERE customer_id = ?').run(c.id);
       db.prepare('DELETE FROM customers WHERE id = ?').run(c.id);
@@ -369,6 +401,9 @@ function customerRoutes(db, { mailer } = {}) {
     transaction(db, () => {
       for (const t of [...OPERATIONS, 'mail_log', 'users']) db.prepare(`UPDATE ${t} SET customer_id = ? WHERE customer_id = ?`).run(into.id, from.id);
       db.prepare('DELETE FROM customer_mail_prefs WHERE customer_id = ?').run(from.id);
+      // Own prices: those the right record lacks come from the one removed.
+      db.prepare('INSERT OR IGNORE INTO customer_prices (customer_id, product_id, price, user_id, updated_at) SELECT ?, product_id, price, user_id, updated_at FROM customer_prices WHERE customer_id = ?').run(into.id, from.id);
+      db.prepare('DELETE FROM customer_prices WHERE customer_id = ?').run(from.id);
       db.prepare('DELETE FROM mail_tokens WHERE customer_id = ?').run(from.id);
       // What the right record lacks is taken from the one removed.
       const empty = (v) => v == null || v === '';

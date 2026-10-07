@@ -298,9 +298,10 @@ function renderOpenShift(page, ctx, shift, remarks = null) {
 function requestQueue(shift, reload, tol) {
   const list = h('div', { class: 'stack', style: 'gap:10px' });
   const host = h('div', { class: 'stack', style: 'gap:10px' }, list);
-  const priceOf = (productId, type) => {
-    const r = shift.readings.find((x) => x.product_id === productId);
-    return type === 'account' ? r?.subscriber_price ?? r?.unit_price : r?.unit_price;
+  // A request's price: the subscriber's own, else the shift's (subscriber price for a subscriber).
+  const priceOf = (q) => {
+    const r = shift.readings.find((x) => x.product_id === q.product_id);
+    return q.own_price ?? (q.customer_type === 'account' ? r?.subscriber_price ?? r?.unit_price : r?.unit_price);
   };
   let known = null;
   let seenConnected = false;
@@ -328,7 +329,7 @@ function requestQueue(shift, reload, tol) {
       title: `Ajuster — ${r.customer_name}`,
       submitLabel: 'Confirmer la vente',
       grid: false,
-      fields: [{ name: 'liters', label: 'Litres servis', type: 'number', step: '0.01', min: '0.01', required: true, value: r.liters ?? (r.amount && priceOf(r.product_id, r.customer_type) ? Math.round((r.amount / priceOf(r.product_id, r.customer_type)) * 100) / 100 : '') }],
+      fields: [{ name: 'liters', label: 'Litres servis', type: 'number', step: '0.01', min: '0.01', required: true, value: r.liters ?? (r.amount && priceOf(r) ? Math.round((r.amount / priceOf(r)) * 100) / 100 : '') }],
       onSubmit: (d) => confirmRequest(r, { liters: d.liters }),
     });
   }
@@ -345,7 +346,7 @@ function requestQueue(shift, reload, tol) {
     setContent(list, 
       h('h2', { class: 'queue-title' }, h('span', { class: 'pulse', 'aria-hidden': 'true' }), `Demandes des clients (${rows.length})`),
       ...rows.map((r) => {
-        const price = priceOf(r.product_id, r.customer_type) ?? r.current_price;
+        const price = priceOf(r) ?? r.current_price;
         const liters = r.liters ?? r.amount / price;
         const amount = r.amount ?? r.liters * price;
         // An individual with an unpaid credit: the request cannot become a credit.
@@ -531,10 +532,10 @@ export async function addCredit(ctx, shift, reload) {
   const customers = await customersList();
   const clientRef = newRef();
   const products = [...new Map(shift.readings.map((r) => [r.product_id, r])).values()];
-  // Subscribers pay the subscriber price fixed at shift opening.
+  // Subscribers pay their own price when they have one, else the subscriber price fixed at shift opening.
   const priceOf = (productId, c) => {
     const r = products.find((x) => x.product_id === Number(productId));
-    return (c?.type === 'account' ? r?.subscriber_price ?? r?.unit_price : r?.unit_price) || 0;
+    return (c?.type === 'account' ? c.prices?.[productId] ?? r?.subscriber_price ?? r?.unit_price : r?.unit_price) || 0;
   };
   const { combosPerLiter, comboValue, comboThreshold } = ctx.state.settings;
 

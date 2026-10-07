@@ -391,6 +391,15 @@ CREATE TABLE IF NOT EXISTS meter_photos (
   created_at       TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_meter_photos_created ON meter_photos(created_at);
+-- A subscriber's own price per fuel, agreed with the station (none: the subscribers' price).
+CREATE TABLE IF NOT EXISTS customer_prices (
+  customer_id INTEGER NOT NULL REFERENCES customers(id),
+  product_id  INTEGER NOT NULL REFERENCES products(id),
+  price       REAL NOT NULL CHECK (price > 0),
+  user_id     INTEGER REFERENCES users(id),
+  updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (customer_id, product_id)
+);
 -- « Demander à l'appli »: each question to Claude, its answer and the tokens spent (the month's limit).
 CREATE TABLE IF NOT EXISTS ai_questions (
   id            INTEGER PRIMARY KEY,

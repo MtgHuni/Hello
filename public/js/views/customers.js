@@ -299,6 +299,7 @@ export async function renderCustomerDetail(page, ctx) {
             edit(button('Compléter la fiche', () => customerDialog(c, ctx, reload), { iconName: 'edit' })),
           )
         : null,
+      priceCard(acc, reload),
       statement(
         acc,
         period,
@@ -311,6 +312,39 @@ export async function renderCustomerDetail(page, ctx) {
     );
   };
   await load();
+}
+
+// A subscriber's prices: their own, agreed with the station, or the subscribers' price (shown in their space).
+function priceCard(acc, reload) {
+  const c = acc.customer;
+  if (c.type !== 'account') return null;
+  return h(
+    'section',
+    { class: 'card section' },
+    cardHeader('Prix', null, edit(button('Modifier', () => pricesDialog(acc, reload), { variant: 'ghost' }))),
+    acc.prices.map((p) =>
+      h(
+        'div',
+        { class: 'summary-line' },
+        h('span', {}, p.name, p.own ? null : h('span', { class: 'muted small' }, ' · prix abonnés')),
+        h(p.own ? 'strong' : 'span', {}, fmt.price(p.price)),
+      ),
+    ),
+  );
+}
+
+async function pricesDialog(acc, reload) {
+  const c = acc.customer;
+  const ok = await formDialog({
+    title: `Prix — ${c.name}`,
+    grid: false,
+    fields: acc.prices.map((p) => ({ name: `p${p.product_id}`, label: `${p.name} ($/L)`, type: 'number', step: '0.001', min: '0.001', value: p.own ? p.price : '', hint: `Prix abonnés : ${fmt.price(p.base)}` })),
+    onSubmit: (d) => api.put(`/customers/${c.id}/prices`, { prices: Object.fromEntries(acc.prices.map((p) => [p.product_id, d[`p${p.product_id}`]])) }),
+  });
+  if (ok) {
+    toast('Prix enregistrés');
+    reload();
+  }
 }
 
 export function defaultPeriod() {

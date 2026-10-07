@@ -159,21 +159,23 @@ function createMailJobs(db, mailer) {
       const c = customerFor(id, 'prix');
       if (!c) continue;
       const sub = c.type === 'account';
+      // A subscriber's own price stays as agreed: only the prices they pay that moved count.
+      const own = new Map(sub ? db.prepare('SELECT product_id, price FROM customer_prices WHERE customer_id = ?').all(id).map((r) => [r.product_id, r.price]) : []);
+      const lines = products.map((p) => {
+        const old = changed.get(p.id);
+        const now = own.get(p.id) ?? (sub ? p.subscriber_price : p.price);
+        const was = own.has(p.id) || !old ? null : sub ? old.subscriber_price ?? old.price : old.price;
+        return { p, now, was, moved: !own.has(p.id) && changed.has(p.id) && (was == null || Math.abs(was - now) > 1e-9) };
+      });
+      if (!lines.some((l) => l.moved)) continue;
       toCustomer(c, 'prix', {
         subject: `Nouveaux prix à ${stationName()}`,
         eyebrow: 'Prix à la pompe',
         title: 'Nouveaux prix',
-        preheader: products.map((p) => `${p.name} ${fmt.price(sub ? p.subscriber_price : p.price)} $/L`).join(' · '),
+        preheader: lines.map((l) => `${l.p.name} ${fmt.price(l.now)} $/L`).join(' · '),
         blocks: [
           { p: `Bonjour ${firstName(c.name)}, voici ${sub ? 'vos prix d’abonné' : 'les prix'} à partir d’aujourd’hui.` },
-          {
-            rows: products.map((p) => {
-              const old = changed.get(p.id);
-              const was = old ? (sub ? old.subscriber_price ?? old.price : old.price) : null;
-              const now = sub ? p.subscriber_price : p.price;
-              return [p.name, `${fmt.price(now)} $/L${was != null && Math.abs(was - now) > 1e-9 ? ` (avant ${fmt.price(was)})` : ''}`, { bold: true }];
-            }),
-          },
+          { rows: lines.map((l) => [l.p.name, `${fmt.price(l.now)} $/L${l.was != null && Math.abs(l.was - l.now) > 1e-9 ? ` (avant ${fmt.price(l.was)})` : ''}`, { bold: true }]) },
         ],
       });
     }

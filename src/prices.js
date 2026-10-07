@@ -31,4 +31,25 @@ function applyScheduledPrices(db) {
   return due.length;
 }
 
-module.exports = { applyScheduledPrices, price3 };
+// A subscriber's own price for a fuel (customer_prices), or null: they pay the subscribers' price.
+function ownPrice(db, customer, productId) {
+  if (customer?.type !== 'account') return null;
+  return db.prepare('SELECT price FROM customer_prices WHERE customer_id = ? AND product_id = ?').get(customer.id, productId)?.price ?? null;
+}
+
+// What a customer pays now for each fuel on sale: a subscriber their own price, else the
+// subscribers' price; a particulier the pump price. `base`: the price without their own.
+function customerPriceList(db, customer) {
+  const subscriber = customer.type === 'account';
+  const own = new Map(db.prepare('SELECT product_id, price FROM customer_prices WHERE customer_id = ?').all(customer.id).map((r) => [r.product_id, r.price]));
+  return db
+    .prepare('SELECT id, name, price, COALESCE(subscriber_price, price) AS subscriber_price FROM products WHERE active = 1 ORDER BY id')
+    .all()
+    .map((p) => {
+      const base = subscriber ? p.subscriber_price : p.price;
+      const mine = subscriber ? own.get(p.id) : undefined;
+      return { product_id: p.id, name: p.name, base, price: mine ?? base, own: mine != null };
+    });
+}
+
+module.exports = { applyScheduledPrices, price3, ownPrice, customerPriceList };

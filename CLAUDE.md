@@ -36,7 +36,7 @@ Requires Node ≥ 22.13 (built-in `node:sqlite`, hence `--disable-warning=Experi
 
 **Core business logic** (shared by several routes):
 - `src/sales.js` `createSale(db, shift, input)`: the only way a sale is created. It is used both by the attendant's sale form and by the confirmation of a customer purchase request (`afterInsert` marks the request confirmed in the same transaction). It handles:
-  - subscriber price;
+  - subscriber price: a subscriber's own price per fuel when set (`customer_prices`, `ownPrice()` in `src/prices.js`; `PUT /customers/:id/prices`, manager, journalled `customer_prices`; « Prix » card on the record), else the shift's frozen subscriber price. `customerPriceList()` gives what a customer pays per fuel (`account().prices`: the record and the client space's totem and fill form); the attendant's customer list carries `prices`, the requests `own_price`; the price mail shows their own price and skips them when nothing they pay moved; merge and delete handle the table;
   - $ ↔ litres conversion at the shift's frozen price;
   - payment `paid` | `credit` | `combo`;
   - one credit at a time for an individual (`has_credit`, never overridden) and the late-subscriber check (`grantCredit` overrides it and sets `over_limit`, shown « crédit malgré le retard »).
