@@ -45,6 +45,16 @@ export function photoButton({ label, onImage, className = 'btn secondary meter-p
   return btn;
 }
 
+// The photo of a meter in a report: opens the picture (kept a week).
+export function meterPhotoLink(id) {
+  if (!id) return null;
+  return h(
+    'a',
+    { class: 'photo-link', href: `/api/meter-photos/${id}`, target: '_blank', rel: 'noopener', 'aria-label': 'Photo du compteur' },
+    h('span', { class: 'png-icon png-camera', 'aria-hidden': 'true' }),
+  );
+}
+
 // A field with the camera beside it.
 export function withPhoto(fieldEl, { label, onImage }) {
   if (!photosOn()) return fieldEl;
@@ -52,13 +62,15 @@ export function withPhoto(fieldEl, { label, onImage }) {
 }
 
 // A meter index field: the figure read lands in the field, for the attendant to check before saving.
-export function withMeterPhoto(fieldEl, { product, last } = {}) {
+// With the nozzle, the photo is kept a week and goes with the relief or closing (input.dataset.photoId).
+export function withMeterPhoto(fieldEl, { product, last, nozzleId } = {}) {
   const input = fieldEl.querySelector('input');
   return withPhoto(fieldEl, {
     label: `Photo du compteur${product ? ` ${product}` : ''}`,
     onImage: async (image) => {
-      const { index, suspect } = await api.post('/meters/read', { image, mediaType: 'image/jpeg', product, last }, { timeout: 30000 });
+      const { index, suspect, photoId } = await api.post('/meters/read', { image, mediaType: 'image/jpeg', product, last, nozzleId }, { timeout: 30000 });
       input.value = String(index);
+      if (photoId) input.dataset.photoId = String(photoId);
       input.dispatchEvent(new Event('input', { bubbles: true }));
       input.focus();
       if (suspect) toast(`À vérifier : ${fmt.number(index)}, dernier relevé ${fmt.number(last)}`, 'error');

@@ -1,7 +1,7 @@
 import { api } from '../api.js';
 import { h, fmt, pageHeader, card, cardHeader, button, toast, field, productColor, varianceCell, setContent, confirmDialog } from '../ui.js';
 import { renderAttendant } from './attendant.js';
-import { withMeterPhoto } from '../photo.js';
+import { withMeterPhoto, meterPhotoLink } from '../photo.js';
 
 // One shift runs from one 15:30 closing to the next, across the night. Inside it, checkpoints:
 // a relief (the attendant hands over, money to the next one), the evening closing (19:00, the
@@ -41,7 +41,7 @@ export function reportCard(r, tol, { title, preview = false } = {}) {
       h(
         'div',
         { class: 'summary-line' },
-        h('span', {}, h('span', { class: 'swatch', style: `background:${productColor(n.product_id)}` }), n.name, h('div', { class: 'muted small' }, `Index ${fmt.number(n.from)} → ${fmt.number(n.to)}`)),
+        h('span', {}, h('span', { class: 'swatch', style: `background:${productColor(n.product_id)}` }), n.name, h('div', { class: 'muted small' }, `Index ${fmt.number(n.from)} → ${fmt.number(n.to)}`, meterPhotoLink(n.photo_id))),
         h('span', { class: 'num nowrap' }, fmt.liters(n.liters)),
       ),
     ),
@@ -103,7 +103,7 @@ export function renderCheckpoint(page, ctx, shift, kind, { report } = {}) {
   let timer;
 
   const form = h('form', { class: 'stack' });
-  const readings = () => shift.readings.map((r) => ({ nozzleId: r.nozzle_id, meter: form.elements[`m_${r.nozzle_id}`].value }));
+  const readings = () => shift.readings.map((r) => ({ nozzleId: r.nozzle_id, meter: form.elements[`m_${r.nozzle_id}`].value, photoId: form.elements[`m_${r.nozzle_id}`].dataset.photoId }));
   const refresh = () => {
     clearTimeout(timer);
     timer = setTimeout(async () => {
@@ -136,7 +136,7 @@ export function renderCheckpoint(page, ctx, shift, kind, { report } = {}) {
             min: String(lastMeter(r)),
             required: true,
             onInput: refresh,
-          }), { product: r.product_name, last: lastMeter(r) }),
+          }), { product: r.product_name, last: lastMeter(r), nozzleId: r.nozzle_id }),
         ),
       ),
     ),

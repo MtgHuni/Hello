@@ -19,7 +19,7 @@ const plateKey = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 
 // Photos read by Claude: a meter's index, a page of the old debts notebook, a car's plate.
 // Nothing is saved from a photo: what was read fills a form, which is checked before saving.
-function aiRoutes(db) {
+function aiRoutes(db, { photos } = {}) {
   const router = express.Router();
   const ready = () => {
     if (!aiEnabled()) fail(409, 'La lecture des photos n’est pas disponible.', 'no_reader');
@@ -31,6 +31,7 @@ function aiRoutes(db) {
     const image = imageParam(req.body);
     const product = str(req.body?.product, 'Le produit', { required: false, max: 60 });
     const last = req.body?.last == null || req.body.last === '' ? null : num(req.body.last, 'Le dernier index', { max: 1e12 });
+    const nozzleId = req.body?.nozzleId ? Number(req.body.nozzleId) : null;
     let read;
     try {
       read = await reader.readMeter({ image, product, last });
@@ -39,7 +40,17 @@ function aiRoutes(db) {
       fail(422, 'Lecture impossible : tapez l’index.', 'reader_failed');
     }
     if (!read) fail(422, 'Index illisible : reprenez la photo ou tapez-le.', 'unreadable');
-    res.json(read);
+    // Kept a week as the proof of the index, linked to the relief or closing the form sends it with.
+    const shiftId = db.prepare("SELECT id FROM shifts WHERE status = 'open'").get()?.id;
+    const photoId = photos && nozzleId ? photos.save({ base64: image.source.data, shiftId, nozzleId, index: read.index, userId: req.user.id }) : null;
+    res.json({ ...read, photoId });
+  });
+
+  router.get('/meter-photos/:id', staff, (req, res) => {
+    const file = photos?.read(Number(req.params.id));
+    if (!file) fail(404, 'Photo effacée : les photos sont gardées une semaine.');
+    res.setHeader('Cache-Control', 'private, max-age=604800');
+    res.type('image/jpeg').sendFile(file);
   });
 
   // ---------- Car plate → the customer ----------

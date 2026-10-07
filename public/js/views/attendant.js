@@ -916,7 +916,7 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
             {},
             withMeterPhoto(
               field({ name: `end_${r.nozzle_id}`, label: `${r.product_name} (début : ${fmt.number(r.start_meter)}${lastTaken(r) !== r.start_meter ? `, dernier relevé : ${fmt.number(lastTaken(r))}` : ''})`, type: 'number', step: '0.01', min: String(lastTaken(r)), required: true, value: first(r.end_meter, undefined), onInput: recompute }),
-              { product: r.product_name, last: lastTaken(r) },
+              { product: r.product_name, last: lastTaken(r), nozzleId: r.nozzle_id },
             ),
             out,
           );
@@ -998,7 +998,9 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
     try {
       const money = showMoney ? { cash: Number(form.elements.cash.value), changeLeft: Number(form.elements.changeLeft.value) || 0, notes: form.elements.notes.value } : {};
       const closed = await api.post(`/shifts/${shift.id}/${correcting ? 'correct' : counting ? 'count' : 'close'}`, {
-        ...(counting ? {} : { readings: shift.readings.map((r) => ({ nozzleId: r.nozzle_id, endMeter: Number(form.elements[`end_${r.nozzle_id}`].value) })) }),
+        ...(counting
+          ? {}
+          : { readings: shift.readings.map((r) => ({ nozzleId: r.nozzle_id, endMeter: Number(form.elements[`end_${r.nozzle_id}`].value), photoId: form.elements[`end_${r.nozzle_id}`].dataset.photoId })) }),
         ...money,
         reason: form.elements.reason?.value,
       });

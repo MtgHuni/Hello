@@ -376,6 +376,21 @@ CREATE TABLE IF NOT EXISTS mail_prefs (
   kind    TEXT NOT NULL,
   PRIMARY KEY (user_id, kind)
 );
+-- Meter photos read by Claude: the image file next to the database (photos/), kept a week as the
+-- proof of an index, then deleted with its row (src/photoStore.js). Linked to the checkpoint or the
+-- closing whose form sent it.
+CREATE TABLE IF NOT EXISTS meter_photos (
+  id               INTEGER PRIMARY KEY,
+  file             TEXT NOT NULL,
+  shift_id         INTEGER REFERENCES shifts(id),
+  nozzle_id        INTEGER REFERENCES nozzles(id),
+  read_index       REAL,
+  checkpoint_id    INTEGER REFERENCES shift_checkpoints(id),
+  closing_shift_id INTEGER REFERENCES shifts(id),
+  user_id          INTEGER REFERENCES users(id),
+  created_at       TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_meter_photos_created ON meter_photos(created_at);
 CREATE TABLE IF NOT EXISTS customer_mail_prefs (
   customer_id INTEGER NOT NULL REFERENCES customers(id),
   kind        TEXT NOT NULL,
@@ -581,6 +596,7 @@ const DEFAULT_SETTINGS = {
   subscriber_grace_days: '5', // days after month end for subscribers to pay
   closing_time: '15:30', // the manager closes the shift every day at this time
   station_phone: '+243974105000', // shown at the bottom of the client space
+  shift_transport: '0', // dollars: an expense « Transport » added to every shift when it opens (0: none)
 };
 
 // Rebuilds the sales table when its kind constraint is from an older release
@@ -773,6 +789,7 @@ function getSettings(db) {
     subscriberGraceDays: Number(s.subscriber_grace_days),
     closingTime: s.closing_time,
     stationPhone: s.station_phone || '',
+    shiftTransport: Number(s.shift_transport || 0),
     expenseCategories: EXPENSE_CATEGORIES,
   };
 }

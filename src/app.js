@@ -6,6 +6,7 @@ const { HttpError } = require('./util');
 const { checkStorage, storageOf } = require('./storage');
 const { createMail } = require('./mail');
 const { createMailer } = require('./mailer');
+const { createPhotoStore } = require('./photoStore');
 const { createMailJobs } = require('./mailJobs');
 
 // Everything the app loads comes from its own origin (fonts and film are self-hosted).
@@ -23,6 +24,7 @@ function createApp({ dbFile }) {
   const db = openDb(dbFile);
   checkStorage(dbFile);
   const mailer = createMailer(db, createMail(db));
+  const photos = createPhotoStore(db, dbFile);
   const app = express();
 
   app.set('trust proxy', 1);
@@ -74,7 +76,7 @@ function createApp({ dbFile }) {
   });
   const routers = {};
   for (const routes of ['auth', 'mail', 'config', 'stock', 'shifts', 'customers', 'requests', 'expenses', 'users', 'reports', 'admin', 'cashbook', 'ai']) {
-    routers[routes] = require(`./routes/${routes}`)(db, { mailer });
+    routers[routes] = require(`./routes/${routes}`)(db, { mailer, photos });
     api.use(routers[routes]);
   }
   // The PDFs and alerts the mails carry come from the routes that build them for the screens.
@@ -85,7 +87,9 @@ function createApp({ dbFile }) {
     salesReport: routers.reports.salesReport,
     stationAlerts: routers.reports.stationAlerts,
     customerStatement: routers.customers.customerStatement,
+    cleanPhotos: photos.cleanup,
   });
+  app.locals.photos = photos;
   app.locals.mailer = mailer;
   app.locals.mailJobs = createMailJobs(db, mailer);
   api.use((req, res) => res.status(404).json({ error: 'Route inconnue.' }));

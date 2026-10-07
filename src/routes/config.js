@@ -1,11 +1,12 @@
 const express = require('express');
 const { getSettings, syncCreditLimits } = require('../db');
-const { fail, num, str, bool, transaction } = require('../util');
+const { fail, num, str, bool, round, transaction } = require('../util');
 const { attendantNamesSql } = require('../checkpoints');
 const { requireRole, requireAdmin } = require('../auth');
 const { audit } = require('../audit');
 const { applyScheduledPrices } = require('../prices');
 const { withLiveStock } = require('../liveStock');
+const { addShiftTransport } = require('../transport');
 
 const price3 = (n) => Number(n).toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 
@@ -21,6 +22,7 @@ const SETTING_LABELS = {
   subscriber_grace_days: 'délai des abonnés',
   closing_time: 'heure de clôture',
   station_phone: 'téléphone de la station',
+  shift_transport: 'transport par poste',
 };
 
 const manager = requireRole('manager');
@@ -53,6 +55,7 @@ module.exports = function configRoutes(db) {
       combo_value: pick(b.comboValue, cur.comboValue, "La valeur d'un combo", { min: 0.0001, max: 1000 }),
       combo_threshold: pick(b.comboThreshold, cur.comboThreshold, "Le seuil d'échange", { min: 1, max: 1e7, integer: true }),
       subscriber_grace_days: pick(b.subscriberGraceDays, cur.subscriberGraceDays, 'Le délai de paiement des abonnés', { min: 1, max: 28, integer: true }),
+      shift_transport: round(pick(b.shiftTransport, cur.shiftTransport, 'Le transport par poste', { max: 10000 })),
     };
     values.combos_enabled = bool(b.combosEnabled, cur.combosEnabled) ? 1 : 0;
     values.closing_time = b.closingTime === undefined ? cur.closingTime : str(b.closingTime, 'L’heure de clôture', { max: 5 });
@@ -64,6 +67,8 @@ module.exports = function configRoutes(db) {
       const stmt = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
       for (const [key, value] of Object.entries(values)) stmt.run(key, String(value));
       syncCreditLimits(db);
+      // A transport set now also goes on the shift already open (once).
+      if (changed.includes('shift_transport')) addShiftTransport(db, db.prepare("SELECT id FROM shifts WHERE status = 'open'").get()?.id);
       if (changed.length) {
         audit(db, req, {
           category: 'reglages',

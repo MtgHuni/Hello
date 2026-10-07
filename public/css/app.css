@@ -770,6 +770,9 @@ tfoot td { font-weight: 600; border-top: 1px solid var(--separator); border-bott
 /* PNG icons (pngegg.com, as the user asked) drawn in the text colour through a mask. */
 .png-icon { display: inline-block; width: 26px; height: 26px; background: currentColor; -webkit-mask: var(--png) center / contain no-repeat; mask: var(--png) center / contain no-repeat; }
 .png-camera { --png: url(/media/icon-camera.png); }
+/* The meter's photo beside an index in a report. */
+.photo-link { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 32px; margin: 0 4px; color: var(--link); vertical-align: middle; }
+.photo-link .png-icon { width: 22px; height: 22px; }
 .field .hint { padding: 0 2px; font-size: 13px; line-height: 1.38; color: var(--text-2); }
 .field-box { position: relative; display: block; }
 .field-label {

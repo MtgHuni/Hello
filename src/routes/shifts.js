@@ -13,6 +13,7 @@ const { refreshCustomer } = require('../loyalty');
 const { shiftReportPdf } = require('../shiftReport');
 const { applyScheduledPrices } = require('../prices');
 const { audit } = require('../audit');
+const { addShiftTransport } = require('../transport');
 const { momoTotal, closingCutoff, attendantNamesSql, checkpointReports, currentPeriod, lastMeters, shiftMovements, movementsTotal } = require('../checkpoints');
 
 const staff = requireRole('manager', 'attendant');
@@ -312,6 +313,7 @@ module.exports = function shiftRoutes(db) {
       'INSERT INTO shift_readings (shift_id, nozzle_id, product_id, tank_id, unit_price, subscriber_price, start_meter) VALUES (?, ?, ?, ?, ?, ?, ?)',
     );
     for (const n of nozzles) insert.run(shiftId, n.id, n.product_id, n.tank_id, n.price, n.subscriber_price, n.meter);
+    addShiftTransport(db, shiftId);
     return shiftId;
   }
 
@@ -377,10 +379,17 @@ module.exports = function shiftRoutes(db) {
     return meters;
   }
 
+  // The meter photos sent with a relief or a closing (`readings[].photoId`), linked to it.
+  function linkPhotos(shiftId, readings, column, value) {
+    const link = db.prepare(`UPDATE meter_photos SET ${column} = ? WHERE id = ? AND nozzle_id = ? AND shift_id = ?`);
+    for (const r of Array.isArray(readings) ? readings : []) if (r?.photoId) link.run(value, Number(r.photoId), Number(r.nozzleId), shiftId);
+  }
+
   const detailReadings = (shiftId) =>
     db
       .prepare(
-        `SELECT r.*, n.name AS nozzle_name, pu.name AS pump_name, p.name AS product_name
+        `SELECT r.*, n.name AS nozzle_name, pu.name AS pump_name, p.name AS product_name,
+           (SELECT MAX(m.id) FROM meter_photos m WHERE m.closing_shift_id = r.shift_id AND m.nozzle_id = r.nozzle_id) AS end_photo_id
          FROM shift_readings r JOIN nozzles n ON n.id = r.nozzle_id JOIN pumps pu ON pu.id = n.pump_id JOIN products p ON p.id = r.product_id
          WHERE r.shift_id = ? ORDER BY pu.id, n.id`,
       )
@@ -414,6 +423,7 @@ module.exports = function shiftRoutes(db) {
       );
       const insert = db.prepare('INSERT INTO checkpoint_readings (checkpoint_id, nozzle_id, meter) VALUES (?, ?, ?)');
       for (const [nozzleId, meter] of meters) insert.run(cp, nozzleId, meter);
+      linkPhotos(shift.id, req.body?.readings, 'checkpoint_id', cp);
       if (kind === 'releve') db.prepare("UPDATE shift_attendants SET left_at = datetime('now') WHERE shift_id = ? AND user_id = ? AND left_at IS NULL").run(shift.id, req.user.id);
       if (kind === 'fermeture') {
         db.prepare("UPDATE shift_attendants SET left_at = datetime('now') WHERE shift_id = ? AND left_at IS NULL").run(shift.id);
@@ -748,6 +758,7 @@ module.exports = function shiftRoutes(db) {
     const { cash, changeLeft } = counted ? moneyOf(b) : { cash: 0, changeLeft: 0 };
     const notes = b.notes === undefined ? shift.notes : str(b.notes, 'La remarque', { required: false, max: 500 });
     const ends = new Map((Array.isArray(b.readings) ? b.readings : []).map((r) => [Number(r.nozzleId), r.endMeter]));
+    linkPhotos(shift.id, b.readings, 'closing_shift_id', shift.id);
     const last = lastMeters(db, shift.id);
     {
       const readings = db

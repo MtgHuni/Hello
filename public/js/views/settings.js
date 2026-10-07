@@ -103,6 +103,7 @@ export async function renderSettings(page, ctx) {
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Tolérance d’écart de caisse'), h('span', {}, `± ${fmt.money(settings.cashTolerance)}`)),
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Tolérance d’écart de jaugeage'), h('span', {}, `± ${fmt.liters(settings.stockTolerance)}`)),
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Heure de clôture du poste'), h('span', {}, settings.closingTime || '15:30')),
+        h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Transport par poste'), h('span', {}, settings.shiftTransport > 0 ? fmt.money(settings.shiftTransport) : 'Aucun')),
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Téléphone (espace client)'), h('span', {}, settings.stationPhone || '—')),
       ),
 
@@ -163,6 +164,7 @@ async function stationDialog(s) {
       { name: 'stockTolerance', label: 'Tolérance de jaugeage (L)', type: 'number', step: '0.01', min: '0', value: s.stockTolerance, hint: 'Écart toléré entre stock théorique et mesuré' },
       { name: 'stationPhone', label: 'Téléphone de la station', type: 'tel', value: s.stationPhone, full: true, hint: 'Affiché en bas de l’espace client' },
       { name: 'closingTime', label: 'Heure de clôture du poste', type: 'time', value: s.closingTime || '15:30', required: true, hint: 'Le gérant clôture chaque jour à cette heure ; le poste suivant s’ouvre aussitôt' },
+      { name: 'shiftTransport', label: 'Transport par poste ($)', type: 'number', step: '0.01', min: '0', value: s.shiftTransport ?? 0, full: true, hint: 'Dépense « Transport » ajoutée à chaque poste à son ouverture, payée avec l’argent du poste ; 0 = aucune' },
     ],
     onSubmit: (d) => api.put('/settings', d),
   });

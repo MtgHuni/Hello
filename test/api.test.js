@@ -1408,6 +1408,54 @@ test('photos lues par Claude : plaque → client, page du cahier → anciennes d
   }
 });
 
+test('photo d’un compteur gardée une semaine avec la relève ; transport ajouté à chaque poste', async () => {
+  const reader = require('../src/meterReader');
+  const { readMeter } = reader;
+  process.env.ANTHROPIC_API_KEY = 'cle-de-test';
+  let shift = (await gerant('GET', '/api/shifts/current')).data;
+  const meters = (await gerant('GET', '/api/stock/meters')).data;
+  const latest = (id) => meters.find((m) => m.nozzleId === id).latest;
+  try {
+    reader.readMeter = async ({ last }) => ({ index: last + 10, suspect: false });
+    const nozzle = shift.readings[0].nozzle_id;
+    const read = await gerant('POST', '/api/meters/read', { image: 'A'.repeat(400), last: latest(nozzle), nozzleId: nozzle });
+    assert.ok(read.data.photoId, 'photo gardée');
+    const photo = await gerant('GET', `/api/meter-photos/${read.data.photoId}`);
+    assert.deepStrictEqual([photo.status, photo.type], [200, 'image/jpeg']);
+    // Sent with the relief: the report shows it beside that meter's index.
+    const relief = await gerant('POST', `/api/shifts/${shift.id}/checkpoints`, {
+      kind: 'releve',
+      cash: 0,
+      readings: shift.readings.map((r) => ({ nozzleId: r.nozzle_id, meter: r.nozzle_id === nozzle ? read.data.index : latest(r.nozzle_id), photoId: r.nozzle_id === nozzle ? read.data.photoId : undefined })),
+    });
+    assert.strictEqual(relief.status, 201, JSON.stringify(relief.data));
+    assert.strictEqual(relief.data.report.nozzles.find((n) => n.nozzle_id === nozzle).photo_id, read.data.photoId);
+    // After a week: the file and its row are gone.
+    const file = locals.photos.read(read.data.photoId);
+    db.prepare("UPDATE meter_photos SET created_at = datetime('now', '-8 days') WHERE id = ?").run(read.data.photoId);
+    assert.strictEqual(locals.photos.cleanup(), 1);
+    assert.strictEqual(require('node:fs').existsSync(file), false);
+    assert.strictEqual((await gerant('GET', `/api/meter-photos/${read.data.photoId}`)).status, 404);
+  } finally {
+    reader.readMeter = readMeter;
+    delete process.env.ANTHROPIC_API_KEY;
+  }
+
+  // Transport: set in Réglages, it goes on the shift open now (once), then on every new shift.
+  const transport = (id) => db.prepare("SELECT amount FROM expenses WHERE shift_id = ? AND category = 'Transport' AND client_ref = ?").all(id, `transport-${id}`);
+  assert.strictEqual((await gerant('PUT', '/api/settings', { shiftTransport: 7 })).data.shiftTransport, 7);
+  await gerant('PUT', '/api/settings', { shiftTransport: 7, stationPhone: '+243974105000' });
+  assert.deepStrictEqual(transport(shift.id).map((e) => e.amount), [7], 'une seule fois');
+  shift = (await gerant('GET', `/api/shifts/${shift.id}`)).data;
+  assert.ok(shift.expenses.some((e) => e.category === 'Transport' && e.amount === 7), 'dépense du poste');
+  await nextSecond();
+  const ends = (await gerant('GET', '/api/stock/meters')).data;
+  const closed = await closeShift(shift, Object.fromEntries(ends.map((m) => [m.nozzleId, m.latest + 1000])));
+  assert.strictEqual(closed.status, 200, JSON.stringify(closed.data));
+  assert.deepStrictEqual(transport(closed.data.next_shift_id).map((e) => e.amount), [7], 'le poste suivant aussi');
+  await gerant('PUT', '/api/settings', { shiftTransport: 0 });
+});
+
 test('clients : jamais deux fois le même nom ; un client en double est supprimé, ses opérations vont au bon', async () => {
   const jean = await gerant('POST', '/api/customers', { type: 'individual', name: 'Jean Bosco' });
   assert.strictEqual(jean.status, 201);

@@ -449,6 +449,7 @@ function createMailJobs(db, mailer) {
     if (t.hour >= 8 && once(`rappels:${t.date}`)) run('rappels', () => reminders(t.date));
     if (t.hour >= 22 && t.weekday === 'Sun' && once(`sauvegarde:${t.date}`)) run('sauvegarde', () => backup(t.date));
     run('nettoyage', () => db.exec("DELETE FROM mail_tokens WHERE expires_at < datetime('now', '-2 days')"));
+    run('photos', () => mailer.services.cleanPhotos?.()); // meter photos older than a week
   }
 
   let timer = null;

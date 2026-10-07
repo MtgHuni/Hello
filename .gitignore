@@ -8,3 +8,5 @@ videos/*/renders/
 videos/*/snapshots/
 videos/*/.hyperframes/
 videos/*/.thumbnails/
+photos/
+review.db*

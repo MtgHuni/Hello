@@ -4,6 +4,7 @@ import { shiftLine, h, fmt, pageHeader, card, cardHeader, table, segmented, shif
 import { icon } from '../icons.js';
 import { renderClosing } from './attendant.js';
 import { reportCard } from './relay.js';
+import { meterPhotoLink } from '../photo.js';
 import { renderShiftStatus } from './shiftStatus.js';
 
 // Money handed over, in dollars.
@@ -376,7 +377,7 @@ export function shiftSummary(shift, tolerance, onEdit = null) {
         [
           { label: 'Produit', key: 'product_name' },
           { label: 'Index début', align: 'right', render: (r) => fmt.number(r.start_meter) },
-          { label: 'Index fin', align: 'right', render: (r) => (r.end_meter == null ? '—' : fmt.number(r.end_meter)) },
+          { label: 'Index fin', align: 'right', render: (r) => (r.end_meter == null ? '—' : h('span', { class: 'nowrap' }, meterPhotoLink(r.end_photo_id), fmt.number(r.end_meter))) },
           ...(shift.readings.some((r) => r.tested) ? [{ label: 'Tests (remis en cuve)', align: 'right', render: (r) => (r.tested ? `−${fmt.liters(r.tested)}` : '—') }] : []),
           { label: 'Litres vendus', align: 'right', render: (r) => (r.liters == null ? '—' : fmt.liters(r.liters)) },
           { label: 'Prix', align: 'right', render: (r) => fmt.price(r.unit_price) },
