@@ -31,25 +31,27 @@ function applyScheduledPrices(db) {
   return due.length;
 }
 
-// A subscriber's own price for a fuel (customer_prices), or null: they pay the subscribers' price.
-function ownPrice(db, customer, productId) {
+// A subscriber's own price is a difference in $/L with the subscribers' price (customer_price_deltas):
+// it follows every change of the station's prices. null: they pay the subscribers' price.
+function priceDelta(db, customer, productId) {
   if (customer?.type !== 'account') return null;
-  return db.prepare('SELECT price FROM customer_prices WHERE customer_id = ? AND product_id = ?').get(customer.id, productId)?.price ?? null;
+  return db.prepare('SELECT delta FROM customer_price_deltas WHERE customer_id = ? AND product_id = ?').get(customer.id, productId)?.delta ?? null;
 }
+const withDelta = (base, delta) => (delta == null ? base : Math.round((base + delta) * 1000) / 1000);
 
-// What a customer pays now for each fuel on sale: a subscriber their own price, else the
-// subscribers' price; a particulier the pump price. `base`: the price without their own.
+// What a customer pays now for each fuel on sale: a subscriber the subscribers' price with their
+// difference, a particulier the pump price. `base`: the price without their difference.
 function customerPriceList(db, customer) {
   const subscriber = customer.type === 'account';
-  const own = new Map(db.prepare('SELECT product_id, price FROM customer_prices WHERE customer_id = ?').all(customer.id).map((r) => [r.product_id, r.price]));
+  const own = new Map(db.prepare('SELECT product_id, delta FROM customer_price_deltas WHERE customer_id = ?').all(customer.id).map((r) => [r.product_id, r.delta]));
   return db
     .prepare('SELECT id, name, price, COALESCE(subscriber_price, price) AS subscriber_price FROM products WHERE active = 1 ORDER BY id')
     .all()
     .map((p) => {
       const base = subscriber ? p.subscriber_price : p.price;
-      const mine = subscriber ? own.get(p.id) : undefined;
-      return { product_id: p.id, name: p.name, base, price: mine ?? base, own: mine != null };
+      const delta = subscriber ? own.get(p.id) ?? null : null;
+      return { product_id: p.id, name: p.name, base, delta, price: withDelta(base, delta), own: delta != null };
     });
 }
 
-module.exports = { applyScheduledPrices, price3, ownPrice, customerPriceList };
+module.exports = { applyScheduledPrices, price3, priceDelta, withDelta, customerPriceList };

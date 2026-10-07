@@ -2,7 +2,7 @@ const { getSettings } = require('./db');
 const { fail, num, str, oneOf, round, transaction, clientRef } = require('./util');
 const { customerBalance } = require('./routes/customers');
 const { refreshCustomer, subscriberDues, creditAllocation } = require('./loyalty');
-const { ownPrice } = require('./prices');
+const { priceDelta, withDelta } = require('./prices');
 
 const money = (n) => `${n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $`;
 
@@ -35,8 +35,8 @@ function createSale(db, shift, input) {
   }
 
   const subscriber = customer.type === 'account';
-  // A subscriber pays their own price when the station gave them one, else the shift's subscriber price.
-  const unitPrice = subscriber ? ownPrice(db, customer, reading.product_id) ?? reading.subscriber_price ?? reading.unit_price : reading.unit_price;
+  // A subscriber pays the shift's subscriber price, with their own difference when the station gave them one.
+  const unitPrice = subscriber ? withDelta(reading.subscriber_price ?? reading.unit_price, priceDelta(db, customer, reading.product_id)) : reading.unit_price;
   const payment = oneOf(input.payment ?? 'credit', 'Le mode de paiement', ['paid', 'credit', 'combo']);
   let liters;
   let amount;
@@ -101,7 +101,7 @@ function updateSale(db, sale, input) {
   if (!customer) fail(400, 'Client inconnu.');
   const reading = db.prepare('SELECT * FROM shift_readings WHERE shift_id = ? AND product_id = ? ORDER BY id LIMIT 1').get(sale.shift_id, Number(input.productId ?? sale.product_id));
   if (!reading) fail(400, 'Ce produit ne fait pas partie du poste.');
-  const unitPrice = customer.type === 'account' ? ownPrice(db, customer, reading.product_id) ?? reading.subscriber_price ?? reading.unit_price : reading.unit_price;
+  const unitPrice = customer.type === 'account' ? withDelta(reading.subscriber_price ?? reading.unit_price, priceDelta(db, customer, reading.product_id)) : reading.unit_price;
   let liters;
   let amount;
   if (input.amount !== undefined && input.amount !== null && input.amount !== '') {

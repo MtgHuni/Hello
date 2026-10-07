@@ -298,10 +298,12 @@ function renderOpenShift(page, ctx, shift, remarks = null) {
 function requestQueue(shift, reload, tol) {
   const list = h('div', { class: 'stack', style: 'gap:10px' });
   const host = h('div', { class: 'stack', style: 'gap:10px' }, list);
-  // A request's price: the subscriber's own, else the shift's (subscriber price for a subscriber).
+  // A request's price: the shift's (subscriber price for a subscriber, with their own difference).
   const priceOf = (q) => {
     const r = shift.readings.find((x) => x.product_id === q.product_id);
-    return q.own_price ?? (q.customer_type === 'account' ? r?.subscriber_price ?? r?.unit_price : r?.unit_price);
+    if (q.customer_type !== 'account') return r?.unit_price;
+    const base = r?.subscriber_price ?? r?.unit_price;
+    return q.price_delta == null || base == null ? base : Math.round((base + q.price_delta) * 1000) / 1000;
   };
   let known = null;
   let seenConnected = false;
@@ -532,10 +534,13 @@ export async function addCredit(ctx, shift, reload) {
   const customers = await customersList();
   const clientRef = newRef();
   const products = [...new Map(shift.readings.map((r) => [r.product_id, r])).values()];
-  // Subscribers pay their own price when they have one, else the subscriber price fixed at shift opening.
+  // Subscribers pay the subscriber price fixed at shift opening, with their own difference when they have one.
   const priceOf = (productId, c) => {
     const r = products.find((x) => x.product_id === Number(productId));
-    return (c?.type === 'account' ? c.prices?.[productId] ?? r?.subscriber_price ?? r?.unit_price : r?.unit_price) || 0;
+    if (c?.type !== 'account') return r?.unit_price || 0;
+    const base = r?.subscriber_price ?? r?.unit_price ?? 0;
+    const delta = c.deltas?.[productId];
+    return delta == null ? base : Math.round((base + delta) * 1000) / 1000;
   };
   const { combosPerLiter, comboValue, comboThreshold } = ctx.state.settings;
 

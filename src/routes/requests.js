@@ -16,11 +16,11 @@ module.exports = function requestRoutes(db) {
 
   const select = `
     SELECT r.*, c.name AS customer_name, c.phone AS customer_phone, c.type AS customer_type, c.credit_limit, c.loyalty_points,
-      p.name AS product_name, CASE c.type WHEN 'account' THEN COALESCE(cp.price, p.subscriber_price, p.price) ELSE p.price END AS current_price,
-      CASE c.type WHEN 'account' THEN cp.price END AS own_price, u.name AS handled_by_name, s.points AS sale_points,
+      p.name AS product_name, CASE c.type WHEN 'account' THEN ROUND(COALESCE(p.subscriber_price, p.price) + COALESCE(d.delta, 0), 3) ELSE p.price END AS current_price,
+      CASE c.type WHEN 'account' THEN d.delta END AS price_delta, u.name AS handled_by_name, s.points AS sale_points,
       s.liters AS sale_liters, s.amount AS sale_amount, s.combos_used AS sale_combos
     FROM purchase_requests r JOIN customers c ON c.id = r.customer_id JOIN products p ON p.id = r.product_id
-    LEFT JOIN customer_prices cp ON cp.customer_id = c.id AND cp.product_id = p.id
+    LEFT JOIN customer_price_deltas d ON d.customer_id = c.id AND d.product_id = p.id
     LEFT JOIN users u ON u.id = r.handled_by LEFT JOIN sales s ON s.id = r.sale_id`;
 
   // ---- Customer side -----------------------------------------------------

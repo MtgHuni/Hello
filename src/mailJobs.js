@@ -14,7 +14,7 @@ const { getSettings } = require('./db');
 const { fmt } = require('./pdfReport');
 const { round } = require('./util');
 const { balanceSql, subscriberDues } = require('./loyalty');
-const { applyScheduledPrices } = require('./prices');
+const { applyScheduledPrices, withDelta } = require('./prices');
 const { userAlerts } = require('./alerts');
 const { firstName } = require('./mailer');
 const { aiEnabled } = require('./claude');
@@ -159,13 +159,13 @@ function createMailJobs(db, mailer) {
       const c = customerFor(id, 'prix');
       if (!c) continue;
       const sub = c.type === 'account';
-      // A subscriber's own price stays as agreed: only the prices they pay that moved count.
-      const own = new Map(sub ? db.prepare('SELECT product_id, price FROM customer_prices WHERE customer_id = ?').all(id).map((r) => [r.product_id, r.price]) : []);
+      // A subscriber's own difference follows the subscribers' price; only the prices they pay that moved count.
+      const own = new Map(sub ? db.prepare('SELECT product_id, delta FROM customer_price_deltas WHERE customer_id = ?').all(id).map((r) => [r.product_id, r.delta]) : []);
       const lines = products.map((p) => {
         const old = changed.get(p.id);
-        const now = own.get(p.id) ?? (sub ? p.subscriber_price : p.price);
-        const was = own.has(p.id) || !old ? null : sub ? old.subscriber_price ?? old.price : old.price;
-        return { p, now, was, moved: !own.has(p.id) && changed.has(p.id) && (was == null || Math.abs(was - now) > 1e-9) };
+        const now = withDelta(sub ? p.subscriber_price : p.price, own.get(p.id));
+        const was = old ? withDelta(sub ? old.subscriber_price ?? old.price : old.price, own.get(p.id)) : null;
+        return { p, now, was, moved: changed.has(p.id) && (was == null || Math.abs(was - now) > 1e-9) };
       });
       if (!lines.some((l) => l.moved)) continue;
       toCustomer(c, 'prix', {

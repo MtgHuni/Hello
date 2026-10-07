@@ -314,7 +314,9 @@ export async function renderCustomerDetail(page, ctx) {
   await load();
 }
 
-// A subscriber's prices: their own, agreed with the station, or the subscribers' price (shown in their space).
+// A subscriber's prices: the subscribers' price, or with their own difference agreed with the station
+// (it follows the station's price changes); shown in their space.
+const signedPrice = (d) => `${d < 0 ? '−' : '+'} ${fmt.price(Math.abs(d))}`;
 function priceCard(acc, reload) {
   const c = acc.customer;
   if (c.type !== 'account') return null;
@@ -326,7 +328,7 @@ function priceCard(acc, reload) {
       h(
         'div',
         { class: 'summary-line' },
-        h('span', {}, p.name, p.own ? null : h('span', { class: 'muted small' }, ' · prix abonnés')),
+        h('span', {}, p.name, h('span', { class: 'muted small' }, p.own ? ` · prix abonnés ${signedPrice(p.delta)}` : ' · prix abonnés')),
         h(p.own ? 'strong' : 'span', {}, fmt.price(p.price)),
       ),
     ),
@@ -338,8 +340,21 @@ async function pricesDialog(acc, reload) {
   const ok = await formDialog({
     title: `Prix — ${c.name}`,
     grid: false,
-    fields: acc.prices.map((p) => ({ name: `p${p.product_id}`, label: `${p.name} ($/L)`, type: 'number', step: '0.001', min: '0.001', value: p.own ? p.price : '', hint: `Prix abonnés : ${fmt.price(p.base)}` })),
-    onSubmit: (d) => api.put(`/customers/${c.id}/prices`, { prices: Object.fromEntries(acc.prices.map((p) => [p.product_id, d[`p${p.product_id}`]])) }),
+    // The difference in $/L (− 0,05: five cents less); the hint shows the price it gives.
+    fields: acc.prices.map((p) => {
+      const shown = (delta) => `Prix abonnés ${fmt.price(p.base)}${delta ? ` → ${fmt.price(Math.round((p.base + delta) * 1000) / 1000)}` : ''}`;
+      return {
+        name: `p${p.product_id}`,
+        label: `${p.name} : écart ($/L)`,
+        type: 'number',
+        step: '0.001',
+        inputmode: 'text',
+        value: p.own ? p.delta : '',
+        hint: shown(p.delta),
+        onInput: (e) => (e.target.closest('.field').querySelector('.hint').textContent = shown(Number(e.target.value) || 0)),
+      };
+    }),
+    onSubmit: (d) => api.put(`/customers/${c.id}/prices`, { deltas: Object.fromEntries(acc.prices.map((p) => [p.product_id, d[`p${p.product_id}`]])) }),
   });
   if (ok) {
     toast('Prix enregistrés');

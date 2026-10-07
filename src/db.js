@@ -391,11 +391,12 @@ CREATE TABLE IF NOT EXISTS meter_photos (
   created_at       TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_meter_photos_created ON meter_photos(created_at);
--- A subscriber's own price per fuel, agreed with the station (none: the subscribers' price).
-CREATE TABLE IF NOT EXISTS customer_prices (
+-- A subscriber's own price per fuel, agreed with the station: a difference in $/L with the
+-- subscribers' price, so it follows the station's price changes (none: the subscribers' price).
+CREATE TABLE IF NOT EXISTS customer_price_deltas (
   customer_id INTEGER NOT NULL REFERENCES customers(id),
   product_id  INTEGER NOT NULL REFERENCES products(id),
-  price       REAL NOT NULL CHECK (price > 0),
+  delta       REAL NOT NULL,
   user_id     INTEGER REFERENCES users(id),
   updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
   PRIMARY KEY (customer_id, product_id)
@@ -541,7 +542,7 @@ const MIGRATIONS = [
 ];
 
 // Bumped with every schema change; recorded in PRAGMA user_version.
-const SCHEMA_VERSION = 25;
+const SCHEMA_VERSION = 26;
 
 function missingColumns(db) {
   return MIGRATIONS.filter(([table, column]) => {
@@ -727,6 +728,14 @@ function openDb(file) {
   if (salesRebuilt) addMissingColumns(db); // the rebuilt table only has the older columns
   migrateRequests(db);
   migrateUserRoles(db);
+  // Version 26: a subscriber's own price became a difference with the subscribers' price (it
+  // follows the station's price changes): the fixed prices of the first days are converted.
+  if (tableSql(db, 'customer_prices')) {
+    db.exec(`INSERT OR IGNORE INTO customer_price_deltas (customer_id, product_id, delta, user_id, updated_at)
+      SELECT cp.customer_id, cp.product_id, ROUND(cp.price - COALESCE(p.subscriber_price, p.price), 3), cp.user_id, cp.updated_at
+      FROM customer_prices cp JOIN products p ON p.id = cp.product_id WHERE ABS(cp.price - COALESCE(p.subscriber_price, p.price)) > 0.0005;
+      DROP TABLE customer_prices;`);
+  }
   db.exec(`CREATE INDEX IF NOT EXISTS idx_payments_shift ON payments(shift_id);
     CREATE INDEX IF NOT EXISTS idx_expenses_shift ON expenses(shift_id);
     CREATE INDEX IF NOT EXISTS idx_requests_status ON purchase_requests(status);
