@@ -1,4 +1,5 @@
 import { icon } from './icons.js';
+import { withMeterPhoto } from './meterPhoto.js';
 
 // ---------- DOM builder ----------
 export function h(tag, props, ...children) {
@@ -545,12 +546,14 @@ export function field(f) {
   // Floating-label field: the label sits inside the box and floats up once the field is used.
   // Selects, text areas and dates always show a value, so their label stays up.
   const pinned = f.type === 'select' || f.type === 'textarea' || f.type === 'date';
-  return h(
+  const el = h(
     'label',
     { class: `field ${f.full ? 'full' : ''}`, for: id, hidden: f.hidden },
     h('span', { class: `field-box ${pinned ? 'pinned' : ''}` }, input, h('span', { class: 'field-label' }, f.label)),
     f.hint ? h('span', { class: 'hint' }, f.hint) : null,
   );
+  // A meter index: the camera beside it (`meterPhoto: { product, last }`).
+  return f.meterPhoto ? withMeterPhoto(el, f.meterPhoto) : el;
 }
 
 export function readForm(form, fields) {

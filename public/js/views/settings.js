@@ -245,7 +245,7 @@ async function meterDialog(n, tankOptions, reload, pumpId) {
     grid: false,
     fields: [
       { name: 'tankId', label: 'Cuve', type: 'select', options: tankOptions, value: n?.tank_id, required: true },
-      { name: 'meter', label: 'Index du compteur', type: 'number', step: '0.01', min: '0', value: n?.meter ?? 0, required: true },
+      { name: 'meter', label: 'Index du compteur', type: 'number', step: '0.01', min: '0', value: n?.meter ?? 0, required: true, meterPhoto: { product: n?.product_name } },
       ...(n ? [{ name: 'active', label: 'Compteur actif', type: 'checkbox', value: !!n.active }] : []),
     ],
     onSubmit: (d) => (n ? api.put(`/nozzles/${n.id}`, { ...d, tankId: Number(d.tankId) }) : api.post(`/pumps/${pumpId}/nozzles`, { ...d, name: 'Compteur', tankId: Number(d.tankId) })),

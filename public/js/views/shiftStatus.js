@@ -33,6 +33,7 @@ export async function renderShiftStatus(page, ctx) {
         type: 'number',
         step: '0.01',
         min: String(lastMeter(r)),
+        meterPhoto: { product: r.product_name, last: lastMeter(r) },
         onInput: () => {
           clearTimeout(timer);
           timer = setTimeout(async () => {
