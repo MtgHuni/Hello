@@ -1,6 +1,6 @@
 import { flags } from './ui.js';
-import { api } from './api.js';
-import { h, errorState, toast, formDialog, actionSheet, openDialog, spinner, initials, applyTheme, toggleTheme, themeButton } from './ui.js';
+import { api, net, pending, setUser, forgetCache, isFlushing } from './api.js';
+import { h, errorState, toast, formDialog, actionSheet, openDialog, spinner, initials, applyTheme, toggleTheme, themeButton, noticeDialog } from './ui.js';
 import { icon, brandMark } from './icons.js';
 import { enhance } from './motion.js';
 import { renderLogin, renderSetup, renderForgot, renderReset } from './views/auth.js';
@@ -95,6 +95,9 @@ async function boot() {
     flags.readonly = me.user.role === 'owner';
     flags.admin = !!me.user.admin;
     flags.ai = !!me.settings.ai;
+    flags.station = me.settings.stationName;
+    flags.ask = !!me.settings.ask;
+    setUser(me.user.id);
     document.title = me.settings.stationName;
     await route();
     if (openMailsAfterLogin) {
@@ -108,6 +111,7 @@ async function boot() {
 
 async function logout() {
   await api.post('/auth/logout').catch(() => {});
+  forgetCache();
   state.user = null;
   location.hash = '';
   boot();
@@ -171,6 +175,7 @@ function buildShell() {
   const role = state.user.role;
   const nav = NAV[role];
   const slot = h('div', { class: 'page-slot' });
+  const netStrip = h('button', { type: 'button', class: 'offline-strip net-strip', role: 'status', hidden: true, onClick: showPending });
   const link = ([path, label, iconName, , short], useShort) =>
     h('a', { href: `#/${path}`, 'data-path': path }, icon(iconName), h('span', {}, useShort ? short || label : label));
 
@@ -220,8 +225,9 @@ function buildShell() {
     : null;
   const tabbar = nav.length > 1 ? h('nav', { class: 'tabbar', 'aria-label': 'Navigation', style: `--n:${tabs.length + (more ? 1 : 0)}` }, tabs.map((n) => link(n, true)), more) : null;
 
-  const el = h('div', { class: `shell ${role} ${tabbar ? 'has-tabs' : ''}` }, side, h('div', { class: 'shell-main' }, topbar, h('main', { class: 'main' }, slot)), tabbar);
-  shell = { role, el, slot, topTitle, more, rest: rest.map(([path]) => path) };
+  const el = h('div', { class: `shell ${role} ${tabbar ? 'has-tabs' : ''}` }, side, h('div', { class: 'shell-main' }, topbar, h('main', { class: 'main' }, netStrip, slot)), tabbar);
+  shell = { role, el, slot, netStrip, topTitle, more, rest: rest.map(([path]) => path) };
+  drawNet();
   return shell;
 }
 
@@ -344,6 +350,45 @@ async function route() {
     window.scrollTo(0, 0);
     enhance(page);
   }, direction);
+}
+
+// Without network: a strip at the top (since when, how many entries wait to be sent).
+function drawNet() {
+  if (!shell?.netStrip) return;
+  const count = pending().length;
+  const at = new Date(net.lastOk).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const parts = [net.offline ? `Hors connexion · à jour à ${at}` : count && isFlushing() ? 'Envoi…' : null, count ? `${count} en attente d’envoi` : null].filter(Boolean);
+  shell.netStrip.hidden = !parts.length;
+  shell.netStrip.textContent = parts.join(' · ');
+}
+function showPending() {
+  const list = pending();
+  if (!list.length) return;
+  noticeDialog('En attente d’envoi', h('ul', { class: 'notice-list' }, list.map((x) => h('li', {}, h('span', {}, x.label), h('small', {}, new Date(x.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }))))), {
+    level: 'warning',
+    iconName: 'info',
+  });
+}
+window.addEventListener('net:change', drawNet);
+// Sent once the network is back; what the server refused is shown, to enter again.
+window.addEventListener('outbox:sent', ({ detail: { sent, refused } }) => {
+  if (sent.length) toast(`${sent.length} opération${sent.length > 1 ? 's' : ''} envoyée${sent.length > 1 ? 's' : ''}`);
+  if (refused.length) noticeDialog('Non enregistré', h('ul', { class: 'notice-list' }, refused.map((x) => h('li', {}, h('span', {}, x.label), h('small', {}, x.error)))));
+  if (state.user) route();
+});
+
+// The app's files kept on the phone (public/sw.js): it opens without network.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('/sw.js')
+      .then(() => navigator.serviceWorker.ready)
+      .then((reg) => {
+        const files = performance.getEntriesByType('resource').map((e) => e.name.split('#')[0]).filter((u) => u.startsWith(location.origin) && !u.includes('/api/') && !/\.(mp4|webm)$/.test(u));
+        reg.active?.postMessage({ keep: [`${location.origin}/`, ...files] });
+      })
+      .catch(() => {});
+  });
 }
 
 window.addEventListener('hashchange', route);

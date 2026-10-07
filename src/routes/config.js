@@ -23,6 +23,7 @@ const SETTING_LABELS = {
   closing_time: 'heure de clôture',
   station_phone: 'téléphone de la station',
   shift_transport: 'transport par poste',
+  ask_month_limit: 'questions à l’appli par mois',
 };
 
 const manager = requireRole('manager');
@@ -56,6 +57,7 @@ module.exports = function configRoutes(db) {
       combo_threshold: pick(b.comboThreshold, cur.comboThreshold, "Le seuil d'échange", { min: 1, max: 1e7, integer: true }),
       subscriber_grace_days: pick(b.subscriberGraceDays, cur.subscriberGraceDays, 'Le délai de paiement des abonnés', { min: 1, max: 28, integer: true }),
       shift_transport: round(pick(b.shiftTransport, cur.shiftTransport, 'Le transport par poste', { max: 10000 })),
+      ask_month_limit: pick(b.askMonthLimit, cur.askMonthLimit, 'Les questions par mois', { max: 1000, integer: true }),
     };
     values.combos_enabled = bool(b.combosEnabled, cur.combosEnabled) ? 1 : 0;
     values.closing_time = b.closingTime === undefined ? cur.closingTime : str(b.closingTime, 'L’heure de clôture', { max: 5 });

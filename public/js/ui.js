@@ -38,7 +38,7 @@ const numFmt = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 });
 const priceFmt = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 
 // Programme de combos activé ? Réglage du gérant, posé par main.js au démarrage.
-export const flags = { combos: true, readonly: false, admin: false, ai: false };
+export const flags = { combos: true, readonly: false, admin: false, ai: false, ask: false, station: '' };
 // The owner (actionnaire) sees everything and changes nothing: a control that writes is left out.
 export const edit = (node) => (flags.readonly ? null : node);
 // The settings and the cash book: changed by the admin only (the manager reads them).
@@ -106,19 +106,37 @@ export function priceTotem(items) {
 }
 
 // ---------- Feedback ----------
-export function toast(message, type = 'info') {
+// `action`: one button in the toast (e.g. the WhatsApp receipt), which then stays longer.
+export function toast(message, type = 'info', { action } = {}) {
+  const leave = () => {
+    el.classList.add('leaving');
+    el.addEventListener('animationend', () => el.remove(), { once: true });
+    setTimeout(() => el.remove(), 600);
+  };
   const el = h(
     'div',
     { class: `toast ${type === 'error' ? 'error' : ''}`, role: type === 'error' ? 'alert' : 'status' },
     h('span', { class: 'toast-icon' }, icon(type === 'error' ? 'alert' : 'check')),
     h('span', {}, message),
+    action
+      ? h('a', { class: 'btn secondary sm toast-action', href: action.href, target: '_blank', rel: 'noopener', 'aria-label': action.ariaLabel, onClick: () => setTimeout(leave, 300) }, action.icon, action.label)
+      : null,
   );
   document.getElementById('toasts').append(el);
-  setTimeout(() => {
-    el.classList.add('leaving');
-    el.addEventListener('animationend', () => el.remove(), { once: true });
-    setTimeout(() => el.remove(), 600);
-  }, type === 'error' ? 4500 : 2600);
+  setTimeout(leave, action ? 8000 : type === 'error' ? 4500 : 2600);
+}
+
+// The customer's receipt through WhatsApp: to their number, or to a contact picked in WhatsApp.
+export function receipt(customer, lines, balance) {
+  const when = new Date().toLocaleString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const owed = balance > 0.001 ? `Vous devez : ${fmt.money(balance)}` : balance < -0.001 ? `Votre avance : ${fmt.money(-balance)}` : `Solde : ${fmt.money(0)}`;
+  const text = [flags.station, when, `Client : ${customer.name}`, ...lines, balance == null ? null : owed].filter(Boolean).join('\n');
+  return {
+    label: 'Reçu',
+    ariaLabel: 'Envoyer le reçu par WhatsApp',
+    icon: h('span', { class: 'logo-whatsapp', 'aria-hidden': 'true' }),
+    href: `https://wa.me/${whatsappNumber(customer.phone) || ''}?text=${encodeURIComponent(text)}`,
+  };
 }
 
 export function spinner() {

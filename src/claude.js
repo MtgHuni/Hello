@@ -1,5 +1,5 @@
 // Claude through the Messages API over Node's fetch (no dependency, like the mails). ANTHROPIC_API_KEY
-// on Render turns on what uses it: the meter, notebook and plate photos, the reports' commentary.
+// on Render turns on what uses it: the meter, notebook and plate photos, the reports' commentary, the questions.
 // Without it those are simply not offered (tests and development call nothing).
 const { fail } = require('./util');
 
@@ -15,9 +15,8 @@ function imageParam(body) {
   return { type: 'image', source: { type: 'base64', media_type: mediaType, data } };
 }
 
-// One question, one answer: with a JSON schema the answer is the parsed object (structured output),
-// without one the text. Null when the model did not finish (refusal, length).
-async function ask({ model, effort = 'low', content, schema, maxTokens = 4000, timeoutMs = 25000 }) {
+// One call to the Messages API: the message Claude returned.
+async function call(body, timeoutMs) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -31,28 +30,36 @@ async function ask({ model, effort = 'low', content, schema, maxTokens = 4000, t
         // A declined request is run again on another model inside the same call.
         'anthropic-beta': 'server-side-fallback-2026-07-01',
       },
-      body: JSON.stringify({
-        model,
-        max_tokens: maxTokens,
-        fallbacks: 'default',
-        output_config: { effort, ...(schema ? { format: { type: 'json_schema', schema } } : {}) },
-        messages: [{ role: 'user', content }],
-      }),
+      body: JSON.stringify({ ...body, fallbacks: 'default' }),
     });
     if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      throw new Error(`API ${res.status}: ${body.slice(0, 300)}`);
+      const text = await res.text().catch(() => '');
+      throw new Error(`API ${res.status}: ${text.slice(0, 300)}`);
     }
-    const message = await res.json();
-    if (message.stop_reason !== 'end_turn') {
-      console.warn('Claude : arrêt', message.stop_reason);
-      return null;
-    }
-    const text = message.content.find((b) => b.type === 'text')?.text || '';
-    return schema ? JSON.parse(text || '{}') : text.trim();
+    return await res.json();
   } finally {
     clearTimeout(timer);
   }
+}
+
+// A conversation with tools (« Demander à l'appli »): the next message, tool calls included.
+async function converse({ model, system, tools, toolChoice, messages, effort = 'medium', maxTokens = 3000, timeoutMs = 40000 }) {
+  return call({ model, max_tokens: maxTokens, system, tools, ...(toolChoice ? { tool_choice: toolChoice } : {}), output_config: { effort }, messages }, timeoutMs);
+}
+
+// One question, one answer: with a JSON schema the answer is the parsed object (structured output),
+// without one the text. Null when the model did not finish (refusal, length).
+async function ask({ model, effort = 'low', content, schema, maxTokens = 4000, timeoutMs = 25000 }) {
+  const message = await call(
+    { model, max_tokens: maxTokens, output_config: { effort, ...(schema ? { format: { type: 'json_schema', schema } } : {}) }, messages: [{ role: 'user', content }] },
+    timeoutMs,
+  );
+  if (message.stop_reason !== 'end_turn') {
+    console.warn('Claude : arrêt', message.stop_reason);
+    return null;
+  }
+  const text = message.content.find((b) => b.type === 'text')?.text || '';
+  return schema ? JSON.parse(text || '{}') : text.trim();
 }
 
 // What the routes reply when the call itself failed (key, credit, network, delay).
@@ -65,4 +72,4 @@ async function askOr422(args, label) {
   }
 }
 
-module.exports = { aiEnabled, imageParam, ask, askOr422 };
+module.exports = { aiEnabled, imageParam, ask, askOr422, converse };

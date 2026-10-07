@@ -110,7 +110,7 @@ function createApp({ dbFile }) {
         : status >= 500
           ? 'Erreur interne du serveur.'
           : err.message;
-    res.status(status).json({ error: message, code: constraint ? 'constraint' : status < 500 && !err.type ? err.code : undefined });
+    res.status(status).json({ error: message, code: constraint ? 'constraint' : status < 500 && !err.type ? err.code : undefined, ...(status < 500 ? err.extra : undefined) });
   });
 
   app.locals.db = db;

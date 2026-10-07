@@ -15,6 +15,7 @@ const { applyScheduledPrices } = require('../prices');
 const { audit } = require('../audit');
 const { addShiftTransport } = require('../transport');
 const { momoTotal, closingCutoff, attendantNamesSql, checkpointReports, currentPeriod, lastMeters, shiftMovements, movementsTotal } = require('../checkpoints');
+const { aiEnabled } = require('../claude');
 
 const staff = requireRole('manager', 'attendant');
 
@@ -379,6 +380,15 @@ module.exports = function shiftRoutes(db) {
     return meters;
   }
 
+  // With Claude reading the meters, an attendant's index comes from a photo of each meter (kept a week).
+  function needPhotos(shift, readings) {
+    const sent = new Map((Array.isArray(readings) ? readings : []).map((r) => [Number(r?.nozzleId), Number(r?.photoId)]));
+    const photo = db.prepare('SELECT 1 FROM meter_photos WHERE id = ? AND nozzle_id = ? AND shift_id = ?');
+    for (const r of db.prepare('SELECT nozzle_id FROM shift_readings WHERE shift_id = ?').all(shift.id)) {
+      if (!photo.get(sent.get(r.nozzle_id) || 0, r.nozzle_id, shift.id)) fail(422, 'Prenez la photo de chaque compteur.', 'photo_required');
+    }
+  }
+
   // The meter photos sent with a relief or a closing (`readings[].photoId`), linked to it.
   function linkPhotos(shiftId, readings, column, value) {
     const link = db.prepare(`UPDATE meter_photos SET ${column} = ? WHERE id = ? AND nozzle_id = ? AND shift_id = ?`);
@@ -389,7 +399,8 @@ module.exports = function shiftRoutes(db) {
     db
       .prepare(
         `SELECT r.*, n.name AS nozzle_name, pu.name AS pump_name, p.name AS product_name,
-           (SELECT MAX(m.id) FROM meter_photos m WHERE m.closing_shift_id = r.shift_id AND m.nozzle_id = r.nozzle_id) AS end_photo_id
+           (SELECT MAX(m.id) FROM meter_photos m WHERE m.closing_shift_id = r.shift_id AND m.nozzle_id = r.nozzle_id) AS end_photo_id,
+           (SELECT m.read_index FROM meter_photos m WHERE m.closing_shift_id = r.shift_id AND m.nozzle_id = r.nozzle_id ORDER BY m.id DESC LIMIT 1) AS end_photo_read
          FROM shift_readings r JOIN nozzles n ON n.id = r.nozzle_id JOIN pumps pu ON pu.id = n.pump_id JOIN products p ON p.id = r.product_id
          WHERE r.shift_id = ? ORDER BY pu.id, n.id`,
       )
@@ -413,6 +424,7 @@ module.exports = function shiftRoutes(db) {
     if (kind !== 'ouverture') {
       if (shift.station_closed_at) fail(409, 'La station est fermée : faites l’ouverture pour continuer le poste.', 'station_closed');
       if (req.user.role !== 'manager' && !onDuty(shift.id, req.user.id)) fail(403, 'Prenez d’abord le poste.', 'not_on_duty');
+      if (req.user.role === 'attendant' && aiEnabled()) needPhotos(shift, req.body?.readings);
     }
     const cash = round(num(req.body?.cash ?? 0, 'L’argent remis', { max: 1e8 }));
     const note = str(req.body?.note, 'La remarque', { required: false, max: 300 });
@@ -454,7 +466,7 @@ module.exports = function shiftRoutes(db) {
     if (payment === 'paid') fail(400, 'Les ventes payées ne se saisissent pas : les index les comptent.', 'paid');
     const sale = createSale(db, shift, { ...(req.body || {}), payment, source: 'attendant', userId: req.user.id });
     lateEntry(req, shift, 'sales', sale);
-    res.status(201).json(sale);
+    res.status(201).json({ ...sale, balance: customerBalance(db, sale.customer_id) }); // for the receipt
   });
 
   // A customer settling their account at the pump: the money goes into the shift's cash.

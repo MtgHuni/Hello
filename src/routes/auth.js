@@ -134,6 +134,8 @@ module.exports = function authRoutes(db, { mailer }) {
     if (user.role !== 'customer') {
       settings.supplierNames = db.prepare('SELECT name FROM suppliers ORDER BY name COLLATE NOCASE').all().map((r) => r.name);
       settings.ai = aiEnabled(); // the photos read by Claude: meters, plates, the notebook
+      // « Demander à l'appli »: the manager, the admin and the owner (passed as a manager here).
+      settings.ask = aiEnabled() && user.role === 'manager' && settings.askMonthLimit > 0;
     }
     res.json({ user: owner ? { ...user, role: 'owner' } : user, settings });
   });

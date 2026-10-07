@@ -6,8 +6,9 @@ class HttpError extends Error {
   }
 }
 
-const fail = (status, message, code) => {
-  throw new HttpError(status, message, code);
+// `extra`: more fields in the error reply (e.g. the photo kept when it could not be read).
+const fail = (status, message, code, extra) => {
+  throw Object.assign(new HttpError(status, message, code), extra ? { extra } : {});
 };
 
 const round = (n, digits = 2) => {

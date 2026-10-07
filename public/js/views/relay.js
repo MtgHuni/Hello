@@ -41,7 +41,7 @@ export function reportCard(r, tol, { title, preview = false } = {}) {
       h(
         'div',
         { class: 'summary-line' },
-        h('span', {}, h('span', { class: 'swatch', style: `background:${productColor(n.product_id)}` }), n.name, h('div', { class: 'muted small' }, `Index ${fmt.number(n.from)} → ${fmt.number(n.to)}`, meterPhotoLink(n.photo_id))),
+        h('span', {}, h('span', { class: 'swatch', style: `background:${productColor(n.product_id)}` }), n.name, h('div', { class: 'muted small' }, `Index ${fmt.number(n.from)} → ${fmt.number(n.to)}`, meterPhotoLink(n.photo_id, n.photo_read, n.to))),
         h('span', { class: 'num nowrap' }, fmt.liters(n.liters)),
       ),
     ),
@@ -167,7 +167,7 @@ export function renderCheckpoint(page, ctx, shift, kind, { report } = {}) {
     try {
       const done = await api.post(`/shifts/${shift.id}/checkpoints`, {
         kind,
-        readings: readings().map((x) => ({ nozzleId: x.nozzleId, meter: Number(x.meter) })),
+        readings: readings().map((x) => ({ nozzleId: x.nozzleId, meter: Number(x.meter), photoId: x.photoId })),
         cash: Number(form.elements.cash.value) || 0,
         note: form.elements.note.value,
       });

@@ -1,12 +1,12 @@
 import { flags, edit } from '../ui.js';
 import { api } from '../api.js';
-import { h, fmt, kpi, cardHeader, tankGauge, pageHeader, button, setContent, priceTotem, formDialog, toast } from '../ui.js';
+import { h, fmt, kpi, cardHeader, tankGauge, pageHeader, button, setContent, priceTotem, formDialog, toast, field, busy } from '../ui.js';
 import { icon } from '../icons.js';
 
 const ALERT_ICON = { critical: 'alert', serious: 'alert', warning: 'info' };
 
 export async function renderDashboard(page, { state, navigate }) {
-  const [d, products] = await Promise.all([api.get('/dashboard'), api.get('/products')]);
+  const [d, products, asked] = await Promise.all([api.get('/dashboard'), api.get('/products'), flags.ask ? api.get('/ask').catch(() => null) : null]);
   const hour = new Date().getHours();
   const hello = hour < 18 ? 'Bonjour' : 'Bonsoir';
 
@@ -35,6 +35,8 @@ export async function renderDashboard(page, { state, navigate }) {
       h('a', { class: 'card kpi kpi-link', href: '#/clients/creances' }, h('div', { class: 'label' }, 'Encours clients'), h('div', { class: 'value' }, fmt.money(d.receivables)), h('div', { class: 'sub' }, d.receivablesOld ? `${fmt.money(d.receivablesOld)} à plus de 30 jours` : 'Rien à plus de 30 jours')),
     ),
 
+    asked ? askCard(asked) : null,
+
     // One ruled board: sales, alerts, stock and customer facts share a single surface.
     h(
       'div',
@@ -62,6 +64,45 @@ export async function renderDashboard(page, { state, navigate }) {
       ]),
     ),
   );
+}
+
+// « Demander à l'appli »: a question on the station's figures, answered by Claude from the database.
+function askCard(data) {
+  const left = h('span');
+  const list = h('div', { class: 'ask-list' });
+  const draw = () => {
+    const n = Math.max(0, data.limit - data.used);
+    left.textContent = `${n} restante${n > 1 ? 's' : ''} ce mois`;
+    setContent(
+      list,
+      data.rows.slice(0, 5).map((r) =>
+        h('div', { class: 'ask-item' }, h('p', { class: 'ask-q' }, r.question, h('span', { class: 'ask-when' }, fmt.dateTime(r.created_at))), h('p', { class: 'ask-a' }, r.answer)),
+      ),
+    );
+  };
+  const send = h('button', { class: 'btn', type: 'submit' }, 'Demander');
+  const form = h(
+    'form',
+    {
+      class: 'ask-form',
+      onSubmit: (e) => {
+        e.preventDefault();
+        const question = form.elements.question.value.trim();
+        if (question)
+          busy(send, async () => {
+            const r = await api.post('/ask', { question }, { timeout: 120000 });
+            Object.assign(data, { used: r.used, limit: r.limit });
+            data.rows.unshift(r);
+            form.elements.question.value = '';
+            draw();
+          });
+      },
+    },
+    field({ name: 'question', label: 'Votre question', required: true, enterkeyhint: 'send' }),
+    send,
+  );
+  draw();
+  return h('section', { class: 'card ask-card section' }, cardHeader('Question', left), form, list);
 }
 
 // Customer facts as ruled rows: label and note on the left, the figure on the right.

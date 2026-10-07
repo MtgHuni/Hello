@@ -49,8 +49,9 @@ function periodReport(db, shift, readings, end) {
     const tested = round(tests.filter((t) => t.nozzle_id === r.nozzle_id).reduce((s, t) => s + t.liters, 0));
     const liters = round(stop - start - tested);
     // The photo of the meter sent with this relief (kept a week).
-    const photo = end.id ? db.prepare('SELECT MAX(id) AS id FROM meter_photos WHERE checkpoint_id = ? AND nozzle_id = ?').get(end.id, r.nozzle_id).id : null;
-    return { nozzle_id: r.nozzle_id, name: r.product_name, product_id: r.product_id, product_name: r.product_name, from: start, to: stop, tested, liters, amount: round(liters * r.unit_price), photo_id: photo };
+    // With what Claude read on it: the report shows an index typed differently.
+    const photo = end.id ? db.prepare('SELECT id, read_index FROM meter_photos WHERE checkpoint_id = ? AND nozzle_id = ? ORDER BY id DESC LIMIT 1').get(end.id, r.nozzle_id) : null;
+    return { nozzle_id: r.nozzle_id, name: r.product_name, product_id: r.product_id, product_name: r.product_name, from: start, to: stop, tested, liters, amount: round(liters * r.unit_price), photo_id: photo?.id ?? null, photo_read: photo?.read_index ?? null };
   });
   const unitPrices = new Map(readings.map((r) => [r.nozzle_id, r.unit_price]));
   const customerName = new Map(db.prepare('SELECT id, name FROM customers').all().map((c) => [c.id, c.name]));

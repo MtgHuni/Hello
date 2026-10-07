@@ -6,6 +6,8 @@ const { refreshCustomer } = require('../loyalty');
 const claude = require('../claude');
 const { aiEnabled, imageParam } = claude;
 const reader = require('../meterReader');
+const assistant = require('../assistant');
+const { getSettings } = require('../db');
 const { customerNamed } = require('./customers');
 
 const staff = requireRole('manager', 'attendant');
@@ -32,17 +34,19 @@ function aiRoutes(db, { photos } = {}) {
     const product = str(req.body?.product, 'Le produit', { required: false, max: 60 });
     const last = req.body?.last == null || req.body.last === '' ? null : num(req.body.last, 'Le dernier index', { max: 1e12 });
     const nozzleId = req.body?.nozzleId ? Number(req.body.nozzleId) : null;
+    // Kept a week as the proof of the index, linked to the relief or closing the form sends it with;
+    // kept too when it cannot be read: the index is then typed, beside its photo.
+    const shiftId = db.prepare("SELECT id FROM shifts WHERE status = 'open'").get()?.id;
+    const photoId = photos && nozzleId ? photos.save({ base64: image.source.data, shiftId, nozzleId, index: null, userId: req.user.id }) : null;
     let read;
     try {
       read = await reader.readMeter({ image, product, last });
     } catch (err) {
       console.error('Lecture du compteur :', err.message);
-      fail(422, 'Lecture impossible : tapez l’index.', 'reader_failed');
+      fail(422, 'Lecture impossible : tapez l’index.', 'reader_failed', { photoId });
     }
-    if (!read) fail(422, 'Index illisible : reprenez la photo ou tapez-le.', 'unreadable');
-    // Kept a week as the proof of the index, linked to the relief or closing the form sends it with.
-    const shiftId = db.prepare("SELECT id FROM shifts WHERE status = 'open'").get()?.id;
-    const photoId = photos && nozzleId ? photos.save({ base64: image.source.data, shiftId, nozzleId, index: read.index, userId: req.user.id }) : null;
+    if (!read) fail(422, 'Index illisible : reprenez la photo ou tapez-le.', 'unreadable', { photoId });
+    if (photoId) db.prepare('UPDATE meter_photos SET read_index = ? WHERE id = ?').run(read.index, photoId);
     res.json({ ...read, photoId });
   });
 
@@ -51,6 +55,37 @@ function aiRoutes(db, { photos } = {}) {
     if (!file) fail(404, 'Photo effacée : les photos sont gardées une semaine.');
     res.setHeader('Cache-Control', 'private, max-age=604800');
     res.type('image/jpeg').sendFile(file);
+  });
+
+  // ---------- « Demander à l'appli »: a question on the station's figures ----------
+  // The manager, the admin and the owner; a limit per month for the whole station (Réglages).
+  const asker = requireRole('manager', 'owner');
+  const usedThisMonth = () =>
+    db.prepare("SELECT COUNT(*) AS n FROM ai_questions WHERE strftime('%Y-%m', created_at, 'localtime') = strftime('%Y-%m', 'now', 'localtime')").get().n;
+
+  router.get('/ask', asker, (req, res) => {
+    const rows = db.prepare('SELECT id, question, answer, created_at FROM ai_questions WHERE user_id = ? ORDER BY id DESC LIMIT 20').all(req.user.id);
+    res.json({ rows, used: usedThisMonth(), limit: getSettings(db).askMonthLimit });
+  });
+
+  router.post('/ask', asker, async (req, res) => {
+    ready();
+    const question = str(req.body?.question, 'La question', { max: 500 });
+    const limit = getSettings(db).askMonthLimit;
+    if (usedThisMonth() >= limit) fail(409, `Limite de ${limit} questions ce mois atteinte.`, 'ask_limit');
+    let out;
+    try {
+      out = await assistant.answer(db, question);
+    } catch (err) {
+      console.error('Question à l’appli :', err.message);
+      fail(422, 'Pas de réponse pour l’instant : réessayez.', 'ask_failed');
+    }
+    if (!out?.text) fail(422, 'Pas de réponse à cette question : reformulez-la.', 'ask_failed');
+    console.log(`Question à l’appli : ${out.usage.input} jetons lus, ${out.usage.output} écrits`);
+    const id = db
+      .prepare('INSERT INTO ai_questions (user_id, question, answer, input_tokens, output_tokens) VALUES (?, ?, ?, ?, ?)')
+      .run(req.user.id, question, out.text, out.usage.input, out.usage.output).lastInsertRowid;
+    res.status(201).json({ ...db.prepare('SELECT id, question, answer, created_at FROM ai_questions WHERE id = ?').get(id), used: usedThisMonth(), limit });
   });
 
   // ---------- Car plate → the customer ----------

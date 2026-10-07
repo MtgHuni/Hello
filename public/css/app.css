@@ -773,6 +773,10 @@ tfoot td { font-weight: 600; border-top: 1px solid var(--separator); border-bott
 /* The meter's photo beside an index in a report. */
 .photo-link { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 32px; margin: 0 4px; color: var(--link); vertical-align: middle; }
 .photo-link .png-icon { width: 22px; height: 22px; }
+/* An index typed differently from the photo: the figure read, in orange. */
+.photo-link.corrected { gap: 4px; color: var(--orange); font-size: 0.8125rem; font-weight: 600; white-space: nowrap; }
+/* An index not read yet: the field waits for its photo (touching it opens the camera). */
+.meter-row.photo-only input { caret-color: transparent; cursor: pointer; }
 .field .hint { padding: 0 2px; font-size: 13px; line-height: 1.38; color: var(--text-2); }
 .field-box { position: relative; display: block; }
 .field-label {
@@ -1089,6 +1093,18 @@ dialog.action-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; 
 .toast.error .toast-icon { background: var(--red); }
 .toast .toast-icon svg { width: 14px; height: 14px; stroke-width: 3; }
 .toast.leaving { animation: banner-out 0.3s var(--ease-out) forwards; }
+.toast .toast-action { flex: none; gap: 6px; margin-left: 4px; }
+/* « Demander à l'appli » on the dashboard: the question field and its button on one line, the answers below. */
+.ask-form { display: flex; gap: 12px; align-items: stretch; }
+.ask-form .field { flex: 1; min-width: 0; }
+.ask-list { display: flex; flex-direction: column; margin-top: 8px; }
+.ask-item { padding: 14px 0; border-top: 1px solid var(--hairline); }
+.ask-item:first-child { border-top: 0; }
+.ask-q { margin: 0 0 6px; font-weight: 600; }
+.ask-q .ask-when { display: block; margin-top: 2px; color: var(--text-2); font-weight: 400; font-size: 0.8125rem; }
+.ask-a { margin: 0; white-space: pre-line; line-height: 1.5; }
+@media (max-width: 600px) { .ask-form { flex-direction: column; } }
+.toast .toast-action .logo-whatsapp { width: 18px; height: 18px; }
 
 /* ---------- Auth screens: the brand film beside the form ---------- */
 .auth { min-height: 100vh; min-height: 100dvh; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); background: var(--bg); }
@@ -1522,6 +1538,9 @@ input:focus, select:focus, textarea:focus { border-color: var(--text); }
 .chip.new { border-style: dashed; justify-content: center; }
 /* The requests list is not up to date: said plainly, with the time of the last good check. */
 .offline-strip { margin: 0; padding: 10px 14px; border-radius: var(--radius-md); background: color-mix(in srgb, var(--orange) 16%, transparent); color: var(--text); font-size: 14px; font-weight: 600; }
+/* Without network, above every screen: since when, and the entries waiting (touch: their list). */
+.net-strip { display: block; width: 100%; min-height: 44px; margin: 0 0 12px; border: 0; font: inherit; font-size: 14px; font-weight: 600; text-align: left; cursor: pointer; }
+.net-strip[hidden] { display: none; }
 /* Créances: stacked rows on phones, the table on wide screens. */
 .recv-list { display: none; }
 .recv-item { display: grid; gap: 8px; padding: 16px 18px; border-top: 1px solid var(--hairline); }

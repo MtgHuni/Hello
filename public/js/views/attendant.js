@@ -1,10 +1,10 @@
 import { flags } from '../ui.js';
 import { api } from '../api.js';
-import { priceTotem, shiftLine, h, fmt, pageHeader, card, cardHeader, table, shiftBadge, varianceCell, button, formDialog, confirmDialog, toast, field, productColor, badge, kpi, parseServerDate, setContent, reportLink, busy, newRef, buttonRow, noticeDialog, nameChips } from '../ui.js';
+import { priceTotem, shiftLine, h, fmt, receipt, pageHeader, card, cardHeader, table, shiftBadge, varianceCell, button, formDialog, confirmDialog, toast, field, productColor, badge, kpi, parseServerDate, setContent, reportLink, busy, newRef, buttonRow, noticeDialog, nameChips } from '../ui.js';
 import { icon } from '../icons.js';
 import { shiftSummary } from './shifts.js';
 import { renderJoin, renderCheckpoint, reportCard } from './relay.js';
-import { withMeterPhoto } from '../photo.js';
+import { withMeterPhoto, markRead } from '../photo.js';
 
 // One shift for the station, always open: the attendant takes it (or continues it after a relief),
 // opens the station in the morning, or, the very first time, opens the first shift.
@@ -227,7 +227,7 @@ function renderOpenShift(page, ctx, shift, remarks = null) {
         { class: 'quick-actions' },
         quick('Crédit', 'plus', () => addCredit(ctx, shift, reload), true),
         quick('Mobile money', 'phone', () => addMomo(shift, reload)),
-        quick('Règlement', 'cash', () => addPayment(shift, reload)),
+        quick('Règlement', 'cash', () => addPayment(ctx, shift, reload)),
         quick('Dépense', 'wallet', () => addExpense(ctx, shift, reload)),
       ),
       // Fuel drawn for a test and poured back into the tank: not sold once the manager approves.
@@ -296,9 +296,8 @@ function renderOpenShift(page, ctx, shift, remarks = null) {
 // ---------- Purchases started by customers on their phone ----------
 // Polled every few seconds; the attendant confirms with one tap.
 function requestQueue(shift, reload, tol) {
-  const offline = h('p', { class: 'offline-strip', role: 'status', hidden: true });
   const list = h('div', { class: 'stack', style: 'gap:10px' });
-  const host = h('div', { class: 'stack', style: 'gap:10px' }, offline, list);
+  const host = h('div', { class: 'stack', style: 'gap:10px' }, list);
   const priceOf = (productId, type) => {
     const r = shift.readings.find((x) => x.product_id === productId);
     return type === 'account' ? r?.subscriber_price ?? r?.unit_price : r?.unit_price;
@@ -388,7 +387,6 @@ function requestQueue(shift, reload, tol) {
   let timer = null;
   let inFlight = false;
   let failures = 0;
-  let lastOk = Date.now();
   async function poll() {
     clearTimeout(timer);
     if (host.isConnected) seenConnected = true;
@@ -399,8 +397,6 @@ function requestQueue(shift, reload, tol) {
         const [rows, reports] = await Promise.all([api.get('/requests/pending'), api.get('/shifts/reports/unseen').catch(() => [])]);
         showReports(reports);
         failures = 0;
-        lastOk = Date.now();
-        offline.hidden = true;
         const ids = rows.map((r) => r.id);
         if (known && ids.some((id) => !known.includes(id))) {
           navigator.vibrate?.([80, 60, 80]);
@@ -410,10 +406,6 @@ function requestQueue(shift, reload, tol) {
         draw(rows);
       } catch {
         failures += 1;
-        if (failures >= 2) {
-          offline.hidden = false;
-          offline.textContent = `Hors connexion · demandes non mises à jour depuis ${new Date(lastOk).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
-        }
       } finally {
         inFlight = false;
       }
@@ -444,6 +436,12 @@ function requestQueue(shift, reload, tol) {
   document.addEventListener('visibilitychange', onVisible);
   poll();
   return host;
+}
+
+// Saved without network: kept on the phone until the server answers (the strip at the top counts them).
+function queued(reload) {
+  toast('Sans réseau : en attente d’envoi');
+  reload();
 }
 
 // The customers list is kept for 30 s: opening a form a second time is instant.
@@ -582,6 +580,7 @@ export async function addCredit(ctx, shift, reload) {
   };
 
   const search = customerSearch(customers, { allowNew: true, onPick: (form) => update(form) });
+  let sold = null; // the customer, for the receipt
   const fields = [
     {
       name: 'customer',
@@ -627,6 +626,7 @@ export async function addCredit(ctx, shift, reload) {
         forgetCustomers();
         form.elements.customer.value = customer.name;
       }
+      sold = customer;
       const body = {
         customerId: customer.id,
         productId: Number(d.productId),
@@ -636,7 +636,7 @@ export async function addCredit(ctx, shift, reload) {
         clientRef,
       };
       try {
-        return await api.post(`/shifts/${shift.id}/sales`, body);
+        return await api.post(`/shifts/${shift.id}/sales`, body, { queue: `Crédit · ${customer.name} · ${d.unit === 'amount' ? fmt.money(d.qty) : fmt.liters(d.qty)}` });
       } catch (err) {
         if (err.code === 'has_credit') {
           await creditBlocked(customer.id, err.message);
@@ -649,16 +649,22 @@ export async function addCredit(ctx, shift, reload) {
       }
     },
   });
+  if (ok?.queued) return queued(reload);
   if (ok) {
     forgetCustomers(); // balances changed
-    toast(ok.over_limit ? 'Crédit accordé et signalé au gérant' : `Crédit enregistré · ${fmt.liters(ok.liters)} · ${fmt.money(ok.amount)}`);
+    const product = products.find((r) => r.product_id === ok.product_id)?.product_name;
+    const line = `Crédit : ${[product, fmt.liters(ok.liters), fmt.money(ok.amount)].filter(Boolean).join(' · ')}`;
+    toast(ok.over_limit ? 'Crédit accordé et signalé au gérant' : `Crédit enregistré · ${fmt.liters(ok.liters)} · ${fmt.money(ok.amount)}`, 'info', {
+      action: receipt(sold, [line, ok.plate ? `Plaque : ${ok.plate}` : null], ok.balance),
+    });
     reload();
   }
 }
 
-export async function addPayment(shift, reload) {
+export async function addPayment(ctx, shift, reload) {
   const customers = await customersList();
   const clientRef = newRef();
+  let paid = null; // the customer and the money, for the receipt
   const owes = h('p', { class: 'hint-line' });
   // A debt from before the app: asked when the payment is more than what the app knows.
   const oldField = h(
@@ -734,13 +740,21 @@ export async function addPayment(shift, reload) {
       // What the app does not know is a debt from before it (never an advance by mistake).
       const excess = Math.round((Number(d.amount) - known(choice)) * 100) / 100;
       const oldDebt = excess > 0 && form.elements.surplus.value !== 'advance' ? Number(form.elements.oldDebt.value) || excess : 0;
-      return api.post(`/shifts/${shift.id}/payments`, { amount: d.amount, method: d.method, reference: d.reference, customerId: customer.id, oldDebt, clientRef });
+      paid = { customer, line: `Règlement : ${fmt.money(Number(d.amount))} en ${d.method}` };
+      return api.post(
+        `/shifts/${shift.id}/payments`,
+        { amount: d.amount, method: d.method, reference: d.reference, customerId: customer.id, oldDebt, clientRef },
+        { queue: `Règlement · ${customer.name} · ${fmt.money(Number(d.amount))}` },
+      );
     },
   });
+  if (ok?.queued) return queued(reload);
   if (ok) {
     forgetCustomers();
     const done = ok.settled && ok.id == null ? 'Crédit payé' : 'Règlement encaissé';
-    toast(ok.balance < 0 ? `${done} · avance du client ${fmt.money(-ok.balance)}` : `${done} · reste dû ${fmt.money(ok.balance)}`);
+    toast(ok.balance < 0 ? `${done} · avance du client ${fmt.money(-ok.balance)}` : `${done} · reste dû ${fmt.money(ok.balance)}`, 'info', {
+      action: receipt(paid.customer, [paid.line], ok.balance),
+    });
     reload();
   }
 }
@@ -767,8 +781,9 @@ export async function addMomo(shift, reload) {
       { name: 'productId', label: 'Carburant', type: 'segment', options: products.map((p) => [String(p.id), p.name]), value: String(products[0]?.id), onInput: update },
     ],
     extra: () => h('div', { class: 'summary-line total' }, h('span', {}, 'Montant reçu'), amount),
-    onSubmit: (d) => api.post(`/shifts/${shift.id}/momo`, { productId: Number(d.productId), liters: Number(d.liters), clientRef }),
+    onSubmit: (d) => api.post(`/shifts/${shift.id}/momo`, { productId: Number(d.productId), liters: Number(d.liters), clientRef }, { queue: `Mobile money · ${fmt.liters(Number(d.liters))}` }),
   });
+  if (ok?.queued) return queued(reload);
   if (ok) {
     toast(`Mobile money : ${fmt.liters(ok.liters)} · ${fmt.money(ok.amount)}`);
     reload();
@@ -799,8 +814,9 @@ export async function addTest(ctx, shift, reload) {
       { name: 'quick', type: 'node', node: quickLiters },
       { name: 'note', label: 'Remarque (facultatif)', placeholder: 'Étalonnage, contrôle du compteur…' },
     ],
-    onSubmit: (d) => api.post(`/shifts/${shift.id}/tests`, { nozzleId: Number(d.nozzleId), liters: Number(d.liters), note: d.note, clientRef }),
+    onSubmit: (d) => api.post(`/shifts/${shift.id}/tests`, { nozzleId: Number(d.nozzleId), liters: Number(d.liters), note: d.note, clientRef }, { queue: `Test de pompe · ${fmt.liters(Number(d.liters))}` }),
   });
+  if (ok?.queued) return queued(reload);
   if (ok) {
     toast(manager ? `Test de pompe : ${fmt.liters(ok.liters)} remis en cuve` : `Test de pompe envoyé au gérant (${fmt.liters(ok.liters)})`);
     reload();
@@ -822,8 +838,9 @@ export async function addExpense(ctx, shift, reload) {
       { name: 'beneficiary', label: 'Payé à', placeholder: 'Facultatif', onInput: payTo.onInput },
       payTo.node,
     ],
-    onSubmit: (d) => api.post(`/shifts/${shift.id}/expenses`, { ...d, clientRef }),
+    onSubmit: (d) => api.post(`/shifts/${shift.id}/expenses`, { ...d, clientRef }, { queue: `Dépense · ${d.description} · ${fmt.money(Number(d.amount))}` }),
   });
+  if (ok?.queued) return queued(reload);
   if (ok) {
     toast('Dépense enregistrée');
     reload();
@@ -916,7 +933,7 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
             {},
             withMeterPhoto(
               field({ name: `end_${r.nozzle_id}`, label: `${r.product_name} (début : ${fmt.number(r.start_meter)}${lastTaken(r) !== r.start_meter ? `, dernier relevé : ${fmt.number(lastTaken(r))}` : ''})`, type: 'number', step: '0.01', min: String(lastTaken(r)), required: true, value: first(r.end_meter, undefined), onInput: recompute }),
-              { product: r.product_name, last: lastTaken(r), nozzleId: r.nozzle_id },
+              { product: r.product_name, last: lastTaken(r), nozzleId: r.nozzle_id, typed: correcting },
             ),
             out,
           );
@@ -969,7 +986,12 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
     if (correcting) return;
     try {
       const values = {};
-      for (const el of form.elements) if (el.name && el.name !== 'reason') values[el.name] = el.value;
+      for (const el of form.elements) {
+        if (!el.name || el.name === 'reason') continue;
+        values[el.name] = el.value;
+        // An index read from its photo: the photo goes with the draft.
+        if (el.dataset.read) values[`${el.name}@photo`] = el.dataset.photoId || '1';
+      }
       localStorage.setItem(draftKey, JSON.stringify(values));
     } catch {
       /* no storage: nothing kept */
@@ -979,7 +1001,13 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
     if (correcting) return;
     try {
       const values = JSON.parse(localStorage.getItem(draftKey) || 'null');
-      if (values) for (const [name, value] of Object.entries(values)) if (form.elements[name] && value !== '') form.elements[name].value = value;
+      if (values) {
+        for (const [name, value] of Object.entries(values)) if (form.elements[name] && value !== '') form.elements[name].value = value;
+        for (const [key, photo] of Object.entries(values)) {
+          const el = key.endsWith('@photo') && form.elements[key.slice(0, -6)];
+          if (el) markRead(el, photo === '1' ? null : photo);
+        }
+      }
     } catch {
       /* unreadable draft: start empty */
     }

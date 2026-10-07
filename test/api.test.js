@@ -1429,7 +1429,22 @@ test('photo d’un compteur gardée une semaine avec la relève ; transport ajou
       readings: shift.readings.map((r) => ({ nozzleId: r.nozzle_id, meter: r.nozzle_id === nozzle ? read.data.index : latest(r.nozzle_id), photoId: r.nozzle_id === nozzle ? read.data.photoId : undefined })),
     });
     assert.strictEqual(relief.status, 201, JSON.stringify(relief.data));
-    assert.strictEqual(relief.data.report.nozzles.find((n) => n.nozzle_id === nozzle).photo_id, read.data.photoId);
+    const shown = relief.data.report.nozzles.find((n) => n.nozzle_id === nozzle);
+    assert.deepStrictEqual([shown.photo_id, shown.photo_read], [read.data.photoId, read.data.index]);
+    // Unreadable: the photo is kept all the same, for the index typed beside it.
+    reader.readMeter = async () => null;
+    const blurred = await gerant('POST', '/api/meters/read', { image: 'A'.repeat(400), last: read.data.index, nozzleId: nozzle });
+    assert.strictEqual(blurred.status, 422);
+    assert.strictEqual(blurred.data.code, 'unreadable');
+    assert.ok(blurred.data.photoId, 'photo gardée');
+    assert.strictEqual(db.prepare('SELECT read_index FROM meter_photos WHERE id = ?').get(blurred.data.photoId).read_index, null);
+    // An attendant's relief needs a photo of every meter.
+    await pompiste('POST', `/api/shifts/${shift.id}/join`, {});
+    const typed = shift.readings.map((r) => ({ nozzleId: r.nozzle_id, meter: r.nozzle_id === nozzle ? read.data.index : latest(r.nozzle_id) }));
+    const noPhoto = await pompiste('POST', `/api/shifts/${shift.id}/checkpoints`, { kind: 'releve', cash: 0, readings: typed });
+    assert.deepStrictEqual([noPhoto.status, noPhoto.data.code], [422, 'photo_required']);
+    const onePhoto = typed.map((r) => (r.nozzleId === nozzle ? { ...r, photoId: blurred.data.photoId } : r));
+    assert.strictEqual((await pompiste('POST', `/api/shifts/${shift.id}/checkpoints`, { kind: 'releve', cash: 0, readings: onePhoto })).data.code, shift.readings.length > 1 ? 'photo_required' : undefined);
     // After a week: the file and its row are gone.
     const file = locals.photos.read(read.data.photoId);
     db.prepare("UPDATE meter_photos SET created_at = datetime('now', '-8 days') WHERE id = ?").run(read.data.photoId);
@@ -1531,4 +1546,45 @@ test('migration : une base ancienne est convertie (loyalty → paid, combos)', (
   reopened.close();
   assert.ok(fs.readdirSync(dir).some((f) => f.startsWith('old.db.avant-migration-')), 'copie gardée avant la mise à jour');
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('demander à l’appli : Claude lit la base en lecture seule, sans les secrets ; limite par mois', async () => {
+  const claude = require('../src/claude');
+  const { runSql } = require('../src/assistant');
+  const { converse } = claude;
+  // The tool: SELECT only, never a write, never a password.
+  assert.ok(runSql(db, 'WITH c AS (SELECT id FROM customers) SELECT COUNT(*) AS n FROM c').rows[0].n > 0);
+  assert.ok(runSql(db, 'DELETE FROM customers').error);
+  assert.ok(runSql(db, 'SELECT password_hash FROM users').error);
+  assert.ok(runSql(db, 'SELECT * FROM users').rows.every((u) => !('password_hash' in u)));
+  assert.strictEqual(runSql(db, 'SELECT key, value FROM settings').rows.find((r) => r.key === 'mail_secret').value, '[masqué]');
+  // Without the key: not offered.
+  assert.strictEqual((await gerant('GET', '/api/auth/me')).data.settings.ask, false);
+  process.env.ANTHROPIC_API_KEY = 'cle-de-test';
+  const calls = [];
+  claude.converse = async ({ messages }) => {
+    calls.push(messages.length);
+    if (messages.length === 1) return { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 't1', name: 'sql', input: { sql: 'SELECT COUNT(*) AS n FROM customers' } }], usage: { input_tokens: 900, output_tokens: 40 } };
+    const result = JSON.parse(messages.at(-1).content[0].content);
+    return { stop_reason: 'end_turn', content: [{ type: 'text', text: `La station a ${result.rows[0].n} clients.` }], usage: { input_tokens: 950, output_tokens: 20 } };
+  };
+  try {
+    assert.strictEqual((await gerant('GET', '/api/auth/me')).data.settings.ask, true);
+    assert.strictEqual((await pompiste('POST', '/api/ask', { question: 'Combien de clients ?' })).status, 403);
+    const asked = await gerant('POST', '/api/ask', { question: 'Combien de clients ?' });
+    assert.strictEqual(asked.status, 201, JSON.stringify(asked.data));
+    const n = db.prepare('SELECT COUNT(*) AS n FROM customers').get().n;
+    assert.strictEqual(asked.data.answer, `La station a ${n} clients.`);
+    assert.deepStrictEqual(calls, [1, 3]);
+    const history = (await gerant('GET', '/api/ask')).data;
+    assert.deepStrictEqual([history.rows[0].question, history.used], ['Combien de clients ?', 1]);
+    // The month's limit, set in Réglages.
+    await gerant('PUT', '/api/settings', { askMonthLimit: 1 });
+    const over = await gerant('POST', '/api/ask', { question: 'Et les dépenses ?' });
+    assert.deepStrictEqual([over.status, over.data.code], [409, 'ask_limit']);
+  } finally {
+    claude.converse = converse;
+    delete process.env.ANTHROPIC_API_KEY;
+    await gerant('PUT', '/api/settings', { askMonthLimit: 50 });
+  }
 });

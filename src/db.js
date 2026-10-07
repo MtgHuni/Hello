@@ -391,6 +391,16 @@ CREATE TABLE IF NOT EXISTS meter_photos (
   created_at       TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_meter_photos_created ON meter_photos(created_at);
+-- « Demander à l'appli »: each question to Claude, its answer and the tokens spent (the month's limit).
+CREATE TABLE IF NOT EXISTS ai_questions (
+  id            INTEGER PRIMARY KEY,
+  user_id       INTEGER REFERENCES users(id),
+  question      TEXT NOT NULL,
+  answer        TEXT NOT NULL,
+  input_tokens  INTEGER NOT NULL DEFAULT 0,
+  output_tokens INTEGER NOT NULL DEFAULT 0,
+  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
 CREATE TABLE IF NOT EXISTS customer_mail_prefs (
   customer_id INTEGER NOT NULL REFERENCES customers(id),
   kind        TEXT NOT NULL,
@@ -597,6 +607,7 @@ const DEFAULT_SETTINGS = {
   closing_time: '15:30', // the manager closes the shift every day at this time
   station_phone: '+243974105000', // shown at the bottom of the client space
   shift_transport: '0', // dollars: an expense « Transport » added to every shift when it opens (0: none)
+  ask_month_limit: '50', // questions to Claude per month, for the whole station (0: none)
 };
 
 // Rebuilds the sales table when its kind constraint is from an older release
@@ -790,6 +801,7 @@ function getSettings(db) {
     closingTime: s.closing_time,
     stationPhone: s.station_phone || '',
     shiftTransport: Number(s.shift_transport || 0),
+    askMonthLimit: Number(s.ask_month_limit ?? 50),
     expenseCategories: EXPENSE_CATEGORIES,
   };
 }
