@@ -856,7 +856,8 @@ export async function addExpense(ctx, shift, reload) {
 // ---------- 3. Closing in two steps: end meters (the next shift opens), then the money ----------
 // mode 'manager' (or 'attendant'): the end meters only. 'count': the money of a closed shift.
 // 'correct': the manager fixes a closed shift, starting from the first closing.
-export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, onDone } = {}) {
+// `values`: the figures already typed, put back when the form comes again (after an operation added).
+export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, onDone, values } = {}) {
   const tol = ctx.state.settings.cashTolerance;
   const correcting = mode === 'correct';
   const counting = mode === 'count';
@@ -946,6 +947,20 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
         }),
       ),
     ) : meterInputs,
+    // Correcting: a forgotten operation goes into the shift (recomputed, journalled), then this form
+    // comes again with it in the reconciliation and the figures already typed.
+    correcting
+      ? card(
+          cardHeader('Ajouter une opération'),
+          buttonRow([
+            button('Crédit', () => addCredit(ctx, shift, again), { variant: 'secondary', iconName: 'plus' }),
+            button('Règlement', () => addPayment(ctx, shift, again), { variant: 'secondary', iconName: 'cash' }),
+            button('Mobile money', () => addMomo(shift, again), { variant: 'secondary', iconName: 'phone' }),
+            button('Dépense', () => addExpense(ctx, shift, again), { variant: 'secondary', iconName: 'wallet' }),
+            button('Test de pompe', () => addTest(ctx, shift, again), { variant: 'secondary', iconName: 'pump' }),
+          ]),
+        )
+      : null,
     card(
       cardHeader('Rapprochement'),
       received ? h('div', { class: 'summary-line' }, h('span', {}, 'Monnaie reçue à l’ouverture'), h('span', { class: 'num' }, `+ ${fmt.money(received)}`)) : null,
@@ -987,6 +1002,13 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
   ].filter(Boolean));
 
   // Draft kept on the phone: leaving the screen or a reload does not lose the figures typed.
+  // After an operation added during a correction: the shift as recomputed, the typed figures kept.
+  const again = async () => {
+    const typed = {};
+    for (const el of form.elements) if (el.name && el.type !== 'radio' && el.type !== 'hidden') typed[el.name] = el.value;
+    renderClosing(page, ctx, await api.get(`/shifts/${shift.id}`), { mode, onBack, onDone, values: typed });
+  };
+
   const draftKey = `closing-draft-${shift.id}`;
   form.addEventListener('input', () => {
     if (correcting) return;
@@ -1054,6 +1076,7 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
   const title = correcting ? `Corriger la clôture du poste n°${shift.id}` : counting ? `Compter l’argent du poste n°${shift.id}` : `Clôturer le poste n°${shift.id}`;
   setContent(page, pageHeader(title, `Poste n°${shift.id} ouvert le ${fmt.dateTime(shift.opened_at)}`), form);
   restoreDraft();
+  for (const [name, value] of Object.entries(values || {})) if (form.elements[name] && value !== '') form.elements[name].value = value;
   recompute();
 }
 
