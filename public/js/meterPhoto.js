@@ -1,8 +1,9 @@
-import { h, flags, busy } from './ui.js';
+import { h, flags, busy, toast, fmt } from './ui.js';
 import { api } from './api.js';
 
-// The photo is reduced on the phone before it leaves: the digits stay sharp, the upload stays short.
-const MAX_SIDE = 1280;
+// The photo is reduced on the phone before it leaves, to the size the model reads at most:
+// the digits stay sharp, the upload stays short.
+const MAX_SIDE = 1568;
 
 async function shrink(file) {
   const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
@@ -12,7 +13,7 @@ async function shrink(file) {
   canvas.height = Math.round(bitmap.height * scale);
   canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
   bitmap.close?.();
-  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.82));
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
   const url = await new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result);
@@ -39,10 +40,11 @@ export function withMeterPhoto(fieldEl, { product, last } = {}) {
     file.value = '';
     if (!photo) return;
     busy(btn, async () => {
-      const { index } = await api.post('/meters/read', { image: await shrink(photo), mediaType: 'image/jpeg', product, last });
+      const { index, suspect } = await api.post('/meters/read', { image: await shrink(photo), mediaType: 'image/jpeg', product, last }, { timeout: 30000 });
       input.value = String(index);
       input.dispatchEvent(new Event('input', { bubbles: true }));
       input.focus();
+      if (suspect) toast(`À vérifier : ${fmt.number(index)}, dernier relevé ${fmt.number(last)}`, 'error');
     });
   });
   return h('div', { class: 'meter-row' }, fieldEl, btn, file);

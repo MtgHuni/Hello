@@ -1306,7 +1306,7 @@ test('photo d’un compteur : l’index lu revient au formulaire, rien n’est e
   const { readMeter } = reader;
   const seen = [];
   process.env.ANTHROPIC_API_KEY = 'cle-de-test';
-  reader.readMeter = async (args) => (seen.push(args), args.last === 0 ? null : 123456.7);
+  reader.readMeter = async (args) => (seen.push(args), args.last === 0 ? null : { index: 123456.7, suspect: false });
   try {
     assert.strictEqual((await gerant('GET', '/api/auth/me')).data.settings.meterReader, true);
     const read = await gerant('POST', '/api/meters/read', { image: photo, product: 'Gasoil', last: 123400 });
@@ -1317,6 +1317,12 @@ test('photo d’un compteur : l’index lu revient au formulaire, rien n’est e
     // A real photo is bigger than a form: up to a few megabytes.
     assert.strictEqual((await gerant('POST', '/api/meters/read', { image: 'A'.repeat(1_500_000), last: 1 })).status, 200);
     assert.strictEqual((await client()('POST', '/api/meters/read', { image: photo })).status, 401);
+    // A misplaced decimal point is put back from the last index; a reading that fits nowhere is flagged.
+    const { checkAgainst } = reader;
+    assert.deepStrictEqual(checkAgainst(1234567, 123400), { index: 123456.7, suspect: false });
+    assert.deepStrictEqual(checkAgainst(123456.7, 123400), { index: 123456.7, suspect: false });
+    assert.deepStrictEqual(checkAgainst(99999, 123400), { index: 99999, suspect: true });
+    assert.deepStrictEqual(checkAgainst(500, null), { index: 500, suspect: false });
   } finally {
     reader.readMeter = readMeter;
     delete process.env.ANTHROPIC_API_KEY;

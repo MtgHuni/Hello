@@ -15,15 +15,15 @@ function meterRoutes() {
     const mediaType = oneOf(req.body?.mediaType ?? 'image/jpeg', 'Le format de la photo', ['image/jpeg', 'image/png', 'image/webp']);
     const product = str(req.body?.product, 'Le produit', { required: false, max: 60 });
     const last = req.body?.last == null || req.body.last === '' ? null : num(req.body.last, 'Le dernier index', { max: 1e12 });
-    let index;
+    let read;
     try {
-      index = await reader.readMeter({ image, mediaType, product, last });
+      read = await reader.readMeter({ image, mediaType, product, last });
     } catch (err) {
       console.error('Lecture du compteur :', err.message);
       fail(422, 'Lecture impossible : tapez l’index.', 'reader_failed');
     }
-    if (index == null) fail(422, 'Index illisible : reprenez la photo ou tapez-le.', 'unreadable');
-    res.json({ index });
+    if (!read) fail(422, 'Index illisible : reprenez la photo ou tapez-le.', 'unreadable');
+    res.json(read);
   });
 
   return router;
