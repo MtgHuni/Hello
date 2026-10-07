@@ -17,6 +17,8 @@ const { balanceSql, subscriberDues } = require('./loyalty');
 const { applyScheduledPrices } = require('./prices');
 const { userAlerts } = require('./alerts');
 const { firstName } = require('./mailer');
+const { aiEnabled } = require('./claude');
+const { periodComment } = require('./reportComment');
 
 const TZ = 'Africa/Lubumbashi';
 const BACKUP_MAX = 25 * 1024 * 1024; // Resend takes 40 MB per mail, attachments included
@@ -257,8 +259,28 @@ function createMailJobs(db, mailer) {
 
   // ---------- Schedule ----------
 
-  function periodReport(kind, from, to, label) {
+  // With Claude (ANTHROPIC_API_KEY), a few observations come first: the mail waits for them, and
+  // goes without them if they fail. Without the key it is sent at once.
+  function periodReport(kind, from, to, label, previous) {
     const { report, pdf } = mailer.services.periodPdf(from, to);
+    const send = (points) => sendPeriodReport(kind, from, to, label, report, pdf, points);
+    if (!aiEnabled()) return send(null);
+    return periodComment({
+      label,
+      report,
+      previous: mailer.services.salesReport(...previous),
+      alerts: mailer.services.stationAlerts().alerts.map((a) => a.text),
+      stationName: getSettings(db).stationName,
+    })
+      .catch((err) => {
+        console.error('Commentaire du rapport :', err.message);
+        return null;
+      })
+      .then(send)
+      .catch((err) => console.error(`Mails (${kind}) :`, err));
+  }
+
+  function sendPeriodReport(kind, from, to, label, report, pdf, points) {
     const t = report.totals;
     toStaff(
       kind,
@@ -269,6 +291,7 @@ function createMailJobs(db, mailer) {
         preheader: `${fmt.money(t.amount)} de ventes, ${liters(t.liters)}.`,
         blocks: [
           { amount: { label: 'Ventes', value: fmt.money(t.amount), sub: `${liters(t.liters)} · ${report.shifts.length} poste${report.shifts.length > 1 ? 's' : ''}` } },
+          ...(points ? [{ list: points }] : []),
           {
             rows: [
               ['Crédits accordés', fmt.money(t.credit)],
@@ -415,11 +438,12 @@ function createMailJobs(db, mailer) {
     run('alertes', alerts);
     if (t.hour >= 7 && t.weekday === 'Mon' && once(`semaine:${t.date}`)) {
       const from = addDays(t.date, -7);
-      run('semaine', () => periodReport('rapport_semaine', from, addDays(t.date, -1), `de la semaine du ${fmt.date(from)} au ${fmt.date(addDays(t.date, -1))}`));
+      run('semaine', () => periodReport('rapport_semaine', from, addDays(t.date, -1), `de la semaine du ${fmt.date(from)} au ${fmt.date(addDays(t.date, -1))}`, [addDays(from, -7), addDays(from, -1)]));
     }
     if (t.hour >= 7 && t.day === 1) {
       const month = previousMonth(t.month);
-      if (once(`mois:${month}`)) run('mois', () => periodReport('rapport_mois', `${month}-01`, lastDay(month), ofMonth(month)));
+      const before = previousMonth(month);
+      if (once(`mois:${month}`)) run('mois', () => periodReport('rapport_mois', `${month}-01`, lastDay(month), ofMonth(month), [`${before}-01`, lastDay(before)]));
       if (t.hour >= 8 && once(`releves:${month}`)) run('relevés', () => statements(month));
     }
     if (t.hour >= 8 && once(`rappels:${t.date}`)) run('rappels', () => reminders(t.date));

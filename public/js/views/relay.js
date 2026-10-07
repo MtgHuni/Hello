@@ -1,7 +1,7 @@
 import { api } from '../api.js';
 import { h, fmt, pageHeader, card, cardHeader, button, toast, field, productColor, varianceCell, setContent, confirmDialog } from '../ui.js';
 import { renderAttendant } from './attendant.js';
-import { withMeterPhoto } from '../meterPhoto.js';
+import { withMeterPhoto } from '../photo.js';
 
 // One shift runs from one 15:30 closing to the next, across the night. Inside it, checkpoints:
 // a relief (the attendant hands over, money to the next one), the evening closing (19:00, the

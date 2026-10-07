@@ -2,7 +2,7 @@ const express = require('express');
 const { getSettings } = require('../db');
 const { seedTestData } = require('../seed');
 const { customerNamed } = require('./customers');
-const { meterReaderEnabled } = require('../meterReader');
+const { aiEnabled } = require('../claude');
 const { fail, num, str, transaction } = require('../util');
 const {
   hashPassword,
@@ -133,7 +133,7 @@ module.exports = function authRoutes(db, { mailer }) {
     const settings = getSettings(db);
     if (user.role !== 'customer') {
       settings.supplierNames = db.prepare('SELECT name FROM suppliers ORDER BY name COLLATE NOCASE').all().map((r) => r.name);
-      settings.meterReader = meterReaderEnabled(); // the photo button beside a meter index
+      settings.ai = aiEnabled(); // the photos read by Claude: meters, plates, the notebook
     }
     res.json({ user: owner ? { ...user, role: 'owner' } : user, settings });
   });

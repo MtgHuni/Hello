@@ -1,5 +1,5 @@
 import { icon } from './icons.js';
-import { withMeterPhoto } from './meterPhoto.js';
+import { withMeterPhoto, withPhoto } from './photo.js';
 
 // ---------- DOM builder ----------
 export function h(tag, props, ...children) {
@@ -38,7 +38,7 @@ const numFmt = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 });
 const priceFmt = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 });
 
 // Programme de combos activé ? Réglage du gérant, posé par main.js au démarrage.
-export const flags = { combos: true, readonly: false, admin: false, meterReader: false };
+export const flags = { combos: true, readonly: false, admin: false, ai: false };
 // The owner (actionnaire) sees everything and changes nothing: a control that writes is left out.
 export const edit = (node) => (flags.readonly ? null : node);
 // The settings and the cash book: changed by the admin only (the manager reads them).
@@ -553,7 +553,10 @@ export function field(f) {
     f.hint ? h('span', { class: 'hint' }, f.hint) : null,
   );
   // A meter index: the camera beside it (`meterPhoto: { product, last }`).
-  return f.meterPhoto ? withMeterPhoto(el, f.meterPhoto) : el;
+  if (f.meterPhoto) return withMeterPhoto(el, f.meterPhoto);
+  // Any other photo read by Claude (`photo: { label, onImage(image, input) }`).
+  if (f.photo) return withPhoto(el, { label: f.photo.label, onImage: (image) => f.photo.onImage(image, input) });
+  return el;
 }
 
 export function readForm(form, fields) {

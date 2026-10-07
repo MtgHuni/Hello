@@ -4,7 +4,7 @@ import { priceTotem, shiftLine, h, fmt, pageHeader, card, cardHeader, table, shi
 import { icon } from '../icons.js';
 import { shiftSummary } from './shifts.js';
 import { renderJoin, renderCheckpoint, reportCard } from './relay.js';
-import { withMeterPhoto } from '../meterPhoto.js';
+import { withMeterPhoto } from '../photo.js';
 
 // One shift for the station, always open: the attendant takes it (or continues it after a relief),
 // opens the station in the morning, or, the very first time, opens the first shift.
@@ -491,7 +491,7 @@ function customerSearch(customers, { allowNew = false, onPick } = {}) {
     }
     onPick?.(form, picked);
   };
-  return { onInput, chips, picked: () => picked };
+  return { onInput, chips, picked: () => picked, pick: choose };
 }
 
 // Credit entered by the attendant (paid sales are not entered: the indexes count them),
@@ -583,7 +583,26 @@ export async function addCredit(ctx, shift, reload) {
 
   const search = customerSearch(customers, { allowNew: true, onPick: (form) => update(form) });
   const fields = [
-    { name: 'customer', label: 'Client (nom, plaque ou téléphone)', required: true, placeholder: 'Tapez quelques lettres…', onInput: search.onInput, enterkeyhint: 'next' },
+    {
+      name: 'customer',
+      label: 'Client (nom, plaque ou téléphone)',
+      required: true,
+      placeholder: 'Tapez quelques lettres…',
+      onInput: search.onInput,
+      enterkeyhint: 'next',
+      // The car's plate in photo: the customer it belongs to is picked.
+      photo: {
+        label: 'Photo de la plaque',
+        onImage: async (image, input) => {
+          const form = input.form;
+          const read = await api.post('/customers/plate/read', { image, mediaType: 'image/jpeg' }, { timeout: 30000 });
+          form.elements.plate.value = read.plate;
+          const c = read.customerId && customers.find((x) => x.id === read.customerId);
+          if (c) search.pick(form, c);
+          else toast(`Plaque ${read.plate} : aucun client`, 'error');
+        },
+      },
+    },
     { name: 'customerChips', type: 'node', node: search.chips },
     { name: 'productId', label: 'Produit', type: 'segment', options: products.map((r) => [r.product_id, r.product_name]), onInput: update },
     { name: 'unit', label: 'Unité', type: 'segment', options: [['amount', '$'], ['liters', 'L']], onInput: update },

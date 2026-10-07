@@ -1299,7 +1299,7 @@ test('photo d’un compteur : l’index lu revient au formulaire, rien n’est e
   const reader = require('../src/meterReader');
   const photo = 'A'.repeat(400);
   delete process.env.ANTHROPIC_API_KEY;
-  assert.strictEqual((await pompiste('GET', '/api/auth/me')).data.settings.meterReader, false);
+  assert.strictEqual((await pompiste('GET', '/api/auth/me')).data.settings.ai, false);
   const off = await gerant('POST', '/api/meters/read', { image: photo });
   assert.strictEqual(off.data?.code, 'no_reader', JSON.stringify([off.status, off.data]));
 
@@ -1308,10 +1308,10 @@ test('photo d’un compteur : l’index lu revient au formulaire, rien n’est e
   process.env.ANTHROPIC_API_KEY = 'cle-de-test';
   reader.readMeter = async (args) => (seen.push(args), args.last === 0 ? null : { index: 123456.7, suspect: false });
   try {
-    assert.strictEqual((await gerant('GET', '/api/auth/me')).data.settings.meterReader, true);
+    assert.strictEqual((await gerant('GET', '/api/auth/me')).data.settings.ai, true);
     const read = await gerant('POST', '/api/meters/read', { image: photo, product: 'Gasoil', last: 123400 });
     assert.deepStrictEqual([read.status, read.data.index], [200, 123456.7]);
-    assert.deepStrictEqual([seen[0].product, seen[0].last, seen[0].mediaType], ['Gasoil', 123400, 'image/jpeg']);
+    assert.deepStrictEqual([seen[0].product, seen[0].last, seen[0].image.source.media_type], ['Gasoil', 123400, 'image/jpeg']);
     assert.strictEqual((await gerant('POST', '/api/meters/read', { image: photo, last: 0 })).data.code, 'unreadable');
     assert.strictEqual((await gerant('POST', '/api/meters/read', { image: 'pas une photo' })).status, 400);
     // A real photo is bigger than a form: up to a few megabytes.
@@ -1325,6 +1325,85 @@ test('photo d’un compteur : l’index lu revient au formulaire, rien n’est e
     assert.deepStrictEqual(checkAgainst(500, null), { index: 500, suspect: false });
   } finally {
     reader.readMeter = readMeter;
+    delete process.env.ANTHROPIC_API_KEY;
+  }
+});
+
+test('photos lues par Claude : plaque → client, page du cahier → anciennes dettes vérifiées', async () => {
+  const claude = require('../src/claude');
+  const photo = 'A'.repeat(400);
+  const { ask } = claude;
+  const asked = [];
+  process.env.ANTHROPIC_API_KEY = 'cle-de-test';
+  try {
+    // Plate: read, then the customer whose main plate it is (spaces and dashes do not count).
+    const owner = (await gerant('POST', '/api/customers', { type: 'account', name: 'Transco Kivu', plate: '1234 AB 19' })).data;
+    claude.ask = async (args) => (asked.push(args), { readable: true, plate: '1234-ab19' });
+    const plate = await pompiste('POST', '/api/customers/plate/read', { image: photo });
+    assert.deepStrictEqual([plate.status, plate.data.plate, plate.data.customerId], [200, '1234AB19', owner.id]);
+    claude.ask = async () => ({ readable: true, plate: '9999ZZ19' });
+    assert.strictEqual((await pompiste('POST', '/api/customers/plate/read', { image: photo })).data.customerId, null);
+    claude.ask = async () => ({ readable: false, plate: null });
+    assert.strictEqual((await pompiste('POST', '/api/customers/plate/read', { image: photo })).data.code, 'unreadable');
+    claude.ask = async () => {
+      throw new Error('API 529');
+    };
+    assert.strictEqual((await pompiste('POST', '/api/customers/plate/read', { image: photo })).data.code, 'reader_failed');
+
+    // Notebook page: rows matched to the customers already known, the manager checks, then imports.
+    claude.ask = async (args) => (
+      asked.push(args),
+      {
+        readable: true,
+        rows: [
+          { name: 'Transco', amount: 120, currency: 'USD', note: '2 pleins', customer: 'Transco Kivu' },
+          { name: 'Maman Furaha', amount: 35.5, currency: 'USD', note: null, customer: null },
+          { name: 'Kasereka', amount: 50000, currency: 'CDF', note: null, customer: null },
+        ],
+      }
+    );
+    assert.strictEqual((await pompiste('POST', '/api/customers/notebook/read', { image: photo })).status, 403);
+    const page = (await gerant('POST', '/api/customers/notebook/read', { image: photo })).data;
+    assert.ok(asked.at(-1).content[1].text.includes('Transco Kivu'), 'les clients connus sont donnés à Claude');
+    assert.deepStrictEqual(
+      page.rows.map((r) => [r.name, r.amount, r.currency, r.customerId]),
+      [
+        ['Transco', 120, 'USD', owner.id],
+        ['Maman Furaha', 35.5, 'USD', null],
+        ['Kasereka', 50000, 'CDF', null],
+      ],
+    );
+    const done = await gerant('POST', '/api/customers/notebook/import', {
+      rows: [
+        { name: 'Transco Kivu', amount: 120, note: '2 pleins' },
+        { name: 'Maman Furaha', amount: 35.5 },
+      ],
+    });
+    assert.deepStrictEqual([done.status, done.data.count, done.data.created, done.data.total], [201, 2, 1, 155.5]);
+    assert.strictEqual((await customer(owner.id)).balance, 120);
+    const furaha = (await gerant('GET', '/api/customers')).data.find((c) => c.name === 'Maman Furaha');
+    assert.deepStrictEqual([furaha.balance, furaha.needs_review], [35.5, 1]);
+    assert.ok((await gerant('GET', '/api/audit?category=clients')).data.some((a) => a.action === 'notebook_import'));
+
+    // The week's report: Claude's observations first, from this week, the one before and the alerts.
+    const { mailer, mailJobs } = locals;
+    claude.ask = async (args) => (asked.push(args), { points: [{ text: 'Ventes de gasoil en hausse de 12 %.', level: 'good' }, { text: 'Écart répété chez Paul.', level: 'bad' }] });
+    mailJobs.tick({ settle: 0, now: new Date(Date.UTC(2026, 9, 19, 6, 0)) });
+    await new Promise((r) => setTimeout(r, 50));
+    const weekly = [...mailer.mail.outbox].reverse().find((x) => x.kind === 'rapport_semaine');
+    assert.ok(weekly.text.includes('Écart répété chez Paul.'), 'constats en tête du rapport');
+    const question = asked.at(-1).content[0].text;
+    assert.ok(question.includes('2026-10-12') && question.includes('2026-10-05'), 'la semaine et la précédente');
+    // Claude failing: the report goes anyway, without observations.
+    claude.ask = async () => {
+      throw new Error('API 529');
+    };
+    mailJobs.tick({ settle: 0, now: new Date(Date.UTC(2026, 9, 26, 6, 0)) });
+    await new Promise((r) => setTimeout(r, 50));
+    const plain = [...mailer.mail.outbox].reverse().find((x) => x.kind === 'rapport_semaine');
+    assert.ok(plain.subject.includes('19/10/2026') && !plain.text.includes('Écart répété'));
+  } finally {
+    claude.ask = ask;
     delete process.env.ANTHROPIC_API_KEY;
   }
 });

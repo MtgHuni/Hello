@@ -94,7 +94,7 @@ async function boot() {
     flags.combos = me.settings.combosEnabled !== false;
     flags.readonly = me.user.role === 'owner';
     flags.admin = !!me.user.admin;
-    flags.meterReader = !!me.settings.meterReader;
+    flags.ai = !!me.settings.ai;
     document.title = me.settings.stationName;
     await route();
     if (openMailsAfterLogin) {

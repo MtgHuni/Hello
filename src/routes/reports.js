@@ -445,6 +445,7 @@ module.exports = function reportRoutes(db) {
     return { report, pdf: periodReportPdf(report, { stationName: settings.stationName, cashTolerance: settings.cashTolerance, combosEnabled: settings.combosEnabled }) };
   }
   router.periodPdf = periodPdf;
+  router.salesReport = salesReport;
 
   router.get('/reports/period.pdf', manager, (req, res) => {
     const { from, to } = period(req);

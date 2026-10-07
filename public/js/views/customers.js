@@ -2,6 +2,7 @@ import { flags, edit } from '../ui.js';
 import { api } from '../api.js';
 import { h, fmt, pageHeader, card, cardHeader, table, segmented, kpi, badge, button, formDialog, confirmDialog, toast, field, todayISO, isoDate, setContent, sharePdf, whatsappNumber, noticeDialog, buttonRow, nameChips } from '../ui.js';
 import { icon } from '../icons.js';
+import { photoButton, photosOn } from '../photo.js';
 
 let typeFilter = 'all';
 let search = '';
@@ -58,6 +59,18 @@ export async function renderCustomers(page, ctx) {
       `${customers.length} client${customers.length > 1 ? 's' : ''} · encours total ${fmt.money(receivables)}`,
       button('Créances', () => ctx.navigate('clients/creances'), { variant: 'secondary', iconName: 'cash' }),
       edit(button('Nouveau client', () => customerDialog(null, ctx), { iconName: 'plus' })),
+      photosOn()
+        ? photoButton({
+            label: 'Cahier des dettes',
+            text: 'Cahier',
+            className: 'btn secondary',
+            camera: false,
+            onImage: async (image) => {
+              const read = await api.post('/customers/notebook/read', { image, mediaType: 'image/jpeg' }, { timeout: 90000 });
+              if (await notebookDialog(read.rows, customers)) renderCustomers(page, ctx);
+            },
+          })
+        : null,
     ),
     h(
       'section',
@@ -84,6 +97,60 @@ export async function renderCustomers(page, ctx) {
     ),
   );
   draw();
+}
+
+// A page of the old debts notebook as read by Claude: one line per person, the name matched to a
+// customer when it is one (else created), the amount in dollars; the manager checks every line.
+async function notebookDialog(rows, customers) {
+  const known = (name) => customers.find((c) => nameKey(c.name) === nameKey(name));
+  const listId = `nb-${Math.random().toString(36).slice(2, 7)}`;
+  const lines = rows.map((r, i) => {
+    const dollars = r.currency !== 'CDF';
+    const status = h('p', { class: 'hint-line' });
+    const show = () => {
+      const name = nameField.querySelector('input').value;
+      const c = known(name);
+      status.textContent = [c ? `Client : ${c.name}` : name.trim() ? 'Nouveau client' : '', r.currency === 'CDF' ? `Écrit ${fmt.number(r.amount)} FC` : r.currency === 'inconnue' ? 'Monnaie non écrite' : '', r.note]
+        .filter(Boolean)
+        .join(' · ');
+      status.className = `hint-line${c ? '' : ' new'}`;
+    };
+    const nameField = field({ name: `name_${i}`, label: 'Nom', value: r.customerName || r.name, list: listId, onInput: () => show() });
+    show();
+    const node = h(
+      'div',
+      { class: 'notebook-line' },
+      field({ name: `keep_${i}`, label: r.name, type: 'checkbox', value: dollars, full: true }),
+      nameField,
+      field({ name: `amount_${i}`, label: 'Montant ($)', type: 'number', step: '0.01', min: '0.01', value: dollars ? r.amount : '' }),
+      status,
+    );
+    return { node, note: r.note };
+  });
+  const ok = await formDialog({
+    title: `Cahier · ${rows.length} ligne${rows.length > 1 ? 's' : ''}`,
+    grid: false,
+    fields: [
+      {
+        name: 'lines',
+        type: 'node',
+        node: h('div', { class: 'stack' }, lines.map((l) => l.node), h('datalist', { id: listId }, customers.map((c) => h('option', { value: c.name })))),
+      },
+    ],
+    submitLabel: 'Ajouter les dettes',
+    onSubmit: (d, form) => {
+      const picked = lines
+        .map((l, i) => ({ keep: form.elements[`keep_${i}`].checked, name: form.elements[`name_${i}`].value.trim(), amount: Number(form.elements[`amount_${i}`].value), note: l.note }))
+        .filter((l) => l.keep);
+      if (!picked.length) throw new Error('Cochez au moins une ligne.');
+      const bad = picked.find((l) => !l.name || !(l.amount > 0));
+      if (bad) throw new Error(`Ligne « ${bad.name || '…'} » : nom et montant en dollars.`);
+      return api.post('/customers/notebook/import', { rows: picked });
+    },
+  });
+  if (!ok) return false;
+  toast(`${ok.count} dette${ok.count > 1 ? 's' : ''} ajoutée${ok.count > 1 ? 's' : ''} · ${fmt.money(ok.total)}${ok.created ? ` · ${ok.created} client${ok.created > 1 ? 's' : ''} créé${ok.created > 1 ? 's' : ''}` : ''}`);
+  return true;
 }
 
 async function customerDialog(customer, ctx, onDone) {

@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { withMeterPhoto } from '../meterPhoto.js';
+import { withMeterPhoto } from '../photo.js';
 import { flags, edit, adminEdit, canAdmin } from '../ui.js';
 import { h, fmt, pageHeader, cardHeader, table, segmented, tankGauge, button, formDialog, confirmDialog, actionSheet, field, toast, badge, setContent, nameChips } from '../ui.js';
 
