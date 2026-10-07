@@ -763,6 +763,13 @@ tfoot td { font-weight: 600; border-top: 1px solid var(--separator); border-bott
 
 /* ---------- Fields: dark wells with floating labels ---------- */
 .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+/* A meter index with the camera beside it (photo read by the server). */
+.meter-row { display: flex; gap: 8px; align-items: flex-start; }
+.meter-row > .field { flex: 1; }
+.btn.meter-photo { flex: none; width: 56px; min-height: 56px; padding: 0; }
+/* PNG icons (pngegg.com, as the user asked) drawn in the text colour through a mask. */
+.png-icon { display: inline-block; width: 26px; height: 26px; background: currentColor; -webkit-mask: var(--png) center / contain no-repeat; mask: var(--png) center / contain no-repeat; }
+.png-camera { --png: url(/media/icon-camera.png); }
 .field .hint { padding: 0 2px; font-size: 13px; line-height: 1.38; color: var(--text-2); }
 .field-box { position: relative; display: block; }
 .field-label {

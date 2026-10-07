@@ -1,4 +1,5 @@
 import { api } from '../api.js';
+import { withMeterPhoto } from '../meterPhoto.js';
 import { flags, edit, adminEdit, canAdmin } from '../ui.js';
 import { h, fmt, pageHeader, cardHeader, table, segmented, tankGauge, button, formDialog, confirmDialog, actionSheet, field, toast, badge, setContent, nameChips } from '../ui.js';
 
@@ -121,7 +122,10 @@ function meterFields(meters) {
       meters
         .filter((m) => m.tankId === Number(tankId))
         .map((m) =>
-          field({ name: `meter-${m.nozzleId}`, label: `Index ${m.label} maintenant`, type: 'number', step: '0.01', min: String(m.latest), required: true, hint: `Dernier relevé : ${fmt.number(m.latest)}` }),
+          withMeterPhoto(
+            field({ name: `meter-${m.nozzleId}`, label: `Index ${m.label} maintenant`, type: 'number', step: '0.01', min: String(m.latest), required: true, hint: `Dernier relevé : ${fmt.number(m.latest)}` }),
+            { product: m.label, last: m.latest },
+          ),
         ),
     );
   const read = (form) => meters.filter((m) => form.elements[`meter-${m.nozzleId}`]).map((m) => ({ nozzleId: m.nozzleId, meter: Number(form.elements[`meter-${m.nozzleId}`].value) }));

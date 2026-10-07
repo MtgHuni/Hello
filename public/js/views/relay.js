@@ -1,6 +1,7 @@
 import { api } from '../api.js';
 import { h, fmt, pageHeader, card, cardHeader, button, toast, field, productColor, varianceCell, setContent, confirmDialog } from '../ui.js';
 import { renderAttendant } from './attendant.js';
+import { withMeterPhoto } from '../meterPhoto.js';
 
 // One shift runs from one 15:30 closing to the next, across the night. Inside it, checkpoints:
 // a relief (the attendant hands over, money to the next one), the evening closing (19:00, the
@@ -126,7 +127,7 @@ export function renderCheckpoint(page, ctx, shift, kind, { report } = {}) {
         'div',
         { class: 'stack' },
         shift.readings.map((r) =>
-          field({
+          withMeterPhoto(field({
             name: `m_${r.nozzle_id}`,
             label: r.product_name,
             hint: `Ouverture : ${fmt.number(r.start_meter)}${last ? ` · dernier relevé : ${fmt.number(lastMeter(r))}` : ''}`,
@@ -135,7 +136,7 @@ export function renderCheckpoint(page, ctx, shift, kind, { report } = {}) {
             min: String(lastMeter(r)),
             required: true,
             onInput: refresh,
-          }),
+          }), { product: r.product_name, last: lastMeter(r) }),
         ),
       ),
     ),

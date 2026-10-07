@@ -1295,6 +1295,34 @@ test('crédit payé pendant son propre poste : une vente payée, ni crédit ni r
   assert.ok((await gerant('GET', '/api/audit?category=postes')).data.some((x) => x.action === 'credit_paid_in_shift'));
 });
 
+test('photo d’un compteur : l’index lu revient au formulaire, rien n’est enregistré', async () => {
+  const reader = require('../src/meterReader');
+  const photo = 'A'.repeat(400);
+  delete process.env.ANTHROPIC_API_KEY;
+  assert.strictEqual((await pompiste('GET', '/api/auth/me')).data.settings.meterReader, false);
+  const off = await gerant('POST', '/api/meters/read', { image: photo });
+  assert.strictEqual(off.data?.code, 'no_reader', JSON.stringify([off.status, off.data]));
+
+  const { readMeter } = reader;
+  const seen = [];
+  process.env.ANTHROPIC_API_KEY = 'cle-de-test';
+  reader.readMeter = async (args) => (seen.push(args), args.last === 0 ? null : 123456.7);
+  try {
+    assert.strictEqual((await gerant('GET', '/api/auth/me')).data.settings.meterReader, true);
+    const read = await gerant('POST', '/api/meters/read', { image: photo, product: 'Gasoil', last: 123400 });
+    assert.deepStrictEqual([read.status, read.data.index], [200, 123456.7]);
+    assert.deepStrictEqual([seen[0].product, seen[0].last, seen[0].mediaType], ['Gasoil', 123400, 'image/jpeg']);
+    assert.strictEqual((await gerant('POST', '/api/meters/read', { image: photo, last: 0 })).data.code, 'unreadable');
+    assert.strictEqual((await gerant('POST', '/api/meters/read', { image: 'pas une photo' })).status, 400);
+    // A real photo is bigger than a form: up to a few megabytes.
+    assert.strictEqual((await gerant('POST', '/api/meters/read', { image: 'A'.repeat(1_500_000), last: 1 })).status, 200);
+    assert.strictEqual((await client()('POST', '/api/meters/read', { image: photo })).status, 401);
+  } finally {
+    reader.readMeter = readMeter;
+    delete process.env.ANTHROPIC_API_KEY;
+  }
+});
+
 test('clients : jamais deux fois le même nom ; un client en double est supprimé, ses opérations vont au bon', async () => {
   const jean = await gerant('POST', '/api/customers', { type: 'individual', name: 'Jean Bosco' });
   assert.strictEqual(jean.status, 201);

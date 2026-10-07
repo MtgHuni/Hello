@@ -4,6 +4,7 @@ import { priceTotem, shiftLine, h, fmt, pageHeader, card, cardHeader, table, shi
 import { icon } from '../icons.js';
 import { shiftSummary } from './shifts.js';
 import { renderJoin, renderCheckpoint, reportCard } from './relay.js';
+import { withMeterPhoto } from '../meterPhoto.js';
 
 // One shift for the station, always open: the attendant takes it (or continues it after a relief),
 // opens the station in the morning, or, the very first time, opens the first shift.
@@ -894,7 +895,10 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
           return h(
             'div',
             {},
-            field({ name: `end_${r.nozzle_id}`, label: `${r.product_name} (début : ${fmt.number(r.start_meter)}${lastTaken(r) !== r.start_meter ? `, dernier relevé : ${fmt.number(lastTaken(r))}` : ''})`, type: 'number', step: '0.01', min: String(lastTaken(r)), required: true, value: first(r.end_meter, undefined), onInput: recompute }),
+            withMeterPhoto(
+              field({ name: `end_${r.nozzle_id}`, label: `${r.product_name} (début : ${fmt.number(r.start_meter)}${lastTaken(r) !== r.start_meter ? `, dernier relevé : ${fmt.number(lastTaken(r))}` : ''})`, type: 'number', step: '0.01', min: String(lastTaken(r)), required: true, value: first(r.end_meter, undefined), onInput: recompute }),
+              { product: r.product_name, last: lastTaken(r) },
+            ),
             out,
           );
         }),

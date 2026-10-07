@@ -36,6 +36,8 @@ function createApp({ dbFile }) {
     if (req.secure) res.setHeader('Strict-Transport-Security', 'max-age=15552000');
     next();
   });
+  // A meter photo (reduced on the phone) is bigger than any form.
+  app.use('/api/meters/read', express.json({ limit: '3mb' }));
   app.use(express.json({ limit: '100kb' }));
   const pub = path.join(__dirname, '..', 'public');
   for (const dir of ['fonts', 'media', 'icons']) app.use(`/${dir}`, express.static(path.join(pub, dir), { maxAge: '7d' }));
@@ -71,7 +73,7 @@ function createApp({ dbFile }) {
     next();
   });
   const routers = {};
-  for (const routes of ['auth', 'mail', 'config', 'stock', 'shifts', 'customers', 'requests', 'expenses', 'users', 'reports', 'admin', 'cashbook']) {
+  for (const routes of ['auth', 'mail', 'config', 'stock', 'shifts', 'customers', 'requests', 'expenses', 'users', 'reports', 'admin', 'cashbook', 'meters']) {
     routers[routes] = require(`./routes/${routes}`)(db, { mailer });
     api.use(routers[routes]);
   }
