@@ -63,7 +63,6 @@ function periodReportPdf(r, { stationName, cashTolerance = 0, combosEnabled, now
       s.counted_at ? signed(s.variance) : 'À compter',
     ]),
     {
-      size: 8,
       empty: 'Aucun poste clôturé sur la période.',
       totals: r.shifts.length
         ? [['Total', '', '', liters(sum('total_liters')), money(sum('total_amount')), money(sum('credit_amount')), money(sum('expected_amount')), money(round(r.shifts.reduce((a, s) => a + handedOver(s), 0))), signed(sum('variance'))]]

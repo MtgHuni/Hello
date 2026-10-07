@@ -49,7 +49,7 @@ function statementPdf(acc, { stationName, from, to, graceDays, now = new Date() 
       { label: 'SOLDE', align: 'right' },
     ],
     acc.movements.map((m) => [dateTime(m.date), m.label, m.debit ? money(m.debit) : '', m.credit ? money(m.credit) : '', money(m.balance)]),
-    { size: 8.5, empty: 'Aucun mouvement sur cette période.', totals: acc.movements.length ? [[`Total ${of}`, '', money(debits), money(acc.totals.payments), money(acc.closing)]] : [] },
+    { empty: 'Aucun mouvement sur cette période.', totals: acc.movements.length ? [[`Total ${of}`, '', money(debits), money(acc.totals.payments), money(acc.closing)]] : [] },
   );
 
   report.note(`Merci de régler votre solde auprès de ${stationName}.`);

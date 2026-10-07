@@ -53,7 +53,7 @@ function cashbookPdf(books, balances, { stationName, from, to, part = 'all', now
         { label: 'SOLDE', align: 'right' },
       ],
       b.movements.map((m) => [dateTime(m.at), m.label, m.in ? money(m.in) : '', m.out ? money(m.out) : '', money(m.balance)]),
-      { size: 8, empty: 'Aucun mouvement sur la période.' },
+      { empty: 'Aucun mouvement sur la période.' },
     );
   }
 
@@ -81,7 +81,7 @@ function movementsPdf(books, { stationName, from, to, part, now }) {
         { label: 'MONTANT', align: 'right' },
       ],
       list.map((m) => [dateTime(m.at), m.label, money(m[part])]),
-      { size: 8, empty: `Aucune ${part === 'in' ? 'entrée' : 'sortie'} sur la période.`, totals: list.length ? [['Total', '', money(b[part])]] : [] },
+      { empty: `Aucune ${part === 'in' ? 'entrée' : 'sortie'} sur la période.`, totals: list.length ? [['Total', '', money(b[part])]] : [] },
     );
   }
   return report.finish();
