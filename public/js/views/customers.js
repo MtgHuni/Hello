@@ -299,7 +299,6 @@ export async function renderCustomerDetail(page, ctx) {
             edit(button('Compléter la fiche', () => customerDialog(c, ctx, reload), { iconName: 'edit' })),
           )
         : null,
-      priceCard(acc, reload),
       statement(
         acc,
         period,
@@ -307,7 +306,7 @@ export async function renderCustomerDetail(page, ctx) {
           Object.assign(period, p);
           load();
         },
-        { shareUrl: `/api/customers/${c.id}/statement.pdf`, onOldDebt: flags.readonly ? null : (m) => removeOldDebt(c, m, reload) },
+        { shareUrl: `/api/customers/${c.id}/statement.pdf`, onOldDebt: flags.readonly ? null : (m) => removeOldDebt(c, m, reload), first: priceCard(acc, reload) },
       ),
     );
   };
@@ -322,7 +321,7 @@ function priceCard(acc, reload) {
   if (c.type !== 'account') return null;
   return h(
     'section',
-    { class: 'card section' },
+    { class: 'card' },
     cardHeader('Prix', null, edit(button('Modifier', () => pricesDialog(acc, reload), { variant: 'ghost' }))),
     acc.prices.map((p) =>
       h(
@@ -368,7 +367,8 @@ export function defaultPeriod() {
 }
 
 // Account statement shared with the client space: KPIs, period picker, movements.
-export function statement(acc, period, onPeriod, { onOldDebt, clientSpace = false, shareUrl } = {}) {
+// `first`: a card on top of the column (the subscriber's prices on their record).
+export function statement(acc, period, onPeriod, { onOldDebt, clientSpace = false, shareUrl, first = null } = {}) {
   const c = acc.customer;
   const subscriber = c.type === 'account';
   const from = field({ name: 'from', label: 'Du', type: 'date', value: period.from });
@@ -382,6 +382,7 @@ export function statement(acc, period, onPeriod, { onOldDebt, clientSpace = fals
   return h(
     'div',
     { class: 'stack' },
+    first,
     dues && (dues.overdue > 0 || dues.currentMonth > 0)
       ? h(
           'section',
