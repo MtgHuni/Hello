@@ -566,8 +566,8 @@ async function loginDialog(c, ctx, reload) {
   shareAccess(c, sent, ctx?.state?.settings?.stationName || 'la station');
 }
 
-// Sends the customer the link, their login and password through the phone's own share sheet
-// (WhatsApp, SMS…; a copy where the browser cannot share); they change the password in their space.
+// Sends the customer the link, their login and password on WhatsApp, to the number of their record
+// (without one, WhatsApp asks for the contact); they change the password in their space.
 function shareAccess(c, { login, password }, stationName) {
   const text = [
     `Bonjour ${c.name}, voici votre espace client ${stationName} : ${location.origin}`,
@@ -575,12 +575,14 @@ function shareAccess(c, { login, password }, stationName) {
     `Mot de passe : ${password}`,
     'Vous pouvez changer ce mot de passe dans votre espace : touchez vos initiales en haut à droite, puis « Changer le mot de passe ».',
   ].join('\n');
-  const share = () =>
-    typeof navigator.share === 'function'
-      ? navigator.share({ title: `Espace client ${stationName}`, text }).catch(() => {})
-      : navigator.clipboard?.writeText(text).then(() => toast('Message copié.'), () => toast('Copie impossible.', 'error'));
+  const whatsapp = h(
+    'a',
+    { class: 'btn secondary', href: `https://wa.me/${whatsappNumber(c.phone) || ''}?text=${encodeURIComponent(text)}`, target: '_blank', rel: 'noopener' },
+    h('span', { class: 'logo-whatsapp', 'aria-hidden': 'true' }),
+    'WhatsApp',
+  );
   return noticeDialog('Accès client enregistré', [
     h('p', {}, `Identifiant : `, h('strong', {}, login), h('br'), 'Mot de passe : ', h('strong', {}, password)),
-    h('div', { class: 'notice-share' }, buttonRow([button('Partager', share, { variant: 'secondary', iconName: 'share' })])),
+    h('div', { class: 'notice-share' }, buttonRow([whatsapp])),
   ], { okLabel: 'Terminé', level: 'good', iconName: 'check' });
 }
