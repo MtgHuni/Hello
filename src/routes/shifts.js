@@ -3,8 +3,8 @@ const { EXPENSE_CATEGORIES, getSettings } = require('../db');
 const { supplierOf } = require('../cashbook');
 
 // Money accounted for at the closing, in dollars: cash handed over, change left with the
-// attendants, mobile money entered during the shift.
-const declared = (s) => round((s.cash || 0) + (s.change_left || 0) + (s.mobile_money || 0));
+// attendants, francs kept by the manager to change, mobile money entered during the shift.
+const declared = (s) => round((s.cash || 0) + (s.change_left || 0) + (s.francs || 0) + (s.mobile_money || 0));
 const { fail, num, str, oneOf, round, dateParam, transaction, money, clientRef } = require('../util');
 const { requireRole } = require('../auth');
 const { customerBalance } = require('./customers');
@@ -767,7 +767,7 @@ module.exports = function shiftRoutes(db) {
   // money still to count (counted_at null, no variance).
   function applyClosing(shift, b) {
     const counted = b.cash != null && b.cash !== '';
-    const { cash, changeLeft } = counted ? moneyOf(b) : { cash: 0, changeLeft: 0 };
+    const { cash, changeLeft, francs } = counted ? moneyOf(b) : { cash: 0, changeLeft: 0, francs: 0 };
     const notes = b.notes === undefined ? shift.notes : str(b.notes, 'La remarque', { required: false, max: 500 });
     const ends = new Map((Array.isArray(b.readings) ? b.readings : []).map((r) => [Number(r.nozzleId), r.endMeter]));
     linkPhotos(shift.id, b.readings, 'closing_shift_id', shift.id);
@@ -796,9 +796,9 @@ module.exports = function shiftRoutes(db) {
         db.prepare('UPDATE tanks SET book_stock = ROUND(book_stock - ?, 2) WHERE id = ?').run(liters, r.tank_id);
       }
       db.prepare(
-        `UPDATE shifts SET status = 'closed', closed_at = COALESCE(closed_at, datetime('now')), cash = ?, change_left = ?,
+        `UPDATE shifts SET status = 'closed', closed_at = COALESCE(closed_at, datetime('now')), cash = ?, change_left = ?, francs = ?,
            total_liters = ?, notes = ?, counted_at = CASE WHEN ? THEN COALESCE(counted_at, datetime('now')) END WHERE id = ?`,
-      ).run(cash, changeLeft, round(totalLiters), notes, counted ? 1 : 0, shift.id);
+      ).run(cash, changeLeft, francs, round(totalLiters), notes, counted ? 1 : 0, shift.id);
       // Each tank as the shift leaves it, for the report.
       db.prepare('DELETE FROM shift_tank_stock WHERE shift_id = ?').run(shift.id);
       db.prepare(
@@ -813,6 +813,7 @@ module.exports = function shiftRoutes(db) {
   const moneyOf = (b) => ({
     cash: round(num(b.cash, 'Le montant en espèces ($)', { max: 1e8 })),
     changeLeft: round(num(b.changeLeft ?? 0, 'La monnaie laissée aux pompistes', { max: 1e7 })),
+    francs: round(num(b.francs ?? 0, 'Les francs gardés à changer', { max: 1e7 })),
   });
 
   // The next shift receives the change left at this closing.
@@ -857,10 +858,10 @@ module.exports = function shiftRoutes(db) {
     if (!shift) fail(404, 'Poste introuvable.');
     if (shift.status !== 'closed') fail(409, 'Clôturez d’abord le poste.');
     if (shift.counted_at) fail(409, 'L’argent de ce poste est déjà compté : corrigez la clôture pour le changer.');
-    const { cash, changeLeft } = moneyOf(req.body || {});
+    const { cash, changeLeft, francs } = moneyOf(req.body || {});
     const notes = str(req.body?.notes, 'La remarque', { required: false, max: 500 }) ?? shift.notes;
     transaction(db, () => {
-      db.prepare("UPDATE shifts SET cash = ?, change_left = ?, notes = ?, counted_at = datetime('now') WHERE id = ?").run(cash, changeLeft, notes, shift.id);
+      db.prepare("UPDATE shifts SET cash = ?, change_left = ?, francs = ?, notes = ?, counted_at = datetime('now') WHERE id = ?").run(cash, changeLeft, francs, notes, shift.id);
       reconcile(shift.id);
       passChange(shift);
       const s = db.prepare('SELECT * FROM shifts WHERE id = ?').get(shift.id);
@@ -869,7 +870,7 @@ module.exports = function shiftRoutes(db) {
         action: 'shift_counted',
         entity: 'shifts',
         id: shift.id,
-        summary: `Argent du poste n°${shift.id} compté : espèces remises ${money(cash)}${changeLeft ? `, monnaie laissée ${money(changeLeft)}` : ''}, écart ${money(s.variance)}`,
+        summary: `Argent du poste n°${shift.id} compté : espèces remises ${money(cash)}${changeLeft ? `, monnaie laissée ${money(changeLeft)}` : ''}${francs ? `, francs gardés à changer ${money(francs)}` : ''}, écart ${money(s.variance)}`,
       });
     });
     res.json(shiftDetail(shift.id));

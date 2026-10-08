@@ -21,7 +21,7 @@ function shiftReportPdf(shift, { stationName, combosEnabled, cashTolerance = 0, 
   const credits = shift.sales.filter((s) => s.kind === 'credit');
   const combos = shift.sales.filter((s) => s.kind === 'combo');
   const pendingNote = (item) => (item.cancel_requested_at ? 'Annulation demandée' : '');
-  const handedOver = round((shift.cash || 0) + (shift.change_left || 0) + (shift.mobile_money || 0));
+  const handedOver = round((shift.cash || 0) + (shift.change_left || 0) + (shift.francs || 0) + (shift.mobile_money || 0));
 
   // ---- Sales from the meters ----
   report.section('Ventes calculées par les index', 'Toutes les ventes ne sont pas saisies : litres = index de fin − index de début, au prix figé à l’ouverture.');
@@ -132,9 +132,10 @@ function shiftReportPdf(shift, { stationName, combosEnabled, cashTolerance = 0, 
   else {
   if (shift.mobile_money) report.line('− Mobile money reçu (saisi au fil du poste)', money(shift.mobile_money));
   if (shift.change_left) report.line('− Monnaie laissée aux pompistes', money(shift.change_left));
-  report.line('Espèces à remettre', money(round(shift.expected_amount - (shift.mobile_money || 0) - (shift.change_left || 0))), { bold: true });
+  if (shift.francs) report.line('− Francs gardés à changer', money(shift.francs));
+  report.line('Espèces à remettre', money(round(shift.expected_amount - (shift.mobile_money || 0) - (shift.change_left || 0) - (shift.francs || 0))), { bold: true });
   report.line('Espèces remises', money(shift.cash));
-  report.line('Total remis (espèces + monnaie laissée + mobile money)', money(handedOver));
+  report.line(`Total remis (espèces + monnaie laissée${shift.francs ? ' + francs' : ''} + mobile money)`, money(handedOver));
   const ok = Math.abs(shift.variance) <= cashTolerance;
   report.line(ok ? 'Écart de caisse (dans la tolérance)' : 'Écart de caisse (hors tolérance)', signed(shift.variance), { bold: true, color: ok ? COLORS.GOOD : COLORS.BAD });
   }

@@ -219,6 +219,7 @@ function createMailJobs(db, mailer) {
                 ['Espèces remises', fmt.money(s.cash)],
                 ['Mobile money', fmt.money(s.mobile_money)],
                 s.change_left ? ['Monnaie laissée', fmt.money(s.change_left)] : null,
+                s.francs ? ['Francs gardés à changer', fmt.money(s.francs)] : null,
               ],
             },
             { button: { label: 'Voir le poste', url: `${appUrl()}/#/postes/${id}` } },

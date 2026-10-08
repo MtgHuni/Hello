@@ -885,6 +885,7 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
     expectedCash: h('span', { class: 'num' }),
     declared: h('span', { class: 'num' }),
     changeLeft: h('span', { class: 'num nowrap' }),
+    francs: h('span', { class: 'num nowrap' }),
     variance: h('span', { class: 'num' }),
   };
   const perNozzle = new Map();
@@ -916,11 +917,12 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
     const declared = value('cash') + momo;
     lines.total.textContent = complete ? fmt.money(total) : '—';
     lines.expected.textContent = complete ? fmt.money(expected) : '—';
-    // The change left stays with the attendants: it is not handed over.
+    // The change left stays with the attendants, the francs with the manager: neither is handed over in dollars.
     lines.changeLeft.textContent = `− ${fmt.money(value('changeLeft'))}`;
-    lines.expectedCash.textContent = complete ? fmt.money(expected - momo - value('changeLeft')) : '—';
+    lines.francs.textContent = `− ${fmt.money(value('francs'))}`;
+    lines.expectedCash.textContent = complete ? fmt.money(expected - momo - value('changeLeft') - value('francs')) : '—';
     lines.declared.textContent = fmt.money(value('cash'));
-    setContent(lines.variance, complete && cashGiven() ? varianceCell(Math.round((declared + value('changeLeft') - expected) * 100) / 100, tol) : '—');
+    setContent(lines.variance, complete && cashGiven() ? varianceCell(Math.round((declared + value('changeLeft') + value('francs') - expected) * 100) / 100, tol) : '—');
   };
 
   // Counting: the end meters are those of the closing.
@@ -975,6 +977,7 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
       showMoney
         ? [
             h('div', { class: 'summary-line' }, h('span', {}, 'Monnaie laissée aux pompistes'), lines.changeLeft),
+            h('div', { class: 'summary-line' }, h('span', {}, 'Francs gardés à changer'), lines.francs),
             h('div', { class: 'summary-line' }, h('span', {}, 'Espèces à remettre'), lines.expectedCash),
             h('div', { class: 'summary-line' }, h('span', {}, 'Espèces remises'), lines.declared),
             h('div', { class: 'summary-line total' }, h('span', {}, 'Écart'), lines.variance),
@@ -988,6 +991,7 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
         'div',
         { class: 'form-grid' },
         field({ name: 'changeLeft', label: 'Monnaie laissée aux pompistes ($)', type: 'number', step: '0.01', min: '0', value: first(shift.change_left, received || undefined), onInput: recompute }),
+        field({ name: 'francs', label: 'Francs gardés à changer ($)', type: 'number', step: '0.01', min: '0', value: first(shift.francs || undefined, undefined), onInput: recompute }),
         field({ name: 'cash', label: 'Espèces remises ($)', type: 'number', step: '0.01', min: '0', required: true, value: first(shift.cash, undefined), onInput: recompute }),
         field({ name: 'notes', label: 'Remarque (facultatif)', type: 'textarea', full: true, value: first(shift.notes, undefined) }),
       ),
@@ -1052,7 +1056,7 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
     const submit = form.querySelector('button[type=submit]');
     submit.disabled = true;
     try {
-      const money = showMoney ? { cash: Number(form.elements.cash.value), changeLeft: Number(form.elements.changeLeft.value) || 0, notes: form.elements.notes.value } : {};
+      const money = showMoney ? { cash: Number(form.elements.cash.value), changeLeft: Number(form.elements.changeLeft.value) || 0, francs: Number(form.elements.francs.value) || 0, notes: form.elements.notes.value } : {};
       const closed = await api.post(`/shifts/${shift.id}/${correcting ? 'correct' : counting ? 'count' : 'close'}`, {
         ...(counting
           ? {}

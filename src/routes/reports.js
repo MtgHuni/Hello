@@ -346,7 +346,7 @@ module.exports = function reportRoutes(db) {
 
     const money = db
       .prepare(
-        `SELECT ROUND(COALESCE(SUM(cash), 0), 2) AS cash, ROUND(COALESCE(SUM(change_left), 0), 2) AS changeLeft,
+        `SELECT ROUND(COALESCE(SUM(cash), 0), 2) AS cash, ROUND(COALESCE(SUM(change_left), 0), 2) AS changeLeft, ROUND(COALESCE(SUM(francs), 0), 2) AS francs,
            ROUND(COALESCE(SUM(credit_amount), 0), 2) AS credit, ROUND(COALESCE(SUM(variance), 0), 2) AS variance,
            ROUND(COALESCE(SUM(combo_amount), 0), 2) AS combos,
            ROUND(COALESCE(SUM(mobile_money), 0), 2) AS mobileMoney,

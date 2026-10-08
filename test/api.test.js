@@ -1663,3 +1663,23 @@ test('transport du poste : retiré à la clôture seulement, pas aux relèves', 
     await gerant('PUT', '/api/settings', { shiftTransport: 0 });
   }
 });
+
+test('francs gardés à changer : comptés à la clôture, ni au poste suivant ni aux relèves', async () => {
+  let shift = (await gerant('GET', '/api/shifts/current')).data;
+  await nextSecond();
+  const ends = Object.fromEntries((await gerant('GET', '/api/stock/meters')).data.map((m) => [m.nozzleId, m.latest + 1000]));
+  const res = await closeShift(shift, ends, { cash: 10, changeLeft: 4, francs: 15 });
+  assert.strictEqual(res.status, 200, JSON.stringify(res.data));
+  const closed = res.data;
+  assert.strictEqual(closed.francs, 15);
+  assert.strictEqual(closed.variance, round2(10 + 4 + 15 + closed.mobile_money - closed.expected_amount), 'l’écart compte les francs');
+  // The next shift gets the change left with the attendants, not the francs.
+  shift = (await gerant('GET', `/api/shifts/${closed.next_shift_id}`)).data;
+  assert.strictEqual(shift.change_received, 4);
+  const preview = (await gerant('POST', `/api/shifts/${shift.id}/checkpoints/preview`, { readings: shift.readings.map((r) => ({ nozzleId: r.nozzle_id, meter: r.start_meter })) })).data;
+  assert.strictEqual(preview.received, 4, 'la relève ne voit que la monnaie');
+  // The cash book: the francs are station money, on their own line.
+  const book = (await gerant('GET', '/api/cashbook')).data;
+  assert.ok(book.movements.some((m) => m.source === 'shift' && m.id === closed.id && m.label === `Francs à changer du poste n°${closed.id}` && m.in === 15));
+  assert.strictEqual((await gerant('GET', `/api/shifts/${closed.id}/report.pdf`)).status, 200);
+});

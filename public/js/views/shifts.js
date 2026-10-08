@@ -8,7 +8,7 @@ import { meterPhotoLink } from '../photo.js';
 import { renderShiftStatus } from './shiftStatus.js';
 
 // Money handed over, in dollars.
-const declared = (s) => (s.cash || 0) + (s.change_left || 0) + (s.mobile_money || 0);
+const declared = (s) => (s.cash || 0) + (s.change_left || 0) + (s.francs || 0) + (s.mobile_money || 0);
 
 let filter = 'all';
 let attendantFilter = '';
@@ -473,6 +473,7 @@ export function shiftSummary(shift, tolerance, onEdit = null) {
           shift.change_received ? h('div', { class: 'summary-line' }, h('span', {}, 'Monnaie reçue à l’ouverture'), h('span', {}, fmt.money(shift.change_received))) : null,
           h('div', { class: 'summary-line' }, h('span', {}, 'Espèces remises'), h('span', {}, fmt.money(shift.cash))),
           shift.change_left ? h('div', { class: 'summary-line' }, h('span', {}, 'Monnaie laissée aux pompistes'), h('span', {}, fmt.money(shift.change_left))) : null,
+          shift.francs ? h('div', { class: 'summary-line' }, h('span', {}, 'Francs gardés à changer'), h('span', {}, fmt.money(shift.francs))) : null,
           shift.mobile_money ? h('div', { class: 'summary-line' }, h('span', {}, 'Mobile money (saisi au fil du poste)'), h('span', {}, fmt.money(shift.mobile_money))) : null,
           h('div', { class: 'summary-line total' }, h('span', {}, 'Total déclaré'), h('span', {}, fmt.money(declared(shift)))),
           shift.notes ? h('p', { class: 'muted', style: 'margin-top:12px' }, `Remarque : ${shift.notes}`) : null,
