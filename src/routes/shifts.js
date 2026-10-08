@@ -741,11 +741,12 @@ module.exports = function shiftRoutes(db) {
     const comboAmount = round(sales.filter((s) => s.kind === 'combo').reduce((t, s) => t + s.amount, 0));
     const paymentsAmount = round(db.prepare('SELECT COALESCE(SUM(amount), 0) AS v FROM payments WHERE shift_id = ?').get(shiftId).v);
     const expensesAmount = round(db.prepare('SELECT COALESCE(SUM(amount), 0) AS v FROM expenses WHERE shift_id = ?').get(shiftId).v);
-    // To hand over = change received at the opening + fuel sold − sold on credit − exchanged for
+    // To hand over = change received at the opening + francs kept at the previous closing (changed
+    //               into dollars by the manager) + fuel sold − sold on credit − exchanged for
     //               combos + account payments received − expenses paid from the till
     //               ± cash book movements made in the till.
     const moved = movementsTotal(shiftMovements(db, shiftId));
-    const expected = round((shift.change_received || 0) + totalAmount - creditAmount - comboAmount + paymentsAmount - expensesAmount + moved);
+    const expected = round((shift.change_received || 0) + (shift.francs_received || 0) + totalAmount - creditAmount - comboAmount + paymentsAmount - expensesAmount + moved);
     // Mobile money is not counted: it is the total of what was entered as paid by mobile money.
     const mobileMoney = momoTotal(db, shiftId);
     db.prepare(
@@ -816,11 +817,11 @@ module.exports = function shiftRoutes(db) {
     francs: round(num(b.francs ?? 0, 'Les francs gardés à changer', { max: 1e7 })),
   });
 
-  // The next shift receives the change left at this closing.
+  // The next shift receives the change left at this closing, and the francs kept, at its closing.
   function passChange(shift) {
     const next = db.prepare('SELECT * FROM shifts WHERE id > ? ORDER BY id LIMIT 1').get(shift.id);
     if (!next) return;
-    db.prepare('UPDATE shifts SET change_received = (SELECT change_left FROM shifts WHERE id = ?) WHERE id = ?').run(shift.id, next.id);
+    db.prepare('UPDATE shifts SET (change_received, francs_received) = (SELECT change_left, francs FROM shifts WHERE id = ?) WHERE id = ?').run(shift.id, next.id);
     if (next.status !== 'open') reconcile(next.id);
   }
 
@@ -837,7 +838,7 @@ module.exports = function shiftRoutes(db) {
       const present = db.prepare('SELECT DISTINCT user_id FROM shift_attendants WHERE shift_id = ? AND left_at IS NULL ORDER BY id').all(shift.id);
       db.prepare("UPDATE shift_attendants SET left_at = datetime('now') WHERE shift_id = ? AND left_at IS NULL").run(shift.id);
       nextId = openShift(present[0]?.user_id ?? shift.attendant_id);
-      db.prepare('UPDATE shifts SET change_received = (SELECT change_left FROM shifts WHERE id = ?) WHERE id = ?').run(shift.id, nextId);
+      db.prepare('UPDATE shifts SET (change_received, francs_received) = (SELECT change_left, francs FROM shifts WHERE id = ?) WHERE id = ?').run(shift.id, nextId);
       for (const p of present) join(nextId, p.user_id);
       if (shift.station_closed_at) db.prepare('UPDATE shifts SET station_closed_at = ? WHERE id = ?').run(shift.station_closed_at, nextId);
       const s = db.prepare('SELECT * FROM shifts WHERE id = ?').get(shift.id);
@@ -903,7 +904,7 @@ module.exports = function shiftRoutes(db) {
       }
       applyClosing(shift, req.body || {});
       if (next?.status === 'open') {
-        db.prepare('UPDATE shifts SET change_received = (SELECT change_left FROM shifts WHERE id = ?) WHERE id = ?').run(shift.id, next.id);
+        db.prepare('UPDATE shifts SET (change_received, francs_received) = (SELECT change_left, francs FROM shifts WHERE id = ?) WHERE id = ?').run(shift.id, next.id);
         const firstTaken = db.prepare('SELECT c.id FROM shift_checkpoints c WHERE c.shift_id = ? ORDER BY c.id LIMIT 1').get(next.id);
         for (const r of db.prepare('SELECT nozzle_id, end_meter FROM shift_readings WHERE shift_id = ?').all(shift.id)) {
           const taken = firstTaken && db.prepare('SELECT meter FROM checkpoint_readings WHERE checkpoint_id = ? AND nozzle_id = ?').get(firstTaken.id, r.nozzle_id);

@@ -540,8 +540,10 @@ const MIGRATIONS = [
   // A credit paid back in its own shift became a paid sale: the payment form's key (version 25).
   ['sales', 'settled_ref', 'TEXT'],
   // The francs the manager keeps at the closing to change into dollars (their value in $), version 27:
-  // part of what is handed over, never passed to the next shift nor seen by a relief.
+  // part of what is handed over; changed, they come back in the next shift's cash at its closing
+  // (`francs_received`), never seen by a relief.
   ['shifts', 'francs', 'REAL NOT NULL DEFAULT 0'],
+  ['shifts', 'francs_received', 'REAL NOT NULL DEFAULT 0'],
 ];
 
 // Bumped with every schema change; recorded in PRAGMA user_version.

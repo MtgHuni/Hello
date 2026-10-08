@@ -119,8 +119,9 @@ function shiftReportPdf(shift, { stationName, combosEnabled, cashTolerance = 0, 
   }
 
   // ---- Cash ----
-  report.section('Caisse', 'À remettre = monnaie reçue + ventes par les index − crédits − combos + règlements reçus − dépenses ± mouvements de la caisse.');
+  report.section('Caisse', `À remettre = monnaie reçue${shift.francs_received ? ' + francs du poste précédent' : ''} + ventes par les index − crédits − combos + règlements reçus − dépenses ± mouvements de la caisse.`);
   if (shift.change_received) report.line('Monnaie reçue à l’ouverture (poste précédent)', money(shift.change_received));
+  if (shift.francs_received) report.line('Francs gardés au poste précédent, changés', money(shift.francs_received));
   report.line('Ventes calculées par les index', money(shift.total_amount));
   report.line('− Ventes à crédit', money(shift.credit_amount));
   if (combosEnabled || shift.combo_amount) report.line('− Carburant échangé contre des combos', money(shift.combo_amount));

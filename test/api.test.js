@@ -1664,7 +1664,7 @@ test('transport du poste : retiré à la clôture seulement, pas aux relèves', 
   }
 });
 
-test('francs gardés à changer : comptés à la clôture, ni au poste suivant ni aux relèves', async () => {
+test('francs gardés à changer : comptés à la clôture, rendus à la clôture suivante, jamais aux relèves', async () => {
   let shift = (await gerant('GET', '/api/shifts/current')).data;
   await nextSecond();
   const ends = Object.fromEntries((await gerant('GET', '/api/stock/meters')).data.map((m) => [m.nozzleId, m.latest + 1000]));
@@ -1673,13 +1673,22 @@ test('francs gardés à changer : comptés à la clôture, ni au poste suivant n
   const closed = res.data;
   assert.strictEqual(closed.francs, 15);
   assert.strictEqual(closed.variance, round2(10 + 4 + 15 + closed.mobile_money - closed.expected_amount), 'l’écart compte les francs');
-  // The next shift gets the change left with the attendants, not the francs.
+  // The next shift: its reliefs see the change only; the francs, changed, come back at its closing.
   shift = (await gerant('GET', `/api/shifts/${closed.next_shift_id}`)).data;
-  assert.strictEqual(shift.change_received, 4);
+  assert.deepStrictEqual([shift.change_received, shift.francs_received], [4, 15]);
   const preview = (await gerant('POST', `/api/shifts/${shift.id}/checkpoints/preview`, { readings: shift.readings.map((r) => ({ nozzleId: r.nozzle_id, meter: r.start_meter })) })).data;
   assert.strictEqual(preview.received, 4, 'la relève ne voit que la monnaie');
-  // The cash book: the francs are station money, on their own line.
-  const book = (await gerant('GET', '/api/cashbook')).data;
-  assert.ok(book.movements.some((m) => m.source === 'shift' && m.id === closed.id && m.label === `Francs à changer du poste n°${closed.id}` && m.in === 15));
+  // The cash book: no line of their own, they come back in the next shift's cash.
+  let book = (await gerant('GET', '/api/cashbook')).data;
+  assert.ok(book.movements.find((m) => m.source === 'shift' && m.id === closed.id && m.account === 'cash').label.includes('francs gardés à changer'));
+  assert.ok(!book.movements.some((m) => /^Francs à changer/.test(m.label)));
+  await nextSecond();
+  const after = (await closeShift(shift, {}, { cash: 100, changeLeft: 0 })).data;
+  const base = round2(after.change_received + after.total_amount - after.credit_amount - after.combo_amount + after.payments_amount - after.expenses_amount + (after.movements_amount || 0));
+  assert.strictEqual(after.expected_amount, round2(base + 15), 'à remettre avec les francs du poste précédent');
+  assert.strictEqual(after.variance, round2(100 + after.mobile_money - after.expected_amount));
+  book = (await gerant('GET', '/api/cashbook')).data;
+  assert.ok(book.movements.some((m) => m.source === 'shift' && m.id === after.id && m.account === 'cash' && m.in >= 100));
   assert.strictEqual((await gerant('GET', `/api/shifts/${closed.id}/report.pdf`)).status, 200);
+  assert.strictEqual((await gerant('GET', `/api/shifts/${after.id}/report.pdf`)).status, 200);
 });

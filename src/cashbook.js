@@ -49,15 +49,14 @@ function allEntries(db) {
     )
     .all()) {
     const base = { at: s.at, day: s.day, source: 'shift', id: s.id, link: `#/postes/${s.id}` };
-    // The cash handed over (the change left with the attendants stays with them), plus what was
+    // The cash handed over (the change left with the attendants stays with them, the francs with the
+    // manager: both come back in the next shift's cash), plus what was
     // spent from it during the shift: those expenses go out on their own lines.
     const paidIn = s.cash;
     const moved = movementsTotal(shiftMovements(db, s.id));
-    const detail = [s.counted_at ? null : 'argent à compter', s.change_left ? `monnaie laissée aux pompistes ${money(s.change_left)}` : null, s.spent ? `avec les dépenses du poste (${money(s.spent)})` : null, moved ? `sans les mouvements de caisse déjà comptés (${money(moved)})` : null].filter(Boolean).join(', ');
+    const detail = [s.counted_at ? null : 'argent à compter', s.change_left ? `monnaie laissée aux pompistes ${money(s.change_left)}` : null, s.francs ? `francs gardés à changer ${money(s.francs)}` : null, s.spent ? `avec les dépenses du poste (${money(s.spent)})` : null, moved ? `sans les mouvements de caisse déjà comptés (${money(moved)})` : null].filter(Boolean).join(', ');
     push({ ...base, account: 'cash', in: round(paidIn + s.spent - moved), label: `Clôture du poste n°${s.id} (${s.attendant})${detail ? ` : ${detail}` : ''}` });
     push({ ...base, account: 'momo', in: s.mobile_money, label: `Mobile money du poste n°${s.id} (${s.attendant})` });
-    // The francs the manager kept to change: station money, at their value in dollars.
-    push({ ...base, account: 'cash', in: s.francs, label: `Francs à changer du poste n°${s.id}` });
   }
 
   for (const p of db

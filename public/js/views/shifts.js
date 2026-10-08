@@ -471,6 +471,7 @@ export function shiftSummary(shift, tolerance, onEdit = null) {
       ? card(
           cardHeader('Caisse'),
           shift.change_received ? h('div', { class: 'summary-line' }, h('span', {}, 'Monnaie reçue à l’ouverture'), h('span', {}, fmt.money(shift.change_received))) : null,
+          shift.francs_received ? h('div', { class: 'summary-line' }, h('span', {}, 'Francs du poste précédent'), h('span', {}, fmt.money(shift.francs_received))) : null,
           h('div', { class: 'summary-line' }, h('span', {}, 'Espèces remises'), h('span', {}, fmt.money(shift.cash))),
           shift.change_left ? h('div', { class: 'summary-line' }, h('span', {}, 'Monnaie laissée aux pompistes'), h('span', {}, fmt.money(shift.change_left))) : null,
           shift.francs ? h('div', { class: 'summary-line' }, h('span', {}, 'Francs gardés à changer'), h('span', {}, fmt.money(shift.francs))) : null,

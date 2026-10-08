@@ -876,8 +876,10 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
   const moved = shift.movements_amount || 0;
   // Mobile money is not counted: it is the total entered as it was paid.
   const momo = shift.momo_total || 0;
-  // Change left at the previous closing: it is part of what is handed over.
+  // Change left at the previous closing: it is part of what is handed over, like the francs the
+  // manager kept then and changed into dollars.
   const received = shift.change_received || 0;
+  const francsReceived = shift.francs_received || 0;
   const lines = {
     total: h('span', { class: 'num' }),
     credit: h('span', { class: 'num' }, fmt.money(credit)),
@@ -912,7 +914,7 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
     // Subscribers' higher price is cashed on top of the pump price.
     const surcharge = shift.sales.reduce((t, x) => t + (x.amount - x.liters * (shift.readings.find((r) => r.nozzle_id === x.nozzle_id)?.unit_price ?? 0)), 0);
     total += surcharge;
-    const expected = received + total - credit - combos + payments - expenses + moved;
+    const expected = received + francsReceived + total - credit - combos + payments - expenses + moved;
     const value = (name) => Number(form.elements[name]?.value) || 0;
     const declared = value('cash') + momo;
     lines.total.textContent = complete ? fmt.money(total) : '—';
@@ -966,6 +968,7 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
     card(
       cardHeader('Rapprochement'),
       received ? h('div', { class: 'summary-line' }, h('span', {}, 'Monnaie reçue à l’ouverture'), h('span', { class: 'num' }, `+ ${fmt.money(received)}`)) : null,
+      francsReceived ? h('div', { class: 'summary-line' }, h('span', {}, 'Francs du poste précédent'), h('span', { class: 'num' }, `+ ${fmt.money(francsReceived)}`)) : null,
       h('div', { class: 'summary-line' }, h('span', {}, 'Ventes selon les index'), lines.total),
       h('div', { class: 'summary-line' }, h('span', {}, 'Vendu à crédit'), h('span', {}, '− ', lines.credit)),
       combos ? h('div', { class: 'summary-line' }, h('span', {}, 'Échangé contre des combos'), h('span', { class: 'num' }, `− ${fmt.money(combos)}`)) : null,
