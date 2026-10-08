@@ -1644,3 +1644,22 @@ test('migration 26 : les prix fixes des abonnés deviennent des écarts', () => 
   old.close();
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('transport du poste : retiré à la clôture seulement, pas aux relèves', async () => {
+  const shift = (await gerant('GET', '/api/shifts/current')).data;
+  const meters = (await gerant('GET', '/api/stock/meters')).data;
+  const readings = shift.readings.map((r) => ({ nozzleId: r.nozzle_id, meter: meters.find((m) => m.nozzleId === r.nozzle_id).latest }));
+  const before = (await gerant('POST', `/api/shifts/${shift.id}/checkpoints/preview`, { kind: 'releve', readings })).data;
+  await gerant('PUT', '/api/settings', { shiftTransport: 6 });
+  try {
+    const all = db.prepare('SELECT COALESCE(SUM(amount), 0) AS v FROM expenses WHERE shift_id = ?').get(shift.id).v;
+    const transport = db.prepare('SELECT amount FROM expenses WHERE shift_id = ? AND client_ref = ?').get(shift.id, `transport-${shift.id}`)?.amount;
+    assert.ok(transport > 0, 'dépense du poste (une seule par poste)');
+    const after = (await gerant('POST', `/api/shifts/${shift.id}/checkpoints/preview`, { kind: 'releve', readings })).data;
+    assert.deepStrictEqual([after.expenses, after.expected], [before.expenses, before.expected], 'la relève ne la retire pas');
+    assert.ok(!after.operations.some((o) => o.label === 'Transport du poste'));
+    assert.strictEqual(round2(all - after.expenses), transport, 'la clôture la compte avec les autres dépenses');
+  } finally {
+    await gerant('PUT', '/api/settings', { shiftTransport: 0 });
+  }
+});

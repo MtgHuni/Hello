@@ -4,6 +4,7 @@
 // counted from the shift's opening (its start indexes): litres and sales from the indexes, the
 // operations entered, and the money that should be in the till at that moment.
 const { round } = require('./util');
+const { isShiftTransport } = require('./transport');
 
 const attendantNamesSql = `(SELECT group_concat(name, ', ') FROM (SELECT u2.name FROM shift_attendants a JOIN users u2 ON u2.id = a.user_id
   WHERE a.shift_id = s.id GROUP BY u2.id ORDER BY MIN(a.id)))`;
@@ -57,7 +58,8 @@ function periodReport(db, shift, readings, end) {
   const customerName = new Map(db.prepare('SELECT id, name FROM customers').all().map((c) => [c.id, c.name]));
   const sales = inPeriod('sales');
   const payments = inPeriod('payments');
-  const expenses = inPeriod('expenses');
+  // The shift's transport is taken out at the closing, not at a relief.
+  const expenses = inPeriod('expenses').filter((e) => !isShiftTransport(e));
   const momo = inPeriod('momo_sales');
   const moves = shiftMovements(db, shift.id, from.at, end.at);
   const moved = movementsTotal(moves);
