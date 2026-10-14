@@ -1107,6 +1107,7 @@ dialog.action-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; 
 @media (max-width: 600px) { .ask-form { flex-direction: column; } }
 /* Rapport financier: Claude's summary, then each piece of advice under its title and tags. */
 .finance-summary { margin: 0; font-size: 17px; line-height: 1.55; }
+.empty .empty-text + .btn { margin-top: 20px; }
 .advice-list { display: flex; flex-direction: column; }
 .advice-item { padding: 18px 0; border-top: 1px solid var(--hairline); }
 .advice-item:first-child { border-top: 0; padding-top: 0; }

@@ -1408,16 +1408,16 @@ test('photos lues par Claude : plaque → client, page du cahier → anciennes d
   }
 });
 
-test('rapport financier de la semaine : chiffres, conseils de Claude, PDF, mail du lundi', async () => {
+test('rapport financier : sur la période choisie, conseils de Claude, PDF, mail du lundi', async () => {
   const claude = require('../src/claude');
   const { ask } = claude;
   const asked = [];
   const addDays = (iso, n) => new Date(Date.parse(`${iso}T12:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
   const ADVICE = {
-    summary: 'Semaine correcte : ventes stables, marge en baisse.',
+    summary: 'Période correcte : ventes stables, marge en baisse.',
     advice: [
       { title: 'Saisir les prix d’achat', area: 'finance', priority: 'basse', text: 'La marge ne se calcule pas sans eux.' },
-      { title: 'Jauger la cuve de gasoil', area: 'technique', priority: 'haute', text: 'Aucun jaugeage cette semaine.' },
+      { title: 'Jauger la cuve de gasoil', area: 'technique', priority: 'haute', text: 'Aucun jaugeage sur la période.' },
       { title: 'Relancer les crédits anciens', area: 'finance', priority: 'moyenne', text: 'Des crédits ont plus de 30 jours.' },
       { title: ' ', area: 'finance', priority: 'haute', text: 'vide' },
     ],
@@ -1429,53 +1429,74 @@ test('rapport financier de la semaine : chiffres, conseils de Claude, PDF, mail 
     claude.ask = async (args) => (asked.push(args), ADVICE);
     const list = (await gerant('GET', '/api/finance-reports')).data;
     assert.strictEqual(list.ai, true);
-    assert.strictEqual(new Date(`${list.lastWeek}T12:00:00Z`).getUTCDay(), 1, 'un lundi');
-    assert.ok(addDays(list.lastWeek, 6) < today() && addDays(list.lastWeek, 13) >= today(), 'la dernière semaine finie');
+    const { lastWeek } = list;
+    assert.strictEqual(new Date(`${lastWeek.from}T12:00:00Z`).getUTCDay(), 1, 'un lundi');
+    assert.ok(lastWeek.to === addDays(lastWeek.from, 6) && lastWeek.to < today() && addDays(lastWeek.to, 7) >= today(), 'la dernière semaine finie');
 
-    const made = await gerant('POST', '/api/finance-reports', {});
-    assert.strictEqual(made.status, 201);
-    assert.strictEqual(made.data.week_from, list.lastWeek);
-    assert.deepStrictEqual(made.data.advice.map((a) => a.priority), ['haute', 'moyenne', 'basse'], 'le plus urgent d’abord, sans conseil vide');
-    const f = made.data.figures;
-    assert.ok(['week', 'previous', 'trend', 'position', 'stock', 'prices', 'alerts'].every((k) => k in f));
+    // Without a period: the last week over.
+    const week = await gerant('POST', '/api/finance-reports', {});
+    assert.strictEqual(week.status, 201);
+    assert.deepStrictEqual([week.data.date_from, week.data.date_to], [lastWeek.from, lastWeek.to]);
+    assert.deepStrictEqual(week.data.advice.map((a) => a.priority), ['haute', 'moyenne', 'basse'], 'le plus urgent d’abord, sans conseil vide');
+    const f = week.data.figures;
+    assert.ok(['period', 'previous', 'trend', 'position', 'stock', 'prices', 'alerts'].every((k) => k in f));
+    assert.deepStrictEqual([f.period.days, f.previous.from, f.previous.to], [7, addDays(lastWeek.from, -7), addDays(lastWeek.from, -1)]);
     assert.strictEqual(f.trend.length, 6);
-    assert.strictEqual(f.trend.at(-1).from, addDays(list.lastWeek, -7));
-    assert.ok(f.stock.length && f.prices.length);
+    assert.deepStrictEqual([f.trend[0].from, f.trend.at(-1).from], [addDays(lastWeek.from, -42), addDays(lastWeek.from, -7)], 'de la plus ancienne à la plus récente');
+    assert.ok(f.stock.length && f.prices.length && Array.isArray(f.period.byDay));
     const call = asked.at(-1);
-    assert.ok(call.content[0].text.includes('conseiller technique et financier') && call.content[0].text.includes(`"from":"${list.lastWeek}"`));
+    assert.ok(call.content[0].text.includes('conseiller technique et financier') && call.content[0].text.includes(`période du ${lastWeek.from} au ${lastWeek.to} (7 jours)`));
     assert.deepStrictEqual(call.schema.required, ['summary', 'advice']);
 
-    // Read back and as a PDF, by the owner too, who cannot write one.
-    const pdf = await gerant('GET', `/api/finance-reports/${list.lastWeek}/report.pdf`);
+    // A period chosen: up to today (still under way), compared with the one before, as long.
+    const mine = await gerant('POST', '/api/finance-reports', { from: addDays(today(), -9), to: today() });
+    assert.strictEqual(mine.status, 201);
+    assert.deepStrictEqual([mine.data.figures.period.days, mine.data.figures.period.partial, mine.data.figures.previous.from], [10, true, addDays(today(), -19)]);
+    assert.ok(mine.data.figures.period.amount > 0, 'les ventes de ces jours-ci');
+    // Whole months: the month before; beyond a month, the rhythm by month.
+    const months = await gerant('POST', '/api/finance-reports', { from: '2026-07-01', to: '2026-09-30' });
+    assert.deepStrictEqual([months.data.figures.previous.from, months.data.figures.previous.to], ['2026-04-01', '2026-06-30']);
+    assert.ok('byMonth' in months.data.figures.period && !('byDay' in months.data.figures.period));
+    // Written again: the same report, rewritten.
+    const again = await gerant('POST', '/api/finance-reports', { from: '2026-07-01', to: '2026-09-30' });
+    assert.strictEqual(again.data.id, months.data.id);
+
+    // The list, a report and its PDF, read by the owner too, who cannot write one.
+    const reports = (await gerant('GET', '/api/finance-reports')).data.reports;
+    assert.strictEqual(reports.length, 3);
+    assert.strictEqual(reports[0].id, mine.data.id, 'la plus récente d’abord');
+    const pdf = await gerant('GET', `/api/finance-reports/${week.data.id}/report.pdf`);
     assert.strictEqual(pdf.type, 'application/pdf');
     assert.strictEqual(pdf.raw.subarray(0, 5).toString(), '%PDF-');
+    assert.strictEqual((await gerant('GET', '/api/finance-reports/999')).status, 404);
     const awa = client();
     await awa('POST', '/api/auth/login', { login: 'awa', password: 'actionnaire2' });
-    assert.strictEqual((await awa('GET', `/api/finance-reports/${list.lastWeek}`)).data.summary, ADVICE.summary);
+    assert.strictEqual((await awa('GET', `/api/finance-reports/${week.data.id}`)).data.summary, ADVICE.summary);
     assert.strictEqual((await awa('POST', '/api/finance-reports', {})).status, 403);
 
-    // A week not over, or not a Monday: refused. Claude giving nothing: nothing is kept.
-    assert.strictEqual((await gerant('POST', '/api/finance-reports', { from: addDays(list.lastWeek, 7) })).status, 400);
-    assert.strictEqual((await gerant('POST', '/api/finance-reports', { from: addDays(list.lastWeek, 1) })).status, 400);
+    // Refused: a period ending after today, upside down, or longer than a year. Claude giving nothing: nothing kept.
+    assert.strictEqual((await gerant('POST', '/api/finance-reports', { from: today(), to: addDays(today(), 1) })).status, 400);
+    assert.strictEqual((await gerant('POST', '/api/finance-reports', { from: '2026-09-30', to: '2026-09-01' })).status, 400);
+    assert.strictEqual((await gerant('POST', '/api/finance-reports', { from: '2025-01-01', to: '2026-06-30' })).status, 400);
     claude.ask = async () => null;
-    assert.strictEqual((await gerant('POST', '/api/finance-reports', { from: addDays(list.lastWeek, -7) })).data.code, 'finance_failed');
-    assert.deepStrictEqual((await gerant('GET', '/api/finance-reports')).data.weeks.map((w) => w.week_from), [list.lastWeek]);
-    assert.strictEqual((await gerant('GET', `/api/finance-reports/${addDays(list.lastWeek, -7)}`)).status, 404);
+    assert.strictEqual((await gerant('POST', '/api/finance-reports', { from: '2026-06-01', to: '2026-06-30' })).data.code, 'finance_failed');
+    assert.strictEqual((await gerant('GET', '/api/finance-reports')).data.reports.length, 3);
 
-    // Monday from 9:00 in Goma: written for the week before, then mailed with its PDF.
+    // Monday from 9:00 in Goma: the week before, written then mailed with its PDF, once.
     claude.ask = async () => ADVICE;
     const { mailer, mailJobs } = locals;
-    const monday = addDays(list.lastWeek, 21);
+    const monday = addDays(lastWeek.from, 21);
     mailJobs.tick({ settle: 0, now: new Date(`${monday}T07:30:00Z`) });
     await new Promise((r) => setTimeout(r, 100));
-    const week = addDays(monday, -7);
+    const from = addDays(monday, -7);
     const sent = [...mailer.mail.outbox].reverse().find((x) => x.kind === 'rapport_financier');
     assert.ok(sent, 'mail du rapport financier');
-    assert.ok(sent.text.startsWith('Rapport financier') || sent.subject.startsWith('Rapport financier'));
-    assert.ok(sent.text.includes('Jauger la cuve de gasoil : Aucun jaugeage cette semaine.'));
-    assert.deepStrictEqual(sent.attachments, [`rapport-financier-${week}.pdf`]);
-    assert.strictEqual((await gerant('GET', `/api/finance-reports/${week}`)).data.week_to, addDays(week, 6));
-    // Once per Monday.
+    assert.ok(sent.subject.startsWith(`Rapport financier de la semaine du ${new Date(`${from}T12:00:00Z`).toLocaleDateString('fr-FR')}`));
+    assert.ok(sent.text.includes('Jauger la cuve de gasoil : Aucun jaugeage sur la période.'));
+    assert.deepStrictEqual(sent.attachments, [`rapport-financier-${from}_${addDays(monday, -1)}.pdf`]);
+    const kept = (await gerant('GET', '/api/finance-reports')).data.reports.find((x) => x.date_from === from);
+    assert.ok(kept && kept.date_to === addDays(monday, -1));
+    assert.ok(sent.text.includes(`#/rapports/financier/${kept.id}`));
     const count = () => mailer.mail.outbox.filter((x) => x.kind === 'rapport_financier').length;
     const before = count();
     mailJobs.tick({ settle: 0, now: new Date(`${monday}T08:30:00Z`) });
@@ -1720,6 +1741,35 @@ test('migration 26 : les prix fixes des abonnés deviennent des écarts', () => 
   old = openDb(file);
   assert.strictEqual(old.prepare('SELECT delta FROM customer_price_deltas WHERE customer_id = 1 AND product_id = 1').get().delta, -0.05);
   assert.strictEqual(old.prepare("SELECT 1 FROM sqlite_master WHERE name = 'customer_prices'").get(), undefined);
+  old.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('migration 29 : un rapport financier de la semaine devient celui d’une période', () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const { openDb } = require('../src/db');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'station-finance-'));
+  const file = path.join(dir, 'old.db');
+  let old = openDb(file);
+  old.exec(`DROP TABLE finance_reports;
+    CREATE TABLE finance_reports (id INTEGER PRIMARY KEY, week_from TEXT NOT NULL UNIQUE, week_to TEXT NOT NULL, figures TEXT NOT NULL,
+      summary TEXT NOT NULL, advice TEXT NOT NULL, user_id INTEGER, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+    PRAGMA user_version = 28`);
+  old.prepare('INSERT INTO finance_reports (week_from, week_to, figures, summary, advice) VALUES (?, ?, ?, ?, ?)').run(
+    '2026-10-05',
+    '2026-10-11',
+    JSON.stringify({ from: '2026-10-05', to: '2026-10-11', week: { amount: 100 }, previous: { amount: 90 } }),
+    'Bonne semaine.',
+    '[]',
+  );
+  old.close();
+  old = openDb(file);
+  const r = old.prepare('SELECT date_from, date_to, figures, summary FROM finance_reports').get();
+  assert.deepStrictEqual([r.date_from, r.date_to, r.summary], ['2026-10-05', '2026-10-11', 'Bonne semaine.']);
+  assert.deepStrictEqual(JSON.parse(r.figures), { from: '2026-10-05', to: '2026-10-11', period: { amount: 100 }, previous: { amount: 90 } });
+  assert.strictEqual(old.prepare("SELECT 1 FROM sqlite_master WHERE name = 'finance_reports_v28'").get(), undefined);
   old.close();
   fs.rmSync(dir, { recursive: true, force: true });
 });
