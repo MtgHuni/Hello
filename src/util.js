@@ -1,12 +1,14 @@
 class HttpError extends Error {
-  constructor(status, message) {
+  constructor(status, message, code) {
     super(message);
     this.status = status;
+    this.code = code;
   }
 }
 
-const fail = (status, message) => {
-  throw new HttpError(status, message);
+// `extra`: more fields in the error reply (e.g. the photo kept when it could not be read).
+const fail = (status, message, code, extra) => {
+  throw Object.assign(new HttpError(status, message, code), extra ? { extra } : {});
 };
 
 const round = (n, digits = 2) => {
@@ -65,4 +67,17 @@ function transaction(db, fn) {
   }
 }
 
-module.exports = { HttpError, fail, round, num, str, oneOf, bool, dateParam, transaction };
+// CSV cell for Excel: quoted, and text starting with = + - @ is prefixed with ' so it never runs as a formula.
+function csvCell(value) {
+  let s = String(value ?? '');
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  return `"${s.replace(/"/g, '""')}"`;
+}
+
+// Key of a form sent by the attendant's phone (see the client_ref columns).
+const clientRef = (value) => (typeof value === 'string' && /^[\w-]{8,64}$/.test(value) ? value : null);
+
+// Amount in dollars for messages and the journal: 1 234,50 $.
+const money = (n) => `${(Number(n) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $`;
+
+module.exports = { HttpError, fail, round, num, str, oneOf, bool, dateParam, transaction, csvCell, money, clientRef };
