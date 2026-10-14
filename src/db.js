@@ -421,6 +421,7 @@ CREATE TABLE IF NOT EXISTS finance_reports (
   figures    TEXT NOT NULL,
   summary    TEXT NOT NULL,
   advice     TEXT NOT NULL,
+  ledger     TEXT,
   user_id    INTEGER REFERENCES users(id),
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE (date_from, date_to)
@@ -558,10 +559,13 @@ const MIGRATIONS = [
   // (`francs_received`), never seen by a relief.
   ['shifts', 'francs', 'REAL NOT NULL DEFAULT 0'],
   ['shifts', 'francs_received', 'REAL NOT NULL DEFAULT 0'],
+  // Every line of a financial report's period (sales, payments, expenses, deliveries, cash book…),
+  // kept with it for its PDF (version 30).
+  ['finance_reports', 'ledger', 'TEXT'],
 ];
 
 // Bumped with every schema change; recorded in PRAGMA user_version.
-const SCHEMA_VERSION = 29;
+const SCHEMA_VERSION = 30;
 
 function missingColumns(db) {
   return MIGRATIONS.filter(([table, column]) => {
