@@ -479,9 +479,9 @@ module.exports = function reportRoutes(db) {
     res.json(stockMovements(from, to));
   });
 
-  // ---------- Financial report of the week, with Claude's advice (src/financeReport.js) ----------
+  // ---------- Financial report of a period, with Claude's advice (src/financeReport.js) ----------
 
-  // A week in a line: what the trend and the comparisons need.
+  // A period in a line: what the trend and the comparisons need.
   const brief = (r) => {
     const t = r.totals;
     return {
@@ -501,22 +501,40 @@ module.exports = function reportRoutes(db) {
     };
   };
 
-  // Everything the adviser reads for the week from `from` to `to` (Monday to Sunday): the week in
-  // detail, the week before, the six before as a trend, and the position now: money, what customers
-  // owe and what is owed to suppliers, the tanks and their days of stock, prices against costs.
+  const daysIn = (from, to) => Math.round((Date.parse(`${to}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / 864e5) + 1;
+  // Whole calendar months (from a 1st to a month's last day): how many, else 0.
+  const wholeMonths = (from, to) =>
+    from.endsWith('-01') && addDays(to, 1).endsWith('-01') ? (Number(to.slice(0, 4)) - Number(from.slice(0, 4))) * 12 + Number(to.slice(5, 7)) - Number(from.slice(5, 7)) + 1 : 0;
+  // The period just before, as long; whole months go back by whole months.
+  function periodBefore(from, to) {
+    const months = wholeMonths(from, to);
+    if (!months) return [addDays(from, -daysIn(from, to)), addDays(from, -1)];
+    const d = new Date(`${from}T12:00:00Z`);
+    d.setUTCMonth(d.getUTCMonth() - months);
+    return [d.toISOString().slice(0, 10), addDays(from, -1)];
+  }
+
+  // Everything the adviser reads for a period: the period in detail, the one before, the six before
+  // as a trend, and the position now: money, what customers owe and what is owed to suppliers, the
+  // tanks and their days of stock, prices against costs, the open alerts.
   function financeFigures(from, to) {
     const settings = getSettings(db);
-    const week = salesReport(from, to);
-    const previous = salesReport(addDays(from, -7), addDays(to, -7));
-    const trend = [];
-    for (let n = 6; n >= 1; n--) trend.push(brief(n === 1 ? previous : salesReport(addDays(from, -7 * n), addDays(to, -7 * n))));
-
     const today = db.prepare("SELECT date('now', 'localtime') AS d").get().d;
+    const days = daysIn(from, to);
+    const current = salesReport(from, to);
+    const trend = [];
+    let previous = null;
+    for (let p = periodBefore(from, to); trend.length < 6; p = periodBefore(...p)) {
+      const r = salesReport(...p);
+      previous ||= r;
+      trend.unshift(brief(r));
+    }
+
     const { tanks, customers, supplierDebt, alerts } = stationAlerts(settings);
-    const moved = new Map(week.stock.map((t) => [t.id, t]));
+    const moved = new Map(current.stock.map((t) => [t.id, t]));
     const stock = tanks.map((t) => {
       const m = moved.get(t.id) || {};
-      const daily = (m.sold || 0) / 7;
+      const daily = (m.sold || 0) / days;
       const cost = avgCost.get(t.product_id, today).cost;
       return {
         tank: t.name,
@@ -524,10 +542,10 @@ module.exports = function reportRoutes(db) {
         stock: round(t.book_stock),
         capacity: t.capacity,
         low_level: t.low_level,
-        sold_week: m.sold || 0,
-        delivered_week: m.delivered || 0,
-        dips_week: m.dips || 0,
-        dip_variance_week: m.dip_variance || 0,
+        sold: m.sold || 0,
+        delivered: m.delivered || 0,
+        dips: m.dips || 0,
+        dip_variance: m.dip_variance || 0,
         loss_pct: m.loss_pct ?? null,
         days_left: daily ? round(t.book_stock / daily, 1) : null,
         value: cost == null ? null : round(t.book_stock * cost),
@@ -542,26 +560,30 @@ module.exports = function reportRoutes(db) {
       });
     const cash = balances(db);
     const owed = receivables(customers);
-    // Days are totals of both products: the adviser looks at the week's rhythm.
-    const byDay = [];
-    for (const d of week.byDay) {
-      const last = byDay.at(-1);
-      if (last?.date === d.date) Object.assign(last, { liters: round(last.liters + d.liters), amount: round(last.amount + d.amount) });
-      else byDay.push({ date: d.date, liters: d.liters, amount: d.amount });
+    // The rhythm of the period, both products together: by day, by month beyond a month.
+    const rhythm = [];
+    for (const d of current.byDay) {
+      const key = days > 31 ? d.date.slice(0, 7) : d.date;
+      const last = rhythm.at(-1);
+      if (last?.date === key) Object.assign(last, { liters: round(last.liters + d.liters), amount: round(last.amount + d.amount) });
+      else rhythm.push({ date: key, liters: d.liters, amount: d.amount });
     }
 
     return {
       from,
       to,
-      week: {
-        ...brief(week),
-        changeLeft: week.totals.changeLeft,
-        francs: week.totals.francs,
-        byProduct: week.byProduct.map(({ product_id, ...p }) => p),
-        byDay,
-        byAttendant: week.byAttendant.map(({ attendant_id, ...a }) => a),
-        expensesByCategory: week.expensesByCategory,
-        deliveries: week.deliveries,
+      period: {
+        ...brief(current),
+        days,
+        // The last day is still under way: its open shift is not counted yet.
+        partial: to >= today,
+        changeLeft: current.totals.changeLeft,
+        francs: current.totals.francs,
+        byProduct: current.byProduct.map(({ product_id, ...p }) => p),
+        [days > 31 ? 'byMonth' : 'byDay']: rhythm,
+        byAttendant: current.byAttendant.map(({ attendant_id, ...a }) => a),
+        expensesByCategory: current.expensesByCategory,
+        deliveries: current.deliveries,
       },
       previous: { ...brief(previous), byProduct: previous.byProduct.map((p) => ({ product: p.product, liters: p.liters, amount: p.amount, margin_per_liter: p.margin_per_liter })) },
       trend,
@@ -580,63 +602,62 @@ module.exports = function reportRoutes(db) {
     };
   }
 
-  const financeRow = (from) => {
-    const r = db.prepare('SELECT week_from, week_to, figures, summary, advice, created_at FROM finance_reports WHERE week_from = ?').get(from);
+  const financeRow = (id) => {
+    const r = db.prepare('SELECT id, date_from, date_to, figures, summary, advice, created_at FROM finance_reports WHERE id = ?').get(id);
     return r ? { ...r, figures: JSON.parse(r.figures), advice: JSON.parse(r.advice) } : null;
   };
 
-  // Writes (or writes again) the report of the week from `from`, a Monday. Null when Claude gave nothing.
-  async function financeReport(from, userId = null) {
-    const to = addDays(from, 6);
+  // Writes (or writes again) the report of a period. Null when Claude gave nothing.
+  async function financeReport(from, to, userId = null) {
     const figures = financeFigures(from, to);
     const out = await financeAdvice({ figures, stationName: getSettings(db).stationName });
     if (!out) return null;
     db.prepare(
-      `INSERT INTO finance_reports (week_from, week_to, figures, summary, advice, user_id) VALUES (?, ?, ?, ?, ?, ?)
-       ON CONFLICT(week_from) DO UPDATE SET week_to = excluded.week_to, figures = excluded.figures, summary = excluded.summary,
+      `INSERT INTO finance_reports (date_from, date_to, figures, summary, advice, user_id) VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(date_from, date_to) DO UPDATE SET figures = excluded.figures, summary = excluded.summary,
          advice = excluded.advice, user_id = excluded.user_id, created_at = datetime('now')`,
     ).run(from, to, JSON.stringify(figures), out.summary, JSON.stringify(out.advice), userId);
-    return financeRow(from);
+    return financeRow(db.prepare('SELECT id FROM finance_reports WHERE date_from = ? AND date_to = ?').get(from, to).id);
   }
   const financePdf = (r) => financeReportPdf(r, { stationName: getSettings(db).stationName });
   router.financeReport = financeReport;
   router.financePdf = financePdf;
 
-  // The Monday of the last week that is over.
-  const lastWeek = () => db.prepare("SELECT date('now', 'localtime', '-6 days', 'weekday 1', '-7 days') AS d").get().d;
-  const weekParam = (value, { over = false } = {}) => {
-    const from = dateParam(value, 'La semaine');
-    if (!from || new Date(`${from}T12:00:00Z`).getUTCDay() !== 1) fail(400, 'Choisissez une semaine (son lundi).');
-    if (over && from > lastWeek()) fail(400, 'Cette semaine n’est pas encore finie.');
-    return from;
+  // The last week that is over, Monday to Sunday.
+  const lastWeek = () => {
+    const from = db.prepare("SELECT date('now', 'localtime', '-6 days', 'weekday 1', '-7 days') AS d").get().d;
+    return { from, to: addDays(from, 6) };
+  };
+  const reportParam = (id) => {
+    const r = /^\d+$/.test(id) ? financeRow(Number(id)) : null;
+    if (!r) fail(404, 'Rapport financier introuvable.');
+    return r;
   };
 
   router.get('/finance-reports', manager, (req, res) => {
-    const weeks = db.prepare('SELECT week_from, week_to, created_at FROM finance_reports ORDER BY week_from DESC').all();
-    res.json({ weeks, lastWeek: lastWeek(), ai: aiEnabled() });
+    const reports = db.prepare('SELECT id, date_from, date_to, created_at FROM finance_reports ORDER BY date_to DESC, date_from DESC').all();
+    res.json({ reports, lastWeek: lastWeek(), ai: aiEnabled() });
   });
 
-  router.get('/finance-reports/:from', manager, (req, res) => {
-    const r = financeRow(weekParam(req.params.from));
-    if (!r) fail(404, 'Pas de rapport financier pour cette semaine.');
-    res.json(r);
-  });
+  router.get('/finance-reports/:id', manager, (req, res) => res.json(reportParam(req.params.id)));
 
-  router.get('/finance-reports/:from/report.pdf', manager, (req, res) => {
-    const r = financeRow(weekParam(req.params.from));
-    if (!r) fail(404, 'Pas de rapport financier pour cette semaine.');
+  router.get('/finance-reports/:id/report.pdf', manager, (req, res) => {
+    const r = reportParam(req.params.id);
     res.set('Content-Type', 'application/pdf');
-    res.set('Content-Disposition', `attachment; filename="rapport-financier-${r.week_from}.pdf"`);
+    res.set('Content-Disposition', `attachment; filename="rapport-financier-${r.date_from}${r.date_from === r.date_to ? '' : `_${r.date_to}`}.pdf"`);
     res.send(financePdf(r));
   });
 
-  // Written now (the week before by default), or written again with the latest figures.
+  // Written now for the period chosen (the last week by default), or written again with the latest figures.
   router.post('/finance-reports', manager, async (req, res) => {
     if (!aiEnabled()) fail(409, 'Le rapport financier n’est pas disponible.', 'no_ai');
-    const from = req.body?.from ? weekParam(req.body.from, { over: true }) : lastWeek();
+    const b = req.body || {};
+    const { from, to } = b.from || b.to ? period({ query: b }) : lastWeek();
+    if (to > db.prepare("SELECT date('now', 'localtime') AS d").get().d) fail(400, 'La période ne peut pas finir après aujourd’hui.');
+    if (daysIn(from, to) > 366) fail(400, 'Choisissez une période d’un an au plus.');
     let r;
     try {
-      r = await financeReport(from, req.user.id);
+      r = await financeReport(from, to, req.user.id);
     } catch (err) {
       console.error('Rapport financier :', err.message);
       fail(422, 'Rapport impossible pour l’instant : réessayez.', 'finance_failed');

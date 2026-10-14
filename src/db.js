@@ -411,17 +411,19 @@ CREATE TABLE IF NOT EXISTS ai_questions (
   output_tokens INTEGER NOT NULL DEFAULT 0,
   created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
--- The week's financial report (version 28): the figures, Claude's summary and advice, kept so it is
--- written once (Monday's mail, or « Générer » in Rapports) and read as often as needed.
+-- A financial report (version 29, any period; a week in version 28): the figures, Claude's summary
+-- and advice, kept so it is written once (Monday's mail for the week before, or « Rédiger » in
+-- Rapports → Rapport financier) and read as often as needed. One per period.
 CREATE TABLE IF NOT EXISTS finance_reports (
   id         INTEGER PRIMARY KEY,
-  week_from  TEXT NOT NULL UNIQUE,
-  week_to    TEXT NOT NULL,
+  date_from  TEXT NOT NULL,
+  date_to    TEXT NOT NULL,
   figures    TEXT NOT NULL,
   summary    TEXT NOT NULL,
   advice     TEXT NOT NULL,
   user_id    INTEGER REFERENCES users(id),
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (date_from, date_to)
 );
 CREATE TABLE IF NOT EXISTS customer_mail_prefs (
   customer_id INTEGER NOT NULL REFERENCES customers(id),
@@ -559,7 +561,7 @@ const MIGRATIONS = [
 ];
 
 // Bumped with every schema change; recorded in PRAGMA user_version.
-const SCHEMA_VERSION = 28;
+const SCHEMA_VERSION = 29;
 
 function missingColumns(db) {
   return MIGRATIONS.filter(([table, column]) => {
@@ -738,6 +740,8 @@ function openDb(file) {
   const db = new DatabaseSync(file);
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
   const version = db.prepare('PRAGMA user_version').get().user_version;
+  // Version 29: a financial report covers any period, not only a week (copied below).
+  if (tableSql(db, 'finance_reports')?.includes('week_from')) db.exec('ALTER TABLE finance_reports RENAME TO finance_reports_v28');
   db.exec(SCHEMA);
   if (file !== ':memory:') backupBeforeMigration(db, file);
   addMissingColumns(db);
@@ -745,6 +749,12 @@ function openDb(file) {
   if (salesRebuilt) addMissingColumns(db); // the rebuilt table only has the older columns
   migrateRequests(db);
   migrateUserRoles(db);
+  if (tableSql(db, 'finance_reports_v28')) {
+    db.exec(`INSERT OR IGNORE INTO finance_reports (date_from, date_to, figures, summary, advice, user_id, created_at)
+      SELECT week_from, week_to, json_remove(json_set(figures, '$.period', json(json_extract(figures, '$.week'))), '$.week'), summary, advice, user_id, created_at
+      FROM finance_reports_v28;
+      DROP TABLE finance_reports_v28;`);
+  }
   // Version 26: a subscriber's own price became a difference with the subscribers' price (it
   // follows the station's price changes): the fixed prices of the first days are converted.
   if (tableSql(db, 'customer_prices')) {
