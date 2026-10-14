@@ -1,14 +1,16 @@
 import { api } from '../api.js';
-import { h, fmt, pageHeader, table, segmented, kpi, field, button, todayISO, isoDate, varianceCell } from '../ui.js';
+import { h, fmt, pageHeader, table, segmented, kpi, field, todayISO, isoDate, varianceCell, setContent, shareButton } from '../ui.js';
+import { showShiftsOf } from './shifts.js';
+import { financeLink } from './finance.js';
 
-const PRESETS = [
+export const PRESETS = [
   ['today', "Aujourd'hui"],
   ['7d', '7 jours'],
   ['month', 'Ce mois'],
   ['lastMonth', 'Mois dernier'],
 ];
 
-function presetRange(key) {
+export function presetRange(key) {
   const now = new Date();
   const y = now.getFullYear();
   const m = now.getMonth();
@@ -43,12 +45,13 @@ export async function renderReports(page, ctx) {
   to.querySelector('input').addEventListener('change', onDate);
 
   const t = r.totals;
-  page.replaceChildren(
+  setContent(page, 
     pageHeader(
       'Rapports',
       range.from === range.to ? fmt.longDay(range.from) : `Du ${fmt.date(range.from)} au ${fmt.date(range.to)}`,
       h('a', { class: 'btn secondary', href: `/api/reports/sales?from=${range.from}&to=${range.to}&format=csv` }, 'Exporter (Excel)'),
-      button('Imprimer / PDF', () => window.print(), { variant: 'secondary' }),
+      shareButton(`/api/reports/period.pdf?from=${range.from}&to=${range.to}`, `rapport-${range.from}_${range.to}.pdf`),
+      financeLink(),
     ),
     h(
       'div',
@@ -66,13 +69,30 @@ export async function renderReports(page, ctx) {
       'div',
       { class: 'grid grid-4' },
       kpi("Chiffre d'affaires", fmt.money(t.amount), fmt.liters(t.liters)),
-      kpi('Encaissé', fmt.money(t.cash + t.card), `Espèces ${fmt.money(t.cash)} · Cartes ${fmt.money(t.card)}`),
-      kpi('Vendu à crédit', fmt.money(t.credit), `Règlements reçus : ${fmt.money(t.payments)}`),
+      kpi(
+        'Encaissé',
+        fmt.money(t.cash + t.mobileMoney),
+        [
+          `Espèces ${fmt.money(t.cash)}`,
+          t.mobileMoney ? `Mobile money ${fmt.money(t.mobileMoney)}` : null,
+        ]
+          .filter(Boolean)
+          .join(' · '),
+      ),
+      kpi('Vendu à crédit', fmt.money(t.credit), `Règlements reçus : ${fmt.money(t.payments)}${t.combos ? ` · combos échangés : ${fmt.money(t.combos)}` : ''}`),
       kpi('Écarts de caisse', varianceCell(t.variance, tol), 'Cumul de la période'),
     ),
     h(
       'div',
-      { class: 'grid grid-2 section' },
+      { class: 'grid grid-3 section' },
+      kpi('Marge brute estimée', t.costKnown ? fmt.money(t.grossMargin) : '—', t.costKnown ? 'Ventes − coût d’achat du carburant' : 'Prix d’achat manquant pour un produit : saisissez-le dans les livraisons'),
+      kpi('Dépenses', fmt.money(t.expenses), r.expensesByCategory[0] ? `Surtout : ${r.expensesByCategory[0].category}` : 'Aucune dépense'),
+      kpi('Résultat net estimé', t.costKnown ? h('span', { class: t.net < 0 ? 'variance-neg' : '' }, fmt.money(t.net)) : '—', t.costKnown ? 'Marge brute − dépenses' : 'Calculé dès que les prix d’achat sont connus'),
+    ),
+    // Full width: these tables have six columns.
+    h(
+      'div',
+      { class: 'stack section' },
       h(
         'section',
         { class: 'card flush' },
@@ -82,7 +102,9 @@ export async function renderReports(page, ctx) {
             { label: 'Produit', key: 'product' },
             { label: 'Litres', align: 'right', render: (x) => fmt.liters(x.liters) },
             { label: 'Montant', align: 'right', render: (x) => fmt.money(x.amount) },
-            { label: 'Part', align: 'right', render: (x) => (t.amount ? `${Math.round((x.amount / t.amount) * 100)} %` : '—') },
+            { label: 'Coût moyen', align: 'right', render: (x) => (x.avg_cost == null ? '—' : fmt.price(x.avg_cost)) },
+            { label: 'Marge', align: 'right', render: (x) => (x.margin == null ? '—' : fmt.money(x.margin)) },
+            { label: 'Marge / L', align: 'right', render: (x) => (x.margin_per_liter == null ? '—' : fmt.price(x.margin_per_liter)) },
           ],
           r.byProduct,
           { empty: 'Aucune vente sur la période.' },
@@ -91,16 +113,24 @@ export async function renderReports(page, ctx) {
       h(
         'section',
         { class: 'card flush' },
-        h('div', { class: 'card-header' }, h('h2', {}, 'Par pompiste')),
+        h('div', { class: 'card-header' }, h('div', {}, h('h2', {}, 'Écarts par pompiste'), h('p', {}, `Tolérance ± ${fmt.money(tol)}`))),
         table(
           [
             { label: 'Pompiste', key: 'attendant' },
             { label: 'Postes', align: 'right', key: 'shifts' },
-            { label: 'Ventes', align: 'right', render: (x) => fmt.money(x.amount) },
-            { label: 'Écarts', align: 'right', render: (x) => varianceCell(x.variance, tol) },
+            { label: 'Hors tolérance', align: 'right', render: (x) => (x.outside ? h('strong', { class: 'variance-neg' }, String(x.outside)) : '0') },
+            { label: 'Manques', align: 'right', render: (x) => (x.shortages < 0 ? h('span', { class: 'variance-neg' }, fmt.money(x.shortages)) : '—') },
+            { label: 'Surplus', align: 'right', render: (x) => (x.surpluses > 0 ? fmt.money(x.surpluses) : '—') },
+            { label: 'Pire écart', align: 'right', render: (x) => varianceCell(x.worst, tol) },
           ],
           r.byAttendant,
-          { empty: 'Aucun poste sur la période.' },
+          {
+            empty: 'Aucun poste sur la période.',
+            onRowClick: (x) => {
+              showShiftsOf(x.attendant_id);
+              ctx.navigate('postes');
+            },
+          },
         ),
       ),
     ),
@@ -117,6 +147,38 @@ export async function renderReports(page, ctx) {
         ],
         r.byDay,
         { empty: 'Aucune vente sur la période.', footer: r.byDay.length ? { date: 'Total', liters: fmt.liters(t.liters), amount: fmt.money(t.amount) } : null },
+      ),
+    ),
+    h(
+      'section',
+      { class: 'card flush section' },
+      h('div', { class: 'card-header' }, h('h2', {}, 'Dépenses par catégorie'), h('a', { class: 'btn ghost sm no-print', href: '#/depenses' }, 'Voir le détail')),
+      table(
+        [
+          { label: 'Catégorie', key: 'category' },
+          { label: 'Nombre', align: 'right', key: 'count' },
+          { label: 'Montant', align: 'right', key: 'amount', render: (x) => fmt.money(x.amount) },
+          { label: 'Part', align: 'right', render: (x) => (t.expenses ? `${Math.round((x.amount / t.expenses) * 100)} %` : '—') },
+        ],
+        r.expensesByCategory,
+        { empty: 'Aucune dépense sur la période.', footer: r.expensesByCategory.length ? { category: 'Total', amount: fmt.money(t.expenses) } : null },
+      ),
+    ),
+    h(
+      'section',
+      { class: 'card flush section' },
+      h('div', { class: 'card-header' }, h('div', {}, h('h2', {}, 'Cuves'))),
+      table(
+        [
+          { label: 'Cuve', key: 'name' },
+          { label: 'Livré', align: 'right', render: (x) => fmt.liters(x.delivered) },
+          { label: 'Vendu', align: 'right', render: (x) => fmt.liters(x.sold) },
+          { label: 'Écart jaugeage', align: 'right', render: (x) => (x.dips ? h('span', { class: x.dip_variance < 0 ? 'variance-neg' : '' }, fmt.liters(x.dip_variance)) : '—') },
+          { label: 'Perte', align: 'right', render: (x) => (x.dips && x.loss_pct != null ? `${fmt.number(x.loss_pct)} %` : '—') },
+          { label: 'Stock', align: 'right', render: (x) => fmt.liters(x.book_stock) },
+        ],
+        r.stock,
+        { empty: 'Aucune cuve.' },
       ),
     ),
     h(

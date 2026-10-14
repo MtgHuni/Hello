@@ -1,30 +1,41 @@
+import { flags, edit } from '../ui.js';
 import { api } from '../api.js';
-import { h, fmt, pageHeader, card, cardHeader, table, segmented, kpi, badge, button, formDialog, toast, field, todayISO, isoDate } from '../ui.js';
+import { h, fmt, receipt, pageHeader, card, cardHeader, table, segmented, kpi, badge, button, formDialog, confirmDialog, toast, field, todayISO, isoDate, setContent, sharePdf, whatsappNumber, noticeDialog, buttonRow, nameChips } from '../ui.js';
 import { icon } from '../icons.js';
+import { photoButton, photosOn } from '../photo.js';
 
 let typeFilter = 'all';
 let search = '';
 
-const TYPE_LABEL = { account: 'En compte', individual: 'Particulier' };
+const TYPE_LABEL = { account: 'Abonné', individual: 'Particulier' };
+// Names compared as the server does: without case, accents nor extra spaces.
+const nameKey = (s) => String(s || '').normalize('NFD').replace(/\p{M}/gu, '').replace(/\s+/g, ' ').trim().toLowerCase();
 
 export async function renderCustomers(page, ctx) {
-  const loyalty = ctx.state.settings.loyaltyEnabled;
   const customers = await api.get('/customers');
   const listHost = h('div');
+  // Namesakes left from before names had to be unique.
+  const seen = new Map();
+  for (const c of customers) seen.set(nameKey(c.name), (seen.get(nameKey(c.name)) || 0) + 1);
+  const namesake = (c) => seen.get(nameKey(c.name)) > 1;
 
   const draw = () => {
     const q = search.trim().toLowerCase();
     const rows = customers.filter(
-      (c) => (typeFilter === 'all' || c.type === typeFilter) && (!q || [c.name, c.phone, c.plate, c.email].some((v) => v?.toLowerCase().includes(q))),
+      (c) =>
+        (typeFilter === 'all' || (typeFilter === 'review' ? c.needs_review && c.active : c.type === typeFilter)) &&
+        (!q || [c.name, c.phone, c.plate, c.email].some((v) => v?.toLowerCase().includes(q))),
     );
-    listHost.replaceChildren(
+    setContent(listHost, 
       table(
         [
           { label: 'Client', render: (c) => h('div', {}, h('div', { style: 'font-weight:600' }, c.name), h('div', { class: 'muted small' }, [c.phone, c.plate].filter(Boolean).join(' · ') || '—')) },
-          { label: 'Type', render: (c) => (c.active ? TYPE_LABEL[c.type] : badge('Désactivé')) },
-          { label: 'Solde dû', align: 'right', render: (c) => (c.type === 'account' ? h('span', { class: c.balance > c.credit_limit ? 'variance-neg' : '' }, fmt.money(c.balance)) : '—') },
-          { label: 'Plafond', align: 'right', render: (c) => (c.type === 'account' ? fmt.money(c.credit_limit) : '—') },
-          ...(loyalty ? [{ label: 'Points', align: 'right', render: (c) => (c.type === 'individual' ? fmt.number(c.loyalty_points) : '—') }] : []),
+          {
+            label: 'Type',
+            render: (c) => (namesake(c) ? badge('Même nom', 'warning') : !c.active ? badge('Désactivé') : c.needs_review ? badge('À compléter', 'warning') : TYPE_LABEL[c.type]),
+          },
+          { label: 'Solde dû', align: 'right', render: (c) => (c.balance < 0 ? `Avance ${fmt.money(-c.balance)}` : c.balance ? fmt.money(c.balance) : '—') },
+          ...(flags.combos ? [{ label: 'Combos', align: 'right', render: (c) => fmt.number(c.loyalty_points) }] : []),
           { label: 'Dernier achat', render: (c) => fmt.date(c.last_purchase_at) },
         ],
         rows,
@@ -39,9 +50,28 @@ export async function renderCustomers(page, ctx) {
     draw();
   });
 
-  const receivables = customers.filter((c) => c.type === 'account').reduce((t, c) => t + Math.max(0, c.balance), 0);
-  page.replaceChildren(
-    pageHeader('Clients', `${customers.length} client${customers.length > 1 ? 's' : ''} · encours total ${fmt.money(receivables)}`, button('Nouveau client', () => customerDialog(null, ctx), { iconName: 'plus' })),
+  const receivables = customers.reduce((t, c) => t + Math.max(0, c.balance), 0);
+  const toReview = customers.filter((c) => c.needs_review && c.active).length;
+  if (typeFilter === 'review' && !toReview) typeFilter = 'all';
+  setContent(page, 
+    pageHeader(
+      'Clients',
+      `${customers.length} client${customers.length > 1 ? 's' : ''} · encours total ${fmt.money(receivables)}`,
+      button('Créances', () => ctx.navigate('clients/creances'), { variant: 'secondary', iconName: 'cash' }),
+      edit(button('Nouveau client', () => customerDialog(null, ctx), { iconName: 'plus' })),
+      photosOn()
+        ? photoButton({
+            label: 'Cahier des dettes',
+            text: 'Cahier',
+            className: 'btn secondary',
+            camera: false,
+            onImage: async (image) => {
+              const read = await api.post('/customers/notebook/read', { image, mediaType: 'image/jpeg' }, { timeout: 90000 });
+              if (await notebookDialog(read.rows, customers)) renderCustomers(page, ctx);
+            },
+          })
+        : null,
+    ),
     h(
       'section',
       { class: 'card flush' },
@@ -51,8 +81,9 @@ export async function renderCustomers(page, ctx) {
         segmented(
           [
             ['all', 'Tous'],
-            ['account', 'En compte'],
+            ['account', 'Abonnés'],
             ['individual', 'Particuliers'],
+            ...(toReview ? [['review', `À compléter (${toReview})`]] : []),
           ],
           typeFilter,
           (v) => {
@@ -68,16 +99,97 @@ export async function renderCustomers(page, ctx) {
   draw();
 }
 
+// A page of the old debts notebook as read by Claude: one line per person, the name matched to a
+// customer when it is one (else created), the amount in dollars; the manager checks every line.
+async function notebookDialog(rows, customers) {
+  const known = (name) => customers.find((c) => nameKey(c.name) === nameKey(name));
+  const listId = `nb-${Math.random().toString(36).slice(2, 7)}`;
+  const lines = rows.map((r, i) => {
+    const dollars = r.currency !== 'CDF';
+    const status = h('p', { class: 'hint-line' });
+    const show = () => {
+      const name = nameField.querySelector('input').value;
+      const c = known(name);
+      status.textContent = [c ? `Client : ${c.name}` : name.trim() ? 'Nouveau client' : '', r.currency === 'CDF' ? `Écrit ${fmt.number(r.amount)} FC` : r.currency === 'inconnue' ? 'Monnaie non écrite' : '', r.note]
+        .filter(Boolean)
+        .join(' · ');
+      status.className = `hint-line${c ? '' : ' new'}`;
+    };
+    const nameField = field({ name: `name_${i}`, label: 'Nom', value: r.customerName || r.name, list: listId, onInput: () => show() });
+    show();
+    const node = h(
+      'div',
+      { class: 'notebook-line' },
+      field({ name: `keep_${i}`, label: r.name, type: 'checkbox', value: dollars, full: true }),
+      nameField,
+      field({ name: `amount_${i}`, label: 'Montant ($)', type: 'number', step: '0.01', min: '0.01', value: dollars ? r.amount : '' }),
+      status,
+    );
+    return { node, note: r.note };
+  });
+  const ok = await formDialog({
+    title: `Cahier · ${rows.length} ligne${rows.length > 1 ? 's' : ''}`,
+    grid: false,
+    fields: [
+      {
+        name: 'lines',
+        type: 'node',
+        node: h('div', { class: 'stack' }, lines.map((l) => l.node), h('datalist', { id: listId }, customers.map((c) => h('option', { value: c.name })))),
+      },
+    ],
+    submitLabel: 'Ajouter les dettes',
+    onSubmit: (d, form) => {
+      const picked = lines
+        .map((l, i) => ({ keep: form.elements[`keep_${i}`].checked, name: form.elements[`name_${i}`].value.trim(), amount: Number(form.elements[`amount_${i}`].value), note: l.note }))
+        .filter((l) => l.keep);
+      if (!picked.length) throw new Error('Cochez au moins une ligne.');
+      const bad = picked.find((l) => !l.name || !(l.amount > 0));
+      if (bad) throw new Error(`Ligne « ${bad.name || '…'} » : nom et montant en dollars.`);
+      return api.post('/customers/notebook/import', { rows: picked });
+    },
+  });
+  if (!ok) return false;
+  toast(`${ok.count} dette${ok.count > 1 ? 's' : ''} ajoutée${ok.count > 1 ? 's' : ''} · ${fmt.money(ok.total)}${ok.created ? ` · ${ok.created} client${ok.created > 1 ? 's' : ''} créé${ok.created > 1 ? 's' : ''}` : ''}`);
+  return true;
+}
+
 async function customerDialog(customer, ctx, onDone) {
   const ok = await formDialog({
     title: customer ? `Modifier ${customer.name}` : 'Nouveau client',
     fields: [
-      { name: 'type', label: 'Type', type: 'select', value: customer?.type || 'account', options: [['account', 'En compte (société, flotte — paie à crédit)'], ['individual', 'Particulier (fidélité)']], full: true },
+      {
+        name: 'type',
+        label: 'Catégorie',
+        type: 'segment',
+        value: customer?.type || 'individual',
+        options: [
+          ['individual', 'Particulier'],
+          ['account', 'Abonné'],
+        ],
+        full: true,
+        onInput: (e) => {
+          const day = e.target.form.elements.paymentDay;
+          const account = e.target.value === 'account';
+          day.closest('.field').hidden = !account;
+          day.required = account;
+        },
+      },
+      {
+        name: 'paymentDay',
+        label: 'Jour de paiement du mois',
+        type: 'number',
+        step: '1',
+        min: '1',
+        max: '28',
+        value: customer?.payment_day ?? ctx?.state?.settings?.subscriberGraceDays ?? 5,
+        hidden: (customer?.type || 'individual') !== 'account',
+        required: customer?.type === 'account',
+        full: true,
+      },
       { name: 'name', label: 'Nom ou raison sociale', value: customer?.name, required: true, full: true },
       { name: 'phone', label: 'Téléphone', value: customer?.phone, type: 'tel' },
       { name: 'email', label: 'E-mail', value: customer?.email, type: 'email' },
-      { name: 'plate', label: 'Immatriculation principale', value: customer?.plate },
-      { name: 'creditLimit', label: 'Plafond de crédit ($)', type: 'number', step: '0.01', min: '0', value: customer?.credit_limit ?? 0, hint: 'Clients en compte uniquement' },
+      { name: 'plate', label: 'Immatriculation principale', value: customer?.plate, full: true },
       { name: 'address', label: 'Adresse', value: customer?.address, full: true },
       ...(customer ? [{ name: 'active', label: 'Client actif', type: 'checkbox', value: !!customer.active, full: true }] : []),
     ],
@@ -89,28 +201,164 @@ async function customerDialog(customer, ctx, onDone) {
   else ctx.navigate(`clients/${ok.id}`);
 }
 
+// Who owes what, by age: payments settle the oldest credit first, so the old column is what to chase.
+async function renderReceivables(page, ctx) {
+  const { rows, totals } = await api.get('/customers/receivables');
+  const station = ctx.state.settings.stationName;
+  const remind = (r) => {
+    const number = whatsappNumber(r.phone);
+    if (flags.readonly) return null;
+    if (!number) return h('span', { class: 'muted small' }, 'Pas de téléphone');
+    const text = `Bonjour ${r.name}, votre solde chez ${station} est de ${fmt.money(r.balance)}${r.old ? `, dont ${fmt.money(r.old)} depuis plus de 30 jours` : ''}. Merci de passer le régler. ${station}`;
+    return h(
+      'a',
+      { class: 'btn secondary sm', href: `https://wa.me/${number}?text=${encodeURIComponent(text)}`, target: '_blank', rel: 'noopener', onClick: (e) => e.stopPropagation() },
+      'Relancer',
+    );
+  };
+  setContent(
+    page,
+    h('a', { class: 'back no-print', href: '#/clients' }, icon('back'), 'Clients'),
+    pageHeader('Créances', null),
+    h(
+      'div',
+      { class: 'grid grid-4' },
+      kpi('Plus de 30 jours', fmt.money(totals.old), 'À relancer en priorité'),
+      kpi('8 à 30 jours', fmt.money(totals.month)),
+      kpi('7 derniers jours', fmt.money(totals.recent)),
+      kpi('Total dû', fmt.money(totals.balance), `${rows.length} client${rows.length > 1 ? 's' : ''}`),
+    ),
+    // Phones: one stacked row per customer, the Relancer button full width.
+    h(
+      'section',
+      { class: 'card flush section recv-list' },
+      rows.length
+        ? rows.map((r) =>
+            h(
+              'div',
+              { class: 'recv-item' },
+              h(
+                'a',
+                { class: 'recv-head', href: `#/clients/${r.id}` },
+                h('span', {}, h('strong', {}, r.name), h('span', { class: 'muted small' }, `${TYPE_LABEL[r.type]}${r.oldest_days ? ` · plus ancien : ${r.oldest_days} j` : ''}`)),
+                h('span', { class: 'recv-total' }, fmt.money(r.balance)),
+              ),
+              h('div', { class: 'muted small' }, [r.old ? `${fmt.money(r.old)} à + 30 j` : null, r.month ? `${fmt.money(r.month)} à 8–30 j` : null, r.recent ? `${fmt.money(r.recent)} sur 7 j` : null].filter(Boolean).join(' · ')),
+              remind(r),
+            ),
+          )
+        : h('div', { class: 'empty' }, 'Aucun client ne doit d’argent.'),
+    ),
+    h(
+      'section',
+      { class: 'card flush section recv-table' },
+      table(
+        [
+          { label: 'Client', render: (r) => h('span', {}, h('strong', {}, r.name), h('div', { class: 'muted small' }, `${TYPE_LABEL[r.type]}${r.oldest_days ? ` · plus ancien : ${r.oldest_days} j` : ''}`)) },
+          { label: '+ 30 jours', align: 'right', render: (r) => (r.old ? h('strong', { class: 'variance-neg' }, fmt.money(r.old)) : '—') },
+          { label: '8 à 30 j', align: 'right', render: (r) => (r.month ? fmt.money(r.month) : '—') },
+          { label: '7 jours', align: 'right', render: (r) => (r.recent ? fmt.money(r.recent) : '—') },
+          { label: 'Total', align: 'right', render: (r) => h('strong', {}, fmt.money(r.balance)) },
+          { label: '', align: 'right', render: remind },
+        ],
+        rows,
+        { empty: 'Aucun client ne doit d’argent.', onRowClick: (r) => ctx.navigate(`clients/${r.id}`) },
+      ),
+    ),
+  );
+}
+
 export async function renderCustomerDetail(page, ctx) {
+  if (ctx.id === 'creances') return renderReceivables(page, ctx);
   const period = defaultPeriod();
   const load = async () => {
     const acc = await api.get(`/customers/${ctx.id}?from=${period.from}&to=${period.to}`);
     const c = acc.customer;
     const reload = () => load();
-    page.replaceChildren(
+    setContent(page, 
       h('a', { class: 'back no-print', href: '#/clients' }, icon('back'), 'Clients'),
       pageHeader(
         c.name,
-        [TYPE_LABEL[c.type], c.phone, c.email, c.plate].filter(Boolean).join(' · '),
-        c.type === 'account' ? button('Règlement', () => paymentDialog(c, reload), { iconName: 'card' }) : null,
-        button('Modifier', () => customerDialog(c, ctx, reload), { variant: 'secondary', iconName: 'edit' }),
-        button(c.login ? 'Accès client' : 'Créer un accès', () => loginDialog(c, reload), { variant: 'secondary', iconName: 'user' }),
+        [TYPE_LABEL[c.type], c.type === 'account' && c.payment_day ? `paie avant le ${c.payment_day} du mois` : null, c.phone, c.email, c.plate].filter(Boolean).join(' · '),
+        edit(button('Règlement', () => paymentDialog(c, reload), { iconName: 'card' })),
+        edit(button('Ancienne dette', () => oldDebtDialog(c, reload), { variant: 'secondary', iconName: 'plus' })),
+        edit(button('Modifier', () => customerDialog(c, ctx, reload), { variant: 'secondary', iconName: 'edit' })),
+        edit(button(c.login ? 'Accès client' : 'Créer un accès', () => loginDialog(c, ctx, reload), { variant: 'secondary', iconName: 'user' })),
+        edit(button('Supprimer', () => removeCustomer(c, ctx), { variant: 'secondary', iconName: 'trash' })),
       ),
-      statement(acc, period, ctx.state.settings.loyaltyEnabled, (p) => {
-        Object.assign(period, p);
-        load();
-      }),
+      c.needs_review
+        ? h(
+            'section',
+            { class: 'card row between', style: 'margin-bottom:20px;box-shadow:inset 0 0 0 2px color-mix(in srgb, var(--orange) 55%, transparent)' },
+            h(
+              'div',
+              { style: 'flex:1;min-width:220px' },
+              h('h3', {}, 'Fiche à compléter'),
+              h('p', { class: 'muted', style: 'font-size:15px;margin-top:2px' }, `Créé à la pompe${c.created_by_name ? ` par ${c.created_by_name}` : ''}`),
+            ),
+            edit(button('Compléter la fiche', () => customerDialog(c, ctx, reload), { iconName: 'edit' })),
+          )
+        : null,
+      statement(
+        acc,
+        period,
+        (p) => {
+          Object.assign(period, p);
+          load();
+        },
+        { shareUrl: `/api/customers/${c.id}/statement.pdf`, onOldDebt: flags.readonly ? null : (m) => removeOldDebt(c, m, reload), first: priceCard(acc, reload) },
+      ),
     );
   };
   await load();
+}
+
+// A subscriber's prices: the subscribers' price, or with their own difference agreed with the station
+// (it follows the station's price changes); shown in their space.
+const signedPrice = (d) => `${d < 0 ? '−' : '+'} ${fmt.price(Math.abs(d))}`;
+function priceCard(acc, reload) {
+  const c = acc.customer;
+  if (c.type !== 'account') return null;
+  return h(
+    'section',
+    { class: 'card' },
+    cardHeader('Prix', null, edit(button('Modifier', () => pricesDialog(acc, reload), { variant: 'ghost' }))),
+    acc.prices.map((p) =>
+      h(
+        'div',
+        { class: 'summary-line' },
+        h('span', {}, p.name, h('span', { class: 'muted small' }, p.own ? ` · prix abonnés ${signedPrice(p.delta)}` : ' · prix abonnés')),
+        h(p.own ? 'strong' : 'span', {}, fmt.price(p.price)),
+      ),
+    ),
+  );
+}
+
+async function pricesDialog(acc, reload) {
+  const c = acc.customer;
+  const ok = await formDialog({
+    title: `Prix — ${c.name}`,
+    grid: false,
+    // The difference in $/L (− 0,05: five cents less); the hint shows the price it gives.
+    fields: acc.prices.map((p) => {
+      const shown = (delta) => `Prix abonnés ${fmt.price(p.base)}${delta ? ` → ${fmt.price(Math.round((p.base + delta) * 1000) / 1000)}` : ''}`;
+      return {
+        name: `p${p.product_id}`,
+        label: `${p.name} : écart ($/L)`,
+        type: 'number',
+        step: '0.001',
+        inputmode: 'text',
+        value: p.own ? p.delta : '',
+        hint: shown(p.delta),
+        onInput: (e) => (e.target.closest('.field').querySelector('.hint').textContent = shown(Number(e.target.value) || 0)),
+      };
+    }),
+    onSubmit: (d) => api.put(`/customers/${c.id}/prices`, { deltas: Object.fromEntries(acc.prices.map((p) => [p.product_id, d[`p${p.product_id}`]])) }),
+  });
+  if (ok) {
+    toast('Prix enregistrés');
+    reload();
+  }
 }
 
 export function defaultPeriod() {
@@ -118,35 +366,58 @@ export function defaultPeriod() {
   return { from: isoDate(new Date(now.getFullYear(), now.getMonth(), 1)), to: todayISO() };
 }
 
-// Account statement shared with the client space: KPIs, period picker, movements, print.
-export function statement(acc, period, loyalty, onPeriod) {
+// Account statement shared with the client space: KPIs, period picker, movements.
+// `first`: a card on top of the column (the subscriber's prices on their record).
+export function statement(acc, period, onPeriod, { onOldDebt, clientSpace = false, shareUrl, first = null } = {}) {
   const c = acc.customer;
+  const subscriber = c.type === 'account';
   const from = field({ name: 'from', label: 'Du', type: 'date', value: period.from });
   const to = field({ name: 'to', label: 'Au', type: 'date', value: period.to });
   const apply = () => onPeriod({ from: from.querySelector('input').value, to: to.querySelector('input').value });
   from.querySelector('input').addEventListener('change', apply);
   to.querySelector('input').addEventListener('change', apply);
 
-  const isAccount = c.type === 'account';
+  const combos = acc.combos;
+  const dues = acc.dues;
   return h(
     'div',
     { class: 'stack' },
+    first,
+    dues && (dues.overdue > 0 || dues.currentMonth > 0)
+      ? h(
+          'section',
+          { class: 'card', style: dues.late ? 'box-shadow:inset 0 0 0 2px var(--red)' : '' },
+          cardHeader('Paiement mensuel (abonné)', null),
+          dues.overdue > 0
+            ? h(
+                'div',
+                { class: 'summary-line' },
+                h('span', {}, dues.late ? badge('En retard', 'critical') : badge('À payer', 'warning'), ' Mois précédent', h('span', { class: 'muted small' }, ` — avant le ${fmt.date(dues.overdueDeadline)}`)),
+                h('strong', { class: dues.late ? 'variance-neg' : '' }, fmt.money(dues.overdue)),
+              )
+            : null,
+          h('div', { class: 'summary-line' }, h('span', {}, 'Mois en cours', h('span', { class: 'muted small' }, ` — à payer avant le ${fmt.date(dues.nextDeadline)}`)), h('strong', {}, fmt.money(dues.currentMonth))),
+        )
+      : null,
     h(
       'div',
-      { class: 'grid grid-4' },
-      isAccount
-        ? [
-            kpi('Solde dû', h('span', { class: c.balance > c.credit_limit ? 'variance-neg' : '' }, fmt.money(c.balance)), c.balance > c.credit_limit ? 'Plafond dépassé' : 'À ce jour'),
-            kpi('Plafond de crédit', fmt.money(c.credit_limit)),
-            kpi('Crédit disponible', fmt.money(Math.max(0, c.credit_limit - c.balance))),
-            kpi('Achats sur la période', fmt.money(acc.totals.purchases), fmt.liters(acc.totals.liters)),
-          ]
-        : [
-            ...(loyalty ? [kpi('Points fidélité', fmt.number(c.loyalty_points), 'Cumulés')] : []),
-            kpi('Achats sur la période', fmt.money(acc.totals.purchases)),
-            kpi('Litres sur la période', fmt.liters(acc.totals.liters)),
-            ...(loyalty ? [kpi('Points sur la période', `+${fmt.number(acc.totals.points)}`)] : []),
-          ],
+      { class: `grid ${subscriber && flags.combos && !clientSpace ? 'grid-2' : ''}` },
+      kpi(
+        c.balance < 0 ? 'Avance du client' : 'Solde dû',
+        h('span', { class: c.type !== 'account' && c.balance > 0.001 ? 'variance-neg' : '' }, fmt.money(Math.abs(c.balance))),
+        [
+          c.type !== 'account' && c.balance > 0.001 ? 'Crédit en cours : pas d’autre crédit avant paiement' : null,
+          c.old_debt ? `dont ancienne dette ${fmt.money(c.old_debt)} au départ` : null,
+        ].filter(Boolean).join(' · ') || TYPE_LABEL[c.type],
+      ),
+      // The balance; a subscriber's combos too (the client space shows them in their own card).
+      !flags.combos || !subscriber || clientSpace ? null : kpi(
+        'Combos',
+        fmt.number(combos.balance),
+        combos.balance >= combos.threshold
+          ? `= ${fmt.money(combos.value)} · échangeables`
+          : `${fmt.number(combos.threshold - combos.balance)} avant l’échange${combos.pending ? ` · +${fmt.number(combos.pending)} au paiement du crédit` : ''}`,
+      ),
     ),
     h(
       'section',
@@ -155,28 +426,32 @@ export function statement(acc, period, loyalty, onPeriod) {
       h(
         'div',
         { class: 'card-header' },
-        h('div', {}, h('h2', {}, isAccount ? 'Relevé de compte' : 'Historique des achats'), isAccount ? h('p', {}, `Solde au début de la période : ${fmt.money(acc.opening)}`) : null),
-        h('div', { class: 'row no-print', style: 'align-items:flex-end' }, from, to, button('Imprimer', () => window.print(), { variant: 'secondary', iconName: 'print' })),
+        h('div', {}, h('h2', {}, 'Relevé de compte'), h('p', {}, `Solde au début de la période : ${fmt.money(acc.opening)}`)),
+        h(
+          'div',
+          { class: 'row no-print', style: 'align-items:flex-end' },
+          from,
+          to,
+          // « Partager » the statement as a PDF over the period chosen here.
+          shareUrl
+            ? button('Partager', () => sharePdf(`${shareUrl}?from=${period.from}&to=${period.to}`, `releve-${period.from}-au-${period.to}.pdf`), { variant: 'secondary', iconName: 'share' })
+            : null,
+        ),
       ),
       table(
         [
           { label: 'Date', render: (m) => fmt.dateTime(m.date) },
           { label: 'Libellé', wrap: true, key: 'label' },
-          ...(isAccount
-            ? [
-                { label: 'Débit', align: 'right', render: (m) => (m.debit ? fmt.money(m.debit) : '') },
-                { label: 'Crédit', align: 'right', render: (m) => (m.credit ? fmt.money(m.credit) : '') },
-                { label: 'Solde', align: 'right', render: (m) => fmt.money(m.balance) },
-              ]
-            : [
-                { label: 'Montant', align: 'right', render: (m) => fmt.money(m.amount) },
-                ...(loyalty ? [{ label: 'Points', align: 'right', render: (m) => (m.points ? `+${m.points}` : '') }] : []),
-              ]),
+          { label: 'Montant', align: 'right', render: (m) => (m.type === 'sale' ? fmt.money(m.amount) : '') },
+          { label: 'Dû', align: 'right', render: (m) => (m.debit ? fmt.money(m.debit) : '') },
+          { label: 'Payé', align: 'right', render: (m) => (m.credit ? fmt.money(m.credit) : '') },
+          { label: 'Solde', align: 'right', render: (m) => fmt.money(m.balance) },
+          ...(flags.combos ? [{ label: 'Combos', align: 'right', render: (m) => (m.points ? `+${m.points}` : m.combosUsed ? `−${m.combosUsed}` : '') }] : []),
         ],
         acc.movements,
-        { empty: 'Aucune opération sur cette période.' },
+        { empty: 'Aucune opération sur cette période.', onRowClick: onOldDebt ? (m) => m.type === 'old_debt' && onOldDebt(m) : undefined },
       ),
-      isAccount && acc.movements.length
+      acc.movements.length
         ? h('div', { class: 'summary-line total', style: 'padding:14px 22px' }, h('span', {}, 'Solde en fin de période'), h('span', {}, fmt.money(acc.closing)))
         : null,
     ),
@@ -184,35 +459,131 @@ export function statement(acc, period, loyalty, onPeriod) {
 }
 
 async function paymentDialog(c, reload) {
+  let given = null; // the amount and the mode, for the receipt
   const ok = await formDialog({
     title: `Règlement — ${c.name}`,
-    intro: `Solde dû actuel : ${fmt.money(c.balance)}`,
+    intro: `${c.balance < 0 ? `Avance actuelle : ${fmt.money(-c.balance)}` : `Solde dû actuel : ${fmt.money(c.balance)}`}`,
     fields: [
       { name: 'amount', label: 'Montant ($)', type: 'number', step: '0.01', min: '0.01', required: true, value: c.balance > 0 ? c.balance : '' },
-      { name: 'method', label: 'Mode', type: 'select', options: ['espèces', 'virement', 'chèque', 'carte', 'mobile money'].map((m) => [m, m[0].toUpperCase() + m.slice(1)]) },
-      { name: 'reference', label: 'Référence', full: true, placeholder: 'N° de chèque, de virement…' },
+      { name: 'method', label: 'Mode', type: 'select', options: ['espèces', 'mobile money'].map((m) => [m, m[0].toUpperCase() + m.slice(1)]) },
+      { name: 'reference', label: 'Référence', full: true, placeholder: 'N° de transaction mobile money…' },
     ],
-    onSubmit: (d) => api.post(`/customers/${c.id}/payments`, d),
+    onSubmit: (d) => ((given = d), api.post(`/customers/${c.id}/payments`, d)),
   });
   if (ok) {
-    toast(`Règlement enregistré. Nouveau solde : ${fmt.money(ok.balance)}`);
+    toast(`Règlement enregistré. Nouveau solde : ${fmt.money(ok.balance)}`, 'info', {
+      action: receipt(c, [`Règlement : ${fmt.money(Number(given.amount))} en ${given.method}`], ok.balance),
+    });
     reload();
   }
 }
 
-async function loginDialog(c, reload) {
+// A debt from before the app (the notebook): added to the balance, settled first by payments.
+// A record entered by mistake: removed as is when it holds nothing; otherwise its operations
+// and its login go to the right customer, chosen among the others.
+async function removeCustomer(c, ctx) {
+  if (!c.operations && !c.login) {
+    if (!(await confirmDialog(`Supprimer ${c.name} ?`, null, { confirmLabel: 'Supprimer', danger: true }))) return;
+    try {
+      await api.del(`/customers/${c.id}`);
+      toast('Client supprimé.');
+      ctx.navigate('clients');
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+    return;
+  }
+  const others = (await api.get('/customers?form=1')).filter((o) => o.id !== c.id);
+  const chips = nameChips(others.map((o) => o.name));
+  const n = c.operations;
   const ok = await formDialog({
-    title: c.login ? 'Accès à l’espace client' : 'Créer un accès client',
-    intro: 'Le client pourra consulter ses achats, son solde et imprimer ses relevés. Communiquez-lui ces identifiants.',
+    title: `Supprimer ${c.name}`,
     grid: false,
     fields: [
-      { name: 'login', label: 'Identifiant', value: c.login || '', required: true },
-      { name: 'password', label: c.login ? 'Nouveau mot de passe' : 'Mot de passe', type: 'text', required: true, hint: '8 caractères minimum' },
+      { name: 'into', label: !n ? 'Son accès client va à' : n > 1 ? `Ses ${n} opérations vont à` : 'Son opération va à', required: true, onInput: chips.onInput },
+      chips.node,
     ],
-    onSubmit: (d) => api.post(`/customers/${c.id}/login`, d),
+    submitLabel: 'Transférer et supprimer',
+    onSubmit: (d) => {
+      const into = others.find((o) => nameKey(o.name) === nameKey(d.into));
+      if (!into) throw new Error('Touchez un client proposé.');
+      return api.post(`/customers/${c.id}/merge`, { into: into.id });
+    },
+  });
+  if (!ok) return;
+  toast(`${c.name} supprimé.`);
+  ctx.navigate(`clients/${ok.id}`);
+}
+
+async function oldDebtDialog(c, reload) {
+  const ok = await formDialog({
+    title: `Ancienne dette — ${c.name}`,
+    grid: false,
+    fields: [
+      { name: 'amount', label: 'Montant ($)', type: 'number', step: '0.01', min: '0.01', required: true },
+      { name: 'note', label: 'Remarque', placeholder: 'Facultatif (ex. : cahier 2025, page 12)' },
+    ],
+    submitLabel: 'Ajouter',
+    onSubmit: (d) => api.post(`/customers/${c.id}/old-debts`, d),
   });
   if (ok) {
-    toast('Accès client enregistré.');
+    toast(`Ancienne dette ajoutée. Nouveau solde : ${fmt.money(ok.balance)}`);
     reload();
   }
+}
+
+async function removeOldDebt(c, m, reload) {
+  if (!(await confirmDialog('Retirer cette ancienne dette ?', `${fmt.money(m.amount)} · ${m.label}`, { confirmLabel: 'Retirer', danger: true }))) return;
+  try {
+    const r = await api.del(`/customers/${c.id}/old-debts/${m.id}`);
+    toast(`Ancienne dette retirée. Nouveau solde : ${fmt.money(r.balance)}`);
+    reload();
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+}
+
+// The customer's login: their phone by default, and the default password, which they change later.
+const DEFAULT_PASSWORD = '12345678';
+
+async function loginDialog(c, ctx, reload) {
+  const sent = {};
+  const ok = await formDialog({
+    title: c.login ? 'Accès à l’espace client' : 'Créer un accès client',
+    grid: false,
+    fields: [
+      { name: 'login', label: 'Identifiant', value: c.login || (c.phone || '').replace(/[\s.-]/g, ''), required: true },
+      { name: 'password', label: c.login ? 'Nouveau mot de passe' : 'Mot de passe', type: 'text', value: DEFAULT_PASSWORD, required: true },
+    ],
+    submitLabel: 'Enregistrer et partager',
+    onSubmit: async (d) => {
+      Object.assign(sent, d);
+      return api.post(`/customers/${c.id}/login`, d);
+    },
+  });
+  if (!ok) return;
+  reload();
+  if (ok.mailed) toast(`Accès envoyé aussi à ${c.email}`);
+  shareAccess(c, sent, ctx?.state?.settings?.stationName || 'la station');
+}
+
+// Sends the customer the link, their login and password on WhatsApp, to the number of their record
+// (without one, WhatsApp asks for the contact); they change the password in their space.
+function shareAccess(c, { login, password }, stationName) {
+  const text = [
+    `Bonjour ${c.name}, voici votre espace client ${stationName} : ${location.origin}`,
+    `Identifiant : ${login}`,
+    `Mot de passe : ${password}`,
+    'Vous pouvez changer ce mot de passe dans votre espace : touchez vos initiales en haut à droite, puis « Changer le mot de passe ».',
+  ].join('\n');
+  const whatsapp = h(
+    'a',
+    { class: 'btn secondary', href: `https://wa.me/${whatsappNumber(c.phone) || ''}?text=${encodeURIComponent(text)}`, target: '_blank', rel: 'noopener' },
+    h('span', { class: 'logo-whatsapp', 'aria-hidden': 'true' }),
+    'WhatsApp',
+  );
+  return noticeDialog('Accès client enregistré', [
+    h('p', {}, `Identifiant : `, h('strong', {}, login), h('br'), 'Mot de passe : ', h('strong', {}, password)),
+    h('div', { class: 'notice-share' }, buttonRow([whatsapp])),
+  ], { okLabel: 'Terminé', level: 'good', iconName: 'check' });
 }

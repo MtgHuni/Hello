@@ -1,28 +1,36 @@
-import { api } from './api.js';
-import { h, initials, errorState, toast, formDialog, actionSheet, spinner } from './ui.js';
-import { icon } from './icons.js';
-import { renderLogin, renderSetup } from './views/auth.js';
+import { flags } from './ui.js';
+import { api, net, pending, setUser, forgetCache, isFlushing } from './api.js';
+import { h, errorState, toast, formDialog, actionSheet, openDialog, spinner, initials, applyTheme, toggleTheme, themeButton, noticeDialog } from './ui.js';
+import { icon, brandMark } from './icons.js';
+import { enhance } from './motion.js';
+import { renderLogin, renderSetup, renderForgot, renderReset } from './views/auth.js';
 import { renderDashboard } from './views/dashboard.js';
 import { renderShifts, renderShiftDetail } from './views/shifts.js';
 import { renderAttendant, renderMyShifts } from './views/attendant.js';
 import { renderTanks } from './views/tanks.js';
 import { renderCustomers, renderCustomerDetail } from './views/customers.js';
 import { renderReports } from './views/reports.js';
+import { renderFinance } from './views/finance.js';
 import { renderSettings } from './views/settings.js';
+import { renderJournal } from './views/journal.js';
 import { renderAccount } from './views/account.js';
+import { renderExpenses } from './views/expenses.js';
+import { renderCashbook } from './views/cashbook.js';
 
 const root = document.getElementById('app');
 export const state = { user: null, settings: null };
 
-// [path, label, icon, view, short label for the tab bar]
+// [path, label, icon, view, short label for the global nav]
 const NAV = {
   manager: [
     ['', 'Tableau de bord', 'home', renderDashboard, 'Accueil'],
     ['postes', 'Postes', 'shifts', renderShifts],
-    ['cuves', 'Cuves', 'tank', renderTanks],
-    ['clients', 'Clients', 'users', renderCustomers],
-    ['rapports', 'Rapports', 'chart', renderReports],
     ['pompe', 'Mon poste', 'pump', renderAttendant],
+    ['caisse', 'Caisse', 'cash', renderCashbook],
+    ['clients', 'Clients', 'users', renderCustomers],
+    ['depenses', 'Dépenses', 'wallet', renderExpenses],
+    ['cuves', 'Cuves', 'tank', renderTanks],
+    ['rapports', 'Rapports', 'chart', renderReports],
     ['reglages', 'Réglages', 'settings', renderSettings],
   ],
   attendant: [
@@ -31,11 +39,14 @@ const NAV = {
   ],
   customer: [['', 'Mon compte', 'user', renderAccount]],
 };
+// The owner (actionnaire): the manager's screens, to read, but the pump and the settings.
+NAV.owner = NAV.manager.filter(([path]) => !['pompe', 'reglages'].includes(path));
 
 const DETAIL_ROUTES = {
-  manager: { postes: renderShiftDetail, clients: renderCustomerDetail },
+  manager: { postes: renderShiftDetail, clients: renderCustomerDetail, reglages: renderJournal, rapports: renderFinance },
   attendant: { historique: renderShiftDetail },
 };
+DETAIL_ROUTES.owner = { postes: renderShiftDetail, clients: renderCustomerDetail, rapports: renderFinance };
 
 const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -47,18 +58,53 @@ export function navigate(path) {
   location.hash = `#/${path}`;
 }
 
+// Back from a link in a mail (?mail=…): what happened, then the address bar is cleaned.
+const MAIL_NOTICE = {
+  confirme: ['Adresse e-mail confirmée.'],
+  arret: ['Vous ne recevrez plus ces mails.'],
+  'lien-expire': ['Ce lien n’est plus valable.', 'error'],
+};
+let openMailsAfterLogin = false;
+function mailNotice() {
+  const notice = new URLSearchParams(location.search).get('mail');
+  if (!notice) return;
+  history.replaceState(null, '', location.pathname + location.hash);
+  if (notice === 'reglages') openMailsAfterLogin = true;
+  else if (MAIL_NOTICE[notice]) toast(...MAIL_NOTICE[notice]);
+}
+
 async function boot() {
   shell = null;
   lastRoute = null;
+  mailNotice();
   try {
     const setup = await api.get('/setup');
+    flags.combos = setup.combosEnabled !== false;
     if (setup.needsSetup) return renderSetup(root, boot);
+    // Links from a mail: a new password (#/mot-de-passe/<lien>), or ask for one.
+    const [section, token] = location.hash.replace(/^#\/?/, '').split('/');
+    if (section === 'mot-de-passe' && token) return renderReset(root, setup.stationName, token, boot);
     const me = await api.get('/auth/me').catch(() => null);
+    if (section === 'mot-de-passe-oublie') {
+      history.replaceState(null, '', '/');
+      if (!me) return renderForgot(root, setup.stationName, boot);
+    }
     if (!me) return renderLogin(root, setup.stationName, boot);
     state.user = me.user;
     state.settings = me.settings;
+    flags.combos = me.settings.combosEnabled !== false;
+    flags.readonly = me.user.role === 'owner';
+    flags.admin = !!me.user.admin;
+    flags.ai = !!me.settings.ai;
+    flags.station = me.settings.stationName;
+    flags.ask = !!me.settings.ask;
+    setUser(me.user.id);
     document.title = me.settings.stationName;
-    route();
+    await route();
+    if (openMailsAfterLogin) {
+      openMailsAfterLogin = false;
+      myMails();
+    }
   } catch (err) {
     root.replaceChildren(h('div', { class: 'auth' }, errorState(err)));
   }
@@ -66,6 +112,7 @@ async function boot() {
 
 async function logout() {
   await api.post('/auth/logout').catch(() => {});
+  forgetCache();
   state.user = null;
   location.hash = '';
   boot();
@@ -77,126 +124,166 @@ async function changePassword() {
     grid: false,
     fields: [
       { name: 'current', label: 'Mot de passe actuel', type: 'password', required: true, autocomplete: 'current-password' },
-      { name: 'password', label: 'Nouveau mot de passe', type: 'password', required: true, autocomplete: 'new-password', hint: '8 caractères minimum' },
+      { name: 'password', label: 'Nouveau mot de passe', type: 'password', required: true, autocomplete: 'new-password' },
     ],
     onSubmit: (d) => api.post('/auth/password', d),
   });
   if (ok) toast('Mot de passe modifié');
 }
 
+// Mode nuit (par défaut) ou mode jour pour la pompe en plein soleil ; mémorisé sur l'appareil.
+try {
+  applyTheme(localStorage.getItem('theme'));
+} catch {
+  /* stockage indisponible : mode nuit */
+}
+
+// « Mes mails » : the address (confirmed by a link) and the kinds of mail this person gets.
+async function myMails() {
+  const m = await api.get('/me/mail');
+  const ok = await formDialog({
+    title: 'Mes mails',
+    grid: false,
+    fields: [
+      { name: 'email', label: m.email ? (m.verified ? 'Adresse e-mail · confirmée' : 'Adresse e-mail · à confirmer') : 'Adresse e-mail', type: 'email', value: m.email, autocomplete: 'email', inputmode: 'email' },
+      { type: 'node', name: 'kinds-title', node: h('h3', { class: 'form-section' }, 'Je reçois') },
+      ...m.kinds.map((k) => ({ name: `k_${k.kind}`, label: k.label, type: 'checkbox', value: k.on, full: true })),
+    ],
+    onSubmit: (d) => api.put('/me/mail', { email: d.email, kinds: Object.fromEntries(m.kinds.map((k) => [k.kind, !!d[`k_${k.kind}`]])) }),
+  });
+  if (ok) toast(ok.confirmationSent ? `Lien de confirmation envoyé à ${ok.email}` : 'Enregistré');
+}
+
 function accountMenu() {
-  const actions = [{ label: 'Changer le mot de passe', onClick: changePassword }];
-  if (state.user.role === 'manager') actions.push({ label: 'Mon poste (pompe)', onClick: () => navigate('pompe') });
+  const actions = [
+    { label: document.documentElement.dataset.theme === 'light' ? 'Passer en mode nuit' : 'Passer en mode jour (plein soleil)', onClick: toggleTheme },
+    { label: 'Mes mails', onClick: myMails },
+    { label: 'Changer le mot de passe', onClick: changePassword },
+  ];
   actions.push({ label: 'Se déconnecter', destructive: true, onClick: logout });
   actionSheet({ title: `${state.user.name} · ${state.settings.stationName}`, actions });
 }
 
-// ---------- Persistent shell: sidebar, toolbar, floating tab bar ----------
+// ---------- Persistent shell: side rail on wide screens, top bar + bottom tabs on phones ----------
+
+const ROLE_LABEL = { manager: 'Gérant', attendant: 'Pompiste', customer: 'Client', owner: 'Actionnaire' };
+// The admin is a manager with the settings and the cash book.
+const roleLabel = () => (state.user.admin ? 'Administrateur' : ROLE_LABEL[state.user.role]);
+// On phones the tab bar keeps four destinations; the others sit behind « Plus ».
+const TAB_MAX = 4;
 
 function buildShell() {
   const role = state.user.role;
   const nav = NAV[role];
-  const appIcon = () => h('div', { class: 'app-icon' }, icon('pump'));
-
   const slot = h('div', { class: 'page-slot' });
-  const title = h('div', { class: 'toolbar-title', 'aria-hidden': 'true' });
-  const toolbar = h(
-    'header',
-    { class: 'toolbar' },
-    h('div', { class: 'toolbar-leading' }, appIcon()),
-    title,
+  const netStrip = h('button', { type: 'button', class: 'offline-strip net-strip', role: 'status', hidden: true, onClick: showPending });
+  const link = ([path, label, iconName, , short], useShort) =>
+    h('a', { href: `#/${path}`, 'data-path': path }, icon(iconName), h('span', {}, useShort ? short || label : label));
+
+  const side = h(
+    'aside',
+    { class: 'side' },
+    h('a', { class: 'side-brand', href: '#/', 'aria-label': `${state.settings.stationName}, accueil` }, brandMark(), h('span', {}, state.settings.stationName)),
+    nav.length > 1 ? h('nav', { class: 'side-nav', 'aria-label': 'Navigation' }, nav.map((n) => link(n, false))) : h('div', { class: 'spacer' }),
     h(
       'div',
-      { class: 'toolbar-trailing' },
-      h('button', { class: 'circle-btn', type: 'button', 'aria-label': 'Mon compte', title: 'Mon compte', onClick: accountMenu }, h('span', { class: 'avatar' }, initials(state.user.name))),
+      { class: 'side-account' },
+      h(
+        'button',
+        { class: 'side-foot', type: 'button', 'aria-label': 'Mon compte', onClick: accountMenu },
+        h('span', { class: 'avatar' }, initials(state.user.name)),
+        h('span', { class: 'who' }, h('strong', {}, state.user.name), h('span', {}, roleLabel())),
+        icon('more'),
+      ),
+      themeButton(),
     ),
   );
 
-  const tabItems = role === 'manager' ? nav.filter(([p]) => p !== 'pompe') : nav;
-  const lens = h('span', { class: 'tab-lens', 'aria-hidden': 'true' });
-  const tabbar =
-    tabItems.length > 1
-      ? h('nav', { class: 'tabbar glass', 'aria-label': 'Navigation' }, lens, tabItems.map(([path, label, iconName, , short]) => h('a', { href: `#/${path}`, 'data-path': path }, icon(iconName), h('span', {}, short || label))))
-      : null;
+  const topTitle = h('span', { class: 'topbar-title' }, state.settings.stationName);
+  const topbar = h(
+    'header',
+    { class: 'topbar' },
+    h('a', { class: 'topbar-brand', href: '#/', 'aria-label': `${state.settings.stationName}, accueil` }, brandMark()),
+    topTitle,
+    themeButton(),
+    h('button', { class: 'topbar-account', type: 'button', 'aria-label': 'Mon compte', onClick: accountMenu }, h('span', { class: 'avatar' }, initials(state.user.name))),
+  );
 
-  const main = h('main', { class: 'main' }, toolbar, slot);
-  let el;
-  if (role === 'manager') {
-    const sidebar = h(
-      'aside',
-      { class: 'sidebar glass' },
-      h('div', { class: 'brand' }, appIcon(), h('span', { class: 'brand-name' }, state.settings.stationName)),
-      h('nav', { class: 'nav' }, nav.map(([path, label, iconName]) => h('a', { href: `#/${path}`, 'data-path': path }, icon(iconName), h('span', {}, label)))),
-      h(
-        'div',
-        { class: 'sidebar-footer' },
-        h(
-          'button',
-          { class: 'user-chip', type: 'button', onClick: accountMenu },
-          h('span', { class: 'avatar' }, initials(state.user.name)),
-          h('span', { style: 'min-width:0;flex:1' }, h('span', { style: 'display:block;font-weight:600;font-size:15px' }, state.user.name), h('span', { class: 'small muted' }, 'Gérant')),
-        ),
-      ),
-    );
-    el = h('div', { class: 'shell manager' }, sidebar, main, tabbar);
-  } else {
-    el = h('div', { class: 'shell simple' }, main, tabbar);
-  }
+  const overflow = nav.length > TAB_MAX + 1;
+  const tabs = overflow ? nav.slice(0, TAB_MAX) : nav;
+  const rest = overflow ? nav.slice(TAB_MAX) : [];
+  const more = rest.length
+    ? h(
+        'button',
+        {
+          class: 'tab-more',
+          type: 'button',
+          onClick: openNavDrawer,
+        },
+        icon('more'),
+        h('span', {}, 'Plus'),
+      )
+    : null;
+  const tabbar = nav.length > 1 ? h('nav', { class: 'tabbar', 'aria-label': 'Navigation', style: `--n:${tabs.length + (more ? 1 : 0)}` }, tabs.map((n) => link(n, true)), more) : null;
 
-  shell = { role, el, slot, toolbar, title, tabbar, lens };
-
-  // Lens follows the active tab; recomputed when the bar resizes (rotation, breakpoint).
-  if (tabbar && 'ResizeObserver' in window) new ResizeObserver(() => moveLens(false)).observe(tabbar);
+  const el = h('div', { class: `shell ${role} ${tabbar ? 'has-tabs' : ''}` }, side, h('div', { class: 'shell-main' }, topbar, h('main', { class: 'main' }, netStrip, slot)), tabbar);
+  shell = { role, el, slot, netStrip, topTitle, more, rest: rest.map(([path]) => path) };
+  drawNet();
   return shell;
 }
 
-function moveLens(animate = true) {
-  const { tabbar, lens } = shell;
-  if (!tabbar) return;
-  const active = tabbar.querySelector('a.active');
-  if (!active || !active.offsetWidth) {
-    lens.style.opacity = '0';
-    return;
-  }
-  if (!animate) lens.style.transition = 'none';
-  lens.style.opacity = '1';
-  lens.style.width = `${active.offsetWidth}px`;
-  lens.style.transform = `translateX(${active.offsetLeft}px)`;
-  if (!animate) requestAnimationFrame(() => (lens.style.transition = ''));
+// « Plus » on a phone: every section, those of the tab bar included, in a drawer from the side
+// built like the side rail of wide screens.
+function openNavDrawer() {
+  const nav = NAV[state.user.role];
+  const section = location.hash.replace(/^#\/?/, '').split('/')[0];
+  const current = (nav.find(([path]) => path === section) || nav[0])[0];
+  openDialog(
+    (close) => {
+      const go = (path) => (e) => {
+        e.preventDefault();
+        close();
+        navigate(path);
+      };
+      return h(
+        'div',
+        { class: 'nav-drawer', role: 'navigation', 'aria-label': 'Toutes les rubriques' },
+        h(
+          'div',
+          { class: 'nav-drawer-head' },
+          h('a', { class: 'side-brand', href: '#/', onClick: go('') }, brandMark(), h('span', {}, state.settings.stationName)),
+          h('button', { class: 'circle-btn', type: 'button', 'aria-label': 'Fermer', onClick: close }, icon('close')),
+        ),
+        h(
+          'nav',
+          { class: 'side-nav' },
+          nav.map(([path, label, iconName]) =>
+            h('a', { href: `#/${path}`, class: path === current ? 'active' : '', 'aria-current': path === current ? 'page' : null, onClick: go(path) }, icon(iconName), h('span', {}, label)),
+          ),
+        ),
+        h(
+          'button',
+          { class: 'side-foot', type: 'button', 'aria-label': 'Mon compte', onClick: () => (close(), accountMenu()) },
+          h('span', { class: 'avatar' }, initials(state.user.name)),
+          h('span', { class: 'who' }, h('strong', {}, state.user.name), h('span', {}, roleLabel())),
+          icon('more'),
+        ),
+      );
+    },
+    { kind: 'nav' },
+  );
 }
 
-function setActive(path) {
+function setActive(path, label) {
   shell.el.querySelectorAll('a[data-path]').forEach((a) => {
     const on = a.dataset.path === path;
     a.classList.toggle('active', on);
     if (on) a.setAttribute('aria-current', 'page');
     else a.removeAttribute('aria-current');
   });
-  moveLens(!!lastRoute);
+  shell.more?.classList.toggle('active', shell.rest.includes(path));
+  shell.topTitle.textContent = NAV[shell.role].length > 1 ? label : state.settings.stationName;
 }
-
-// Large title collapses into the toolbar once scrolled past (iOS behaviour).
-function updateToolbar() {
-  if (!shell) return;
-  const h1 = shell.slot.querySelector('.page-header h1');
-  const scrolled = h1 ? h1.getBoundingClientRect().bottom < 56 : window.scrollY > 40;
-  shell.toolbar.classList.toggle('scrolled', scrolled);
-  shell.toolbar.classList.toggle('edge', window.scrollY > 4);
-  if (h1 && shell.title.textContent !== h1.textContent) shell.title.textContent = h1.textContent;
-}
-let ticking = false;
-window.addEventListener(
-  'scroll',
-  () => {
-    if (ticking) return;
-    ticking = true;
-    requestAnimationFrame(() => {
-      ticking = false;
-      updateToolbar();
-    });
-  },
-  { passive: true },
-);
 
 // Swap page content with a navigation transition: push / pop / cross-fade.
 function swap(update, direction) {
@@ -224,7 +311,7 @@ function swap(update, direction) {
 
 async function route() {
   if (!state.user) return;
-  const [section = '', id] = location.hash.replace(/^#\/?/, '').split('/');
+  const [section = '', id, sub] = location.hash.replace(/^#\/?/, '').split('/');
   const role = state.user.role;
   const nav = NAV[role];
   const entry = nav.find(([path]) => path === section) || nav[0];
@@ -244,17 +331,17 @@ async function route() {
     else direction = 'fade';
   }
   lastRoute = { section: entry[0], depth };
-  setActive(entry[0]);
+  setActive(entry[0], entry[1]);
 
   const token = ++routeToken;
-  const page = h('div', { class: `page ${role === 'manager' ? '' : 'narrow'}` });
+  const page = h('div', { class: `page ${['manager', 'owner'].includes(role) ? '' : 'narrow'}` });
   const slow = setTimeout(() => {
     if (token === routeToken) shell.slot.replaceChildren(h('div', { class: 'loading' }, spinner()));
   }, 300);
   try {
-    await view(page, { id, state, navigate, refresh: route });
+    await view(page, { id, sub, state, navigate, refresh: route });
   } catch (err) {
-    page.replaceChildren(errorState(err));
+    page.replaceChildren(errorState(err, () => route()));
   }
   clearTimeout(slow);
   if (token !== routeToken) return; // a newer navigation won
@@ -262,8 +349,47 @@ async function route() {
   swap(() => {
     shell.slot.replaceChildren(page);
     window.scrollTo(0, 0);
-    updateToolbar();
+    enhance(page);
   }, direction);
+}
+
+// Without network: a strip at the top (since when, how many entries wait to be sent).
+function drawNet() {
+  if (!shell?.netStrip) return;
+  const count = pending().length;
+  const at = new Date(net.lastOk).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const parts = [net.offline ? `Hors connexion · à jour à ${at}` : count && isFlushing() ? 'Envoi…' : null, count ? `${count} en attente d’envoi` : null].filter(Boolean);
+  shell.netStrip.hidden = !parts.length;
+  shell.netStrip.textContent = parts.join(' · ');
+}
+function showPending() {
+  const list = pending();
+  if (!list.length) return;
+  noticeDialog('En attente d’envoi', h('ul', { class: 'notice-list' }, list.map((x) => h('li', {}, h('span', {}, x.label), h('small', {}, new Date(x.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }))))), {
+    level: 'warning',
+    iconName: 'info',
+  });
+}
+window.addEventListener('net:change', drawNet);
+// Sent once the network is back; what the server refused is shown, to enter again.
+window.addEventListener('outbox:sent', ({ detail: { sent, refused } }) => {
+  if (sent.length) toast(`${sent.length} opération${sent.length > 1 ? 's' : ''} envoyée${sent.length > 1 ? 's' : ''}`);
+  if (refused.length) noticeDialog('Non enregistré', h('ul', { class: 'notice-list' }, refused.map((x) => h('li', {}, h('span', {}, x.label), h('small', {}, x.error)))));
+  if (state.user) route();
+});
+
+// The app's files kept on the phone (public/sw.js): it opens without network.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('/sw.js')
+      .then(() => navigator.serviceWorker.ready)
+      .then((reg) => {
+        const files = performance.getEntriesByType('resource').map((e) => e.name.split('#')[0]).filter((u) => u.startsWith(location.origin) && !u.includes('/api/') && !/\.(mp4|webm)$/.test(u));
+        reg.active?.postMessage({ keep: [`${location.origin}/`, ...files] });
+      })
+      .catch(() => {});
+  });
 }
 
 window.addEventListener('hashchange', route);

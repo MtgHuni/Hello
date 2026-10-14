@@ -1,18 +1,22 @@
+import { flags, edit, adminEdit, canAdmin } from '../ui.js';
 import { api } from '../api.js';
-import { h, fmt, pageHeader, card, cardHeader, table, badge, button, formDialog, openDialog, toast, productColor } from '../ui.js';
+import { h, fmt, pageHeader, card, cardHeader, table, badge, button, formDialog, openDialog, toast, productColor, setContent, buttonRow } from '../ui.js';
+import { icon } from '../icons.js';
 
 export async function renderSettings(page, ctx) {
-  const [settings, products, pumps, tanks, users] = await Promise.all([
+  const [settings, products, pumps, tanks, users, mail] = await Promise.all([
     api.get('/settings'),
     api.get('/products'),
     api.get('/pumps'),
     api.get('/tanks'),
     api.get('/users'),
+    api.get('/mail/status'),
   ]);
   const reload = () => renderSettings(page, ctx);
   const tankOptions = tanks.filter((t) => t.active).map((t) => [t.id, `${t.name} (${t.product_name})`]);
+  const meters = pumps.flatMap((p) => p.nozzles);
 
-  page.replaceChildren(
+  setContent(page, 
     pageHeader('Réglages', 'Station, prix, équipements et équipe.'),
     h(
       'div',
@@ -26,54 +30,47 @@ export async function renderSettings(page, ctx) {
           'div',
           { class: 'card-header' },
           h('div', {}, h('h2', {}, 'Produits et prix'), h('p', {}, 'Un nouveau prix s’applique aux postes ouverts après le changement.')),
-          button('Ajouter un produit', () => productDialog(null, reload), { variant: 'ghost', iconName: 'plus' }),
+          adminEdit(button('Ajouter un produit', () => productDialog(null, reload), { variant: 'ghost', iconName: 'plus' })),
         ),
         table(
           [
             { label: 'Produit', render: (p) => h('span', {}, h('span', { class: 'swatch', style: `background:${productColor(p.id)}` }), p.name) },
-            { label: 'Prix de vente', align: 'right', render: (p) => h('strong', {}, fmt.price(p.price)) },
-            { label: 'Statut', render: (p) => (p.active ? badge('Actif', 'good') : badge('Inactif')) },
             {
-              label: '',
+              label: 'Prix public',
               align: 'right',
-              render: (p) => h('span', { class: 'row', style: 'justify-content:flex-end' }, button('Historique', () => priceHistory(p), { variant: 'ghost sm' }), button('Changer le prix', () => productDialog(p, reload), { variant: 'secondary sm' })),
+              render: (p) => h('span', {}, h('strong', {}, fmt.price(p.price)), p.next_price_at ? h('div', { class: 'muted small' }, `→ ${fmt.price(p.next_price)} le ${fmt.dateTime(p.next_price_at)}`) : null),
             },
+            { label: 'Prix abonnés', align: 'right', render: (p) => fmt.price(p.subscriber_price) },
+            { label: 'Statut', render: (p) => (p.active ? badge('Actif', 'good') : badge('Inactif')) },
+            // The manager only reads the settings: no button at all.
+            ...(canAdmin()
+              ? [
+                  {
+                    label: '',
+                    align: 'right',
+                    render: (p) => h('span', { class: 'btn-row inline', style: '--cols:2' }, button('Historique', () => priceHistory(p), { variant: 'secondary sm' }), button('Changer le prix', () => productDialog(p, reload), { variant: 'secondary sm' })),
+                  },
+                ]
+              : []),
           ],
           products,
         ),
       ),
 
-      // ---- Pumps & nozzles ----
+      // ---- Meters: one pump, one meter per product ----
       card(
-        cardHeader('Pompes et pistolets', 'Chaque pistolet est relié à une cuve, qui détermine le produit.', button('Ajouter une pompe', () => pumpDialog(null, reload), { variant: 'ghost', iconName: 'plus' })),
-        pumps.length
-          ? h(
-              'div',
-              { class: 'grid grid-2' },
-              pumps.map((p) =>
-                h(
-                  'div',
-                  { class: 'card', style: 'box-shadow:none;background:var(--surface-2);border:none' },
-                  h(
-                    'div',
-                    { class: 'row between', style: 'margin-bottom:10px' },
-                    h('h3', {}, p.name, ' ', p.active ? null : badge('Désactivée'), p.busy_with ? badge(`En service · ${p.busy_with}`, 'info') : null),
-                    button('Modifier', () => pumpDialog(p, reload), { variant: 'ghost sm' }),
-                  ),
-                  p.nozzles.map((n) =>
-                    h(
-                      'div',
-                      { class: 'nozzle-row' },
-                      h('span', { class: 'swatch', style: `background:${productColor(n.product_id)};width:12px;height:12px` }),
-                      h('div', { class: 'grow' }, h('div', { style: 'font-weight:600' }, n.name, n.active ? '' : ' (inactif)'), h('div', { class: 'muted small' }, `${n.tank_name} · index ${fmt.number(n.meter)}`)),
-                      button('Modifier', () => nozzleDialog(p, n, tankOptions, reload), { variant: 'ghost sm' }),
-                    ),
-                  ),
-                  button('+ Pistolet', () => nozzleDialog(p, null, tankOptions, reload), { variant: 'ghost sm' }),
-                ),
+        cardHeader('Compteurs', 'Un compteur par produit, relié à sa cuve.', pumps[0] ? adminEdit(button('Ajouter un compteur', () => meterDialog(null, tankOptions, reload, pumps[0].id), { variant: 'ghost', iconName: 'plus' })) : null),
+        meters.length
+          ? meters.map((n) =>
+              h(
+                'div',
+                { class: 'nozzle-row' },
+                h('span', { class: 'swatch', style: `background:${productColor(n.product_id)};width:12px;height:12px` }),
+                h('div', { class: 'grow' }, h('div', { style: 'font-weight:600' }, n.product_name, n.active ? '' : ' (inactif)'), h('div', { class: 'muted small' }, `${n.tank_name} · index ${fmt.number(n.meter)}`)),
+                adminEdit(button('Modifier', () => meterDialog(n, tankOptions, reload), { variant: 'ghost sm' })),
               ),
             )
-          : h('div', { class: 'empty' }, 'Aucune pompe.'),
+          : h('div', { class: 'empty' }, 'Aucun compteur.'),
       ),
 
       // ---- Team ----
@@ -83,16 +80,17 @@ export async function renderSettings(page, ctx) {
         h(
           'div',
           { class: 'card-header' },
-          h('div', {}, h('h2', {}, 'Équipe'), h('p', {}, 'Gérants et pompistes. Les accès clients se créent depuis la fiche client.')),
-          button('Ajouter un membre', () => userDialog(null, ctx, reload), { variant: 'ghost', iconName: 'plus' }),
+          h('div', {}, h('h2', {}, 'Équipe'), h('p', {}, 'Administrateur, gérants, pompistes et actionnaires. Les accès clients se créent depuis la fiche client.')),
+          adminEdit(button('Ajouter un membre', () => userDialog(null, ctx, reload), { variant: 'ghost', iconName: 'plus' })),
         ),
         table(
           [
             { label: 'Nom', key: 'name' },
             { label: 'Identifiant', key: 'login' },
-            { label: 'Rôle', render: (u) => (u.role === 'manager' ? 'Gérant' : 'Pompiste') },
+            { label: 'E-mail', render: (u) => (u.email ? h('span', {}, u.email, u.email_verified_at ? null : h('div', {}, badge('À confirmer', 'warning'))) : '—') },
+            { label: 'Rôle', render: (u) => ROLES[u.role] },
             { label: 'Statut', render: (u) => (u.active ? badge('Actif', 'good') : badge('Désactivé')) },
-            { label: '', align: 'right', render: (u) => button('Modifier', () => userDialog(u, ctx, reload), { variant: 'secondary sm' }) },
+            ...(canAdmin() ? [{ label: '', align: 'right', render: (u) => button('Modifier', () => userDialog(u, ctx, reload), { variant: 'secondary sm' }) }] : []),
           ],
           users,
         ),
@@ -100,12 +98,59 @@ export async function renderSettings(page, ctx) {
 
       // ---- Station ----
       card(
-        cardHeader('Station', 'Nom et seuils de contrôle', button('Modifier', () => stationDialog(settings), { variant: 'ghost' })),
+        cardHeader('Station', 'Nom et seuils de contrôle', adminEdit(button('Modifier', () => stationDialog(settings), { variant: 'ghost' }))),
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Nom'), h('span', {}, settings.stationName)),
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Tolérance d’écart de caisse'), h('span', {}, `± ${fmt.money(settings.cashTolerance)}`)),
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Tolérance d’écart de jaugeage'), h('span', {}, `± ${fmt.liters(settings.stockTolerance)}`)),
-        h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Programme de fidélité'), h('span', {}, settings.loyaltyEnabled ? 'Activé' : 'Désactivé')),
-        ...(settings.loyaltyEnabled ? [h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Points fidélité par litre'), h('span', {}, fmt.number(settings.pointsPerLiter)))] : []),
+        h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Heure de clôture du poste'), h('span', {}, settings.closingTime || '15:30')),
+        h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Transport par poste'), h('span', {}, settings.shiftTransport > 0 ? fmt.money(settings.shiftTransport) : 'Aucun')),
+        h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Téléphone (espace client)'), h('span', {}, settings.stationPhone || '—')),
+        h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Questions à l’appli par mois'), h('span', {}, settings.askMonthLimit > 0 ? String(settings.askMonthLimit) : 'Aucune')),
+      ),
+
+      // ---- Mails (src/mail.js): what is sent today and this month, against Resend's limits ----
+      card(
+        cardHeader('Mails'),
+        ...[['day', 'Aujourd’hui'], ['month', 'Ce mois']].map(([period, label]) => {
+          const { count, limit } = mail.usage[period];
+          const near = count >= limit * 0.8;
+          return h(
+            'div',
+            { class: 'summary-line' },
+            h('span', { class: 'muted' }, label),
+            h('span', {}, `${count} / ${limit.toLocaleString('fr-FR')}`, near ? h('span', {}, ' ', badge(count >= limit ? 'Limite atteinte' : 'Presque à la limite', count >= limit ? 'critical' : 'warning')) : null),
+          );
+        }),
+      ),
+
+      // ---- Data: backup and journal (the admin's) ----
+      !canAdmin() ? null : card(
+        cardHeader('Données', flags.readonly ? 'Journal des changements' : 'Sauvegarde complète de la base et journal des changements'),
+        edit(h(
+          'p',
+          { class: 'muted', style: 'margin:0 0 16px' },
+          'Téléchargez une sauvegarde régulièrement et gardez-la ailleurs (ordinateur, clé USB, e-mail) : elle contient toute la station.',
+        )),
+        buttonRow([
+          edit(h('a', { class: 'btn secondary', href: '/api/backup', download: '' }, icon('download'), 'Télécharger une sauvegarde')),
+          button('Ouvrir le journal', () => ctx.navigate('reglages/journal'), { variant: 'secondary', iconName: 'shifts' }),
+        ]),
+      ),
+
+      // ---- Customers & combos ----
+      card(
+        cardHeader('Clients et combos', 'Règles de crédit par catégorie et programme de fidélité', adminEdit(button('Modifier', () => customersDialog(settings, reload), { variant: 'ghost' }))),
+        h('h3', { style: 'margin:4px 0 2px' }, 'Particuliers'),
+        line('Crédit', 'Un seul à la fois : le suivant après paiement'),
+        h('h3', { style: 'margin:14px 0 2px' }, 'Abonnés'),
+        line('Prix au litre', 'Colonne « Prix abonnés » des produits'),
+        line('Jour de paiement', `réglé sur chaque abonné (par défaut : avant le ${settings.subscriberGraceDays})`),
+        h('h3', { style: 'margin:14px 0 2px' }, 'Combos'),
+        line('Programme de combos', settings.combosEnabled ? 'Activé' : 'Désactivé'),
+        ...(settings.combosEnabled ? [line('Combos gagnés par litre', fmt.number(settings.combosPerLiter)),
+        line('Valeur d’un combo', fmt.money(settings.comboValue)),
+        line('Seuil d’échange', `${fmt.number(settings.comboThreshold)} combos (= ${fmt.money(settings.comboThreshold * settings.comboValue)})`),
+        h('p', { class: 'muted small', style: 'margin-top:8px' }, 'Une vente à crédit ne rapporte ses combos qu’une fois entièrement payée.')] : []),
       ),
     ),
   );
@@ -118,8 +163,10 @@ async function stationDialog(s) {
       { name: 'stationName', label: 'Nom de la station', value: s.stationName, required: true, full: true },
       { name: 'cashTolerance', label: 'Tolérance de caisse ($)', type: 'number', step: '0.01', min: '0', value: s.cashTolerance, hint: 'Écart toléré à la clôture d’un poste' },
       { name: 'stockTolerance', label: 'Tolérance de jaugeage (L)', type: 'number', step: '0.01', min: '0', value: s.stockTolerance, hint: 'Écart toléré entre stock théorique et mesuré' },
-      { name: 'loyaltyEnabled', label: 'Programme de fidélité', type: 'checkbox', value: s.loyaltyEnabled, hint: 'Désactivé : aucun point n’est attribué ni affiché' },
-      { name: 'pointsPerLiter', label: 'Points fidélité par litre', type: 'number', step: '0.01', min: '0', value: s.pointsPerLiter },
+      { name: 'stationPhone', label: 'Téléphone de la station', type: 'tel', value: s.stationPhone, full: true, hint: 'Affiché en bas de l’espace client' },
+      { name: 'closingTime', label: 'Heure de clôture du poste', type: 'time', value: s.closingTime || '15:30', required: true, hint: 'Le gérant clôture chaque jour à cette heure ; le poste suivant s’ouvre aussitôt' },
+      { name: 'shiftTransport', label: 'Transport par poste ($)', type: 'number', step: '0.01', min: '0', value: s.shiftTransport ?? 0, full: true, hint: 'Dépense « Transport » ajoutée à chaque poste à son ouverture, payée avec l’argent du poste ; 0 = aucune' },
+      { name: 'askMonthLimit', label: 'Questions à l’appli par mois', type: 'number', step: '1', min: '0', value: s.askMonthLimit ?? 50, full: true, hint: 'Questions posées à Claude sur le tableau de bord par le gérant et l’actionnaire, pour toute la station (environ 0,07 $ chacune) ; 0 = aucune' },
     ],
     onSubmit: (d) => api.put('/settings', d),
   });
@@ -127,20 +174,47 @@ async function stationDialog(s) {
   if (ok) location.reload();
 }
 
+const line = (label, value) => h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, label), h('span', { style: 'text-align:right' }, value));
+
+async function customersDialog(s, reload) {
+  const ok = await formDialog({
+    title: 'Clients et combos',
+    fields: [
+      { name: 'subscriberGraceDays', label: 'Jour de paiement par défaut des nouveaux abonnés', type: 'number', step: '1', min: '1', value: s.subscriberGraceDays, required: true, hint: 'Chaque abonné a son propre jour, modifiable sur sa fiche. Après ce jour, un abonné qui doit le mois précédent ne peut plus prendre à crédit.' },
+      { name: 'combosEnabled', label: 'Programme de combos', type: 'checkbox', value: s.combosEnabled, full: true },
+      { name: 'combosPerLiter', label: 'Combos par litre', type: 'number', step: '0.01', min: '0', value: s.combosPerLiter, required: true },
+      { name: 'comboValue', label: 'Valeur d’un combo ($)', type: 'number', step: '0.0001', min: '0.0001', value: s.comboValue, required: true },
+      { name: 'comboThreshold', label: 'Seuil d’échange (combos)', type: 'number', step: '1', min: '1', value: s.comboThreshold, required: true, hint: 'Minimum pour échanger des combos contre du carburant' },
+    ],
+    onSubmit: (d) => api.put('/settings', d),
+  });
+  if (ok) {
+    // Les combos s'affichent dans tout l'écran : on recharge l'application.
+    location.reload();
+  }
+}
+
 async function productDialog(p, reload) {
   const ok = await formDialog({
     title: p ? `Prix — ${p.name}` : 'Nouveau produit',
-    intro: p ? `Prix actuel : ${fmt.price(p.price)}` : 'Ajoutez ensuite une cuve et un pistolet pour ce produit.',
+    intro: p ? `Actuellement : ${fmt.price(p.price)} public, ${fmt.price(p.subscriber_price)} abonnés. Un changement s’applique aux postes ouverts ensuite.` : 'Ajoutez ensuite une cuve et un compteur pour ce produit.',
     grid: false,
     fields: [
       { name: 'name', label: 'Nom', value: p?.name, required: true },
-      { name: 'price', label: 'Prix de vente ($/L)', type: 'number', step: '0.001', min: '0.001', value: p?.price, required: true },
-      ...(p ? [{ name: 'active', label: 'Produit actif', type: 'checkbox', value: !!p.active }] : []),
+      { name: 'price', label: 'Prix public ($/L)', type: 'number', step: '0.001', min: '0.001', value: p?.price, required: true },
+      { name: 'subscriberPrice', label: 'Prix abonnés ($/L)', type: 'number', step: '0.001', min: '0.001', value: p?.subscriber_price, hint: 'Un peu plus élevé, en échange du crédit au mois' },
+      ...(p
+        ? [
+            { name: 'effectiveAt', label: 'À partir du (facultatif)', type: 'datetime-local', hint: 'Vide : le prix change tout de suite. Sinon il s’applique au premier poste ouvert après cette date.' },
+            ...(p.next_price_at ? [{ name: 'cancelScheduled', label: `Annuler le prix programmé (${fmt.price(p.next_price)} le ${fmt.dateTime(p.next_price_at)})`, type: 'checkbox', value: false, full: true }] : []),
+            { name: 'active', label: 'Produit actif', type: 'checkbox', value: !!p.active },
+          ]
+        : []),
     ],
-    onSubmit: (d) => (p ? api.put(`/products/${p.id}`, d) : api.post('/products', d)),
+    onSubmit: (d) => (p ? api.put(`/products/${p.id}`, { ...d, effectiveAt: d.effectiveAt || undefined, cancelScheduled: d.cancelScheduled || undefined }) : api.post('/products', d)),
   });
   if (ok) {
-    toast(p ? 'Prix mis à jour.' : 'Produit ajouté.');
+    toast(!p ? 'Produit ajouté.' : ok.next_price_at && ok.next_price_at !== p.next_price_at ? 'Nouveau prix programmé.' : 'Prix mis à jour.');
     reload();
   }
 }
@@ -150,57 +224,43 @@ async function priceHistory(p) {
   openDialog((close) =>
     h(
       'div',
-      { class: 'dialog-body' },
+      { class: 'sheet dialog-body' },
       h('h2', {}, `Historique des prix — ${p.name}`),
       table(
         [
           { label: 'Date', render: (r) => fmt.dateTime(r.changed_at) },
-          { label: 'Prix', align: 'right', render: (r) => fmt.price(r.price) },
+          { label: 'Prix public', align: 'right', render: (r) => fmt.price(r.price) },
+          { label: 'Prix abonnés', align: 'right', render: (r) => (r.subscriber_price == null ? '—' : fmt.price(r.subscriber_price)) },
           { label: 'Par', render: (r) => r.user_name || '—' },
         ],
         rows,
       ),
-      h('div', { class: 'dialog-actions' }, button('Fermer', close, { variant: 'secondary' })),
+      h('div', { class: 'dialog-actions' }, button('Fermer', close, { variant: 'cancel' })),
     ),
   );
 }
 
-async function pumpDialog(p, reload) {
+// n is null for a new meter, on the station's pump.
+async function meterDialog(n, tankOptions, reload, pumpId) {
+  if (!tankOptions.length) return toast('Créez d’abord une cuve.', 'error');
   const ok = await formDialog({
-    title: p ? `Modifier ${p.name}` : 'Nouvelle pompe',
-    intro: p ? null : 'Ajoutez ensuite un ou plusieurs pistolets à cette pompe.',
+    title: n ? `Compteur ${n.product_name}` : 'Nouveau compteur',
+    intro: !n ? 'Saisissez l’index actuellement affiché par le compteur.' : 'Pour fixer l’index de départ, ou après un remplacement ou un étalonnage du compteur. Le poste ouvert repart de ce nouvel index.',
     grid: false,
-    fields: [{ name: 'name', label: 'Nom', value: p?.name, required: true, placeholder: 'Pompe 3' }, ...(p ? [{ name: 'active', label: 'Pompe active', type: 'checkbox', value: !!p.active }] : [])],
-    onSubmit: (d) => (p ? api.put(`/pumps/${p.id}`, d) : api.post('/pumps', d)),
+    fields: [
+      { name: 'tankId', label: 'Cuve', type: 'select', options: tankOptions, value: n?.tank_id, required: true },
+      { name: 'meter', label: 'Index du compteur', type: 'number', step: '0.01', min: '0', value: n?.meter ?? 0, required: true, meterPhoto: { product: n?.product_name, typed: true } },
+      ...(n ? [{ name: 'active', label: 'Compteur actif', type: 'checkbox', value: !!n.active }] : []),
+    ],
+    onSubmit: (d) => (n ? api.put(`/nozzles/${n.id}`, { ...d, tankId: Number(d.tankId) }) : api.post(`/pumps/${pumpId}/nozzles`, { ...d, name: 'Compteur', tankId: Number(d.tankId) })),
   });
   if (ok) {
-    toast('Pompe enregistrée.');
+    toast('Compteur enregistré.');
     reload();
   }
 }
 
-async function nozzleDialog(pump, n, tankOptions, reload) {
-  if (!tankOptions.length) return toast('Créez d’abord une cuve.', 'error');
-  const ok = await formDialog({
-    title: n ? `Modifier ${n.name}` : `Nouveau pistolet — ${pump.name}`,
-    intro: n ? 'Ne modifiez l’index qu’après un remplacement ou un étalonnage du compteur.' : 'Saisissez l’index actuellement affiché par le compteur.',
-    grid: false,
-    fields: [
-      { name: 'name', label: 'Nom', value: n?.name, required: true, placeholder: 'Pistolet Gasoil' },
-      { name: 'tankId', label: 'Cuve', type: 'select', options: tankOptions, value: n?.tank_id, required: true },
-      { name: 'meter', label: 'Index du compteur', type: 'number', step: '0.01', min: '0', value: n?.meter ?? 0, required: true },
-      ...(n ? [{ name: 'active', label: 'Pistolet actif', type: 'checkbox', value: !!n.active }] : []),
-    ],
-    onSubmit: (d) => {
-      const body = { ...d, tankId: Number(d.tankId) };
-      return n ? api.put(`/nozzles/${n.id}`, body) : api.post(`/pumps/${pump.id}/nozzles`, body);
-    },
-  });
-  if (ok) {
-    toast('Pistolet enregistré.');
-    reload();
-  }
-}
+const ROLES = { attendant: 'Pompiste', manager: 'Gérant', admin: 'Administrateur', owner: 'Actionnaire' };
 
 async function userDialog(u, ctx, reload) {
   const ok = await formDialog({
@@ -208,7 +268,8 @@ async function userDialog(u, ctx, reload) {
     fields: [
       { name: 'name', label: 'Nom', value: u?.name, required: true },
       ...(u ? [] : [{ name: 'login', label: 'Identifiant', required: true }]),
-      { name: 'role', label: 'Rôle', type: 'select', value: u?.role || 'attendant', options: [['attendant', 'Pompiste'], ['manager', 'Gérant']] },
+      { name: 'role', label: 'Rôle', type: 'select', value: u?.role || 'attendant', options: Object.entries(ROLES), hint: 'L’administrateur seul modifie les réglages et la caisse ; l’actionnaire consulte sans rien modifier.' },
+      { name: 'email', label: 'Adresse e-mail', type: 'email', value: u?.email || '', full: true, hint: 'Facultative : un lien lui est envoyé pour la confirmer' },
       { name: 'password', label: u ? 'Nouveau mot de passe' : 'Mot de passe', type: 'text', required: !u, hint: u ? 'Laisser vide pour ne pas changer' : '8 caractères minimum' },
       ...(u ? [{ name: 'active', label: 'Compte actif', type: 'checkbox', value: !!u.active, full: true }] : []),
     ],
