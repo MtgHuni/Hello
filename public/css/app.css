@@ -1105,6 +1105,15 @@ dialog.action-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; 
 .ask-q .ask-when { display: block; margin-top: 2px; color: var(--text-2); font-weight: 400; font-size: 0.8125rem; }
 .ask-a { margin: 0; white-space: pre-line; line-height: 1.5; }
 @media (max-width: 600px) { .ask-form { flex-direction: column; } }
+/* Rapport financier: Claude's summary, then each piece of advice under its title and tags. */
+.finance-summary { margin: 0; font-size: 17px; line-height: 1.55; }
+.advice-list { display: flex; flex-direction: column; }
+.advice-item { padding: 18px 0; border-top: 1px solid var(--hairline); }
+.advice-item:first-child { border-top: 0; padding-top: 0; }
+.advice-item:last-child { padding-bottom: 0; }
+.advice-item h3 { margin: 0; font-size: 18px; letter-spacing: -0.015em; }
+.advice-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 10px; }
+.advice-item p { margin: 0; line-height: 1.55; }
 .toast .toast-action .logo-whatsapp { width: 18px; height: 18px; }
 
 /* ---------- Auth screens: the brand film beside the form ---------- */

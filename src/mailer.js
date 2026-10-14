@@ -10,11 +10,13 @@ const { getSettings } = require('./db');
 const { renderMail } = require('./mailTemplates');
 const { readCookie } = require('./auth');
 const { fmt } = require('./pdfReport');
+const { aiEnabled } = require('./claude');
 
 const MAIL_KINDS = {
   rapport_poste: 'Rapport de chaque poste clôturé (PDF)',
   rapport_semaine: 'Rapport de la semaine (PDF, le lundi)',
   rapport_mois: 'Rapport du mois (PDF, le 1er)',
+  rapport_financier: 'Rapport financier et conseils (PDF, le lundi)',
   alertes: 'Nouvelles alertes du tableau de bord',
   sauvegarde: 'Sauvegarde de la base (le dimanche soir)',
   recu: 'Reçu de chaque règlement',
@@ -74,7 +76,7 @@ function createMailer(db, mail) {
   function kindsFor(a) {
     if (a.role === 'customer') return ['recu', 'plein', 'releve', ...(a.customer_type === 'account' ? ['rappel'] : []), 'prix', 'connexion'];
     if (a.role === 'attendant') return ['connexion'];
-    return ['rapport_poste', 'rapport_semaine', 'rapport_mois', 'alertes', ...(a.role === 'admin' ? ['sauvegarde'] : []), 'connexion'];
+    return ['rapport_poste', 'rapport_semaine', 'rapport_mois', ...(aiEnabled() ? ['rapport_financier'] : []), 'alertes', ...(a.role === 'admin' ? ['sauvegarde'] : []), 'connexion'];
   }
   const userOff = (userId, kind) => !!db.prepare('SELECT 1 FROM mail_prefs WHERE user_id = ? AND kind = ?').get(userId, kind);
   const customerOff = (customerId, kind) => !!db.prepare('SELECT 1 FROM customer_mail_prefs WHERE customer_id = ? AND kind = ?').get(customerId, kind);

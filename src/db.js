@@ -411,6 +411,18 @@ CREATE TABLE IF NOT EXISTS ai_questions (
   output_tokens INTEGER NOT NULL DEFAULT 0,
   created_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
+-- The week's financial report (version 28): the figures, Claude's summary and advice, kept so it is
+-- written once (Monday's mail, or « Générer » in Rapports) and read as often as needed.
+CREATE TABLE IF NOT EXISTS finance_reports (
+  id         INTEGER PRIMARY KEY,
+  week_from  TEXT NOT NULL UNIQUE,
+  week_to    TEXT NOT NULL,
+  figures    TEXT NOT NULL,
+  summary    TEXT NOT NULL,
+  advice     TEXT NOT NULL,
+  user_id    INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 CREATE TABLE IF NOT EXISTS customer_mail_prefs (
   customer_id INTEGER NOT NULL REFERENCES customers(id),
   kind        TEXT NOT NULL,
@@ -547,7 +559,7 @@ const MIGRATIONS = [
 ];
 
 // Bumped with every schema change; recorded in PRAGMA user_version.
-const SCHEMA_VERSION = 27;
+const SCHEMA_VERSION = 28;
 
 function missingColumns(db) {
   return MIGRATIONS.filter(([table, column]) => {

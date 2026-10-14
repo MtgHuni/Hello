@@ -10,6 +10,7 @@ import { renderAttendant, renderMyShifts } from './views/attendant.js';
 import { renderTanks } from './views/tanks.js';
 import { renderCustomers, renderCustomerDetail } from './views/customers.js';
 import { renderReports } from './views/reports.js';
+import { renderFinance } from './views/finance.js';
 import { renderSettings } from './views/settings.js';
 import { renderJournal } from './views/journal.js';
 import { renderAccount } from './views/account.js';
@@ -42,10 +43,10 @@ const NAV = {
 NAV.owner = NAV.manager.filter(([path]) => !['pompe', 'reglages'].includes(path));
 
 const DETAIL_ROUTES = {
-  manager: { postes: renderShiftDetail, clients: renderCustomerDetail, reglages: renderJournal },
+  manager: { postes: renderShiftDetail, clients: renderCustomerDetail, reglages: renderJournal, rapports: renderFinance },
   attendant: { historique: renderShiftDetail },
 };
-DETAIL_ROUTES.owner = { postes: renderShiftDetail, clients: renderCustomerDetail };
+DETAIL_ROUTES.owner = { postes: renderShiftDetail, clients: renderCustomerDetail, rapports: renderFinance };
 
 const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 

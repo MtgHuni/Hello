@@ -1,6 +1,7 @@
 import { api } from '../api.js';
 import { h, fmt, pageHeader, table, segmented, kpi, field, todayISO, isoDate, varianceCell, setContent, shareButton } from '../ui.js';
 import { showShiftsOf } from './shifts.js';
+import { financeLink } from './finance.js';
 
 export const PRESETS = [
   ['today', "Aujourd'hui"],
@@ -50,6 +51,7 @@ export async function renderReports(page, ctx) {
       range.from === range.to ? fmt.longDay(range.from) : `Du ${fmt.date(range.from)} au ${fmt.date(range.to)}`,
       h('a', { class: 'btn secondary', href: `/api/reports/sales?from=${range.from}&to=${range.to}&format=csv` }, 'Exporter (Excel)'),
       shareButton(`/api/reports/period.pdf?from=${range.from}&to=${range.to}`, `rapport-${range.from}_${range.to}.pdf`),
+      financeLink(),
     ),
     h(
       'div',

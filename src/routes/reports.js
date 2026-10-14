@@ -9,11 +9,19 @@ const { periodReportPdf } = require('../periodReport');
 const { withLiveStock } = require('../liveStock');
 const { ALERT_TYPES, userAlerts } = require('../alerts');
 const { mailUsage } = require('../mail');
+const { aiEnabled } = require('../claude');
+const { financeAdvice, financeReportPdf } = require('../financeReport');
 
 const manager = requireRole('manager');
 
 // Sales are attributed to the day the shift was closed (station local time).
 const DAY = "date(s.closed_at, 'localtime')";
+
+const addDays = (iso, n) => {
+  const d = new Date(`${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};
 
 module.exports = function reportRoutes(db) {
   const router = express.Router();
@@ -204,6 +212,21 @@ module.exports = function reportRoutes(db) {
   }
   router.stationAlerts = stationAlerts;
 
+  // What the customers owe, and the part of it older than 30 days (payments settle the oldest credit first).
+  function receivables(customers) {
+    const cutoff = db.prepare("SELECT date('now', 'localtime', '-30 days') AS d").get().d;
+    return {
+      total: round(customers.reduce((t, c) => t + Math.max(0, c.balance), 0)),
+      old: round(
+        customers
+          .filter((c) => c.balance > 0)
+          .flatMap((c) => creditAllocation(db, c.id))
+          .filter((s) => s.unpaid > 0 && (s.old || s.day < cutoff))
+          .reduce((t, s) => t + s.unpaid, 0),
+      ),
+    };
+  }
+
   router.get('/dashboard', manager, (req, res) => {
     const settings = getSettings(db);
     const today = db.prepare("SELECT date('now', 'localtime') AS d").get().d;
@@ -237,6 +260,7 @@ module.exports = function reportRoutes(db) {
     const todayExpenses = round(db.prepare('SELECT COALESCE(SUM(amount), 0) AS v FROM expenses WHERE expense_date = ?').get(today).v);
 
     const shown = userAlerts(db, req.user.id, alerts);
+    const owed = receivables(customers);
     res.json({
       today,
       settings,
@@ -250,15 +274,8 @@ module.exports = function reportRoutes(db) {
       openShifts,
       cash: balances(db),
       supplierDebt,
-      receivables: round(customers.reduce((t, c) => t + Math.max(0, c.balance), 0)),
-      // Unpaid credit older than 30 days (payments settle the oldest credit first).
-      receivablesOld: round(
-        customers
-          .filter((c) => c.balance > 0)
-          .flatMap((c) => creditAllocation(db, c.id))
-          .filter((s) => s.unpaid > 0 && (s.old || s.day < db.prepare("SELECT date('now', 'localtime', '-30 days') AS d").get().d))
-          .reduce((t, s) => t + s.unpaid, 0),
-      ),
+      receivables: owed.total,
+      receivablesOld: owed.old,
       todayExpenses,
       toReview,
       combos: { total: combos.total, value: round(combos.total * settings.comboValue), redeemable: combos.redeemable },
@@ -300,6 +317,13 @@ module.exports = function reportRoutes(db) {
         loss_pct: t.sold ? round((-t.dip_variance / t.sold) * 100, 2) : null,
       }));
   }
+
+  // Weighted average purchase cost of a product: deliveries recorded with a price up to a day.
+  const avgCost = db.prepare(
+    `SELECT SUM(d.liters_received * d.unit_cost) / SUM(d.liters_received) AS cost
+     FROM deliveries d JOIN tanks t ON t.id = d.tank_id
+     WHERE t.product_id = ? AND d.unit_cost IS NOT NULL AND date(d.created_at, 'localtime') <= ?`,
+  );
 
   // One period's figures: the Reports screen, its CSV export and the period PDF.
   function salesReport(from, to) {
@@ -383,11 +407,6 @@ module.exports = function reportRoutes(db) {
 
     // Estimated gross margin: litres sold × (selling price − weighted average purchase cost),
     // the cost coming from deliveries recorded with a purchase price up to the end of the period.
-    const avgCost = db.prepare(
-      `SELECT SUM(d.liters_received * d.unit_cost) / SUM(d.liters_received) AS cost
-       FROM deliveries d JOIN tanks t ON t.id = d.tank_id
-       WHERE t.product_id = ? AND d.unit_cost IS NOT NULL AND date(d.created_at, 'localtime') <= ?`,
-    );
     let costOfSales = 0;
     let costKnown = true;
     for (const p of byProduct) {
@@ -458,6 +477,172 @@ module.exports = function reportRoutes(db) {
   router.get('/reports/stock', manager, (req, res) => {
     const { from, to } = period(req);
     res.json(stockMovements(from, to));
+  });
+
+  // ---------- Financial report of the week, with Claude's advice (src/financeReport.js) ----------
+
+  // A week in a line: what the trend and the comparisons need.
+  const brief = (r) => {
+    const t = r.totals;
+    return {
+      from: r.from,
+      to: r.to,
+      amount: t.amount,
+      liters: t.liters,
+      grossMargin: t.costKnown ? t.grossMargin : null,
+      expenses: t.expenses,
+      net: t.costKnown ? t.net : null,
+      credit: t.credit,
+      payments: t.payments,
+      cash: t.cash,
+      mobileMoney: t.mobileMoney,
+      variance: t.variance,
+      shifts: r.shifts.length,
+    };
+  };
+
+  // Everything the adviser reads for the week from `from` to `to` (Monday to Sunday): the week in
+  // detail, the week before, the six before as a trend, and the position now: money, what customers
+  // owe and what is owed to suppliers, the tanks and their days of stock, prices against costs.
+  function financeFigures(from, to) {
+    const settings = getSettings(db);
+    const week = salesReport(from, to);
+    const previous = salesReport(addDays(from, -7), addDays(to, -7));
+    const trend = [];
+    for (let n = 6; n >= 1; n--) trend.push(brief(n === 1 ? previous : salesReport(addDays(from, -7 * n), addDays(to, -7 * n))));
+
+    const today = db.prepare("SELECT date('now', 'localtime') AS d").get().d;
+    const { tanks, customers, supplierDebt, alerts } = stationAlerts(settings);
+    const moved = new Map(week.stock.map((t) => [t.id, t]));
+    const stock = tanks.map((t) => {
+      const m = moved.get(t.id) || {};
+      const daily = (m.sold || 0) / 7;
+      const cost = avgCost.get(t.product_id, today).cost;
+      return {
+        tank: t.name,
+        product: t.product_name,
+        stock: round(t.book_stock),
+        capacity: t.capacity,
+        low_level: t.low_level,
+        sold_week: m.sold || 0,
+        delivered_week: m.delivered || 0,
+        dips_week: m.dips || 0,
+        dip_variance_week: m.dip_variance || 0,
+        loss_pct: m.loss_pct ?? null,
+        days_left: daily ? round(t.book_stock / daily, 1) : null,
+        value: cost == null ? null : round(t.book_stock * cost),
+      };
+    });
+    const prices = db
+      .prepare('SELECT id, name, price, subscriber_price FROM products WHERE active = 1 ORDER BY id')
+      .all()
+      .map((p) => {
+        const cost = avgCost.get(p.id, today).cost;
+        return { product: p.name, price: p.price, subscriber_price: p.subscriber_price, avg_cost: cost == null ? null : round(cost, 3), margin_per_liter: cost == null ? null : round(p.price - cost, 3) };
+      });
+    const cash = balances(db);
+    const owed = receivables(customers);
+    // Days are totals of both products: the adviser looks at the week's rhythm.
+    const byDay = [];
+    for (const d of week.byDay) {
+      const last = byDay.at(-1);
+      if (last?.date === d.date) Object.assign(last, { liters: round(last.liters + d.liters), amount: round(last.amount + d.amount) });
+      else byDay.push({ date: d.date, liters: d.liters, amount: d.amount });
+    }
+
+    return {
+      from,
+      to,
+      week: {
+        ...brief(week),
+        changeLeft: week.totals.changeLeft,
+        francs: week.totals.francs,
+        byProduct: week.byProduct.map(({ product_id, ...p }) => p),
+        byDay,
+        byAttendant: week.byAttendant.map(({ attendant_id, ...a }) => a),
+        expensesByCategory: week.expensesByCategory,
+        deliveries: week.deliveries,
+      },
+      previous: { ...brief(previous), byProduct: previous.byProduct.map((p) => ({ product: p.product, liters: p.liters, amount: p.amount, margin_per_liter: p.margin_per_liter })) },
+      trend,
+      position: {
+        cash: cash.cash.balance,
+        mobileMoney: cash.momo.balance,
+        receivables: owed.total,
+        receivablesOld: owed.old,
+        supplierDebt,
+        stockValue: stock.length && stock.every((t) => t.value != null) ? round(stock.reduce((s, t) => s + t.value, 0)) : null,
+      },
+      stock,
+      prices,
+      alerts: alerts.map((a) => a.text),
+      cashTolerance: settings.cashTolerance,
+    };
+  }
+
+  const financeRow = (from) => {
+    const r = db.prepare('SELECT week_from, week_to, figures, summary, advice, created_at FROM finance_reports WHERE week_from = ?').get(from);
+    return r ? { ...r, figures: JSON.parse(r.figures), advice: JSON.parse(r.advice) } : null;
+  };
+
+  // Writes (or writes again) the report of the week from `from`, a Monday. Null when Claude gave nothing.
+  async function financeReport(from, userId = null) {
+    const to = addDays(from, 6);
+    const figures = financeFigures(from, to);
+    const out = await financeAdvice({ figures, stationName: getSettings(db).stationName });
+    if (!out) return null;
+    db.prepare(
+      `INSERT INTO finance_reports (week_from, week_to, figures, summary, advice, user_id) VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(week_from) DO UPDATE SET week_to = excluded.week_to, figures = excluded.figures, summary = excluded.summary,
+         advice = excluded.advice, user_id = excluded.user_id, created_at = datetime('now')`,
+    ).run(from, to, JSON.stringify(figures), out.summary, JSON.stringify(out.advice), userId);
+    return financeRow(from);
+  }
+  const financePdf = (r) => financeReportPdf(r, { stationName: getSettings(db).stationName });
+  router.financeReport = financeReport;
+  router.financePdf = financePdf;
+
+  // The Monday of the last week that is over.
+  const lastWeek = () => db.prepare("SELECT date('now', 'localtime', '-6 days', 'weekday 1', '-7 days') AS d").get().d;
+  const weekParam = (value, { over = false } = {}) => {
+    const from = dateParam(value, 'La semaine');
+    if (!from || new Date(`${from}T12:00:00Z`).getUTCDay() !== 1) fail(400, 'Choisissez une semaine (son lundi).');
+    if (over && from > lastWeek()) fail(400, 'Cette semaine n’est pas encore finie.');
+    return from;
+  };
+
+  router.get('/finance-reports', manager, (req, res) => {
+    const weeks = db.prepare('SELECT week_from, week_to, created_at FROM finance_reports ORDER BY week_from DESC').all();
+    res.json({ weeks, lastWeek: lastWeek(), ai: aiEnabled() });
+  });
+
+  router.get('/finance-reports/:from', manager, (req, res) => {
+    const r = financeRow(weekParam(req.params.from));
+    if (!r) fail(404, 'Pas de rapport financier pour cette semaine.');
+    res.json(r);
+  });
+
+  router.get('/finance-reports/:from/report.pdf', manager, (req, res) => {
+    const r = financeRow(weekParam(req.params.from));
+    if (!r) fail(404, 'Pas de rapport financier pour cette semaine.');
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', `attachment; filename="rapport-financier-${r.week_from}.pdf"`);
+    res.send(financePdf(r));
+  });
+
+  // Written now (the week before by default), or written again with the latest figures.
+  router.post('/finance-reports', manager, async (req, res) => {
+    if (!aiEnabled()) fail(409, 'Le rapport financier n’est pas disponible.', 'no_ai');
+    const from = req.body?.from ? weekParam(req.body.from, { over: true }) : lastWeek();
+    let r;
+    try {
+      r = await financeReport(from, req.user.id);
+    } catch (err) {
+      console.error('Rapport financier :', err.message);
+      fail(422, 'Rapport impossible pour l’instant : réessayez.', 'finance_failed');
+    }
+    if (!r) fail(422, 'Rapport impossible pour l’instant : réessayez.', 'finance_failed');
+    res.status(201).json(r);
   });
 
   return router;

@@ -1408,6 +1408,85 @@ test('photos lues par Claude : plaque → client, page du cahier → anciennes d
   }
 });
 
+test('rapport financier de la semaine : chiffres, conseils de Claude, PDF, mail du lundi', async () => {
+  const claude = require('../src/claude');
+  const { ask } = claude;
+  const asked = [];
+  const addDays = (iso, n) => new Date(Date.parse(`${iso}T12:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
+  const ADVICE = {
+    summary: 'Semaine correcte : ventes stables, marge en baisse.',
+    advice: [
+      { title: 'Saisir les prix d’achat', area: 'finance', priority: 'basse', text: 'La marge ne se calcule pas sans eux.' },
+      { title: 'Jauger la cuve de gasoil', area: 'technique', priority: 'haute', text: 'Aucun jaugeage cette semaine.' },
+      { title: 'Relancer les crédits anciens', area: 'finance', priority: 'moyenne', text: 'Des crédits ont plus de 30 jours.' },
+      { title: ' ', area: 'finance', priority: 'haute', text: 'vide' },
+    ],
+  };
+  // Without the key: not offered.
+  assert.strictEqual((await gerant('POST', '/api/finance-reports', {})).data.code, 'no_ai');
+  process.env.ANTHROPIC_API_KEY = 'cle-de-test';
+  try {
+    claude.ask = async (args) => (asked.push(args), ADVICE);
+    const list = (await gerant('GET', '/api/finance-reports')).data;
+    assert.strictEqual(list.ai, true);
+    assert.strictEqual(new Date(`${list.lastWeek}T12:00:00Z`).getUTCDay(), 1, 'un lundi');
+    assert.ok(addDays(list.lastWeek, 6) < today() && addDays(list.lastWeek, 13) >= today(), 'la dernière semaine finie');
+
+    const made = await gerant('POST', '/api/finance-reports', {});
+    assert.strictEqual(made.status, 201);
+    assert.strictEqual(made.data.week_from, list.lastWeek);
+    assert.deepStrictEqual(made.data.advice.map((a) => a.priority), ['haute', 'moyenne', 'basse'], 'le plus urgent d’abord, sans conseil vide');
+    const f = made.data.figures;
+    assert.ok(['week', 'previous', 'trend', 'position', 'stock', 'prices', 'alerts'].every((k) => k in f));
+    assert.strictEqual(f.trend.length, 6);
+    assert.strictEqual(f.trend.at(-1).from, addDays(list.lastWeek, -7));
+    assert.ok(f.stock.length && f.prices.length);
+    const call = asked.at(-1);
+    assert.ok(call.content[0].text.includes('conseiller technique et financier') && call.content[0].text.includes(`"from":"${list.lastWeek}"`));
+    assert.deepStrictEqual(call.schema.required, ['summary', 'advice']);
+
+    // Read back and as a PDF, by the owner too, who cannot write one.
+    const pdf = await gerant('GET', `/api/finance-reports/${list.lastWeek}/report.pdf`);
+    assert.strictEqual(pdf.type, 'application/pdf');
+    assert.strictEqual(pdf.raw.subarray(0, 5).toString(), '%PDF-');
+    const awa = client();
+    await awa('POST', '/api/auth/login', { login: 'awa', password: 'actionnaire2' });
+    assert.strictEqual((await awa('GET', `/api/finance-reports/${list.lastWeek}`)).data.summary, ADVICE.summary);
+    assert.strictEqual((await awa('POST', '/api/finance-reports', {})).status, 403);
+
+    // A week not over, or not a Monday: refused. Claude giving nothing: nothing is kept.
+    assert.strictEqual((await gerant('POST', '/api/finance-reports', { from: addDays(list.lastWeek, 7) })).status, 400);
+    assert.strictEqual((await gerant('POST', '/api/finance-reports', { from: addDays(list.lastWeek, 1) })).status, 400);
+    claude.ask = async () => null;
+    assert.strictEqual((await gerant('POST', '/api/finance-reports', { from: addDays(list.lastWeek, -7) })).data.code, 'finance_failed');
+    assert.deepStrictEqual((await gerant('GET', '/api/finance-reports')).data.weeks.map((w) => w.week_from), [list.lastWeek]);
+    assert.strictEqual((await gerant('GET', `/api/finance-reports/${addDays(list.lastWeek, -7)}`)).status, 404);
+
+    // Monday from 9:00 in Goma: written for the week before, then mailed with its PDF.
+    claude.ask = async () => ADVICE;
+    const { mailer, mailJobs } = locals;
+    const monday = addDays(list.lastWeek, 21);
+    mailJobs.tick({ settle: 0, now: new Date(`${monday}T07:30:00Z`) });
+    await new Promise((r) => setTimeout(r, 100));
+    const week = addDays(monday, -7);
+    const sent = [...mailer.mail.outbox].reverse().find((x) => x.kind === 'rapport_financier');
+    assert.ok(sent, 'mail du rapport financier');
+    assert.ok(sent.text.startsWith('Rapport financier') || sent.subject.startsWith('Rapport financier'));
+    assert.ok(sent.text.includes('Jauger la cuve de gasoil : Aucun jaugeage cette semaine.'));
+    assert.deepStrictEqual(sent.attachments, [`rapport-financier-${week}.pdf`]);
+    assert.strictEqual((await gerant('GET', `/api/finance-reports/${week}`)).data.week_to, addDays(week, 6));
+    // Once per Monday.
+    const count = () => mailer.mail.outbox.filter((x) => x.kind === 'rapport_financier').length;
+    const before = count();
+    mailJobs.tick({ settle: 0, now: new Date(`${monday}T08:30:00Z`) });
+    await new Promise((r) => setTimeout(r, 100));
+    assert.strictEqual(count(), before);
+  } finally {
+    claude.ask = ask;
+    delete process.env.ANTHROPIC_API_KEY;
+  }
+});
+
 test('photo d’un compteur gardée une semaine avec la relève ; transport ajouté à chaque poste', async () => {
   const reader = require('../src/meterReader');
   const { readMeter } = reader;

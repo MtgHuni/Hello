@@ -85,6 +85,8 @@ function createApp({ dbFile }) {
     reconcile: routers.shifts.reconcile,
     periodPdf: routers.reports.periodPdf,
     salesReport: routers.reports.salesReport,
+    financeReport: routers.reports.financeReport,
+    financePdf: routers.reports.financePdf,
     stationAlerts: routers.reports.stationAlerts,
     customerStatement: routers.customers.customerStatement,
     cleanPhotos: photos.cleanup,

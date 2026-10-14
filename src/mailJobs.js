@@ -311,6 +311,39 @@ function createMailJobs(db, mailer) {
     );
   }
 
+  // Monday, after the week's report: the financial report with Claude's advice, written and kept
+  // (Rapports → Rapport financier), then mailed with its PDF. Nothing is sent if Claude gave nothing.
+  function financeReport(from) {
+    return mailer.services
+      .financeReport(from)
+      .then((r) => r && sendFinanceReport(r))
+      .catch((err) => console.error('Rapport financier :', err.message));
+  }
+
+  const PRIORITY_LEVEL = { haute: 'bad', moyenne: 'warning' };
+  function sendFinanceReport(r) {
+    const w = r.figures.week;
+    const week = `de la semaine du ${fmt.date(r.week_from)} au ${fmt.date(r.week_to)}`;
+    toStaff(
+      'rapport_financier',
+      {
+        subject: `Rapport financier ${week}`,
+        eyebrow: 'Rapport financier',
+        title: `Semaine du ${fmt.date(r.week_from)} au ${fmt.date(r.week_to)}`,
+        preheader: `${r.advice.length} conseil${r.advice.length > 1 ? 's' : ''} : ${r.advice[0].title}.`,
+        blocks: [
+          w.net == null
+            ? { amount: { label: 'Ventes', value: fmt.money(w.amount), sub: liters(w.liters) } }
+            : { amount: { label: 'Résultat net estimé', value: fmt.money(w.net), sub: `Ventes ${fmt.money(w.amount)} · marge brute ${fmt.money(w.grossMargin)}`, level: w.net < 0 ? 'bad' : undefined } },
+          { p: r.summary },
+          { list: r.advice.map((a) => ({ text: `${a.title} : ${a.text}`, level: PRIORITY_LEVEL[a.priority] })) },
+          { button: { label: 'Ouvrir le rapport financier', url: `${appUrl()}/#/rapports/financier/${r.week_from}` } },
+        ],
+      },
+      [{ filename: `rapport-financier-${r.week_from}.pdf`, content: mailer.services.financePdf(r) }],
+    );
+  }
+
   // The 1st: every customer with an address gets last month's statement (if anything moved or is owed).
   function statements(month) {
     const from = `${month}-01`;
@@ -443,6 +476,7 @@ function createMailJobs(db, mailer) {
       const from = addDays(t.date, -7);
       run('semaine', () => periodReport('rapport_semaine', from, addDays(t.date, -1), `de la semaine du ${fmt.date(from)} au ${fmt.date(addDays(t.date, -1))}`, [addDays(from, -7), addDays(from, -1)]));
     }
+    if (t.hour >= 9 && t.weekday === 'Mon' && aiEnabled() && once(`finance:${t.date}`)) run('finance', () => financeReport(addDays(t.date, -7)));
     if (t.hour >= 7 && t.day === 1) {
       const month = previousMonth(t.month);
       const before = previousMonth(month);
