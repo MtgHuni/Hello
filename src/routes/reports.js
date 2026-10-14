@@ -3,7 +3,7 @@ const { getSettings, SUPPLIER_PAYMENT } = require('../db');
 const { round, dateParam, fail, csvCell, money, transaction } = require('../util');
 const { requireRole } = require('../auth');
 const { balanceSql, subscriberDues, creditAllocation } = require('../loyalty');
-const { ACCOUNTS, balances, cashbook, supplierBalances } = require('../cashbook');
+const { ACCOUNTS, KINDS, balances, cashbook, supplierBalances } = require('../cashbook');
 const { attendantNamesSql, closingCutoff } = require('../checkpoints');
 const { periodReportPdf } = require('../periodReport');
 const { withLiveStock } = require('../liveStock');
@@ -514,10 +514,165 @@ module.exports = function reportRoutes(db) {
     return [d.toISOString().slice(0, 10), addDays(from, -1)];
   }
 
+  // The profit the period should leave (sales − cost of the fuel sold − expenses), then every gap
+  // measured against it: shortages and surpluses at the closings, fuel missing or extra at the dips
+  // (at its purchase cost), deliveries paid more than the fuel received is worth, and the till counted
+  // against the book. A gap is negative when money or fuel was lost; its amount is null when it
+  // cannot be valued (purchase price missing). `lines` go to the ledger, not to Claude.
+  function profitCheck(r, from, to) {
+    const t = r.totals;
+    const tolerance = getSettings(db).cashTolerance;
+    const supplierPaid = r.expensesByCategory.find((e) => e.category === SUPPLIER_PAYMENT)?.amount || 0;
+    const sumOf = (list, key) => round(list.reduce((a, x) => a + (x[key] || 0), 0));
+
+    const counted = r.shifts.filter((s) => s.variance != null);
+    const cashLines = counted.filter((s) => Math.abs(s.variance) >= 0.005).map((s) => ({ shift: s.id, attendant: s.attendant, at: s.closed_at, amount: round(s.variance) }));
+    const cash = {
+      key: 'caisse',
+      label: 'Manques et surplus de caisse aux clôtures',
+      amount: sumOf(counted, 'variance'),
+      count: counted.filter((s) => Math.abs(s.variance) > tolerance + 0.001).length,
+      lines: cashLines,
+    };
+
+    const dipLines = db
+      .prepare(
+        `SELECT d.created_at AS at, t.name AS tank, p.id AS product_id, d.book_stock, d.measured, d.variance
+         FROM dips d JOIN tanks t ON t.id = d.tank_id JOIN products p ON p.id = t.product_id
+         WHERE date(d.created_at, 'localtime') BETWEEN ? AND ? ORDER BY d.created_at`,
+      )
+      .all(from, to)
+      .filter((d) => Math.abs(d.variance) >= 0.005)
+      .map((d) => {
+        const cost = avgCost.get(d.product_id, to).cost;
+        return { at: d.at, tank: d.tank, book: round(d.book_stock), measured: round(d.measured), liters: round(d.variance), amount: cost == null ? null : round(d.variance * cost) };
+      });
+    const tanks = {
+      key: 'cuves',
+      label: 'Carburant manquant ou en trop aux jaugeages',
+      liters: sumOf(dipLines, 'liters'),
+      amount: dipLines.some((d) => d.amount == null) ? null : sumOf(dipLines, 'amount'),
+      count: dipLines.length,
+      lines: dipLines,
+    };
+
+    const received = db
+      .prepare(
+        `SELECT d.created_at AS at, t.name AS tank, d.supplier, d.liters_ordered, d.liters_received, d.unit_cost, d.amount
+         FROM deliveries d JOIN tanks t ON t.id = d.tank_id WHERE date(d.created_at, 'localtime') BETWEEN ? AND ? ORDER BY d.created_at`,
+      )
+      .all(from, to);
+    // The invoice against the fuel received at its purchase price: paid more is fuel paid, never delivered.
+    const deliveryLines = received
+      .filter((d) => d.amount != null && d.unit_cost != null)
+      .map((d) => ({ at: d.at, tank: d.tank, supplier: d.supplier, ordered: d.liters_ordered, received: d.liters_received, unit_cost: d.unit_cost, paid: d.amount, amount: round(d.liters_received * d.unit_cost - d.amount) }))
+      .filter((d) => Math.abs(d.amount) >= 0.005);
+    const deliveries = {
+      key: 'livraisons',
+      label: 'Factures de livraison au-delà des litres reçus au prix d’achat',
+      amount: sumOf(deliveryLines, 'amount'),
+      count: deliveryLines.length,
+      // Litres ordered but not received, paid or not (information).
+      shortLiters: round(received.reduce((a, d) => a + Math.min(0, d.liters_received - d.liters_ordered), 0)),
+      lines: deliveryLines,
+    };
+
+    // The last count of each balance in the period against the book; a gap found before the period
+    // and not set right since (no new starting count) is not this period's.
+    const countLines = [];
+    for (const account of Object.keys(ACCOUNTS)) {
+      const last = db
+        .prepare("SELECT counted, book, created_at FROM cash_counts WHERE account = ? AND date(created_at, 'localtime') BETWEEN ? AND ? ORDER BY id DESC LIMIT 1")
+        .get(account, from, to);
+      if (!last) continue;
+      const before = db.prepare("SELECT counted, book, created_at FROM cash_counts WHERE account = ? AND date(created_at, 'localtime') < ? ORDER BY id DESC LIMIT 1").get(account, from);
+      const reset = before && db.prepare("SELECT 1 FROM cash_movements WHERE kind = 'opening' AND account = ? AND created_at > ?").get(account, before.created_at);
+      const carried = before && !reset ? round(before.counted - before.book) : 0;
+      const diff = round(last.counted - last.book);
+      if (Math.abs(diff - carried) >= 0.005) countLines.push({ account: ACCOUNTS[account], at: last.created_at, counted: last.counted, book: last.book, diff, carried, amount: round(diff - carried) });
+    }
+    const counts = { key: 'comptages', label: 'Caisse comptée contre le livre de caisse', amount: sumOf(countLines, 'amount'), count: countLines.length, lines: countLines };
+
+    const gaps = [cash, tanks, deliveries, counts];
+    const expected = t.costKnown ? round(t.grossMargin - t.expenses + supplierPaid) : null;
+    const gapTotal = gaps.some((g) => g.amount == null) ? null : round(gaps.reduce((a, g) => a + g.amount, 0));
+    return {
+      sales: t.amount,
+      costOfSales: t.costKnown ? t.costOfSales : null,
+      grossMargin: t.costKnown ? t.grossMargin : null,
+      expenses: round(t.expenses - supplierPaid),
+      supplierPaid: round(supplierPaid),
+      expected,
+      gaps,
+      gapTotal,
+      real: expected == null || gapTotal == null ? null : round(expected + gapTotal),
+      // Shifts closed whose money is not counted yet: their gap is not known.
+      uncounted: r.shifts.filter((s) => s.variance == null).map((s) => s.id),
+    };
+  }
+
+  // Every money movement of the period, in totals for the screen and Claude (`money`) and line by
+  // line for the PDF (`ledger`): sales, payments, expenses, deliveries, suppliers, both cash books.
+  function moneyOf(r, from, to) {
+    const books = Object.keys(ACCOUNTS).map((account) => cashbook(db, { account, from, to }));
+    const at = "date(created_at, 'localtime') BETWEEN ? AND ?";
+    const sales = db
+      .prepare(
+        `SELECT sa.created_at AS at, s.id AS shift, c.name AS customer, p.name AS product, sa.kind, sa.liters, sa.amount, sa.plate
+         FROM sales sa JOIN shifts s ON s.id = sa.shift_id JOIN products p ON p.id = sa.product_id LEFT JOIN customers c ON c.id = sa.customer_id
+         WHERE s.status != 'open' AND ${DAY} BETWEEN ? AND ? ORDER BY sa.created_at, sa.id`,
+      )
+      .all(from, to);
+    const payments = db
+      .prepare(`SELECT pa.created_at AS at, c.name AS customer, pa.amount, pa.method, pa.shift_id AS shift FROM payments pa LEFT JOIN customers c ON c.id = pa.customer_id WHERE date(pa.created_at, 'localtime') BETWEEN ? AND ? ORDER BY pa.created_at, pa.id`)
+      .all(from, to);
+    const expenses = db
+      .prepare('SELECT expense_date AS day, category, description, beneficiary, amount, method, shift_id AS shift FROM expenses WHERE expense_date BETWEEN ? AND ? ORDER BY expense_date, id')
+      .all(from, to);
+    const deliveries = db
+      .prepare(
+        `SELECT d.created_at AS at, t.name AS tank, d.supplier, d.liters_ordered AS ordered, d.liters_received AS received, d.unit_cost, d.amount, d.payment
+         FROM deliveries d JOIN tanks t ON t.id = d.tank_id WHERE date(d.created_at, 'localtime') BETWEEN ? AND ? ORDER BY d.created_at`,
+      )
+      .all(from, to);
+    const supplierPayments = db.prepare(`SELECT created_at AS at, supplier, amount, method FROM supplier_payments WHERE ${at} ORDER BY created_at, id`).all(from, to);
+    const manual = db
+      .prepare(`SELECT kind, account, ROUND(SUM(amount), 2) AS amount, COUNT(*) AS count FROM cash_movements WHERE kind != 'opening' AND ${at} GROUP BY kind, account ORDER BY kind, account`)
+      .all(from, to)
+      .map((m) => ({ label: KINDS[m.kind]?.label || m.kind, account: ACCOUNTS[m.account], direction: KINDS[m.kind]?.sign > 0 ? 'entrée' : KINDS[m.kind]?.sign < 0 ? 'sortie' : 'transfert', amount: m.amount, count: m.count }));
+    const sumOf = (list, key) => round(list.reduce((a, x) => a + (x[key] || 0), 0));
+    const t = r.totals;
+
+    const money = {
+      accounts: books.map((b) => ({ account: b.accountLabel, opening: b.opening, in: b.in, out: b.out, closing: b.closing })),
+      sales: t.amount,
+      paidCash: t.cash,
+      mobileMoney: t.mobileMoney,
+      credit: t.credit,
+      combos: t.combos,
+      payments: t.payments,
+      expenses: t.expenses,
+      deliveries: { count: deliveries.length, liters: sumOf(deliveries, 'received'), amount: sumOf(deliveries, 'amount'), unpriced: deliveries.filter((d) => d.amount == null).length },
+      supplierPayments: sumOf(supplierPayments, 'amount'),
+      manual,
+    };
+    const ledger = {
+      salesByDay: r.byDay.map(({ product_id, ...d }) => d),
+      shifts: r.shifts,
+      sales,
+      payments,
+      expenses,
+      deliveries,
+      supplierPayments,
+      cashbook: books.map((b) => ({ account: b.accountLabel, opening: b.opening, in: b.in, out: b.out, closing: b.closing, movements: b.movements.map((m) => ({ at: m.at, day: m.day, label: m.label, in: m.in, out: m.out, balance: m.balance })) })),
+    };
+    return { money, ledger };
+  }
+
   // Everything the adviser reads for a period: the period in detail, the one before, the six before
   // as a trend, and the position now: money, what customers owe and what is owed to suppliers, the
   // tanks and their days of stock, prices against costs, the open alerts.
-  function financeFigures(from, to) {
+  function financeData(from, to) {
     const settings = getSettings(db);
     const today = db.prepare("SELECT date('now', 'localtime') AS d").get().d;
     const days = daysIn(from, to);
@@ -569,7 +724,12 @@ module.exports = function reportRoutes(db) {
       else rhythm.push({ date: key, liters: d.liters, amount: d.amount });
     }
 
-    return {
+    const profit = profitCheck(current, from, to);
+    const { money, ledger } = moneyOf(current, from, to);
+    ledger.gaps = Object.fromEntries(profit.gaps.map((g) => [g.key, g.lines]));
+    for (const g of profit.gaps) delete g.lines;
+
+    const figures = {
       from,
       to,
       period: {
@@ -597,29 +757,33 @@ module.exports = function reportRoutes(db) {
       },
       stock,
       prices,
+      profit,
+      money,
       alerts: alerts.map((a) => a.text),
       cashTolerance: settings.cashTolerance,
     };
+    return { figures, ledger };
   }
 
-  const financeRow = (id) => {
-    const r = db.prepare('SELECT id, date_from, date_to, figures, summary, advice, created_at FROM finance_reports WHERE id = ?').get(id);
-    return r ? { ...r, figures: JSON.parse(r.figures), advice: JSON.parse(r.advice) } : null;
+  // The ledger (every line, long) only for the PDF.
+  const financeRow = (id, { ledger = false } = {}) => {
+    const r = db.prepare(`SELECT id, date_from, date_to, figures, summary, advice, ${ledger ? 'ledger, ' : ''}created_at FROM finance_reports WHERE id = ?`).get(id);
+    return r ? { ...r, figures: JSON.parse(r.figures), advice: JSON.parse(r.advice), ...(ledger ? { ledger: r.ledger ? JSON.parse(r.ledger) : null } : {}) } : null;
   };
 
   // Writes (or writes again) the report of a period. Null when Claude gave nothing.
   async function financeReport(from, to, userId = null) {
-    const figures = financeFigures(from, to);
+    const { figures, ledger } = financeData(from, to);
     const out = await financeAdvice({ figures, stationName: getSettings(db).stationName });
     if (!out) return null;
     db.prepare(
-      `INSERT INTO finance_reports (date_from, date_to, figures, summary, advice, user_id) VALUES (?, ?, ?, ?, ?, ?)
+      `INSERT INTO finance_reports (date_from, date_to, figures, summary, advice, ledger, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(date_from, date_to) DO UPDATE SET figures = excluded.figures, summary = excluded.summary,
-         advice = excluded.advice, user_id = excluded.user_id, created_at = datetime('now')`,
-    ).run(from, to, JSON.stringify(figures), out.summary, JSON.stringify(out.advice), userId);
+         advice = excluded.advice, ledger = excluded.ledger, user_id = excluded.user_id, created_at = datetime('now')`,
+    ).run(from, to, JSON.stringify(figures), out.summary, JSON.stringify(out.advice), JSON.stringify(ledger), userId);
     return financeRow(db.prepare('SELECT id FROM finance_reports WHERE date_from = ? AND date_to = ?').get(from, to).id);
   }
-  const financePdf = (r) => financeReportPdf(r, { stationName: getSettings(db).stationName });
+  const financePdf = (r) => financeReportPdf(r.ledger === undefined ? financeRow(r.id, { ledger: true }) : r, { stationName: getSettings(db).stationName });
   router.financeReport = financeReport;
   router.financePdf = financePdf;
 
@@ -628,8 +792,8 @@ module.exports = function reportRoutes(db) {
     const from = db.prepare("SELECT date('now', 'localtime', '-6 days', 'weekday 1', '-7 days') AS d").get().d;
     return { from, to: addDays(from, 6) };
   };
-  const reportParam = (id) => {
-    const r = /^\d+$/.test(id) ? financeRow(Number(id)) : null;
+  const reportParam = (id, options) => {
+    const r = /^\d+$/.test(id) ? financeRow(Number(id), options) : null;
     if (!r) fail(404, 'Rapport financier introuvable.');
     return r;
   };
@@ -642,7 +806,7 @@ module.exports = function reportRoutes(db) {
   router.get('/finance-reports/:id', manager, (req, res) => res.json(reportParam(req.params.id)));
 
   router.get('/finance-reports/:id/report.pdf', manager, (req, res) => {
-    const r = reportParam(req.params.id);
+    const r = reportParam(req.params.id, { ledger: true });
     res.set('Content-Type', 'application/pdf');
     res.set('Content-Disposition', `attachment; filename="rapport-financier-${r.date_from}${r.date_from === r.date_to ? '' : `_${r.date_to}`}.pdf"`);
     res.send(financePdf(r));

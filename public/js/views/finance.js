@@ -14,6 +14,54 @@ const PRESETS = [
   ['lastMonth', 'Mois dernier'],
 ];
 
+// A label and its amount; a loss in red.
+const line = (label, value, { total = false, lost = false } = {}) =>
+  h('div', { class: `summary-line${total ? ' total' : ''}` }, h('span', {}, label), h('span', { class: `num${lost ? ' variance-neg' : ''}` }, value));
+const isLoss = (v) => v != null && v < -0.005;
+
+// The profit there should be, every gap measured, the profit left.
+function profitCard(pc) {
+  return h(
+    'section',
+    { class: 'card section' },
+    cardHeader('Vérification du bénéfice', pc.gapTotal == null ? null : isLoss(pc.gapTotal) ? `Écart ${fmt.signedMoney(pc.gapTotal)}` : 'Aucun manque'),
+    line('Ventes', fmt.money(pc.sales)),
+    line('Coût du carburant vendu', pc.costOfSales == null ? 'Prix d’achat manquant' : fmt.money(-pc.costOfSales), { lost: pc.costOfSales == null }),
+    line('Dépenses', fmt.money(-pc.expenses)),
+    line('Bénéfice attendu', pc.expected == null ? '—' : fmt.money(pc.expected), { total: true }),
+    pc.gaps.map((g) =>
+      line(g.key === 'cuves' && g.count ? `${g.label} (${fmt.liters(g.liters)})` : g.label, g.amount == null ? 'Sans prix d’achat' : fmt.signedMoney(g.amount), { lost: isLoss(g.amount) || g.amount == null }),
+    ),
+    line('Bénéfice réel', pc.real == null ? '—' : fmt.money(pc.real), { total: true, lost: isLoss(pc.real) }),
+    pc.uncounted.length ? line(`Argent à compter : poste${pc.uncounted.length > 1 ? 's' : ''} n° ${pc.uncounted.join(', ')}`, '—', { lost: true }) : null,
+  );
+}
+
+// Every money movement of the period, in totals (each line is in the PDF).
+function moneyCard(m) {
+  return h(
+    'section',
+    { class: 'card section' },
+    cardHeader('Mouvements d’argent'),
+    m.accounts.map((a) => [
+      line(`${a.account} au début`, fmt.money(a.opening)),
+      line('Entrées', `+${fmt.money(a.in)}`),
+      line('Sorties', fmt.money(-a.out)),
+      line(`${a.account} à la fin`, fmt.money(a.closing), { total: true }),
+    ]),
+    line('Ventes (index des compteurs)', fmt.money(m.sales)),
+    line('Espèces remises aux clôtures', fmt.money(m.paidCash)),
+    line('Mobile money des postes', fmt.money(m.mobileMoney)),
+    line('Vendu à crédit', fmt.money(m.credit)),
+    m.combos ? line('Échangé contre des combos', fmt.money(m.combos)) : null,
+    line('Règlements reçus', fmt.money(m.payments)),
+    line('Dépenses', fmt.money(m.expenses)),
+    line(`Livraisons (${m.deliveries.count})`, fmt.money(m.deliveries.amount)),
+    line('Paiements aux fournisseurs', fmt.money(m.supplierPayments)),
+    m.manual.map((x) => line(`${x.label} (${x.account.toLowerCase()})`, fmt.money(x.amount))),
+  );
+}
+
 const span = (from, to) => (from === to ? fmt.longDay(from) : `Du ${fmt.date(from)} au ${fmt.date(to)}`);
 const evolution = (now, before) => {
   if (now == null || before == null || !before) return null;
@@ -119,6 +167,7 @@ export async function renderFinance(page, ctx) {
       'Rapport financier',
       span(r.date_from, r.date_to),
       w.partial ? badge('Période en cours', 'info') : null,
+      f.profit && (isLoss(f.profit.gapTotal) || f.profit.uncounted.length || f.profit.expected == null) ? badge('Écart à vérifier', 'critical') : null,
       shareButton(`/api/finance-reports/${r.id}/report.pdf`, `rapport-financier-${r.date_from}_${r.date_to}.pdf`),
       write('Refaire'),
     ),
@@ -131,6 +180,7 @@ export async function renderFinance(page, ctx) {
       kpi('Dépenses', fmt.money(w.expenses), evolution(w.expenses, p.expenses)),
       kpi('Résultat net estimé', w.net == null ? '—' : h('span', { class: w.net < 0 ? 'variance-neg' : '' }, fmt.money(w.net)), evolution(w.net, p.net)),
     ),
+    f.profit ? profitCard(f.profit) : null,
     h('section', { class: 'card section' }, cardHeader('Synthèse', `Rédigée le ${fmt.dateTime(r.created_at)}`), h('p', { class: 'finance-summary' }, r.summary)),
     h(
       'section',
@@ -150,6 +200,7 @@ export async function renderFinance(page, ctx) {
         ),
       ),
     ),
+    f.money ? moneyCard(f.money) : null,
     h(
       'div',
       { class: 'grid grid-4 section' },

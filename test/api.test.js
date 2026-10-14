@@ -1449,14 +1449,66 @@ test('rapport financier : sur la période choisie, conseils de Claude, PDF, mail
     assert.deepStrictEqual(call.schema.required, ['summary', 'advice']);
 
     // A period chosen: up to today (still under way), compared with the one before, as long.
+    // The till counted 5 $ short of the book: a gap of the period.
+    const book = (await gerant('POST', '/api/cashbook/counts', { account: 'cash', counted: 0 })).data.balances.cash.balance;
+    const counted = (await gerant('POST', '/api/cashbook/counts', { account: 'cash', counted: round2(book - 5) })).data.balances.cash.lastCount;
+    assert.strictEqual(counted.diff, -5);
     const mine = await gerant('POST', '/api/finance-reports', { from: addDays(today(), -9), to: today() });
     assert.strictEqual(mine.status, 201);
     assert.deepStrictEqual([mine.data.figures.period.days, mine.data.figures.period.partial, mine.data.figures.previous.from], [10, true, addDays(today(), -19)]);
     assert.ok(mine.data.figures.period.amount > 0, 'les ventes de ces jours-ci');
+
+    // The profit there should be, every gap measured against it, every money movement.
+    const fig = mine.data.figures;
+    const pc = fig.profit;
+    assert.deepStrictEqual(pc.gaps.map((g) => g.key), ['caisse', 'cuves', 'livraisons', 'comptages']);
+    assert.strictEqual(pc.gaps[0].amount, fig.period.variance, 'les écarts des clôtures');
+    assert.strictEqual(pc.gaps[3].amount, -5, 'la caisse comptée contre le livre');
+    assert.ok(pc.gaps.every((g) => !('lines' in g)), 'le détail ne part pas à Claude');
+    // A fuel without purchase price: the profit there should be cannot be known, nor the real one.
+    assert.deepStrictEqual([pc.costOfSales, pc.expected, pc.real], [null, null, null]);
+    assert.strictEqual(pc.gapTotal, round2(pc.gaps.reduce((a, g) => a + g.amount, 0)));
+    assert.ok(pc.uncounted.length, 'un poste dont l’argent n’est pas compté');
+    // With every purchase price: the profit there should be, and what is left after the gaps.
+    const unpriced = db.prepare('SELECT id FROM deliveries WHERE unit_cost IS NULL').all().map((d) => d.id);
+    db.prepare(`UPDATE deliveries SET unit_cost = 1.1 WHERE id IN (${unpriced.join(',')})`).run();
+    const essence = db.prepare("SELECT t.id FROM tanks t JOIN products p ON p.id = t.product_id WHERE p.name = 'Essence'").get().id;
+    const bought = db.prepare("INSERT INTO deliveries (tank_id, liters_ordered, liters_received, unit_cost, book_before, payment) VALUES (?, 1, 1, 1.3, 0, 'prepaid')").run(essence).lastInsertRowid;
+    try {
+      const priced = (await gerant('POST', '/api/finance-reports', { from: addDays(today(), -9), to: today() })).data.figures;
+      const p = priced.profit;
+      assert.ok(p.costOfSales > 0);
+      assert.strictEqual(p.grossMargin, round2(p.sales - p.costOfSales));
+      assert.strictEqual(p.expected, round2(p.grossMargin - p.expenses));
+      assert.strictEqual(p.expected, priced.period.net, 'le résultat net du rapport');
+      assert.strictEqual(p.real, round2(p.expected + p.gapTotal));
+      assert.ok(p.real < p.expected, 'les manques retirés');
+    } finally {
+      db.prepare(`UPDATE deliveries SET unit_cost = NULL WHERE id IN (${unpriced.join(',')})`).run();
+      db.prepare('DELETE FROM deliveries WHERE id = ?').run(bought);
+    }
+    assert.deepStrictEqual(fig.money.accounts.map((a) => a.account), ['Espèces', 'Mobile money']);
+    for (const a of fig.money.accounts) assert.strictEqual(round2(a.opening + a.in - a.out), a.closing);
+    assert.deepStrictEqual([fig.money.payments, fig.money.expenses, fig.money.credit], [fig.period.payments, fig.period.expenses, fig.period.credit]);
+    assert.ok(!('ledger' in mine.data), 'la liste de chaque ligne reste pour le PDF');
+    const ledger = JSON.parse(db.prepare('SELECT ledger FROM finance_reports WHERE id = ?').get(mine.data.id).ledger);
+    assert.ok(['salesByDay', 'shifts', 'sales', 'payments', 'expenses', 'deliveries', 'supplierPayments', 'cashbook', 'gaps'].every((k) => k in ledger));
+    assert.ok(ledger.sales.length && ledger.payments.length && ledger.cashbook[0].movements.length, 'chaque ligne');
+    assert.strictEqual(round2(ledger.expenses.reduce((a, e) => a + e.amount, 0)), fig.period.expenses);
+    assert.strictEqual(round2(ledger.payments.reduce((a, e) => a + e.amount, 0)), fig.period.payments);
+    assert.deepStrictEqual(ledger.gaps.comptages.map((c) => c.amount), [-5]);
+    assert.ok(call.content[0].text.includes('Vérifie le bénéfice'));
+    assert.ok(!asked.at(-1).content[0].text.includes('"ledger"') && !asked.at(-1).content[0].text.includes('"lines"'));
+    const minePdf = (await gerant('GET', `/api/finance-reports/${mine.data.id}/report.pdf`)).raw.toString('latin1');
+    for (const text of ['(V\\351rification du b\\351n\\351fice)', '(B\\351n\\351fice attendu)', '(B\\351n\\351fice r\\351el)', '(Mouvements d\\222argent)', '(D\\351penses : chaque ligne)', '(Livre de caisse : esp\\350ces)', '(Comptages de la caisse)']) {
+      assert.ok(minePdf.includes(text), text);
+    }
     // Whole months: the month before; beyond a month, the rhythm by month.
     const months = await gerant('POST', '/api/finance-reports', { from: '2026-07-01', to: '2026-09-30' });
     assert.deepStrictEqual([months.data.figures.previous.from, months.data.figures.previous.to], ['2026-04-01', '2026-06-30']);
     assert.ok('byMonth' in months.data.figures.period && !('byDay' in months.data.figures.period));
+    const quiet = months.data.figures.profit;
+    assert.deepStrictEqual([quiet.expected, quiet.gapTotal, quiet.real], [quiet.grossMargin - quiet.expenses, 0, quiet.grossMargin - quiet.expenses]);
     // Written again: the same report, rewritten.
     const again = await gerant('POST', '/api/finance-reports', { from: '2026-07-01', to: '2026-09-30' });
     assert.strictEqual(again.data.id, months.data.id);
@@ -1745,7 +1797,7 @@ test('migration 26 : les prix fixes des abonnés deviennent des écarts', () => 
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test('migration 29 : un rapport financier de la semaine devient celui d’une période', () => {
+test('migrations 29 et 30 : un rapport financier de la semaine devient celui d’une période, avec le détail de chaque ligne', () => {
   const fs = require('node:fs');
   const os = require('node:os');
   const path = require('node:path');
@@ -1770,6 +1822,12 @@ test('migration 29 : un rapport financier de la semaine devient celui d’une p�
   assert.deepStrictEqual([r.date_from, r.date_to, r.summary], ['2026-10-05', '2026-10-11', 'Bonne semaine.']);
   assert.deepStrictEqual(JSON.parse(r.figures), { from: '2026-10-05', to: '2026-10-11', period: { amount: 100 }, previous: { amount: 90 } });
   assert.strictEqual(old.prepare("SELECT 1 FROM sqlite_master WHERE name = 'finance_reports_v28'").get(), undefined);
+  // Version 30: the ledger of every line is added to the reports already written.
+  old.exec('ALTER TABLE finance_reports DROP COLUMN ledger; PRAGMA user_version = 29');
+  old.close();
+  old = openDb(file);
+  assert.ok(old.prepare('PRAGMA table_info(finance_reports)').all().some((c) => c.name === 'ledger'));
+  assert.strictEqual(old.prepare('SELECT summary FROM finance_reports').get().summary, 'Bonne semaine.');
   old.close();
   fs.rmSync(dir, { recursive: true, force: true });
 });
