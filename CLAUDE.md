@@ -4,6 +4,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Fuel station management app (gasoil/essence) for a station in Goma, DRC: amounts in US dollars, timezone `Africa/Lubumbashi`. All UI text, server error messages and the README are in **French**; keep it that way. `README.md` documents the business rules (reconciliation formula, customer categories, combos) and is the reference when behavior is in doubt.
 
+## Working with the user
+
+Standing rules the user gave from 2026-10-05 to 2026-10-08; follow them on every task.
+
+- Reply in French (the user writes French, often without accents). Short answers, no recap of what they already know.
+- Commit when a change is done, but `git push` only when the user writes « push » (or « si oui push » once the condition holds).
+- Show a screenshot of every UI change (local server on a copy of the review database, element screenshots sent to the user).
+- Test credentials only on localhost; the user's e-mail is only the git identity.
+- Never ask for, read or write API keys: the user sets `RESEND_API_KEY`, `ANTHROPIC_API_KEY` and the model variables (`METER_MODEL`, `PHOTO_MODEL`, `ASK_MODEL`…) on Render themselves.
+- When a money concept is ambiguous, check the user's words before reshaping an existing field: the change left to the attendants (« monnaie ») and the francs the manager keeps to change are two different things.
+- Small details follow the same rule as their siblings (icon colours, squares, shapes, in both the night and day themes); never invent an exception. A contrast concern is offered as an option, not applied unasked.
+- No explanatory text anywhere except Réglages: no form intros, field hints, descriptive subtitles or explanation sentences in confirmations. Only data, statuses, empty states and error messages.
+- Grouped buttons have equal width and are centred on mobile.
+- Icons are PNGs found on pngegg.com, every time, never drawn: show candidates, ask before downloading (file name, size) and mention that pngegg marks most files « Non-commercial use ».
+
+Open topics (do nothing without a request):
+- Next planned: a richer account creation form (`/register` in `src/routes/auth.js`, `src/mailer.js`) and security.
+- Proposed but not chosen: daily backup, error alert, attendant account, vehicles, customer QR card, delivery/receipt photos, shop, maintenance, owner view.
+- Unanswered since 2026-10-08: making the cheaper model the default for plates in code (today the user can set `PHOTO_MODEL` on Render).
+
 ## Commands
 
 - `npm start`: serve on `PORT` (3000), with the database at `DB_FILE` (default `data/station.db`).
@@ -106,4 +126,4 @@ Requires Node ≥ 22.13 (built-in `node:sqlite`, hence `--disable-warning=Experi
 
 ## Deployment
 
-`src/storage.js` tells on Render whether the database is on the persistent disk (`/api/health` `storage`, a warning in the log otherwise). `render.yaml` is a Render blueprint (`TZ=Africa/Lubumbashi`, `DB_FILE` on a persistent disk, health check `/api/health`). The SQLite file is the whole state; back it up with Réglages → Données (`GET /api/backup`, `VACUUM INTO`), never by copying `station.db` alone (WAL).
+`src/storage.js` tells on Render whether the database is on the persistent disk (`/api/health` `storage`, a warning in the log otherwise). The live app (station.mtgindustrie.com) is deployed from the branch `claude/web-application-0f5fyd`, not from `main`. `render.yaml` is a Render blueprint (`TZ=Africa/Lubumbashi`, `DB_FILE` on a persistent disk, health check `/api/health`). The SQLite file is the whole state; back it up with Réglages → Données (`GET /api/backup`, `VACUUM INTO`), never by copying `station.db` alone (WAL).
