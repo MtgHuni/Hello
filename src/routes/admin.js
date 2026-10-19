@@ -8,7 +8,7 @@ const { fail } = require('../util');
 const { audit } = require('../audit');
 
 const manager = requireRole('manager');
-const CATEGORIES = ['annulations', 'prix', 'reglages', 'equipe', 'clients', 'postes', 'caisse', 'donnees'];
+const CATEGORIES = ['annulations', 'prix', 'reglages', 'equipe', 'clients', 'postes', 'caisse', 'agents', 'donnees'];
 
 module.exports = function adminRoutes(db) {
   const router = express.Router();

@@ -75,7 +75,7 @@ function createApp({ dbFile }) {
     next();
   });
   const routers = {};
-  for (const routes of ['auth', 'mail', 'config', 'stock', 'shifts', 'customers', 'requests', 'expenses', 'users', 'reports', 'admin', 'cashbook', 'ai']) {
+  for (const routes of ['auth', 'mail', 'config', 'stock', 'shifts', 'customers', 'requests', 'expenses', 'users', 'reports', 'admin', 'cashbook', 'ai', 'staff']) {
     routers[routes] = require(`./routes/${routes}`)(db, { mailer, photos });
     api.use(routers[routes]);
   }

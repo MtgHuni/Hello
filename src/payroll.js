@@ -1,0 +1,77 @@
+// Agents' pay (src/routes/staff.js): the salary of a month, prorated when the agent came or left
+// during it, what is carried from the months before, and the advances and payments counted for it.
+// Advances and payments are expenses « Salaires » linked to the agent (expenses.staff_id, pay_month).
+const { round } = require('./util');
+
+const FUNCTIONS = ['Pompiste', 'Gérant', 'Caissier', 'Gardien', 'Autre'];
+const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+
+const monthLabel = (month) => `${MONTHS[Number(month.slice(5, 7)) - 1]} ${month.slice(0, 4)}`;
+const addMonths = (month, n) => new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1 + n, 1)).toISOString().slice(0, 7);
+const daysIn = (month) => new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate();
+const currentMonth = (db) => db.prepare("SELECT strftime('%Y-%m', 'now', 'localtime') AS m").get().m;
+
+// Where the money of an advance or a payment came from.
+const sourceOf = (e) => (e.shift_id ? 'poste' : e.method);
+
+// The salary in force in a month, and the part of it due: days from the entry (or the 1st) to the
+// departure (or the month's last day), out of the month's days. Nothing before « Paie depuis ».
+function salaryOf(db, staff, month) {
+  const daysInMonth = daysIn(month);
+  const row = db.prepare('SELECT amount FROM staff_salaries WHERE staff_id = ? AND from_month <= ? ORDER BY from_month DESC LIMIT 1').get(staff.id, month);
+  const base = row ? row.amount : 0;
+  const first = `${month}-01`;
+  const last = `${month}-${String(daysInMonth).padStart(2, '0')}`;
+  const start = staff.hired_on > first ? staff.hired_on : first;
+  const end = staff.left_on && staff.left_on < last ? staff.left_on : last;
+  const days = month < staff.pay_from || end < start ? 0 : Number(end.slice(8)) - Number(start.slice(8)) + 1;
+  return { base, days, daysInMonth, amount: round((base * days) / daysInMonth) };
+}
+
+// One month of an agent: its salary, what the months before left (owed > 0, advanced too much < 0),
+// its advances and payments, and the net still to pay.
+function sheetOf(db, staff, month) {
+  const counted = Object.fromEntries(
+    db.prepare('SELECT pay_month AS m, SUM(amount) AS v FROM expenses WHERE staff_id = ? GROUP BY pay_month').all(staff.id).map((r) => [r.m, r.v]),
+  );
+  let carried = 0;
+  for (let m = staff.pay_from; m < month; m = addMonths(m, 1)) carried = round(carried + salaryOf(db, staff, m).amount - (counted[m] || 0));
+  const salary = salaryOf(db, staff, month);
+  const operations = db
+    .prepare(
+      `SELECT e.id, e.expense_date, e.created_at, e.amount, e.method, e.shift_id, e.pay_kind, e.description, s.status AS shift_status
+       FROM expenses e LEFT JOIN shifts s ON s.id = e.shift_id
+       WHERE e.staff_id = ? AND e.pay_month = ? ORDER BY e.expense_date, e.id`,
+    )
+    .all(staff.id, month)
+    .map((e) => ({ ...e, source: sourceOf(e) }));
+  const advances = operations.filter((e) => e.pay_kind === 'avance');
+  const payments = operations.filter((e) => e.pay_kind === 'salaire');
+  const sum = (list) => round(list.reduce((t, e) => t + e.amount, 0));
+  const advanced = sum(advances);
+  const paid = sum(payments);
+  return { month, salary, carried, advances, payments, advanced, paid, net: round(salary.amount + carried - advanced - paid) };
+}
+
+// The pay of a month: every agent with a salary, something carried or an operation that month.
+function payroll(db, month) {
+  const agents = db
+    .prepare('SELECT st.*, u.name AS user_name FROM staff st LEFT JOIN users u ON u.id = st.user_id ORDER BY st.name COLLATE NOCASE')
+    .all()
+    .map((st) => ({ ...st, sheet: sheetOf(db, st, month) }))
+    .filter(({ sheet: s }) => s.salary.amount > 0 || Math.abs(s.carried) >= 0.005 || s.advances.length || s.payments.length);
+  const total = (f) => round(agents.reduce((t, a) => t + f(a.sheet), 0));
+  return {
+    month,
+    agents,
+    totals: {
+      salaries: total((s) => s.salary.amount),
+      advanced: total((s) => s.advanced),
+      paid: total((s) => s.paid),
+      // What is still to pay: an agent advanced too much does not lower what the others are owed.
+      net: total((s) => Math.max(0, s.net)),
+    },
+  };
+}
+
+module.exports = { FUNCTIONS, monthLabel, addMonths, currentMonth, salaryOf, sheetOf, payroll, sourceOf };

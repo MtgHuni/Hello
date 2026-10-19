@@ -1901,3 +1901,56 @@ test('migration 31 : fiches des agents et dépenses reliées', () => {
   old.close();
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+// The month (YYYY-MM) n months from this one, and its number of days.
+const monthOf = (n = 0) => {
+  const [y, m] = today().slice(0, 7).split('-').map(Number);
+  const d = new Date(Date.UTC(y, m - 1 + n, 1));
+  return d.toISOString().slice(0, 7);
+};
+const daysOf = (month) => new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate();
+
+test('agents : fiches par l’administrateur, lues par le gérant et l’actionnaire, prorata d’un mois partiel', async () => {
+  const M = monthOf();
+  const J = daysOf(M);
+  const paulUser = (await gerant('GET', '/api/users')).data.find((u) => u.login === 'paul');
+  const paul = await gerant('POST', '/api/staff', { name: 'Paul', phone: '0990000001', function: 'Pompiste', hiredOn: `${M}-16`, salary: 155, userId: paulUser.id });
+  assert.strictEqual(paul.status, 201, JSON.stringify(paul.data));
+  assert.deepStrictEqual([paul.data.pay_from, paul.data.user_name, paul.data.salary], [M, 'Paul', 155]);
+  const jean = await gerant('POST', '/api/staff', { name: 'Jean', function: 'Gardien', hiredOn: '2025-01-01', salary: 100 });
+  assert.strictEqual(jean.status, 201);
+  ctx.jean = jean.data;
+  const twice = await gerant('POST', '/api/staff', { name: 'Paul bis', function: 'Pompiste', hiredOn: `${M}-01`, salary: 10, userId: paulUser.id });
+  assert.deepStrictEqual([twice.status, twice.data.code], [409, 'duplicate'], 'un compte, une fiche');
+  assert.strictEqual((await gerant('POST', '/api/staff', { name: 'X', function: 'Chauffeur', hiredOn: `${M}-01`, salary: 10 })).status, 400, 'fonction hors liste');
+  assert.strictEqual((await gerant('PUT', `/api/staff/${jean.data.id}`, { leftOn: '2024-12-31' })).status, 400, 'départ avant l’entrée');
+
+  // Rights: the admin writes, the manager and the owner read, the attendant sees nothing.
+  const chef = client();
+  await chef('POST', '/api/auth/login', { login: 'chef', password: 'gerant123' });
+  assert.strictEqual((await chef('GET', '/api/staff')).status, 200);
+  assert.strictEqual((await chef('POST', '/api/staff', { name: 'Y', function: 'Autre', hiredOn: `${M}-01`, salary: 1 })).data.code, 'admin_only');
+  const awa = client();
+  await awa('POST', '/api/auth/login', { login: 'awa', password: 'actionnaire2' });
+  assert.strictEqual((await awa('GET', '/api/staff')).status, 200);
+  assert.strictEqual((await awa('POST', '/api/staff', { name: 'Z', function: 'Autre', hiredOn: `${M}-01`, salary: 1 })).data.code, 'read_only');
+  assert.strictEqual((await pompiste('GET', '/api/staff')).status, 403);
+
+  // This month: Paul from the 16th, Jean the whole month.
+  let pay = (await gerant('GET', '/api/staff')).data;
+  assert.deepStrictEqual([pay.month, pay.firstMonth], [M, M]);
+  const sheet = (name) => pay.agents.find((a) => a.name === name).sheet;
+  assert.deepStrictEqual(sheet('Paul').salary, { base: 155, days: J - 15, daysInMonth: J, amount: round2((155 * (J - 15)) / J) });
+  assert.deepStrictEqual([sheet('Jean').salary.amount, sheet('Jean').carried, sheet('Jean').net], [100, 0, 100]);
+  assert.strictEqual(pay.totals.salaries, round2(100 + (155 * (J - 15)) / J));
+  assert.strictEqual((await gerant('GET', `/api/staff?month=${monthOf(1)}`)).status, 400, 'pas de mois à venir');
+
+  // A new salary from next month: this month keeps the old one.
+  assert.strictEqual((await gerant('PUT', `/api/staff/${jean.data.id}`, { salary: 120, salaryFrom: monthOf(1) })).status, 200);
+  pay = (await gerant('GET', '/api/staff')).data;
+  assert.strictEqual(sheet('Jean').salary.amount, 100);
+  const detail = (await gerant('GET', `/api/staff/${jean.data.id}`)).data;
+  assert.deepStrictEqual(detail.salaries.map((s) => [s.from_month, s.amount]), [[monthOf(1), 120], [M, 100]]);
+  assert.deepStrictEqual(detail.months.map((m) => m.month), [M]);
+  assert.ok((await gerant('GET', '/api/audit?category=agents')).data.some((a) => a.summary.includes('Jean')), 'au journal');
+});
