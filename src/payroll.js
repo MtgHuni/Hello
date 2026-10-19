@@ -2,6 +2,7 @@
 // during it, what is carried from the months before, and the advances and payments counted for it.
 // Advances and payments are expenses « Salaires » linked to the agent (expenses.staff_id, pay_month).
 const { round } = require('./util');
+const { deductionLines } = require('./deductions');
 
 const FUNCTIONS = ['Pompiste', 'Gérant', 'Caissier', 'Gardien', 'Autre'];
 const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
@@ -47,7 +48,10 @@ function monthSheet(db, staff, month, carried) {
   const sum = (list) => round(list.reduce((t, e) => t + e.amount, 0));
   const advanced = sum(advances);
   const paid = sum(payments);
-  return { month, salary, carried, advances, payments, advanced, paid, net: round(salary.amount + carried - advanced - paid) };
+  // Kept from the pay (> 0) or given back (< 0): src/deductions.js.
+  const deductions = deductionLines(db, staff.id, month);
+  const deducted = sum(deductions);
+  return { month, salary, carried, advances, payments, deductions, advanced, paid, deducted, net: round(salary.amount + carried - advanced - paid - deducted) };
 }
 
 // Every month from « Paie depuis » to `until`. `due` is what is still to pay for a month once the
@@ -83,7 +87,7 @@ function payroll(db, month) {
     // Everyone still there (even before their first day), and anyone gone with money still owed.
     .filter(
       ({ sheet: s, ...st }) =>
-        s.salary.amount > 0 || Math.abs(s.carried) >= 0.005 || s.advances.length || s.payments.length || (month >= st.pay_from && (!st.left_on || st.left_on >= `${month}-01`)),
+        s.salary.amount > 0 || Math.abs(s.carried) >= 0.005 || s.advances.length || s.payments.length || s.deductions.length || (month >= st.pay_from && (!st.left_on || st.left_on >= `${month}-01`)),
     );
   const total = (f) => round(agents.reduce((t, a) => t + f(a.sheet), 0));
   return {
@@ -93,6 +97,7 @@ function payroll(db, month) {
       salaries: total((s) => s.salary.amount),
       advanced: total((s) => s.advanced),
       paid: total((s) => s.paid),
+      deducted: total((s) => s.deducted),
       // What is still to pay: an agent advanced too much does not lower what the others are owed.
       net: total((s) => s.due),
     },

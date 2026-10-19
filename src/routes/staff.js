@@ -5,6 +5,7 @@ const { requireRole, requireAdmin } = require('../auth');
 const { audit } = require('../audit');
 const { FUNCTIONS, monthLabel, ofMonth, currentMonth, salaryOf, sheetOf, sheetsOf, payroll, sourceOf } = require('../payroll');
 const { payslipPdf } = require('../payslip');
+const { syncDeductions, keptFor } = require('../deductions');
 
 const manager = requireRole('manager');
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -45,12 +46,14 @@ module.exports = function staffRoutes(db, { mailer }) {
   }
 
   router.get('/staff', manager, (req, res) => {
+    syncDeductions(db);
     const month = notAfterNow(monthParam(req.query.month, 'Le mois') || currentMonth(db));
     const first = db.prepare('SELECT MIN(pay_from) AS m FROM staff').get().m;
     res.json({ ...payroll(db, month), firstMonth: first && first < currentMonth(db) ? first : currentMonth(db) });
   });
 
   router.get('/staff/:id', manager, (req, res) => {
+    syncDeductions(db);
     const staff = staffRow(req.params.id);
     const months = sheetsOf(db, staff, currentMonth(db)).reverse();
     res.json({
@@ -61,6 +64,7 @@ module.exports = function staffRoutes(db, { mailer }) {
   });
 
   router.get('/staff/:id/payslip.pdf', manager, (req, res) => {
+    syncDeductions(db);
     const staff = staffRow(req.params.id);
     const month = notAfterNow(monthParam(req.query.month, 'Le mois') || currentMonth(db));
     const pdf = payslipPdf({ staff, sheet: sheetOf(db, staff, month), stationName: getSettings(db).stationName });
@@ -180,6 +184,71 @@ module.exports = function staffRoutes(db, { mailer }) {
     if (month < staff.pay_from) fail(400, `Rien n’est compté pour ${staff.name} avant ${monthLabel(staff.pay_from)}.`);
     const source = oneOf(b.source, 'D’où sort l’argent', SOURCES);
     res.status(201).json(payOut(req, staff, { kind: 'salaire', month, date: today(), amount: amountParam(b.amount), source }));
+  });
+
+  // ---------- Deductions (src/deductions.js) ----------
+
+  // The agent who granted a credit (admin): the deductions follow at once.
+  router.put('/staff/credits/:saleId', manager, requireAdmin, (req, res) => {
+    const sale = db.prepare("SELECT s.*, c.name AS customer_name FROM sales s JOIN customers c ON c.id = s.customer_id WHERE s.id = ? AND s.kind = 'credit'").get(req.params.saleId);
+    if (!sale) fail(404, 'Crédit introuvable.');
+    const staffId = req.body?.staffId ? staffRow(req.body.staffId).id : null;
+    transaction(db, () => {
+      db.prepare('UPDATE sales SET staff_id = ? WHERE id = ?').run(staffId, sale.id);
+      const name = staffId ? staffRow(staffId).name : 'l’agent de son compte';
+      audit(db, req, { category: 'agents', action: 'credit_agent', entity: 'sales', id: sale.id, summary: `Crédit de ${sale.customer_name} (${money(sale.amount)}) accordé par ${name}`, before: { staff_id: sale.staff_id } });
+    });
+    syncDeductions(db);
+    res.json({ sale_id: sale.id, staff_id: staffId });
+  });
+
+  // An expense kept from an agent's pay (once, whoever entered it).
+  router.post('/staff/:id/deductions', manager, (req, res) => {
+    const staff = staffRow(req.params.id);
+    const expense = db.prepare('SELECT * FROM expenses WHERE id = ?').get(Number(req.body?.expenseId));
+    if (!expense) fail(404, 'Dépense introuvable.');
+    if (expense.staff_id) fail(400, 'Une avance ou un salaire ne se retient pas.');
+    const other = db
+      .prepare(`SELECT st.name FROM staff_deductions d JOIN staff st ON st.id = d.staff_id WHERE d.expense_id = ? GROUP BY d.staff_id HAVING SUM(d.amount) > 0.001 OR MAX(d.reason = 'pardon') = 1`)
+      .get(expense.id);
+    if (other) fail(409, `Cette dépense est déjà retenue sur le salaire de ${other.name}.`);
+    const id = transaction(db, () => {
+      const id = Number(
+        db
+          .prepare("INSERT INTO staff_deductions (staff_id, expense_id, amount, reason, pay_month, user_id) VALUES (?, ?, ?, 'retenue', ?, ?)")
+          .run(staff.id, expense.id, expense.amount, currentMonth(db), req.user.id).lastInsertRowid,
+      );
+      audit(db, req, { category: 'agents', action: 'staff_deduction', entity: 'expenses', id: expense.id, summary: `Dépense retenue sur le salaire de ${staff.name} : ${expense.description}, ${money(expense.amount)}` });
+      return id;
+    });
+    res.status(201).json(db.prepare('SELECT * FROM staff_deductions WHERE id = ?').get(id));
+  });
+
+  // Forgiven: what is still kept is given back, and the source is never kept again from this agent.
+  router.post('/staff/:id/deductions/forgive', manager, (req, res) => {
+    const staff = staffRow(req.params.id);
+    const source = { saleId: Number(req.body?.saleId) || null, expenseId: Number(req.body?.expenseId) || null };
+    if (!source.saleId === !source.expenseId) fail(400, 'Choisissez la retenue à pardonner.');
+    const kept = keptFor(db, staff.id, source);
+    if (kept.forgiven) fail(409, 'Cette retenue est déjà pardonnée.');
+    transaction(db, () => {
+      db.prepare("INSERT INTO staff_deductions (staff_id, sale_id, expense_id, amount, reason, pay_month, user_id) VALUES (?, ?, ?, ?, 'pardon', ?, ?)").run(
+        staff.id,
+        source.saleId,
+        source.expenseId,
+        round(-kept.net),
+        currentMonth(db),
+        req.user.id,
+      );
+      audit(db, req, {
+        category: 'agents',
+        action: 'staff_deduction_forgiven',
+        entity: source.saleId ? 'sales' : 'expenses',
+        id: source.saleId || source.expenseId,
+        summary: `Retenue pardonnée à ${staff.name} : ${money(kept.net)} (${source.saleId ? `crédit n°${source.saleId}` : `dépense n°${source.expenseId}`})`,
+      });
+    });
+    res.json({ forgiven: kept.net });
   });
 
   // An amount entered wrongly, corrected from the agent's record; paid with a closed shift's money,

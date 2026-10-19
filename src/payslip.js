@@ -2,6 +2,7 @@
 // month before left, each advance and each payment, and what remains.
 const { Report, fmt, COLORS } = require('./pdfReport');
 const { monthLabel } = require('./payroll');
+const { deductionLabel } = require('./deductions');
 
 const SOURCE = { espèces: 'Espèces', 'mobile money': 'Mobile money' };
 const sourceLabel = (e) => (e.source === 'poste' ? `Argent du poste n°${e.shift_id}` : SOURCE[e.source] || e.source);
@@ -34,6 +35,16 @@ function payslipPdf({ staff, sheet, stationName, now }) {
       columns,
       list.map((e) => [fmt.date(e.expense_date), sourceLabel(e), fmt.money(e.amount)]),
       { totals: list.length > 1 ? [['Total', '', fmt.money(total)]] : [], empty },
+    );
+  }
+
+  // Kept from the pay (−) or given back (+).
+  if (sheet.deductions.length) {
+    report.section('Retenues');
+    report.table(
+      [{ label: 'Date', width: 1 }, { label: 'Motif', width: 3 }, { label: 'Montant', align: 'right', width: 1 }],
+      sheet.deductions.map((d) => [fmt.date(d.created_at), deductionLabel(d, fmt.date), fmt.signed(-d.amount)]),
+      { totals: sheet.deductions.length > 1 ? [['Total', '', fmt.signed(-sheet.deducted)]] : [] },
     );
   }
 
