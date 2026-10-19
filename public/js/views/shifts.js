@@ -131,7 +131,8 @@ function operationMenu(ctx, shift, kind, item, reload) {
   actionSheet({
     title: `${fmt.time(item.created_at)} · ${fmt.money(item.amount)}`,
     actions: [
-      { label: `Corriger ${KIND_TITLE[kind]}`, onClick: () => editOperation(ctx, shift, kind, item, reload) },
+      // An agent's advance or salary is not corrected here: cancelled, then given again from Agents.
+      item.staff_id ? { label: 'Voir l’agent', onClick: () => ctx.navigate(`agents/${item.staff_id}`) } : { label: `Corriger ${KIND_TITLE[kind]}`, onClick: () => editOperation(ctx, shift, kind, item, reload) },
       {
         label: `Annuler ${KIND_TITLE[kind]}`,
         destructive: true,
@@ -189,7 +190,7 @@ async function editOperation(ctx, shift, kind, item, reload) {
       title: 'Corriger la dépense',
       fields: [
         { name: 'amount', label: 'Montant ($)', type: 'number', step: '0.01', min: '0.01', value: item.amount, required: true },
-        { name: 'category', label: 'Catégorie', type: 'select', options: ctx.state.settings.expenseCategories.map((c) => [c, c]), value: item.category },
+        { name: 'category', label: 'Catégorie', type: 'select', options: [...new Set([...ctx.state.settings.expenseCategories, item.category])].map((c) => [c, c]), value: item.category },
         { name: 'description', label: 'Description', value: item.description, required: true },
         { name: 'beneficiary', label: 'Payé à', value: item.beneficiary || undefined, onInput: payTo.onInput },
         payTo.node,

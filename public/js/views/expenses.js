@@ -120,7 +120,8 @@ function rowActions(e, categories, ctx, reload) {
   actionSheet({
     title: `${e.description} · ${fmt.money(e.amount)}`,
     actions: [
-      { label: 'Modifier', onClick: () => expenseDialog(e, categories, reload) },
+      // An agent's advance or salary is changed from Agents.
+      e.staff_id ? { label: 'Voir l’agent', onClick: () => ctx.navigate(`agents/${e.staff_id}`) } : { label: 'Modifier', onClick: () => expenseDialog(e, categories, reload) },
       {
         label: 'Supprimer',
         destructive: true,
@@ -147,7 +148,8 @@ async function expenseDialog(e, categories, reload) {
     fields: [
       { name: 'amount', label: 'Montant ($)', type: 'number', step: '0.01', min: '0.01', value: e?.amount, required: true },
       { name: 'expenseDate', label: 'Date', type: 'date', value: e?.expense_date || todayISO(), required: true },
-      { name: 'category', label: 'Catégorie', type: 'select', options: categories.map((c) => [c, c]), value: e?.category, required: true },
+      // A category no longer offered (« Salaires » entered before Agents) stays on its expense.
+      { name: 'category', label: 'Catégorie', type: 'select', options: [...categories, ...(e && !categories.includes(e.category) ? [e.category] : [])].map((c) => [c, c]), value: e?.category, required: true },
       { name: 'method', label: 'Payée par', type: 'select', options: METHODS, value: e?.method || 'espèces' },
       { name: 'description', label: 'Description', value: e?.description, required: true, full: true, placeholder: 'Ex. : salaire de septembre, carburant du générateur…' },
       { name: 'beneficiary', label: 'Bénéficiaire', value: e?.beneficiary, placeholder: 'Facultatif', onInput: payTo.onInput },
