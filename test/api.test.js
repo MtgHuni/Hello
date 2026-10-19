@@ -927,7 +927,12 @@ test('particulier : pas de nouveau crédit avant paiement du précédent ; livre
   assert.strictEqual(second.status, 409);
   assert.strictEqual(second.data.code, 'has_credit');
   assert.match(second.data.error, /déjà un crédit non payé de 10,00/);
-  assert.strictEqual((await gerant('POST', `/api/shifts/${open.id}/sales`, { customerId: c.id, productId: ctx.diesel.id, amount: 5, grantCredit: true })).status, 409, 'personne ne peut l’accorder');
+  // Granted all the same once confirmed: flagged, and the manager is told.
+  const granted = await gerant('POST', `/api/shifts/${open.id}/sales`, { customerId: c.id, productId: ctx.diesel.id, amount: 5, grantCredit: true });
+  assert.deepStrictEqual([granted.status, granted.data.over_limit], [201, 2], 'accordé malgré un crédit en cours');
+  const alert = (await gerant('GET', '/api/dashboard')).data.alerts.find((a) => a.type === 'credit_en_cours' && a.key === `credit_en_cours:${granted.data.id}`);
+  assert.ok(alert && alert.text.includes('Jean Particulier'), 'signalé au gérant');
+  assert.strictEqual((await gerant('DELETE', `/api/shifts/${open.id}/sales/${granted.data.id}`)).status, 204);
   // A credit entered wrongly: 10 $ instead of 4 $, corrected by the manager.
   const sale = (await gerant('GET', `/api/shifts/${open.id}`)).data.sales.find((s) => s.customer_id === c.id);
   const corrected = (await gerant('PUT', `/api/shifts/${open.id}/sales/${sale.id}`, { amount: 4 })).data;

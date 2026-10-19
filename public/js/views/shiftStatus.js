@@ -129,7 +129,7 @@ export async function renderShiftStatus(page, ctx) {
           { label: 'Client', key: 'customer_name' },
           { label: 'Produit', render: (s) => `${s.product_name} · ${fmt.liters(s.liters)}` },
           { label: 'Saisi par', render: person },
-          { label: 'Montant', align: 'right', render: (s) => h('span', {}, fmt.money(s.amount), s.over_limit ? h('span', {}, ' ', badge('Malgré le retard', 'serious')) : null) },
+          { label: 'Montant', align: 'right', render: (s) => h('span', {}, fmt.money(s.amount), s.over_limit ? h('span', {}, ' ', badge(s.over_limit === 2 ? 'Malgré un crédit en cours' : 'Malgré le retard', 'serious')) : null) },
         ],
         [...credits].reverse(),
         { empty: 'Aucun crédit pour le moment.' },

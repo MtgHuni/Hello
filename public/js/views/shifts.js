@@ -75,7 +75,7 @@ export async function renderShifts(page, ctx) {
             : [{ label: 'Litres', align: 'right', render: (s) => (s.total_liters == null ? '—' : fmt.liters(s.total_liters)) }]),
           { label: 'Ventes', align: 'right', render: (s) => (s.total_amount == null ? '—' : fmt.money(s.total_amount)) },
           { label: 'Écart caisse', align: 'right', render: (s) => varianceCell(s.variance, tol) },
-          { label: 'Statut', render: (s) => h('span', { class: 'row', style: 'gap:6px;flex-wrap:nowrap' }, shiftBadge(s.status), s.status === 'closed' && !s.counted_at ? badge('Argent à compter', 'warning') : null, s.over_limit_count ? badge('Crédit malgré le retard', 'serious') : null) },
+          { label: 'Statut', render: (s) => h('span', { class: 'row', style: 'gap:6px;flex-wrap:nowrap' }, shiftBadge(s.status), s.status === 'closed' && !s.counted_at ? badge('Argent à compter', 'warning') : null, s.over_limit_count ? badge('Crédit signalé', 'serious') : null) },
         ],
         shifts,
         {
@@ -401,7 +401,7 @@ export function shiftSummary(shift, tolerance, onEdit = null) {
               h(
                 'span',
                 { class: 'row', style: 'gap:6px' },
-                s.kind === 'credit' ? (s.over_limit ? badge('Crédit malgré le retard', 'serious') : badge('Crédit', 'info')) : s.kind === 'combo' ? badge('Combos', 'warning') : badge('Payé', 'good'),
+                s.kind === 'credit' ? (s.over_limit ? badge(s.over_limit === 2 ? 'Crédit malgré un crédit en cours' : 'Crédit malgré le retard', 'serious') : badge('Crédit', 'info')) : s.kind === 'combo' ? badge('Combos', 'warning') : badge('Payé', 'good'),
                 s.source === 'customer' ? badge('Demande client') : null,
               ),
           },

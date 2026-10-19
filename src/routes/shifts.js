@@ -183,7 +183,7 @@ module.exports = function shiftRoutes(db) {
           `SELECT s.id, s.status, s.opened_at, s.closed_at, s.total_liters, s.total_amount, s.credit_amount,
              s.expected_amount, s.payments_amount, s.expenses_amount, s.cash, s.mobile_money, s.variance, s.counted_at, COALESCE(${attendantNamesSql}, u.name) AS attendant_name,
              s.manager_comment IS NOT NULL AS has_remark, (s.manager_comment IS NOT NULL AND s.comment_seen_at IS NULL) AS remark_unread,
-             (SELECT COUNT(*) FROM sales sa WHERE sa.shift_id = s.id AND sa.over_limit = 1) AS over_limit_count
+             (SELECT COUNT(*) FROM sales sa WHERE sa.shift_id = s.id AND sa.over_limit > 0) AS over_limit_count
            FROM shifts s JOIN users u ON u.id = s.attendant_id
            WHERE (? IS NULL OR s.status = ?)
              AND (? IS NULL OR s.attendant_id = ? OR EXISTS (SELECT 1 FROM shift_attendants a WHERE a.shift_id = s.id AND a.user_id = ?))

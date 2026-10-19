@@ -68,9 +68,13 @@ function createSale(db, shift, input) {
       const dues = subscriber ? subscriberDues(db, customer.id, settings.subscriberGraceDays) : null;
       let problem = null;
       if (dues?.late) problem = `Abonné en retard : ${money(dues.overdue)} du mois précédent non payés.`;
-      // An individual takes a new credit only once the last one is paid: no one can grant it.
-      else if (!subscriber && balance > 0.001) fail(409, `${customer.name} a déjà un crédit non payé de ${money(balance)} : pas de nouveau crédit avant son paiement.`, 'has_credit');
-      // There is no credit limit: an individual has one credit at a time, a subscriber pays each month.
+      // An individual who still owes gets a new credit only once the attendant confirms it: flagged
+      // (over_limit 2, « malgré un crédit en cours ») and reported to the manager.
+      else if (!subscriber && balance > 0.001) {
+        if (input.grantCredit !== true) fail(409, `${customer.name} a déjà un crédit non payé de ${money(balance)}.`, 'has_credit');
+        overLimit = 2;
+      }
+      // There is no credit limit: a subscriber pays each month.
       if (problem) {
         // The attendant may still grant the credit to a late subscriber, but must confirm it explicitly:
         // the sale is then flagged and reported to the manager.

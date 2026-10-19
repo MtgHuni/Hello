@@ -160,7 +160,7 @@ function renderOpenShift(page, ctx, shift, remarks = null) {
       tag: h(
         'span',
         { class: 'row', style: 'gap:6px' },
-        s.kind === 'credit' ? (s.over_limit ? badge('Crédit malgré le retard', 'serious') : badge('Crédit', 'info')) : s.kind === 'combo' ? badge(`Combos −${s.combos_used}`, 'warning') : badge('Payé', 'good'),
+        s.kind === 'credit' ? (s.over_limit ? badge(s.over_limit === 2 ? 'Crédit malgré un crédit en cours' : 'Crédit malgré le retard', 'serious') : badge('Crédit', 'info')) : s.kind === 'combo' ? badge(`Combos −${s.combos_used}`, 'warning') : badge('Payé', 'good'),
         s.points && flags.combos ? badge(`+${s.points} combos`) : null,
         s.source === 'customer' ? badge('Demande client') : null,
       ),
@@ -500,10 +500,14 @@ function customerSearch(customers, { allowNew = false, onPick } = {}) {
 // name creates the customer), one-tap product and unit, amount in dollars or litres.
 // A particulier who still owes a credit gets no other: a card in the middle of the screen says so,
 // with each credit still unpaid (when, what, how much is left, who entered it).
-export async function creditBlocked(customerId, fallback) {
+// What the customer still owes; with confirmLabel, the attendant may grant the new credit all the same
+// (resolved true).
+export async function creditBlocked(customerId, fallback, { confirmLabel = null } = {}) {
+  const title = confirmLabel ? 'Crédit en cours' : 'Pas de nouveau crédit';
+  const options = confirmLabel ? { confirmLabel, level: 'serious' } : {};
   const info = await api.get(`/customers/${customerId}/unpaid`).catch(() => null);
-  if (!info) return noticeDialog('Pas de nouveau crédit', h('p', {}, fallback || 'Ce client doit encore un crédit : pas de nouveau crédit avant son paiement.'));
-  return noticeDialog('Pas de nouveau crédit', [
+  if (!info) return noticeDialog(title, h('p', {}, fallback || 'Ce client doit encore un crédit.'), options);
+  return noticeDialog(title, [
     h('p', {}, `${info.name} doit encore `, h('strong', {}, fmt.money(info.balance)), '.'),
     h(
       'ul',
@@ -527,7 +531,7 @@ export async function creditBlocked(customerId, fallback) {
       ),
     ),
     info.phone ? h('p', { class: 'notice-foot' }, `Téléphone : ${info.phone}`) : null,
-  ]);
+  ], options);
 }
 
 export async function addCredit(ctx, shift, reload) {
@@ -645,8 +649,8 @@ export async function addCredit(ctx, shift, reload) {
         return await api.post(`/shifts/${shift.id}/sales`, body, { queue: `Crédit · ${customer.name} · ${d.unit === 'amount' ? fmt.money(d.qty) : fmt.liters(d.qty)}` });
       } catch (err) {
         if (err.code === 'has_credit') {
-          await creditBlocked(customer.id, err.message);
-          throw new Error('Crédit non enregistré : le client doit encore son crédit précédent.');
+          if (!(await creditBlocked(customer.id, err.message, { confirmLabel: 'Accorder quand même' }))) throw new Error('Crédit non enregistré.');
+          return api.post(`/shifts/${shift.id}/sales`, { ...body, grantCredit: true });
         }
         if (err.code !== 'over_limit') throw err;
         const grant = await confirmDialog('Accorder le crédit ?', err.message, { confirmLabel: 'Accorder' });
