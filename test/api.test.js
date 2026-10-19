@@ -1388,20 +1388,21 @@ test('photos lues par Claude : plaque → client, page du cahier → anciennes d
     // The week's report: Claude's observations first, from this week, the one before and the alerts.
     const { mailer, mailJobs } = locals;
     claude.ask = async (args) => (asked.push(args), { points: [{ text: 'Ventes de gasoil en hausse de 12 %.', level: 'good' }, { text: 'Écart répété chez Paul.', level: 'bad' }] });
-    mailJobs.tick({ settle: 0, now: new Date(Date.UTC(2026, 9, 19, 6, 0)) });
+    // Past Mondays: an earlier tick, at the real time, already sent today's report (once a day).
+    mailJobs.tick({ settle: 0, now: new Date(Date.UTC(2026, 9, 5, 6, 0)) });
     await new Promise((r) => setTimeout(r, 50));
     const weekly = [...mailer.mail.outbox].reverse().find((x) => x.kind === 'rapport_semaine');
     assert.ok(weekly.text.includes('Écart répété chez Paul.'), 'constats en tête du rapport');
     const question = asked.at(-1).content[0].text;
-    assert.ok(question.includes('2026-10-12') && question.includes('2026-10-05'), 'la semaine et la précédente');
+    assert.ok(question.includes('2026-09-28') && question.includes('2026-09-21'), 'la semaine et la précédente');
     // Claude failing: the report goes anyway, without observations.
     claude.ask = async () => {
       throw new Error('API 529');
     };
-    mailJobs.tick({ settle: 0, now: new Date(Date.UTC(2026, 9, 26, 6, 0)) });
+    mailJobs.tick({ settle: 0, now: new Date(Date.UTC(2026, 9, 12, 6, 0)) });
     await new Promise((r) => setTimeout(r, 50));
     const plain = [...mailer.mail.outbox].reverse().find((x) => x.kind === 'rapport_semaine');
-    assert.ok(plain.subject.includes('19/10/2026') && !plain.text.includes('Écart répété'));
+    assert.ok(plain.subject.includes('05/10/2026') && !plain.text.includes('Écart répété'));
   } finally {
     claude.ask = ask;
     delete process.env.ANTHROPIC_API_KEY;
