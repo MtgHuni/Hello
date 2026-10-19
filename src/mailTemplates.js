@@ -1,6 +1,6 @@
 // The look of every mail, as the big senders do it: the text without any page colour (the mail
 // app's own, light or dark); only the header (the night band edge to edge, the MTG Station logo as a
-// link to the site, gasoil and essence stripe) and the buttons are filled.
+// link to the site) and the buttons are filled.
 // Tables and inline styles only: that is what Gmail, Outlook and phone mail apps all read.
 // Each mail is built from blocks; the same blocks give the plain-text version.
 
@@ -8,8 +8,6 @@ const C = {
   night: '#0a0a0b',
   muted: '#8a8984', // reads on a white and on a black mail app
   line: '#cfcec9',
-  gasoil: '#23c46b',
-  essence: '#f0313a',
   good: '#178a4a',
   bad: '#c8262d',
   warn: '#b45f06',
@@ -113,10 +111,6 @@ function renderMail(mail, station) {
   <tr><td align="center" style="background:${C.night};padding:22px 20px 20px">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px"><tr><td>${logo}</td></tr></table>
   </td></tr>
-  <tr><td style="font-size:0;line-height:0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-    <td width="50%" height="5" style="background:${C.gasoil};font-size:0;line-height:0">&nbsp;</td>
-    <td width="50%" height="5" style="background:${C.essence};font-size:0;line-height:0">&nbsp;</td>
-  </tr></table></td></tr>
 </table>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:0 20px 36px">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px">
