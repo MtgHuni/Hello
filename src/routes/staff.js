@@ -1,9 +1,10 @@
 const express = require('express');
-const { SALARY } = require('../db');
+const { SALARY, getSettings } = require('../db');
 const { fail, num, str, oneOf, dateParam, money, round, transaction } = require('../util');
 const { requireRole, requireAdmin } = require('../auth');
 const { audit } = require('../audit');
 const { FUNCTIONS, monthLabel, currentMonth, salaryOf, sheetOf, payroll, addMonths, sourceOf } = require('../payroll');
+const { payslipPdf } = require('../payslip');
 
 const manager = requireRole('manager');
 const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -58,6 +59,15 @@ module.exports = function staffRoutes(db, { mailer }) {
       salaries: db.prepare('SELECT from_month, amount FROM staff_salaries WHERE staff_id = ? ORDER BY from_month DESC').all(staff.id),
       months,
     });
+  });
+
+  router.get('/staff/:id/payslip.pdf', manager, (req, res) => {
+    const staff = staffRow(req.params.id);
+    const month = notAfterNow(monthParam(req.query.month, 'Le mois') || currentMonth(db));
+    const pdf = payslipPdf({ staff, sheet: sheetOf(db, staff, month), stationName: getSettings(db).stationName });
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', `attachment; filename="bulletin-${staff.id}-${month}.pdf"`);
+    res.send(pdf);
   });
 
   router.post('/staff', manager, requireAdmin, (req, res) => {

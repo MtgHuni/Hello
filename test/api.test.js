@@ -2031,3 +2031,17 @@ test('paie : avances depuis la caisse ou le poste, paiement en deux fois, reste 
   assert.deepStrictEqual([edited.status, edited.data.category, edited.data.amount], [200, 'Salaires', 55]);
   assert.ok(!(await gerant('GET', '/api/auth/me')).data.settings.expenseCategories.includes('Salaires'));
 });
+
+test('bulletin de paie : le mois d’un agent en PDF', async () => {
+  const url = `/api/staff/${ctx.jean.id}/payslip.pdf?month=${monthOf()}`;
+  const res = await gerant('GET', url);
+  assert.deepStrictEqual([res.status, res.type], [200, 'application/pdf']);
+  const text = res.raw.toString('latin1');
+  assert.ok(text.startsWith('%PDF'));
+  assert.ok(text.includes('(Bulletin de paie)') && text.includes('(Avances)') && text.includes('(Paiements)'));
+  const awa = client();
+  await awa('POST', '/api/auth/login', { login: 'awa', password: 'actionnaire2' });
+  assert.strictEqual((await awa('GET', url)).status, 200, 'l’actionnaire le lit');
+  assert.strictEqual((await pompiste('GET', url)).status, 403);
+  assert.strictEqual((await gerant('GET', `/api/staff/${ctx.jean.id}/payslip.pdf?month=2026-13`)).status, 400);
+});
