@@ -515,7 +515,7 @@ test('installation neuve : pas d’inscription client avant le gérant ; origine
 
 test('dépenses et rapport avec marge', async () => {
   assert.strictEqual((await pompiste('GET', '/api/expenses')).status, 403);
-  const created = await gerant('POST', '/api/expenses', { category: 'Salaires', amount: 300, description: 'Avance Paul', method: 'mobile money' });
+  const created = await gerant('POST', '/api/expenses', { category: 'Électricité', amount: 300, description: 'Facture SNEL', method: 'mobile money' });
   assert.strictEqual(created.data.expense_date, today());
   const list = (await gerant('GET', `/api/expenses?from=${today()}&to=${today()}`)).data;
   assert.strictEqual(list.total, 315);
@@ -927,7 +927,12 @@ test('particulier : pas de nouveau crédit avant paiement du précédent ; livre
   assert.strictEqual(second.status, 409);
   assert.strictEqual(second.data.code, 'has_credit');
   assert.match(second.data.error, /déjà un crédit non payé de 10,00/);
-  assert.strictEqual((await gerant('POST', `/api/shifts/${open.id}/sales`, { customerId: c.id, productId: ctx.diesel.id, amount: 5, grantCredit: true })).status, 409, 'personne ne peut l’accorder');
+  // Granted all the same once confirmed: flagged, and the manager is told.
+  const granted = await gerant('POST', `/api/shifts/${open.id}/sales`, { customerId: c.id, productId: ctx.diesel.id, amount: 5, grantCredit: true });
+  assert.deepStrictEqual([granted.status, granted.data.over_limit], [201, 2], 'accordé malgré un crédit en cours');
+  const alert = (await gerant('GET', '/api/dashboard')).data.alerts.find((a) => a.type === 'credit_en_cours' && a.key === `credit_en_cours:${granted.data.id}`);
+  assert.ok(alert && alert.text.includes('Jean Particulier'), 'signalé au gérant');
+  assert.strictEqual((await gerant('DELETE', `/api/shifts/${open.id}/sales/${granted.data.id}`)).status, 204);
   // A credit entered wrongly: 10 $ instead of 4 $, corrected by the manager.
   const sale = (await gerant('GET', `/api/shifts/${open.id}`)).data.sales.find((s) => s.customer_id === c.id);
   const corrected = (await gerant('PUT', `/api/shifts/${open.id}/sales/${sale.id}`, { amount: 4 })).data;
@@ -1388,20 +1393,21 @@ test('photos lues par Claude : plaque → client, page du cahier → anciennes d
     // The week's report: Claude's observations first, from this week, the one before and the alerts.
     const { mailer, mailJobs } = locals;
     claude.ask = async (args) => (asked.push(args), { points: [{ text: 'Ventes de gasoil en hausse de 12 %.', level: 'good' }, { text: 'Écart répété chez Paul.', level: 'bad' }] });
-    mailJobs.tick({ settle: 0, now: new Date(Date.UTC(2026, 9, 19, 6, 0)) });
+    // Past Mondays: an earlier tick, at the real time, already sent today's report (once a day).
+    mailJobs.tick({ settle: 0, now: new Date(Date.UTC(2026, 9, 5, 6, 0)) });
     await new Promise((r) => setTimeout(r, 50));
     const weekly = [...mailer.mail.outbox].reverse().find((x) => x.kind === 'rapport_semaine');
     assert.ok(weekly.text.includes('Écart répété chez Paul.'), 'constats en tête du rapport');
     const question = asked.at(-1).content[0].text;
-    assert.ok(question.includes('2026-10-12') && question.includes('2026-10-05'), 'la semaine et la précédente');
+    assert.ok(question.includes('2026-09-28') && question.includes('2026-09-21'), 'la semaine et la précédente');
     // Claude failing: the report goes anyway, without observations.
     claude.ask = async () => {
       throw new Error('API 529');
     };
-    mailJobs.tick({ settle: 0, now: new Date(Date.UTC(2026, 9, 26, 6, 0)) });
+    mailJobs.tick({ settle: 0, now: new Date(Date.UTC(2026, 9, 12, 6, 0)) });
     await new Promise((r) => setTimeout(r, 50));
     const plain = [...mailer.mail.outbox].reverse().find((x) => x.kind === 'rapport_semaine');
-    assert.ok(plain.subject.includes('19/10/2026') && !plain.text.includes('Écart répété'));
+    assert.ok(plain.subject.includes('05/10/2026') && !plain.text.includes('Écart répété'));
   } finally {
     claude.ask = ask;
     delete process.env.ANTHROPIC_API_KEY;
@@ -1878,4 +1884,362 @@ test('francs gardés à changer : comptés à la clôture, rendus à la clôture
   assert.ok(book.movements.some((m) => m.source === 'shift' && m.id === after.id && m.account === 'cash' && m.in >= 100));
   assert.strictEqual((await gerant('GET', `/api/shifts/${closed.id}/report.pdf`)).status, 200);
   assert.strictEqual((await gerant('GET', `/api/shifts/${after.id}/report.pdf`)).status, 200);
+});
+
+test('migration 31 : fiches des agents et dépenses reliées', () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const { openDb } = require('../src/db');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'station-staff-'));
+  const file = path.join(dir, 'old.db');
+  let old = openDb(file);
+  old.exec(`DROP TABLE IF EXISTS staff_salaries; DROP TABLE IF EXISTS staff;
+    ALTER TABLE expenses DROP COLUMN pay_kind; ALTER TABLE expenses DROP COLUMN pay_month; ALTER TABLE expenses DROP COLUMN staff_id;
+    PRAGMA user_version = 30`);
+  old.close();
+  old = openDb(file);
+  for (const table of ['staff', 'staff_salaries']) assert.ok(old.prepare('SELECT 1 FROM sqlite_master WHERE name = ?').get(table), table);
+  const columns = old.prepare('PRAGMA table_info(expenses)').all().map((c) => c.name);
+  for (const c of ['staff_id', 'pay_month', 'pay_kind']) assert.ok(columns.includes(c), c);
+  assert.strictEqual(old.prepare('PRAGMA user_version').get().user_version, require('../src/db').SCHEMA_VERSION);
+  old.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+// The month (YYYY-MM) n months from this one, and its number of days.
+const monthOf = (n = 0) => {
+  const [y, m] = today().slice(0, 7).split('-').map(Number);
+  const d = new Date(Date.UTC(y, m - 1 + n, 1));
+  return d.toISOString().slice(0, 7);
+};
+const daysOf = (month) => new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate();
+
+test('agents : fiches par l’administrateur, lues par le gérant et l’actionnaire, prorata d’un mois partiel', async () => {
+  const M = monthOf();
+  const J = daysOf(M);
+  const paulUser = (await gerant('GET', '/api/users')).data.find((u) => u.login === 'paul');
+  const paul = await gerant('POST', '/api/staff', { name: 'Paul', phone: '0990000001', function: 'Pompiste', hiredOn: `${M}-16`, salary: 155, userId: paulUser.id });
+  assert.strictEqual(paul.status, 201, JSON.stringify(paul.data));
+  assert.deepStrictEqual([paul.data.pay_from, paul.data.user_name, paul.data.salary], [M, 'Paul', 155]);
+  const jean = await gerant('POST', '/api/staff', { name: 'Jean', function: 'Gardien', hiredOn: '2025-01-01', salary: 100 });
+  assert.strictEqual(jean.status, 201);
+  ctx.jean = jean.data;
+  const twice = await gerant('POST', '/api/staff', { name: 'Paul bis', function: 'Pompiste', hiredOn: `${M}-01`, salary: 10, userId: paulUser.id });
+  assert.deepStrictEqual([twice.status, twice.data.code], [409, 'duplicate'], 'un compte, une fiche');
+  assert.strictEqual((await gerant('POST', '/api/staff', { name: 'X', function: 'Chauffeur', hiredOn: `${M}-01`, salary: 10 })).status, 400, 'fonction hors liste');
+  assert.strictEqual((await gerant('PUT', `/api/staff/${jean.data.id}`, { leftOn: '2024-12-31' })).status, 400, 'départ avant l’entrée');
+
+  // Rights: the admin writes, the manager and the owner read, the attendant sees nothing.
+  const chef = client();
+  await chef('POST', '/api/auth/login', { login: 'chef', password: 'gerant123' });
+  assert.strictEqual((await chef('GET', '/api/staff')).status, 200);
+  assert.strictEqual((await chef('POST', '/api/staff', { name: 'Y', function: 'Autre', hiredOn: `${M}-01`, salary: 1 })).data.code, 'admin_only');
+  const awa = client();
+  await awa('POST', '/api/auth/login', { login: 'awa', password: 'actionnaire2' });
+  assert.strictEqual((await awa('GET', '/api/staff')).status, 200);
+  assert.strictEqual((await awa('POST', '/api/staff', { name: 'Z', function: 'Autre', hiredOn: `${M}-01`, salary: 1 })).data.code, 'read_only');
+  assert.strictEqual((await pompiste('GET', '/api/staff')).status, 403);
+
+  // This month: Paul from the 16th, Jean the whole month.
+  let pay = (await gerant('GET', '/api/staff')).data;
+  assert.deepStrictEqual([pay.month, pay.firstMonth], [M, M]);
+  const sheet = (name) => pay.agents.find((a) => a.name === name).sheet;
+  assert.deepStrictEqual(sheet('Paul').salary, { base: 155, days: J - 15, daysInMonth: J, amount: round2((155 * (J - 15)) / J) });
+  assert.deepStrictEqual([sheet('Jean').salary.amount, sheet('Jean').carried, sheet('Jean').net], [100, 0, 100]);
+  assert.strictEqual(pay.totals.salaries, round2(100 + (155 * (J - 15)) / J));
+  assert.strictEqual((await gerant('GET', `/api/staff?month=${monthOf(1)}`)).status, 400, 'pas de mois à venir');
+
+  // A new salary from next month: this month keeps the old one.
+  assert.strictEqual((await gerant('PUT', `/api/staff/${jean.data.id}`, { salary: 120, salaryFrom: monthOf(1) })).status, 200);
+  pay = (await gerant('GET', '/api/staff')).data;
+  assert.strictEqual(sheet('Jean').salary.amount, 100);
+  const detail = (await gerant('GET', `/api/staff/${jean.data.id}`)).data;
+  assert.deepStrictEqual(detail.salaries.map((s) => [s.from_month, s.amount]), [[monthOf(1), 120], [M, 100]]);
+  assert.deepStrictEqual(detail.months.map((m) => m.month), [M]);
+  assert.ok((await gerant('GET', '/api/audit?category=agents')).data.some((a) => a.summary.includes('Jean')), 'au journal');
+});
+
+test('paie : avances depuis la caisse ou le poste, paiement en deux fois, reste reporté', async () => {
+  const M = monthOf();
+  const jean = ctx.jean;
+  const advance = (id, body, as = gerant) => as('POST', `/api/staff/${id}/advances`, body);
+  const pay = (id, body) => gerant('POST', `/api/staff/${id}/payments`, body);
+  const sheet = async (name, month = M) => (await gerant('GET', `/api/staff?month=${month}`)).data.agents.find((a) => a.name === name).sheet;
+
+  // From the cash book: cash, mobile money.
+  const cash = await advance(jean.id, { amount: 30, source: 'espèces' });
+  assert.strictEqual(cash.status, 201, JSON.stringify(cash.data));
+  assert.deepStrictEqual([cash.data.category, cash.data.pay_kind, cash.data.pay_month, cash.data.staff_id, cash.data.shift_id], ['Salaires', 'avance', M, jean.id, null]);
+  const momo = await advance(jean.id, { amount: 10, source: 'mobile money' });
+  const line = async (account, id) => (await gerant('GET', `/api/cashbook?account=${account}`)).data.movements.find((m) => m.source === 'expense' && m.id === id);
+  assert.strictEqual((await line('cash', cash.data.id)).out, 30);
+  assert.strictEqual((await line('momo', momo.data.id)).out, 10);
+  // From the open shift's money: an expense of that shift.
+  let shift = (await gerant('GET', '/api/shifts/current')).data;
+  const till = await advance(jean.id, { amount: 20, source: 'poste' });
+  assert.deepStrictEqual([till.status, till.data.shift_id, till.data.method], [201, shift.id, 'espèces']);
+
+  let s = await sheet('Jean');
+  assert.deepStrictEqual([s.advanced, s.net, s.advances.map((a) => a.source)], [60, 40, ['espèces', 'mobile money', 'poste']]);
+  // Paid in two goes.
+  assert.strictEqual((await pay(jean.id, { month: M, amount: 25, source: 'espèces' })).status, 201);
+  const second = await pay(jean.id, { month: M, amount: 15, source: 'mobile money' });
+  assert.deepStrictEqual([second.data.description, second.data.pay_kind], [`Salaire ${require('../src/payroll').ofMonth(M)} : Jean`, 'salaire']);
+  s = await sheet('Jean');
+  assert.deepStrictEqual([s.paid, s.net], [40, 0]);
+
+  // Advanced more than the salary: the rest is carried; last month's salary paid today counts for last month.
+  const L = monthOf(-1);
+  const marie = (await gerant('POST', '/api/staff', { name: 'Marie', function: 'Caissier', hiredOn: '2025-06-01', salary: 80, payFrom: L })).data;
+  assert.strictEqual((await advance(marie.id, { amount: 100, date: `${L}-10`, source: 'espèces' })).status, 201);
+  s = await sheet('Marie');
+  assert.deepStrictEqual([s.carried, s.net], [-20, 60]);
+  assert.strictEqual((await pay(marie.id, { month: L, amount: 10, source: 'espèces' })).status, 201);
+  s = await sheet('Marie');
+  assert.deepStrictEqual([s.carried, s.paid, s.net], [-30, 0, 50]);
+  const last = await sheet('Marie', L);
+  assert.deepStrictEqual([last.salary.amount, last.advanced, last.paid, last.net], [80, 100, 10, -30]);
+
+  // Refused: a month to come, a date to come, before « Paie depuis », the owner.
+  assert.strictEqual((await pay(jean.id, { month: monthOf(1), amount: 5, source: 'espèces' })).status, 400);
+  const tomorrow = new Date(Date.now() + 864e5).toLocaleDateString('sv-SE');
+  assert.strictEqual((await advance(jean.id, { amount: 5, date: tomorrow, source: 'espèces' })).status, 400);
+  assert.strictEqual((await advance(jean.id, { amount: 5, date: `${L}-10`, source: 'espèces' })).status, 400, 'Jean est payé depuis ce mois');
+  const awa = client();
+  await awa('POST', '/api/auth/login', { login: 'awa', password: 'actionnaire2' });
+  assert.strictEqual((await advance(jean.id, { amount: 5, source: 'espèces' }, awa)).data.code, 'read_only');
+
+  // The shift's closing counts the advance; cancelled afterwards, the shift is reconciled again.
+  await nextSecond();
+  const ends = Object.fromEntries((await gerant('GET', '/api/stock/meters')).data.map((m) => [m.nozzleId, m.latest + 100]));
+  const closed = await closeShift(shift, ends, { cash: 50, changeLeft: 0 });
+  assert.strictEqual(closed.status, 200, JSON.stringify(closed.data));
+  assert.ok(closed.data.expenses_amount >= 20);
+  assert.strictEqual((await gerant('DELETE', `/api/staff/${jean.id}/operations/${till.data.id}`)).status, 204);
+  const after = (await gerant('GET', `/api/shifts/${shift.id}`)).data;
+  assert.strictEqual(round2(closed.data.expenses_amount - after.expenses_amount), 20);
+  assert.strictEqual(round2(after.expected_amount - closed.data.expected_amount), 20);
+  assert.strictEqual((await sheet('Jean')).advanced, 40);
+  assert.ok((await gerant('GET', '/api/audit?category=agents')).data.some((a) => a.action === 'staff_operation_deleted'));
+
+  // « Salaires » only from Agents; an agent's expense is not changed elsewhere; an old one still is.
+  const refused = await gerant('POST', '/api/expenses', { category: 'Salaires', amount: 5, description: 'x' });
+  assert.deepStrictEqual([refused.status, refused.data.code], [400, 'salary_staff']);
+  shift = (await gerant('GET', '/api/shifts/current')).data;
+  assert.strictEqual((await gerant('POST', `/api/shifts/${shift.id}/expenses`, { category: 'Salaires', amount: 5, description: 'x' })).data.code, 'salary_staff');
+  assert.strictEqual((await gerant('PUT', `/api/expenses/${cash.data.id}`, { amount: 31 })).data.code, 'staff_expense');
+  const other = (await gerant('POST', '/api/expenses', { category: 'Fournitures', amount: 5, description: 'Papier' })).data;
+  assert.strictEqual((await gerant('PUT', `/api/expenses/${other.id}`, { category: 'Salaires' })).data.code, 'salary_staff');
+  const old = db.prepare("INSERT INTO expenses (expense_date, category, amount, description, method) VALUES (date('now', 'localtime'), 'Salaires', 50, 'Salaire de septembre', 'espèces')").run().lastInsertRowid;
+  const edited = await gerant('PUT', `/api/expenses/${old}`, { amount: 55 });
+  assert.deepStrictEqual([edited.status, edited.data.category, edited.data.amount], [200, 'Salaires', 55]);
+  assert.ok(!(await gerant('GET', '/api/auth/me')).data.settings.expenseCategories.includes('Salaires'));
+});
+
+test('bulletin de paie : le mois d’un agent en PDF', async () => {
+  const url = `/api/staff/${ctx.jean.id}/payslip.pdf?month=${monthOf()}`;
+  const res = await gerant('GET', url);
+  assert.deepStrictEqual([res.status, res.type], [200, 'application/pdf']);
+  const text = res.raw.toString('latin1');
+  assert.ok(text.startsWith('%PDF'));
+  assert.ok(text.includes('(Bulletin de paie)') && text.includes('(Avances)') && text.includes('(Paiements)'));
+  const awa = client();
+  await awa('POST', '/api/auth/login', { login: 'awa', password: 'actionnaire2' });
+  assert.strictEqual((await awa('GET', url)).status, 200, 'l’actionnaire le lit');
+  assert.strictEqual((await pompiste('GET', url)).status, 403);
+  assert.strictEqual((await gerant('GET', `/api/staff/${ctx.jean.id}/payslip.pdf?month=2026-13`)).status, 400);
+});
+
+test('paie : un mois passé payé le mois suivant n’est plus dû ; correction d’une avance ; libellés', async () => {
+  const L = monthOf(-1);
+  const M = monthOf();
+  const { ofMonth } = require('../src/payroll');
+  const get = async (name, month) => (await gerant('GET', `/api/staff?month=${month}`)).data.agents.find((a) => a.name === name);
+  const bosco = (await gerant('POST', '/api/staff', { name: 'Bosco', function: 'Autre', hiredOn: '2025-01-01', salary: 100, payFrom: L })).data;
+  // Last month unpaid: due then, and with this month.
+  assert.deepStrictEqual([(await get('Bosco', L)).sheet.due, (await get('Bosco', M)).sheet.due], [100, 200]);
+  // Paid from this month's line: last month is not owed any more.
+  assert.strictEqual((await gerant('POST', `/api/staff/${bosco.id}/payments`, { month: M, amount: 200, source: 'espèces' })).status, 201);
+  const last = (await get('Bosco', L)).sheet;
+  assert.deepStrictEqual([last.net, last.due, (await get('Bosco', M)).sheet.due], [100, 0, 0], 'reporté au mois suivant, payé avec lui');
+  const slip = (await gerant('GET', `/api/staff/${bosco.id}/payslip.pdf?month=${L}`)).raw.toString('latin1');
+  assert.ok(slip.includes('(Report\\351 au mois suivant)') && !slip.includes('(Reste \\340 payer)'));
+  assert.ok(slip.includes('(Pay\\351 pour ce mois)') && !slip.includes('avances et salaire'), 'pas de texte d’explication');
+
+  // « de » or « d’ » before the month.
+  const anna = (await gerant('POST', '/api/staff', { name: 'Anna', function: 'Autre', hiredOn: '2025-01-01', salary: 50, payFrom: '2026-08' })).data;
+  const aug = (await gerant('POST', `/api/staff/${anna.id}/payments`, { month: '2026-08', amount: 50, source: 'espèces' })).data;
+  const sep = (await gerant('POST', `/api/staff/${anna.id}/payments`, { month: '2026-09', amount: 50, source: 'espèces' })).data;
+  assert.deepStrictEqual([aug.description, sep.description], ['Salaire d’août 2026 : Anna', 'Salaire de septembre 2026 : Anna']);
+  assert.strictEqual(ofMonth('2026-10'), 'd’octobre 2026');
+
+  // An agent who starts next month is listed already, nothing to pay.
+  const next = monthOf(1);
+  await gerant('POST', '/api/staff', { name: 'Zoé', function: 'Pompiste', hiredOn: `${next}-01`, salary: 90 });
+  const zoe = await get('Zoé', M);
+  assert.ok(zoe, 'trouvée dans la liste');
+  assert.deepStrictEqual([zoe.sheet.salary.amount, zoe.sheet.due], [0, 0]);
+
+  // An advance from a shift's money, corrected after its closing: the shift is reconciled again.
+  let shift = (await gerant('GET', '/api/shifts/current')).data;
+  const till = (await gerant('POST', `/api/staff/${bosco.id}/advances`, { amount: 20, source: 'poste' })).data;
+  await nextSecond();
+  const ends = Object.fromEntries((await gerant('GET', '/api/stock/meters')).data.map((m) => [m.nozzleId, m.latest + 100]));
+  const closed = (await closeShift(shift, ends, { cash: 40, changeLeft: 0 })).data;
+  const fixed = await gerant('PUT', `/api/staff/${bosco.id}/operations/${till.id}`, { amount: 15 });
+  assert.deepStrictEqual([fixed.status, fixed.data.amount, fixed.data.staff_id, fixed.data.category], [200, 15, bosco.id, 'Salaires']);
+  shift = (await gerant('GET', `/api/shifts/${shift.id}`)).data;
+  assert.strictEqual(round2(closed.expenses_amount - shift.expenses_amount), 5);
+  assert.strictEqual((await get('Bosco', M)).sheet.advanced, 15);
+  const awa = client();
+  await awa('POST', '/api/auth/login', { login: 'awa', password: 'actionnaire2' });
+  assert.strictEqual((await awa('PUT', `/api/staff/${bosco.id}/operations/${till.id}`, { amount: 10 })).data.code, 'read_only');
+});
+
+test('migration 32 : retenues des agents, agent d’un crédit', () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const { openDb } = require('../src/db');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'station-deductions-'));
+  const file = path.join(dir, 'old.db');
+  let old = openDb(file);
+  old.exec('DROP TABLE IF EXISTS staff_deductions; ALTER TABLE sales DROP COLUMN staff_id; PRAGMA user_version = 31');
+  old.close();
+  old = openDb(file);
+  assert.ok(old.prepare("SELECT 1 FROM sqlite_master WHERE name = 'staff_deductions'").get());
+  assert.ok(old.prepare('PRAGMA table_info(sales)').all().some((c) => c.name === 'staff_id'));
+  assert.strictEqual(old.prepare('PRAGMA user_version').get().user_version, require('../src/db').SCHEMA_VERSION);
+  old.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('retenues : crédits d’un particulier de plus d’un mois, rendu, pardon, changement d’agent, dépense marquée', async () => {
+  const M = monthOf();
+  const agent = async (name) => (await gerant('POST', '/api/staff', { name, function: 'Pompiste', hiredOn: '2025-01-01', salary: 100, payFrom: monthOf(-2) })).data;
+  const kito = await agent('Kito');
+  const lina = await agent('Lina');
+  const sheet = async (who = kito) => (await gerant('GET', `/api/staff?month=${M}`)).data.agents.find((a) => a.id === who.id).sheet;
+  const shift = (await gerant('GET', '/api/shifts/current')).data;
+  const quick = async (name) => (await gerant('POST', '/api/customers/quick', { name })).data;
+  const sell = (customer, body) => gerant('POST', `/api/shifts/${shift.id}/sales`, { customerId: customer.id, productId: ctx.diesel.id, payment: 'credit', ...body });
+  const c = await quick('Client Retenue');
+  const first = (await sell(c, { amount: 10 })).data;
+  const second = (await sell(c, { amount: 5, grantCredit: true })).data;
+  // The admin says who granted them; another manager may not.
+  const chef = client();
+  await chef('POST', '/api/auth/login', { login: 'chef', password: 'gerant123' });
+  assert.strictEqual((await chef('PUT', `/api/staff/credits/${first.id}`, { staffId: kito.id })).data.code, 'admin_only');
+  for (const s of [first, second]) assert.strictEqual((await gerant('PUT', `/api/staff/credits/${s.id}`, { staffId: kito.id })).status, 200);
+  assert.strictEqual((await sheet()).deducted, 0, 'crédits récents : rien');
+
+  // The first one over a month old: every unpaid credit of the customer is kept.
+  db.prepare("UPDATE sales SET created_at = datetime('now', '-40 days') WHERE id = ?").run(first.id);
+  let s = await sheet();
+  assert.strictEqual(s.deducted, 15);
+  assert.deepStrictEqual(s.deductions.map((d) => [d.reason, d.amount, d.customer_name]), [['retenue', 10, 'Client Retenue'], ['retenue', 5, 'Client Retenue']]);
+  assert.strictEqual(s.net, round2(s.salary.amount + s.carried - s.advanced - s.paid - s.deducted));
+  // The customer pays 12 (the oldest first): given back to the agent.
+  assert.strictEqual((await gerant('POST', `/api/customers/${c.id}/payments`, { amount: 12, method: 'espèces' })).status, 201);
+  assert.strictEqual((await sheet()).deducted, 3);
+  // Forgiven: nothing kept, and never again.
+  const awa = client();
+  await awa('POST', '/api/auth/login', { login: 'awa', password: 'actionnaire2' });
+  assert.strictEqual((await awa('POST', `/api/staff/${kito.id}/deductions/forgive`, { saleId: second.id })).data.code, 'read_only');
+  assert.strictEqual((await gerant('POST', `/api/staff/${kito.id}/deductions/forgive`, { saleId: second.id })).status, 200);
+  assert.strictEqual((await sheet()).deducted, 0);
+  assert.strictEqual((await sheet()).deducted, 0, 'pas repris au calcul suivant');
+
+  // Another customer's old credit, then given to another agent: back to the first, kept from the second.
+  const c2 = await quick('Client Retenue 2');
+  const third = (await sell(c2, { amount: 6 })).data;
+  await gerant('PUT', `/api/staff/credits/${third.id}`, { staffId: kito.id });
+  db.prepare("UPDATE sales SET created_at = datetime('now', '-40 days') WHERE id = ?").run(third.id);
+  assert.strictEqual((await sheet()).deducted, 6);
+  await gerant('PUT', `/api/staff/credits/${third.id}`, { staffId: lina.id });
+  assert.deepStrictEqual([(await sheet()).deducted, (await sheet(lina)).deducted], [0, 6]);
+
+  // Never kept: a credit older than the agent's first month in the app, a subscriber's credit.
+  const paul = (await gerant('GET', `/api/staff?month=${M}`)).data.agents.find((a) => a.name === 'Paul');
+  const c3 = await quick('Client Retenue 3');
+  const before = (await sell(c3, { amount: 7 })).data;
+  await gerant('PUT', `/api/staff/credits/${before.id}`, { staffId: paul.id });
+  db.prepare("UPDATE sales SET created_at = datetime('now', '-40 days') WHERE id = ?").run(before.id);
+  assert.strictEqual((await sheet(paul)).deducted, 0, 'avant « Paie depuis »');
+  const subscriber = (await gerant('POST', '/api/customers', { type: 'account', name: 'Abonné Retenue' })).data;
+  const sub = (await sell(subscriber, { amount: 9 })).data;
+  await gerant('PUT', `/api/staff/credits/${sub.id}`, { staffId: lina.id });
+  db.prepare("UPDATE sales SET created_at = datetime('now', '-40 days') WHERE id = ?").run(sub.id);
+  assert.strictEqual((await sheet(lina)).deducted, 6, 'pas un abonné');
+
+  // An expense marked: kept once; its amount corrected, the difference; cancelled, given back.
+  const exp = (await gerant('POST', `/api/shifts/${shift.id}/expenses`, { category: 'Fournitures', amount: 8, description: 'Seau' })).data;
+  db.prepare("UPDATE expenses SET created_at = datetime('now', '-2 hours') WHERE id = ?").run(exp.id); // entered earlier
+  assert.strictEqual((await gerant('POST', `/api/staff/${kito.id}/deductions`, { expenseId: exp.id })).status, 201);
+  assert.strictEqual((await gerant('POST', `/api/staff/${lina.id}/deductions`, { expenseId: exp.id })).status, 409, 'une seule fois');
+  assert.strictEqual((await sheet()).deducted, 8);
+  const slip = (await gerant('GET', `/api/staff/${kito.id}/payslip.pdf?month=${M}`)).raw.toString('latin1');
+  assert.ok(slip.includes('(Retenues)'));
+  assert.strictEqual((await gerant('PUT', `/api/shifts/${shift.id}/expenses/${exp.id}`, { amount: 10 })).status, 200);
+  assert.strictEqual((await sheet()).deducted, 10);
+  assert.strictEqual((await gerant('DELETE', `/api/shifts/${shift.id}/expenses/${exp.id}`)).status, 204);
+  assert.strictEqual((await sheet()).deducted, 0);
+  assert.ok((await gerant('GET', '/api/audit?category=agents')).data.some((a) => a.action === 'staff_deduction_forgiven'));
+});
+
+test('retenues : le numéro d’une ligne annulée repris par une autre ne la fait pas retenir ; pardon puis le bon agent', async () => {
+  const M = monthOf();
+  const agents = (await gerant('GET', `/api/staff?month=${M}`)).data.agents;
+  const kito = agents.find((a) => a.name === 'Kito');
+  const lina = agents.find((a) => a.name === 'Lina');
+  const sheet = async (who) => (await gerant('GET', `/api/staff?month=${M}`)).data.agents.find((a) => a.id === who.id).sheet;
+  const deducted = async () => [(await sheet(kito)).deducted, (await sheet(lina)).deducted];
+  const shift = (await gerant('GET', '/api/shifts/current')).data;
+  const before = await deducted();
+
+  // A marked expense cancelled: the next expense takes its number (an advance here), and is not kept.
+  const exp = (await gerant('POST', `/api/shifts/${shift.id}/expenses`, { category: 'Fournitures', amount: 8, description: 'Balai' })).data;
+  db.prepare("UPDATE expenses SET created_at = datetime('now', '-1 hour') WHERE id = ?").run(exp.id); // entered earlier
+  assert.strictEqual((await gerant('POST', `/api/staff/${lina.id}/deductions`, { expenseId: exp.id })).status, 201);
+  assert.strictEqual((await gerant('DELETE', `/api/shifts/${shift.id}/expenses/${exp.id}`)).status, 204);
+  const advance = (await gerant('POST', `/api/staff/${lina.id}/advances`, { amount: 50, source: 'espèces' })).data;
+  assert.strictEqual(advance.id, exp.id, 'même numéro');
+  assert.deepStrictEqual(await deducted(), before);
+
+  // A kept credit cancelled: a recent credit with its number is not kept.
+  const quick = async (name) => (await gerant('POST', '/api/customers/quick', { name })).data;
+  const sell = (customer, body) => gerant('POST', `/api/shifts/${shift.id}/sales`, { customerId: customer.id, productId: ctx.diesel.id, payment: 'credit', ...body });
+  const old = (await sell(await quick('Client Numéro'), { amount: 4 })).data;
+  await gerant('PUT', `/api/staff/credits/${old.id}`, { staffId: kito.id });
+  db.prepare("UPDATE sales SET created_at = datetime('now', '-40 days') WHERE id = ?").run(old.id);
+  assert.strictEqual((await sheet(kito)).deducted, before[0] + 4);
+  assert.strictEqual((await gerant('DELETE', `/api/shifts/${shift.id}/sales/${old.id}`)).status, 204);
+  const fresh = (await sell(await quick('Client Récent'), { amount: 3 })).data;
+  assert.strictEqual(fresh.id, old.id, 'même numéro');
+  await gerant('PUT', `/api/staff/credits/${fresh.id}`, { staffId: lina.id });
+  assert.deepStrictEqual(await deducted(), before);
+
+  // Marked for the wrong agent: forgiven, then marked for the right one; never again for the first.
+  const seau = (await gerant('POST', `/api/shifts/${shift.id}/expenses`, { category: 'Fournitures', amount: 6, description: 'Seau neuf' })).data;
+  await gerant('POST', `/api/staff/${kito.id}/deductions`, { expenseId: seau.id });
+  assert.strictEqual((await gerant('POST', `/api/staff/${kito.id}/deductions/forgive`, { expenseId: seau.id })).status, 200);
+  assert.strictEqual((await gerant('POST', `/api/staff/${kito.id}/deductions`, { expenseId: seau.id })).status, 409, 'pardonnée à Kito');
+  assert.strictEqual((await gerant('POST', `/api/staff/${lina.id}/deductions`, { expenseId: seau.id })).status, 201);
+  assert.deepStrictEqual(await deducted(), [before[0], before[1] + 6]);
+  const line = (await sheet(lina)).deductions.find((d) => d.expense_id === seau.id);
+  assert.strictEqual(line.kept, 6, 'ce qui est encore retenu');
+  // Nothing kept: nothing to forgive.
+  assert.strictEqual((await gerant('POST', `/api/staff/${kito.id}/deductions/forgive`, { saleId: 99999 })).status, 409);
+  assert.strictEqual((await gerant('POST', `/api/staff/${lina.id}/deductions/forgive`, { saleId: fresh.id })).status, 409);
+  assert.deepStrictEqual(await deducted(), [before[0], before[1] + 6]);
+});
+
+test('les PDF portent le logo MTG, sans les carrés vert et rouge', () => {
+  const { Report } = require('../src/pdfReport');
+  const text = new Report({ title: 'Essai', stationName: 'Station', heading: 'Essai' }).finish().toString('latin1');
+  assert.ok(text.includes('0.043 0.518 0.839 rg'), 'bleu MTG');
+  assert.ok(text.includes('0.078 0.078 0.086 rg'), 'lettres MTG');
+  assert.ok(!text.includes('0.137 0.769 0.420 rg'), 'vert gasoil');
+  assert.ok(!text.includes('0.941 0.192 0.227 rg'), 'rouge essence');
 });

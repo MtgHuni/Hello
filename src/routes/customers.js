@@ -42,7 +42,7 @@ function customerRoutes(db, { mailer } = {}) {
       (SELECT MAX(created_at) FROM sales WHERE customer_id = c.id) AS last_purchase_at,
       (SELECT login FROM users WHERE customer_id = c.id) AS login,
       (SELECT name FROM users WHERE id = c.created_by) AS created_by_name,
-      (SELECT COUNT(*) FROM sales WHERE customer_id = c.id AND over_limit = 1) AS over_limit_count,
+      (SELECT COUNT(*) FROM sales WHERE customer_id = c.id AND over_limit > 0) AS over_limit_count,
       ${operationsSql('c.id')} AS operations
     FROM customers c`;
 
@@ -90,7 +90,7 @@ function customerRoutes(db, { mailer } = {}) {
           s.kind === 'combo'
             ? `${s.product_name} — ${frNum(s.liters)} L échangés contre ${s.combos_used} combos`
             : `${s.product_name} — ${frNum(s.liters)} L à ${frNum(s.unit_price, 3)} $/L${s.plate ? ` (${s.plate})` : ''} — ${
-                s.kind === 'credit' ? `à crédit${s.over_limit ? ' (accordé malgré le retard)' : ''}${s.points_due && !s.points ? ', combos à l’encaissement' : ''}` : 'payé'
+                s.kind === 'credit' ? `à crédit${s.over_limit === 2 ? ' (accordé malgré un crédit en cours)' : s.over_limit ? ' (accordé malgré le retard)' : ''}${s.points_due && !s.points ? ', combos à l’encaissement' : ''}` : 'payé'
               }`,
         liters: s.liters,
         points: s.points,

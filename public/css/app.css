@@ -670,6 +670,9 @@ td.wrap { white-space: normal; min-width: 200px; }
 tbody tr:last-child td { border-bottom: none; }
 tbody tr.clickable { cursor: pointer; transition: background-color 0.2s; }
 tbody tr.clickable:hover { background: var(--fill-4); }
+/* A line that opens an action (an agent's advance or payment: cancel it). */
+.summary-line.clickable { cursor: pointer; border-radius: 8px; margin: 0 -8px; padding-left: 8px; padding-right: 8px; transition: background-color 0.2s; }
+.summary-line.clickable:hover { background: var(--fill-4); }
 tfoot td { font-weight: 600; border-top: 1px solid var(--separator); border-bottom: none; }
 .card:not(.flush) table th:first-child, .card:not(.flush) table td:first-child { padding-left: 0; }
 .card:not(.flush) table th:last-child, .card:not(.flush) table td:last-child { padding-right: 0; }

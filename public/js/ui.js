@@ -562,8 +562,8 @@ export function field(f) {
   }
   if (f.onInput) input.addEventListener('input', f.onInput);
   // Floating-label field: the label sits inside the box and floats up once the field is used.
-  // Selects, text areas and dates always show a value, so their label stays up.
-  const pinned = f.type === 'select' || f.type === 'textarea' || f.type === 'date';
+  // Selects, text areas, dates and months always show a value, so their label stays up.
+  const pinned = f.type === 'select' || f.type === 'textarea' || f.type === 'date' || f.type === 'month';
   const el = h(
     'label',
     { class: `field ${f.full ? 'full' : ''}`, for: id, hidden: f.hidden },
@@ -688,7 +688,8 @@ export function confirmDialog(title, text, { confirmLabel = 'Confirmer', danger 
 
 // An alert that stops the action: a card in the middle of the screen, a mark, a title, what to know,
 // and one button to close it.
-export function noticeDialog(title, body, { okLabel = 'Compris', level = 'critical', iconName = 'alert', wide = false } = {}) {
+// With confirmLabel: Annuler and that action, resolved true when confirmed.
+export function noticeDialog(title, body, { okLabel = 'Compris', level = 'critical', iconName = 'alert', wide = false, confirmLabel = null } = {}) {
   return new Promise((resolve) => {
     openDialog(
       (close) =>
@@ -698,7 +699,13 @@ export function noticeDialog(title, body, { okLabel = 'Compris', level = 'critic
           h('span', { class: `alert-icon notice-icon ${level}`, 'aria-hidden': 'true' }, icon(iconName)),
           h('h2', {}, title),
           body,
-          h('div', { class: 'alert-actions' }, button(okLabel, () => { close(); resolve(); })),
+          h(
+            'div',
+            { class: 'alert-actions' },
+            confirmLabel
+              ? [button('Annuler', () => { close(); resolve(false); }, { variant: 'cancel' }), button(confirmLabel, () => { close(); resolve(true); })]
+              : button(okLabel, () => { close(); resolve(); }),
+          ),
         ),
       { kind: 'alert' },
     );

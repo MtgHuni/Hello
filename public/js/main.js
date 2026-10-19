@@ -11,6 +11,7 @@ import { renderTanks } from './views/tanks.js';
 import { renderCustomers, renderCustomerDetail } from './views/customers.js';
 import { renderReports } from './views/reports.js';
 import { renderFinance } from './views/finance.js';
+import { renderStaff, renderStaffDetail } from './views/staff.js';
 import { renderSettings } from './views/settings.js';
 import { renderJournal } from './views/journal.js';
 import { renderAccount } from './views/account.js';
@@ -29,6 +30,7 @@ const NAV = {
     ['caisse', 'Caisse', 'cash', renderCashbook],
     ['clients', 'Clients', 'users', renderCustomers],
     ['depenses', 'Dépenses', 'wallet', renderExpenses],
+    ['agents', 'Agents', 'user', renderStaff],
     ['cuves', 'Cuves', 'tank', renderTanks],
     ['rapports', 'Rapports', 'chart', renderReports],
     ['reglages', 'Réglages', 'settings', renderSettings],
@@ -43,10 +45,10 @@ const NAV = {
 NAV.owner = NAV.manager.filter(([path]) => !['pompe', 'reglages'].includes(path));
 
 const DETAIL_ROUTES = {
-  manager: { postes: renderShiftDetail, clients: renderCustomerDetail, reglages: renderJournal, rapports: renderFinance },
+  manager: { postes: renderShiftDetail, clients: renderCustomerDetail, reglages: renderJournal, rapports: renderFinance, agents: renderStaffDetail },
   attendant: { historique: renderShiftDetail },
 };
-DETAIL_ROUTES.owner = { postes: renderShiftDetail, clients: renderCustomerDetail, rapports: renderFinance };
+DETAIL_ROUTES.owner = { postes: renderShiftDetail, clients: renderCustomerDetail, rapports: renderFinance, agents: renderStaffDetail };
 
 const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 

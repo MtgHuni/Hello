@@ -11,6 +11,7 @@ const ALERT_TYPES = {
   annulations: 'Annulations à valider',
   abonne_retard: 'Abonné en retard de paiement',
   credit_retard: 'Crédit accordé à un abonné en retard',
+  credit_en_cours: 'Crédit accordé malgré un crédit en cours',
   clients_a_completer: 'Clients créés à la pompe, à compléter',
   fournisseurs: 'Dettes envers les fournisseurs',
   mails_limite: 'Limite d’envoi des mails presque atteinte',

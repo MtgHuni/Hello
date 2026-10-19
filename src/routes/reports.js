@@ -119,21 +119,23 @@ module.exports = function reportRoutes(db) {
       for (const d of recentDips) {
         alerts.push({ type: 'ecart_jaugeage', key: `ecart_jaugeage:${d.id}`, level: 'serious', text: `${d.tank_name} : écart de jaugeage de ${String(d.variance).replace('.', ',')} L`, link: '#/cuves' });
       }
-      // Credits granted by attendants to a late subscriber, on the open shift or one closed in the last three days.
+      // Credits granted by attendants to a late subscriber, or to an individual who still owes one, on the
+      // open shift or one closed in the last three days.
       const overLimit = db
         .prepare(
-          `SELECT sa.id, sa.amount, sa.shift_id, c.id AS customer_id, c.name AS customer_name, u.name AS attendant_name
+          `SELECT sa.id, sa.amount, sa.shift_id, sa.over_limit, c.id AS customer_id, c.name AS customer_name, u.name AS attendant_name
            FROM sales sa JOIN shifts s ON s.id = sa.shift_id JOIN customers c ON c.id = sa.customer_id
            JOIN users u ON u.id = COALESCE(sa.user_id, s.attendant_id)
-           WHERE sa.over_limit = 1 AND c.type = 'account' AND (s.status = 'open' OR s.closed_at >= datetime('now', '-3 days')) ORDER BY sa.id DESC`,
+           WHERE ((sa.over_limit = 1 AND c.type = 'account') OR sa.over_limit = 2) AND (s.status = 'open' OR s.closed_at >= datetime('now', '-3 days')) ORDER BY sa.id DESC`,
         )
         .all();
       for (const o of overLimit) {
+        const type = o.over_limit === 2 ? 'credit_en_cours' : 'credit_retard';
         alerts.push({
-          type: 'credit_retard',
-          key: `credit_retard:${o.id}`,
+          type,
+          key: `${type}:${o.id}`,
           level: 'serious',
-          text: `Crédit accordé par ${o.attendant_name} à ${o.customer_name}, abonné en retard (${o.amount.toFixed(2).replace('.', ',')} $)`,
+          text: `Crédit accordé par ${o.attendant_name} à ${o.customer_name}, ${o.over_limit === 2 ? 'qui doit encore un crédit' : 'abonné en retard'} (${o.amount.toFixed(2).replace('.', ',')} $)`,
           link: `#/postes/${o.shift_id}`,
         });
       }

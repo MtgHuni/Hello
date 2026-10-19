@@ -1,5 +1,5 @@
 const express = require('express');
-const { EXPENSE_CATEGORIES } = require('../db');
+const { EXPENSE_CATEGORIES, SALARY } = require('../db');
 const { fail, num, str, oneOf, round, dateParam, csvCell, money } = require('../util');
 const { audit } = require('../audit');
 const { supplierOf } = require('../cashbook');
@@ -18,6 +18,8 @@ module.exports = function expenseRoutes(db) {
   function fields(b, current = {}) {
     const date = dateParam(b.expenseDate ?? current.expense_date, 'La date') || db.prepare("SELECT date('now', 'localtime') AS d").get().d;
     const category = oneOf(b.category ?? current.category, 'La catégorie', EXPENSE_CATEGORIES);
+    // A salary is paid from Agents; one entered before keeps its category.
+    if (category === SALARY && current.category !== SALARY) fail(400, 'Un salaire se paie depuis Agents.', 'salary_staff');
     return {
       date,
       category,
@@ -89,6 +91,7 @@ module.exports = function expenseRoutes(db) {
 
   router.put('/expenses/:id', manager, (req, res) => {
     const current = getEditable(req.params.id);
+    if (current.staff_id) fail(409, 'Cette dépense est celle d’un agent : annulez-la depuis sa fiche dans Agents.', 'staff_expense');
     const f = fields(req.body || {}, current);
     db.prepare(
       `UPDATE expenses SET expense_date = ?, category = ?, amount = ?, description = ?, beneficiary = ?, method = ?, reference = ?

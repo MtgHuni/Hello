@@ -1,4 +1,4 @@
-import { flags, edit } from '../ui.js';
+import { flags, edit, canAdmin } from '../ui.js';
 import { api } from '../api.js';
 import { shiftLine, h, fmt, pageHeader, card, cardHeader, table, segmented, shiftBadge, varianceCell, kpi, formDialog, confirmDialog, actionSheet, toast, button, badge, setContent, reportLink, buttonRow, nameChips } from '../ui.js';
 import { icon } from '../icons.js';
@@ -6,6 +6,7 @@ import { renderClosing } from './attendant.js';
 import { reportCard } from './relay.js';
 import { meterPhotoLink } from '../photo.js';
 import { renderShiftStatus } from './shiftStatus.js';
+import { keepExpenseDialog, creditAgentDialog } from './staff.js';
 
 // Money handed over, in dollars.
 const declared = (s) => (s.cash || 0) + (s.change_left || 0) + (s.francs || 0) + (s.mobile_money || 0);
@@ -75,7 +76,7 @@ export async function renderShifts(page, ctx) {
             : [{ label: 'Litres', align: 'right', render: (s) => (s.total_liters == null ? '—' : fmt.liters(s.total_liters)) }]),
           { label: 'Ventes', align: 'right', render: (s) => (s.total_amount == null ? '—' : fmt.money(s.total_amount)) },
           { label: 'Écart caisse', align: 'right', render: (s) => varianceCell(s.variance, tol) },
-          { label: 'Statut', render: (s) => h('span', { class: 'row', style: 'gap:6px;flex-wrap:nowrap' }, shiftBadge(s.status), s.status === 'closed' && !s.counted_at ? badge('Argent à compter', 'warning') : null, s.over_limit_count ? badge('Crédit malgré le retard', 'serious') : null) },
+          { label: 'Statut', render: (s) => h('span', { class: 'row', style: 'gap:6px;flex-wrap:nowrap' }, shiftBadge(s.status), s.status === 'closed' && !s.counted_at ? badge('Argent à compter', 'warning') : null, s.over_limit_count ? badge('Crédit signalé', 'serious') : null) },
         ],
         shifts,
         {
@@ -131,7 +132,11 @@ function operationMenu(ctx, shift, kind, item, reload) {
   actionSheet({
     title: `${fmt.time(item.created_at)} · ${fmt.money(item.amount)}`,
     actions: [
-      { label: `Corriger ${KIND_TITLE[kind]}`, onClick: () => editOperation(ctx, shift, kind, item, reload) },
+      // An agent's advance or salary is not corrected here: cancelled, then given again from Agents.
+      kind === 'expenses' && item.staff_id ? { label: 'Voir l’agent', onClick: () => ctx.navigate(`agents/${item.staff_id}`) } : { label: `Corriger ${KIND_TITLE[kind]}`, onClick: () => editOperation(ctx, shift, kind, item, reload) },
+      // Deductions from an agent's pay: an expense kept, the agent of a credit (admin).
+      kind === 'expenses' && !item.staff_id ? { label: 'Retenir sur un salaire', onClick: () => keepExpenseDialog(item, reload) } : null,
+      kind === 'sales' && canAdmin() ? { label: 'Accordé par…', onClick: () => creditAgentDialog(item, reload) } : null,
       {
         label: `Annuler ${KIND_TITLE[kind]}`,
         destructive: true,
@@ -146,7 +151,7 @@ function operationMenu(ctx, shift, kind, item, reload) {
           }
         },
       },
-    ],
+    ].filter(Boolean),
   });
 }
 
@@ -189,7 +194,7 @@ async function editOperation(ctx, shift, kind, item, reload) {
       title: 'Corriger la dépense',
       fields: [
         { name: 'amount', label: 'Montant ($)', type: 'number', step: '0.01', min: '0.01', value: item.amount, required: true },
-        { name: 'category', label: 'Catégorie', type: 'select', options: ctx.state.settings.expenseCategories.map((c) => [c, c]), value: item.category },
+        { name: 'category', label: 'Catégorie', type: 'select', options: [...new Set([...ctx.state.settings.expenseCategories, item.category])].map((c) => [c, c]), value: item.category },
         { name: 'description', label: 'Description', value: item.description, required: true },
         { name: 'beneficiary', label: 'Payé à', value: item.beneficiary || undefined, onInput: payTo.onInput },
         payTo.node,
@@ -400,7 +405,7 @@ export function shiftSummary(shift, tolerance, onEdit = null) {
               h(
                 'span',
                 { class: 'row', style: 'gap:6px' },
-                s.kind === 'credit' ? (s.over_limit ? badge('Crédit malgré le retard', 'serious') : badge('Crédit', 'info')) : s.kind === 'combo' ? badge('Combos', 'warning') : badge('Payé', 'good'),
+                s.kind === 'credit' ? (s.over_limit ? badge(s.over_limit === 2 ? 'Crédit malgré un crédit en cours' : 'Crédit malgré le retard', 'serious') : badge('Crédit', 'info')) : s.kind === 'combo' ? badge('Combos', 'warning') : badge('Payé', 'good'),
                 s.source === 'customer' ? badge('Demande client') : null,
               ),
           },

@@ -11,6 +11,7 @@ const FILTERS = [
   ['equipe', 'Équipe'],
   ['clients', 'Clients'],
   ['caisse', 'Caisse'],
+  ['agents', 'Agents'],
   ['donnees', 'Sauvegardes'],
 ];
 
