@@ -1879,3 +1879,24 @@ test('francs gardés à changer : comptés à la clôture, rendus à la clôture
   assert.strictEqual((await gerant('GET', `/api/shifts/${closed.id}/report.pdf`)).status, 200);
   assert.strictEqual((await gerant('GET', `/api/shifts/${after.id}/report.pdf`)).status, 200);
 });
+
+test('migration 31 : fiches des agents et dépenses reliées', () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const { openDb } = require('../src/db');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'station-staff-'));
+  const file = path.join(dir, 'old.db');
+  let old = openDb(file);
+  old.exec(`DROP TABLE IF EXISTS staff_salaries; DROP TABLE IF EXISTS staff;
+    ALTER TABLE expenses DROP COLUMN pay_kind; ALTER TABLE expenses DROP COLUMN pay_month; ALTER TABLE expenses DROP COLUMN staff_id;
+    PRAGMA user_version = 30`);
+  old.close();
+  old = openDb(file);
+  for (const table of ['staff', 'staff_salaries']) assert.ok(old.prepare('SELECT 1 FROM sqlite_master WHERE name = ?').get(table), table);
+  const columns = old.prepare('PRAGMA table_info(expenses)').all().map((c) => c.name);
+  for (const c of ['staff_id', 'pay_month', 'pay_kind']) assert.ok(columns.includes(c), c);
+  assert.strictEqual(old.prepare('PRAGMA user_version').get().user_version, 31);
+  old.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+});

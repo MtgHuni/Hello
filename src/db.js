@@ -426,6 +426,28 @@ CREATE TABLE IF NOT EXISTS finance_reports (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE (date_from, date_to)
 );
+-- Every agent of the station (version 31), with or without a login: an advance or a salary paid is
+-- an expense « Salaires » linked to them (expenses.staff_id), counted for its month (pay_month).
+CREATE TABLE IF NOT EXISTS staff (
+  id         INTEGER PRIMARY KEY,
+  name       TEXT NOT NULL,
+  phone      TEXT,
+  function   TEXT NOT NULL,
+  hired_on   TEXT NOT NULL,
+  left_on    TEXT,
+  pay_from   TEXT NOT NULL,
+  user_id    INTEGER UNIQUE REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+-- The monthly salary from a month on; the months before keep theirs.
+CREATE TABLE IF NOT EXISTS staff_salaries (
+  id         INTEGER PRIMARY KEY,
+  staff_id   INTEGER NOT NULL REFERENCES staff(id),
+  from_month TEXT NOT NULL,
+  amount     REAL NOT NULL CHECK (amount >= 0),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (staff_id, from_month)
+);
 CREATE TABLE IF NOT EXISTS customer_mail_prefs (
   customer_id INTEGER NOT NULL REFERENCES customers(id),
   kind        TEXT NOT NULL,
@@ -562,10 +584,15 @@ const MIGRATIONS = [
   // Every line of a financial report's period (sales, payments, expenses, deliveries, cash book…),
   // kept with it for its PDF (version 30).
   ['finance_reports', 'ledger', 'TEXT'],
+  // An advance or a salary paid to an agent (version 31): the agent, the month it counts for,
+  // 'avance' or 'salaire'.
+  ['expenses', 'staff_id', 'INTEGER REFERENCES staff(id)'],
+  ['expenses', 'pay_month', 'TEXT'],
+  ['expenses', 'pay_kind', 'TEXT'],
 ];
 
 // Bumped with every schema change; recorded in PRAGMA user_version.
-const SCHEMA_VERSION = 30;
+const SCHEMA_VERSION = 31;
 
 function missingColumns(db) {
   return MIGRATIONS.filter(([table, column]) => {
@@ -625,6 +652,8 @@ const EXPENSE_CATEGORIES = [
   'Autre',
 ];
 const SUPPLIER_PAYMENT = 'Paiement fournisseur';
+// Paid to an agent only, from Agents (src/routes/staff.js): left out of the other expense forms.
+const SALARY = 'Salaires';
 
 const DEFAULT_SETTINGS = {
   station_name: 'Ma station',
@@ -851,8 +880,8 @@ function getSettings(db) {
     stationPhone: s.station_phone || '',
     shiftTransport: Number(s.shift_transport || 0),
     askMonthLimit: Number(s.ask_month_limit ?? 50),
-    expenseCategories: EXPENSE_CATEGORIES,
+    expenseCategories: EXPENSE_CATEGORIES.filter((c) => c !== SALARY),
   };
 }
 
-module.exports = { openDb, getSettings, syncCreditLimits, EXPENSE_CATEGORIES, SUPPLIER_PAYMENT, SCHEMA_VERSION };
+module.exports = { openDb, getSettings, syncCreditLimits, EXPENSE_CATEGORIES, SUPPLIER_PAYMENT, SALARY, SCHEMA_VERSION };
