@@ -2,6 +2,7 @@ import { api } from '../api.js';
 import { flags, edit } from '../ui.js';
 import { h, fmt, pageHeader, table, segmented, kpi, field, button, formDialog, confirmDialog, actionSheet, toast, todayISO, setContent, nameChips } from '../ui.js';
 import { PRESETS, presetRange } from './reports.js';
+import { keepExpenseDialog } from './staff.js';
 
 const METHODS = [
   ['espèces', 'Espèces'],
@@ -113,7 +114,10 @@ function rowActions(e, categories, ctx, reload) {
   if (e.shift_id) {
     actionSheet({
       title: `Dépense du poste n°${e.shift_id}`,
-      actions: [{ label: `Voir le poste n°${e.shift_id}`, onClick: () => ctx.navigate(`postes/${e.shift_id}`) }],
+      actions: [
+        { label: `Voir le poste n°${e.shift_id}`, onClick: () => ctx.navigate(`postes/${e.shift_id}`) },
+        e.staff_id ? null : { label: 'Retenir sur un salaire', onClick: () => keepExpenseDialog(e, reload) },
+      ].filter(Boolean),
     });
     return;
   }
@@ -122,6 +126,7 @@ function rowActions(e, categories, ctx, reload) {
     actions: [
       // An agent's advance or salary is changed from Agents.
       e.staff_id ? { label: 'Voir l’agent', onClick: () => ctx.navigate(`agents/${e.staff_id}`) } : { label: 'Modifier', onClick: () => expenseDialog(e, categories, reload) },
+      e.staff_id ? null : { label: 'Retenir sur un salaire', onClick: () => keepExpenseDialog(e, reload) },
       {
         label: 'Supprimer',
         destructive: true,
@@ -136,7 +141,7 @@ function rowActions(e, categories, ctx, reload) {
           }
         },
       },
-    ],
+    ].filter(Boolean),
   });
 }
 

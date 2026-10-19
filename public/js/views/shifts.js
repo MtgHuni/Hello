@@ -1,4 +1,4 @@
-import { flags, edit } from '../ui.js';
+import { flags, edit, canAdmin } from '../ui.js';
 import { api } from '../api.js';
 import { shiftLine, h, fmt, pageHeader, card, cardHeader, table, segmented, shiftBadge, varianceCell, kpi, formDialog, confirmDialog, actionSheet, toast, button, badge, setContent, reportLink, buttonRow, nameChips } from '../ui.js';
 import { icon } from '../icons.js';
@@ -6,6 +6,7 @@ import { renderClosing } from './attendant.js';
 import { reportCard } from './relay.js';
 import { meterPhotoLink } from '../photo.js';
 import { renderShiftStatus } from './shiftStatus.js';
+import { keepExpenseDialog, creditAgentDialog } from './staff.js';
 
 // Money handed over, in dollars.
 const declared = (s) => (s.cash || 0) + (s.change_left || 0) + (s.francs || 0) + (s.mobile_money || 0);
@@ -132,7 +133,10 @@ function operationMenu(ctx, shift, kind, item, reload) {
     title: `${fmt.time(item.created_at)} · ${fmt.money(item.amount)}`,
     actions: [
       // An agent's advance or salary is not corrected here: cancelled, then given again from Agents.
-      item.staff_id ? { label: 'Voir l’agent', onClick: () => ctx.navigate(`agents/${item.staff_id}`) } : { label: `Corriger ${KIND_TITLE[kind]}`, onClick: () => editOperation(ctx, shift, kind, item, reload) },
+      kind === 'expenses' && item.staff_id ? { label: 'Voir l’agent', onClick: () => ctx.navigate(`agents/${item.staff_id}`) } : { label: `Corriger ${KIND_TITLE[kind]}`, onClick: () => editOperation(ctx, shift, kind, item, reload) },
+      // Deductions from an agent's pay: an expense kept, the agent of a credit (admin).
+      kind === 'expenses' && !item.staff_id ? { label: 'Retenir sur un salaire', onClick: () => keepExpenseDialog(item, reload) } : null,
+      kind === 'sales' && canAdmin() ? { label: 'Accordé par…', onClick: () => creditAgentDialog(item, reload) } : null,
       {
         label: `Annuler ${KIND_TITLE[kind]}`,
         destructive: true,
@@ -147,7 +151,7 @@ function operationMenu(ctx, shift, kind, item, reload) {
           }
         },
       },
-    ],
+    ].filter(Boolean),
   });
 }
 

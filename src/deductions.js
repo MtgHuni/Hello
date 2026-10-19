@@ -86,6 +86,7 @@ function deductionLines(db, staffId, month) {
   return db
     .prepare(
       `SELECT d.id, d.sale_id, d.expense_id, d.amount, d.reason, d.created_at,
+         EXISTS (SELECT 1 FROM staff_deductions p WHERE p.staff_id = d.staff_id AND p.sale_id IS d.sale_id AND p.expense_id IS d.expense_id AND p.reason = 'pardon') AS forgiven,
          c.name AS customer_name, date(s.created_at, 'localtime') AS sale_day, s.amount AS sale_amount,
          e.description AS expense_description, e.expense_date AS expense_day
        FROM staff_deductions d
@@ -96,14 +97,14 @@ function deductionLines(db, staffId, month) {
     .all(staffId, month);
 }
 
-// How a movement reads: « Crédit de Marie du 12/09/2026 », « Rendu : … », « Pardonné : … ».
+// How a movement reads: « Retenue : crédit de Marie du 12/09/2026 », « Rendu : … », « Pardonné : … ».
 function deductionLabel(d, date = (day) => day) {
   const what = d.sale_id
     ? `crédit de ${d.customer_name || 'un client'}${d.sale_day ? ` du ${date(d.sale_day)}` : ' (annulé)'}`
     : `dépense ${d.expense_description ? `« ${d.expense_description} »` : '(annulée)'}`;
   if (d.reason === 'pardon') return `Pardonné : ${what}`;
   if (d.reason === 'rendu') return `Rendu : ${what}`;
-  return `${what.charAt(0).toUpperCase()}${what.slice(1)}`;
+  return `Retenue : ${what}`;
 }
 
 module.exports = { syncDeductions, deductionLines, deductionLabel, keptFor, creditAgentId };

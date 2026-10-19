@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { h, fmt, flags, edit, adminEdit, pageHeader, cardHeader, kpi, badge, button, table, field, formDialog, confirmDialog, actionSheet, toast, todayISO, setContent, shareButton } from '../ui.js';
+import { h, fmt, flags, edit, adminEdit, canAdmin, pageHeader, cardHeader, kpi, badge, button, table, field, formDialog, confirmDialog, actionSheet, toast, todayISO, setContent, shareButton } from '../ui.js';
 import { icon } from '../icons.js';
 
 // Agents: the pay of a month (#/agents) and each agent's record (#/agents/<id>). An advance or a
@@ -27,6 +27,15 @@ const monthsFrom = (first) => {
 };
 const sourceLabel = (e) => (e.source === 'poste' ? `Argent du poste n°${e.shift_id}` : SOURCES.find(([v]) => v === e.source)?.[1] || e.source);
 const isZero = (n) => Math.abs(n) < 0.005;
+// A deduction movement: « Retenue : crédit de Marie du 12 sept. 2026 », « Rendu : … », « Pardonné : … ».
+const deductionLabel = (d) => {
+  const what = d.sale_id
+    ? `crédit de ${d.customer_name || 'un client'}${d.sale_day ? ` du ${fmt.date(d.sale_day)}` : ' (annulé)'}`
+    : `dépense ${d.expense_description ? `« ${d.expense_description} »` : '(annulée)'}`;
+  if (d.reason === 'pardon') return `Pardonné : ${what}`;
+  if (d.reason === 'rendu') return `Rendu : ${what}`;
+  return `Retenue : ${what}`;
+};
 
 // What the month leaves: to pay, paid, or advanced too much; nothing yet before the first day.
 function netCell(sheet) {
@@ -72,6 +81,7 @@ export async function renderStaff(page, ctx) {
           { label: 'Reste d’avant', align: 'right', render: (a) => (isZero(a.sheet.carried) ? '—' : fmt.signedMoney(a.sheet.carried)) },
           { label: 'Avances', align: 'right', render: (a) => (a.sheet.advanced ? fmt.money(a.sheet.advanced) : '—') },
           { label: 'Payé', align: 'right', render: (a) => (a.sheet.paid ? fmt.money(a.sheet.paid) : '—') },
+          { label: 'Retenues', align: 'right', render: (a) => (isZero(a.sheet.deducted) ? '—' : a.sheet.deducted > 0 ? fmt.money(a.sheet.deducted) : `+${fmt.money(-a.sheet.deducted)}`) },
           {
             label: '',
             align: 'right',
@@ -138,12 +148,83 @@ function monthCard(s, m, current, reload) {
       Object.assign(row, { tabIndex: 0, role: 'button', onclick: () => operationMenu(s, e, reload), onkeydown: (k) => k.key === 'Enter' && operationMenu(s, e, reload) });
       return row;
     }),
+    // What is kept from the pay (−) or given back (+); touched, a deduction can be forgiven.
+    m.deductions.map((d) => {
+      const row = line(deductionLabel(d), fmt.signedMoney(-d.amount));
+      if (flags.readonly || d.reason !== 'retenue' || d.forgiven) return row;
+      row.classList.add('clickable');
+      Object.assign(row, { tabIndex: 0, role: 'button', onclick: () => deductionMenu(s, d, reload), onkeydown: (k) => k.key === 'Enter' && deductionMenu(s, d, reload) });
+      return row;
+    }),
     m.net < -0.005
       ? line('Avancé en trop', fmt.money(-m.net), { total: true, lost: true })
       : !current && m.due < 0.005 && m.net > 0.005
         ? line('Reporté au mois suivant', fmt.money(m.net), { total: true })
         : line('Net à payer', fmt.money(current ? m.net : m.due), { total: true }),
   );
+}
+
+function deductionMenu(s, d, reload) {
+  actionSheet({
+    title: `${deductionLabel(d)} · ${fmt.money(d.amount)}`,
+    actions: [
+      {
+        label: 'Pardonner',
+        onClick: async () => {
+          if (!(await confirmDialog('Pardonner la retenue ?', `${deductionLabel(d)} · ${fmt.money(d.amount)}`, { confirmLabel: 'Pardonner' }))) return;
+          try {
+            await api.post(`/staff/${s.id}/deductions/forgive`, d.sale_id ? { saleId: d.sale_id } : { expenseId: d.expense_id });
+            toast('Retenue pardonnée.');
+            reload();
+          } catch (err) {
+            toast(err.message, 'error');
+          }
+        },
+      },
+      d.sale_id && canAdmin() ? { label: 'Changer d’agent', onClick: () => creditAgentDialog({ id: d.sale_id, staff_id: s.id }, reload) } : null,
+    ].filter(Boolean),
+  });
+}
+
+// The agents to choose from: those of this month's pay still there.
+const agentsList = async () => (await api.get('/staff')).agents.filter((a) => !a.left_on || a.left_on >= todayISO());
+
+// An expense kept from an agent's pay (the agent who entered it, by default).
+export async function keepExpenseDialog(expense, reload) {
+  const agents = await agentsList();
+  if (!agents.length) return toast('Aucun agent.', 'error');
+  const ok = await formDialog({
+    title: 'Retenir sur un salaire',
+    fields: [{ name: 'staffId', label: 'Agent', type: 'select', value: agents.find((a) => a.user_id === expense.user_id)?.id ?? agents[0].id, options: agents.map((a) => [a.id, a.name]) }],
+    submitLabel: 'Retenir',
+    onSubmit: (d) => api.post(`/staff/${d.staffId}/deductions`, { expenseId: expense.id }),
+  });
+  if (ok) {
+    toast('Dépense retenue.');
+    reload?.();
+  }
+}
+
+// Who granted a credit (admin): an agent, or the record of the login that entered it.
+export async function creditAgentDialog(sale, reload) {
+  const agents = await agentsList();
+  const ok = await formDialog({
+    title: 'Accordé par',
+    fields: [
+      {
+        name: 'staffId',
+        label: 'Agent',
+        type: 'select',
+        value: sale.staff_id ?? '',
+        options: [['', 'L’agent de son compte'], ...agents.map((a) => [a.id, a.name])],
+      },
+    ],
+    onSubmit: (d) => api.put(`/staff/credits/${sale.id}`, { staffId: d.staffId ? Number(d.staffId) : null }),
+  });
+  if (ok) {
+    toast('Agent du crédit enregistré.');
+    reload?.();
+  }
 }
 
 // Touched: its amount corrected, or cancelled.
