@@ -448,6 +448,22 @@ CREATE TABLE IF NOT EXISTS staff_salaries (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE (staff_id, from_month)
 );
+-- What is kept from an agent's pay (version 32): a credit of an individual whose oldest unpaid credit is
+-- over a month old, or an expense the manager marked. Movements only, never rewritten: amount > 0 kept
+-- (reason 'retenue'), < 0 given back ('rendu': paid by the customer, cancelled…; 'pardon'). The sale or
+-- the expense has no foreign key: it can be cancelled, which gives the money back (src/deductions.js).
+CREATE TABLE IF NOT EXISTS staff_deductions (
+  id         INTEGER PRIMARY KEY,
+  staff_id   INTEGER NOT NULL REFERENCES staff(id),
+  sale_id    INTEGER,
+  expense_id INTEGER,
+  amount     REAL NOT NULL,
+  reason     TEXT NOT NULL CHECK (reason IN ('retenue', 'rendu', 'pardon')),
+  pay_month  TEXT NOT NULL,
+  user_id    INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_staff_deductions ON staff_deductions(staff_id, pay_month);
 CREATE TABLE IF NOT EXISTS customer_mail_prefs (
   customer_id INTEGER NOT NULL REFERENCES customers(id),
   kind        TEXT NOT NULL,
@@ -589,10 +605,12 @@ const MIGRATIONS = [
   ['expenses', 'staff_id', 'INTEGER REFERENCES staff(id)'],
   ['expenses', 'pay_month', 'TEXT'],
   ['expenses', 'pay_kind', 'TEXT'],
+  // The agent who granted a credit, given by the admin (version 32); else the record of its login.
+  ['sales', 'staff_id', 'INTEGER REFERENCES staff(id)'],
 ];
 
 // Bumped with every schema change; recorded in PRAGMA user_version.
-const SCHEMA_VERSION = 31;
+const SCHEMA_VERSION = 32;
 
 function missingColumns(db) {
   return MIGRATIONS.filter(([table, column]) => {

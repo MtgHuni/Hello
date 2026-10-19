@@ -1902,7 +1902,7 @@ test('migration 31 : fiches des agents et dépenses reliées', () => {
   for (const table of ['staff', 'staff_salaries']) assert.ok(old.prepare('SELECT 1 FROM sqlite_master WHERE name = ?').get(table), table);
   const columns = old.prepare('PRAGMA table_info(expenses)').all().map((c) => c.name);
   for (const c of ['staff_id', 'pay_month', 'pay_kind']) assert.ok(columns.includes(c), c);
-  assert.strictEqual(old.prepare('PRAGMA user_version').get().user_version, 31);
+  assert.strictEqual(old.prepare('PRAGMA user_version').get().user_version, require('../src/db').SCHEMA_VERSION);
   old.close();
   fs.rmSync(dir, { recursive: true, force: true });
 });
@@ -2095,4 +2095,22 @@ test('paie : un mois passé payé le mois suivant n’est plus dû ; correction 
   const awa = client();
   await awa('POST', '/api/auth/login', { login: 'awa', password: 'actionnaire2' });
   assert.strictEqual((await awa('PUT', `/api/staff/${bosco.id}/operations/${till.id}`, { amount: 10 })).data.code, 'read_only');
+});
+
+test('migration 32 : retenues des agents, agent d’un crédit', () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const { openDb } = require('../src/db');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'station-deductions-'));
+  const file = path.join(dir, 'old.db');
+  let old = openDb(file);
+  old.exec('DROP TABLE IF EXISTS staff_deductions; ALTER TABLE sales DROP COLUMN staff_id; PRAGMA user_version = 31');
+  old.close();
+  old = openDb(file);
+  assert.ok(old.prepare("SELECT 1 FROM sqlite_master WHERE name = 'staff_deductions'").get());
+  assert.ok(old.prepare('PRAGMA table_info(sales)').all().some((c) => c.name === 'staff_id'));
+  assert.strictEqual(old.prepare('PRAGMA user_version').get().user_version, require('../src/db').SCHEMA_VERSION);
+  old.close();
+  fs.rmSync(dir, { recursive: true, force: true });
 });
