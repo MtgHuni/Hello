@@ -2243,3 +2243,10 @@ test('les PDF portent le logo MTG, sans les carrés vert et rouge', () => {
   assert.ok(!text.includes('0.137 0.769 0.420 rg'), 'vert gasoil');
   assert.ok(!text.includes('0.941 0.192 0.227 rg'), 'rouge essence');
 });
+
+test('les mails : le logo MTG sans la bande verte et rouge', () => {
+  const { renderMail } = require('../src/mailTemplates');
+  const { html } = renderMail({ title: 'Essai', blocks: [] }, { name: 'Station', appUrl: 'https://station.example' });
+  assert.ok(html.includes('/media/mail-logo.png'), 'logo MTG');
+  assert.ok(!/#23c46b|#f0313a/i.test(html), 'ni vert gasoil ni rouge essence');
+});
