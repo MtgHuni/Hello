@@ -1,5 +1,5 @@
 const express = require('express');
-const { EXPENSE_CATEGORIES, getSettings } = require('../db');
+const { EXPENSE_CATEGORIES, SALARY, getSettings } = require('../db');
 const { supplierOf } = require('../cashbook');
 
 // Money accounted for at the closing, in dollars: cash handed over, change left with the
@@ -585,6 +585,7 @@ module.exports = function shiftRoutes(db) {
     const done = ref && db.prepare('SELECT * FROM expenses WHERE client_ref = ?').get(ref);
     if (done) return res.status(201).json(done);
     const category = oneOf(req.body?.category, 'La catégorie', EXPENSE_CATEGORIES);
+    if (category === SALARY) fail(400, 'Un salaire se paie depuis Agents.', 'salary_staff');
     const amount = round(num(req.body?.amount, 'Le montant', { min: 0.01, max: 1e7 }));
     const description = str(req.body?.description, 'La description', { max: 300 });
     const beneficiary = supplierOf(db, category, str(req.body?.beneficiary, 'Le bénéficiaire', { required: false, max: 120 }));
@@ -684,7 +685,9 @@ module.exports = function shiftRoutes(db) {
         refreshCustomer(db, customer.id);
         if (customer.id !== item.customer_id) refreshCustomer(db, item.customer_id);
       } else if (table === 'expenses') {
+        if (item.staff_id) fail(409, 'Cette dépense est celle d’un agent : annulez-la depuis sa fiche dans Agents.', 'staff_expense');
         const category = oneOf(b.category ?? item.category, 'La catégorie', EXPENSE_CATEGORIES);
+        if (category === SALARY && item.category !== SALARY) fail(400, 'Un salaire se paie depuis Agents.', 'salary_staff');
         const amount = round(num(b.amount ?? item.amount, 'Le montant', { min: 0.01, max: 1e7 }));
         const description = str(b.description ?? item.description, 'La description', { max: 300 });
         const beneficiary = supplierOf(db, category, b.beneficiary === undefined ? item.beneficiary : str(b.beneficiary, 'Le bénéficiaire', { required: false, max: 120 }));

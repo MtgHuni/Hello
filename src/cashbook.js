@@ -69,7 +69,7 @@ function allEntries(db) {
   }
 
   for (const e of db
-    .prepare("SELECT id, created_at AS at, expense_date AS day, amount, method, category, description, shift_id FROM expenses")
+    .prepare("SELECT id, created_at AS at, expense_date AS day, amount, method, category, description, shift_id, staff_id FROM expenses")
     .all()) {
     push({
       at: e.at,
@@ -79,7 +79,7 @@ function allEntries(db) {
       label: `Dépense${e.shift_id ? ` du poste n°${e.shift_id}` : ''} · ${e.category} : ${e.description}`,
       source: 'expense',
       id: e.id,
-      link: e.shift_id ? `#/postes/${e.shift_id}` : '#/depenses',
+      link: e.shift_id ? `#/postes/${e.shift_id}` : e.staff_id ? `#/agents/${e.staff_id}` : '#/depenses',
     });
   }
 

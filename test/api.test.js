@@ -515,7 +515,7 @@ test('installation neuve : pas d’inscription client avant le gérant ; origine
 
 test('dépenses et rapport avec marge', async () => {
   assert.strictEqual((await pompiste('GET', '/api/expenses')).status, 403);
-  const created = await gerant('POST', '/api/expenses', { category: 'Salaires', amount: 300, description: 'Avance Paul', method: 'mobile money' });
+  const created = await gerant('POST', '/api/expenses', { category: 'Électricité', amount: 300, description: 'Facture SNEL', method: 'mobile money' });
   assert.strictEqual(created.data.expense_date, today());
   const list = (await gerant('GET', `/api/expenses?from=${today()}&to=${today()}`)).data;
   assert.strictEqual(list.total, 315);
@@ -1953,4 +1953,81 @@ test('agents : fiches par l’administrateur, lues par le gérant et l’actionn
   assert.deepStrictEqual(detail.salaries.map((s) => [s.from_month, s.amount]), [[monthOf(1), 120], [M, 100]]);
   assert.deepStrictEqual(detail.months.map((m) => m.month), [M]);
   assert.ok((await gerant('GET', '/api/audit?category=agents')).data.some((a) => a.summary.includes('Jean')), 'au journal');
+});
+
+test('paie : avances depuis la caisse ou le poste, paiement en deux fois, reste reporté', async () => {
+  const M = monthOf();
+  const jean = ctx.jean;
+  const advance = (id, body, as = gerant) => as('POST', `/api/staff/${id}/advances`, body);
+  const pay = (id, body) => gerant('POST', `/api/staff/${id}/payments`, body);
+  const sheet = async (name, month = M) => (await gerant('GET', `/api/staff?month=${month}`)).data.agents.find((a) => a.name === name).sheet;
+
+  // From the cash book: cash, mobile money.
+  const cash = await advance(jean.id, { amount: 30, source: 'espèces' });
+  assert.strictEqual(cash.status, 201, JSON.stringify(cash.data));
+  assert.deepStrictEqual([cash.data.category, cash.data.pay_kind, cash.data.pay_month, cash.data.staff_id, cash.data.shift_id], ['Salaires', 'avance', M, jean.id, null]);
+  const momo = await advance(jean.id, { amount: 10, source: 'mobile money' });
+  const line = async (account, id) => (await gerant('GET', `/api/cashbook?account=${account}`)).data.movements.find((m) => m.source === 'expense' && m.id === id);
+  assert.strictEqual((await line('cash', cash.data.id)).out, 30);
+  assert.strictEqual((await line('momo', momo.data.id)).out, 10);
+  // From the open shift's money: an expense of that shift.
+  let shift = (await gerant('GET', '/api/shifts/current')).data;
+  const till = await advance(jean.id, { amount: 20, source: 'poste' });
+  assert.deepStrictEqual([till.status, till.data.shift_id, till.data.method], [201, shift.id, 'espèces']);
+
+  let s = await sheet('Jean');
+  assert.deepStrictEqual([s.advanced, s.net, s.advances.map((a) => a.source)], [60, 40, ['espèces', 'mobile money', 'poste']]);
+  // Paid in two goes.
+  assert.strictEqual((await pay(jean.id, { month: M, amount: 25, source: 'espèces' })).status, 201);
+  const second = await pay(jean.id, { month: M, amount: 15, source: 'mobile money' });
+  assert.deepStrictEqual([second.data.description, second.data.pay_kind], [`Salaire de ${require('../src/payroll').monthLabel(M)} : Jean`, 'salaire']);
+  s = await sheet('Jean');
+  assert.deepStrictEqual([s.paid, s.net], [40, 0]);
+
+  // Advanced more than the salary: the rest is carried; last month's salary paid today counts for last month.
+  const L = monthOf(-1);
+  const marie = (await gerant('POST', '/api/staff', { name: 'Marie', function: 'Caissier', hiredOn: '2025-06-01', salary: 80, payFrom: L })).data;
+  assert.strictEqual((await advance(marie.id, { amount: 100, date: `${L}-10`, source: 'espèces' })).status, 201);
+  s = await sheet('Marie');
+  assert.deepStrictEqual([s.carried, s.net], [-20, 60]);
+  assert.strictEqual((await pay(marie.id, { month: L, amount: 10, source: 'espèces' })).status, 201);
+  s = await sheet('Marie');
+  assert.deepStrictEqual([s.carried, s.paid, s.net], [-30, 0, 50]);
+  const last = await sheet('Marie', L);
+  assert.deepStrictEqual([last.salary.amount, last.advanced, last.paid, last.net], [80, 100, 10, -30]);
+
+  // Refused: a month to come, a date to come, before « Paie depuis », the owner.
+  assert.strictEqual((await pay(jean.id, { month: monthOf(1), amount: 5, source: 'espèces' })).status, 400);
+  const tomorrow = new Date(Date.now() + 864e5).toLocaleDateString('sv-SE');
+  assert.strictEqual((await advance(jean.id, { amount: 5, date: tomorrow, source: 'espèces' })).status, 400);
+  assert.strictEqual((await advance(jean.id, { amount: 5, date: `${L}-10`, source: 'espèces' })).status, 400, 'Jean est payé depuis ce mois');
+  const awa = client();
+  await awa('POST', '/api/auth/login', { login: 'awa', password: 'actionnaire2' });
+  assert.strictEqual((await advance(jean.id, { amount: 5, source: 'espèces' }, awa)).data.code, 'read_only');
+
+  // The shift's closing counts the advance; cancelled afterwards, the shift is reconciled again.
+  await nextSecond();
+  const ends = Object.fromEntries((await gerant('GET', '/api/stock/meters')).data.map((m) => [m.nozzleId, m.latest + 100]));
+  const closed = await closeShift(shift, ends, { cash: 50, changeLeft: 0 });
+  assert.strictEqual(closed.status, 200, JSON.stringify(closed.data));
+  assert.ok(closed.data.expenses_amount >= 20);
+  assert.strictEqual((await gerant('DELETE', `/api/staff/${jean.id}/operations/${till.data.id}`)).status, 204);
+  const after = (await gerant('GET', `/api/shifts/${shift.id}`)).data;
+  assert.strictEqual(round2(closed.data.expenses_amount - after.expenses_amount), 20);
+  assert.strictEqual(round2(after.expected_amount - closed.data.expected_amount), 20);
+  assert.strictEqual((await sheet('Jean')).advanced, 40);
+  assert.ok((await gerant('GET', '/api/audit?category=agents')).data.some((a) => a.action === 'staff_operation_deleted'));
+
+  // « Salaires » only from Agents; an agent's expense is not changed elsewhere; an old one still is.
+  const refused = await gerant('POST', '/api/expenses', { category: 'Salaires', amount: 5, description: 'x' });
+  assert.deepStrictEqual([refused.status, refused.data.code], [400, 'salary_staff']);
+  shift = (await gerant('GET', '/api/shifts/current')).data;
+  assert.strictEqual((await gerant('POST', `/api/shifts/${shift.id}/expenses`, { category: 'Salaires', amount: 5, description: 'x' })).data.code, 'salary_staff');
+  assert.strictEqual((await gerant('PUT', `/api/expenses/${cash.data.id}`, { amount: 31 })).data.code, 'staff_expense');
+  const other = (await gerant('POST', '/api/expenses', { category: 'Fournitures', amount: 5, description: 'Papier' })).data;
+  assert.strictEqual((await gerant('PUT', `/api/expenses/${other.id}`, { category: 'Salaires' })).data.code, 'salary_staff');
+  const old = db.prepare("INSERT INTO expenses (expense_date, category, amount, description, method) VALUES (date('now', 'localtime'), 'Salaires', 50, 'Salaire de septembre', 'espèces')").run().lastInsertRowid;
+  const edited = await gerant('PUT', `/api/expenses/${old}`, { amount: 55 });
+  assert.deepStrictEqual([edited.status, edited.data.category, edited.data.amount], [200, 'Salaires', 55]);
+  assert.ok(!(await gerant('GET', '/api/auth/me')).data.settings.expenseCategories.includes('Salaires'));
 });
