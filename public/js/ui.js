@@ -562,8 +562,8 @@ export function field(f) {
   }
   if (f.onInput) input.addEventListener('input', f.onInput);
   // Floating-label field: the label sits inside the box and floats up once the field is used.
-  // Selects, text areas and dates always show a value, so their label stays up.
-  const pinned = f.type === 'select' || f.type === 'textarea' || f.type === 'date';
+  // Selects, text areas, dates and months always show a value, so their label stays up.
+  const pinned = f.type === 'select' || f.type === 'textarea' || f.type === 'date' || f.type === 'month';
   const el = h(
     'label',
     { class: `field ${f.full ? 'full' : ''}`, for: id, hidden: f.hidden },
