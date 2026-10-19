@@ -38,9 +38,11 @@ function payslipPdf({ staff, sheet, stationName, now }) {
   }
 
   report.section('Reste');
-  report.line('Payé pour ce mois (avances et salaire)', fmt.money(sheet.advanced + sheet.paid));
-  if (sheet.net >= -0.005) report.line('Reste à payer', fmt.money(Math.max(0, sheet.net)), { bold: true, color: sheet.net > 0.005 ? COLORS.BAD : COLORS.INK });
-  else report.line('Avancé en trop, retiré du mois suivant', fmt.money(-sheet.net), { bold: true, color: COLORS.BAD });
+  report.line('Payé pour ce mois', fmt.money(sheet.advanced + sheet.paid));
+  if (sheet.net < -0.005) report.line('Avancé en trop', fmt.money(-sheet.net), { bold: true, color: COLORS.BAD });
+  // A rest paid with the next month is not owed any more.
+  else if (sheet.due < 0.005 && sheet.net > 0.005) report.line('Reporté au mois suivant', fmt.money(sheet.net), { bold: true });
+  else report.line('Reste à payer', fmt.money(sheet.due), { bold: true, color: sheet.due > 0.005 ? COLORS.BAD : COLORS.INK });
   return report.finish();
 }
 

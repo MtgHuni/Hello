@@ -7,6 +7,8 @@ const FUNCTIONS = ['Pompiste', 'Gérant', 'Caissier', 'Gardien', 'Autre'];
 const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 
 const monthLabel = (month) => `${MONTHS[Number(month.slice(5, 7)) - 1]} ${month.slice(0, 4)}`;
+// « de septembre 2026 », « d’octobre 2026 ».
+const ofMonth = (month) => (/^[aeiouy]/.test(monthLabel(month).normalize('NFD')) ? `d’${monthLabel(month)}` : `de ${monthLabel(month)}`);
 const addMonths = (month, n) => new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1 + n, 1)).toISOString().slice(0, 7);
 const daysIn = (month) => new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate();
 const currentMonth = (db) => db.prepare("SELECT strftime('%Y-%m', 'now', 'localtime') AS m").get().m;
@@ -29,13 +31,8 @@ function salaryOf(db, staff, month) {
 }
 
 // One month of an agent: its salary, what the months before left (owed > 0, advanced too much < 0),
-// its advances and payments, and the net still to pay.
-function sheetOf(db, staff, month) {
-  const counted = Object.fromEntries(
-    db.prepare('SELECT pay_month AS m, SUM(amount) AS v FROM expenses WHERE staff_id = ? GROUP BY pay_month').all(staff.id).map((r) => [r.m, r.v]),
-  );
-  let carried = 0;
-  for (let m = staff.pay_from; m < month; m = addMonths(m, 1)) carried = round(carried + salaryOf(db, staff, m).amount - (counted[m] || 0));
+// its advances and payments, and the net (what the month leaves, carried to the next one).
+function monthSheet(db, staff, month, carried) {
   const salary = salaryOf(db, staff, month);
   const operations = db
     .prepare(
@@ -53,13 +50,41 @@ function sheetOf(db, staff, month) {
   return { month, salary, carried, advances, payments, advanced, paid, net: round(salary.amount + carried - advanced - paid) };
 }
 
+// Every month from « Paie depuis » to `until`. `due` is what is still to pay for a month once the
+// months after it are counted: a month whose rest was paid with the next one is not owed any more.
+function sheetsOf(db, staff, until) {
+  const sheets = [];
+  let carried = 0;
+  for (let m = staff.pay_from; m <= until; m = addMonths(m, 1)) {
+    const sheet = monthSheet(db, staff, m, carried);
+    sheets.push(sheet);
+    carried = sheet.net;
+  }
+  let lowest = Infinity;
+  for (let i = sheets.length - 1; i >= 0; i--) {
+    lowest = Math.min(lowest, sheets[i].net);
+    sheets[i].due = round(Math.max(0, lowest));
+  }
+  return sheets;
+}
+
+function sheetOf(db, staff, month) {
+  if (month < staff.pay_from) return { ...monthSheet(db, staff, month, 0), due: 0 };
+  const now = currentMonth(db);
+  return sheetsOf(db, staff, month > now ? month : now).find((s) => s.month === month);
+}
+
 // The pay of a month: every agent with a salary, something carried or an operation that month.
 function payroll(db, month) {
   const agents = db
     .prepare('SELECT st.*, u.name AS user_name FROM staff st LEFT JOIN users u ON u.id = st.user_id ORDER BY st.name COLLATE NOCASE')
     .all()
     .map((st) => ({ ...st, sheet: sheetOf(db, st, month) }))
-    .filter(({ sheet: s }) => s.salary.amount > 0 || Math.abs(s.carried) >= 0.005 || s.advances.length || s.payments.length);
+    // Everyone still there (even before their first day), and anyone gone with money still owed.
+    .filter(
+      ({ sheet: s, ...st }) =>
+        s.salary.amount > 0 || Math.abs(s.carried) >= 0.005 || s.advances.length || s.payments.length || (month >= st.pay_from && (!st.left_on || st.left_on >= `${month}-01`)),
+    );
   const total = (f) => round(agents.reduce((t, a) => t + f(a.sheet), 0));
   return {
     month,
@@ -69,9 +94,9 @@ function payroll(db, month) {
       advanced: total((s) => s.advanced),
       paid: total((s) => s.paid),
       // What is still to pay: an agent advanced too much does not lower what the others are owed.
-      net: total((s) => Math.max(0, s.net)),
+      net: total((s) => s.due),
     },
   };
 }
 
-module.exports = { FUNCTIONS, monthLabel, addMonths, currentMonth, salaryOf, sheetOf, payroll, sourceOf };
+module.exports = { FUNCTIONS, monthLabel, ofMonth, addMonths, currentMonth, salaryOf, sheetOf, sheetsOf, payroll, sourceOf };

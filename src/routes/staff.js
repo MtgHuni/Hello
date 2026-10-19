@@ -3,7 +3,7 @@ const { SALARY, getSettings } = require('../db');
 const { fail, num, str, oneOf, dateParam, money, round, transaction } = require('../util');
 const { requireRole, requireAdmin } = require('../auth');
 const { audit } = require('../audit');
-const { FUNCTIONS, monthLabel, currentMonth, salaryOf, sheetOf, payroll, addMonths, sourceOf } = require('../payroll');
+const { FUNCTIONS, monthLabel, ofMonth, currentMonth, salaryOf, sheetOf, sheetsOf, payroll, sourceOf } = require('../payroll');
 const { payslipPdf } = require('../payslip');
 
 const manager = requireRole('manager');
@@ -52,8 +52,7 @@ module.exports = function staffRoutes(db, { mailer }) {
 
   router.get('/staff/:id', manager, (req, res) => {
     const staff = staffRow(req.params.id);
-    const months = [];
-    for (let m = currentMonth(db); m >= staff.pay_from; m = addMonths(m, -1)) months.push(sheetOf(db, staff, m));
+    const months = sheetsOf(db, staff, currentMonth(db)).reverse();
     res.json({
       staff,
       salaries: db.prepare('SELECT from_month, amount FROM staff_salaries WHERE staff_id = ? ORDER BY from_month DESC').all(staff.id),
@@ -137,7 +136,7 @@ module.exports = function staffRoutes(db, { mailer }) {
       if (!shift) fail(409, 'Aucun poste ouvert.');
       if (shift.station_closed_at) fail(409, 'La station est fermée : faites l’ouverture pour continuer le poste.', 'station_closed');
     }
-    const description = kind === 'avance' ? `Avance sur salaire : ${staff.name}` : `Salaire de ${monthLabel(month)} : ${staff.name}`;
+    const description = kind === 'avance' ? `Avance sur salaire : ${staff.name}` : `Salaire ${ofMonth(month)} : ${staff.name}`;
     const id = transaction(db, () => {
       const id = Number(
         db
@@ -152,7 +151,7 @@ module.exports = function staffRoutes(db, { mailer }) {
         action: kind === 'avance' ? 'staff_advance' : 'staff_payment',
         entity: 'expenses',
         id,
-        summary: `${kind === 'avance' ? 'Avance' : `Salaire de ${monthLabel(month)}`} payé${kind === 'avance' ? 'e' : ''} à ${staff.name} : ${money(amount)} (${SOURCE_LABEL[source]}${shift ? ` n°${shift.id}` : ''})`,
+        summary: `${kind === 'avance' ? 'Avance' : `Salaire ${ofMonth(month)}`} payé${kind === 'avance' ? 'e' : ''} à ${staff.name} : ${money(amount)} (${SOURCE_LABEL[source]}${shift ? ` n°${shift.id}` : ''})`,
       });
       return id;
     });
@@ -181,6 +180,30 @@ module.exports = function staffRoutes(db, { mailer }) {
     if (month < staff.pay_from) fail(400, `Rien n’est compté pour ${staff.name} avant ${monthLabel(staff.pay_from)}.`);
     const source = oneOf(b.source, 'D’où sort l’argent', SOURCES);
     res.status(201).json(payOut(req, staff, { kind: 'salaire', month, date: today(), amount: amountParam(b.amount), source }));
+  });
+
+  // An amount entered wrongly, corrected from the agent's record; paid with a closed shift's money,
+  // that shift is reconciled again.
+  router.put('/staff/:id/operations/:expenseId', manager, (req, res) => {
+    const staff = staffRow(req.params.id);
+    const e = db.prepare('SELECT e.*, s.status AS shift_status FROM expenses e LEFT JOIN shifts s ON s.id = e.shift_id WHERE e.id = ? AND e.staff_id = ?').get(req.params.expenseId, staff.id);
+    if (!e) fail(404, 'Opération introuvable.');
+    const amount = amountParam(req.body?.amount);
+    transaction(db, () => {
+      db.prepare('UPDATE expenses SET amount = ? WHERE id = ?').run(amount, e.id);
+      audit(db, req, {
+        category: 'agents',
+        action: 'staff_operation_corrected',
+        entity: 'expenses',
+        id: e.id,
+        summary: `${e.pay_kind === 'avance' ? 'Avance' : 'Paiement de salaire'} corrigé${e.pay_kind === 'avance' ? 'e' : ''} : ${staff.name}, ${money(e.amount)} → ${money(amount)} (${monthLabel(e.pay_month)})`,
+        before: e,
+        after: { ...e, amount },
+      });
+      if (e.shift_status === 'closed') mailer.services.reconcile(e.shift_id);
+    });
+    const after = db.prepare('SELECT * FROM expenses WHERE id = ?').get(e.id);
+    res.json({ ...after, source: sourceOf(after) });
   });
 
   // Cancelled from the agent's record: the expense goes (kept in the journal); paid with a shift's

@@ -1980,7 +1980,7 @@ test('paie : avances depuis la caisse ou le poste, paiement en deux fois, reste 
   // Paid in two goes.
   assert.strictEqual((await pay(jean.id, { month: M, amount: 25, source: 'espèces' })).status, 201);
   const second = await pay(jean.id, { month: M, amount: 15, source: 'mobile money' });
-  assert.deepStrictEqual([second.data.description, second.data.pay_kind], [`Salaire de ${require('../src/payroll').monthLabel(M)} : Jean`, 'salaire']);
+  assert.deepStrictEqual([second.data.description, second.data.pay_kind], [`Salaire ${require('../src/payroll').ofMonth(M)} : Jean`, 'salaire']);
   s = await sheet('Jean');
   assert.deepStrictEqual([s.paid, s.net], [40, 0]);
 
@@ -2044,4 +2044,50 @@ test('bulletin de paie : le mois d’un agent en PDF', async () => {
   assert.strictEqual((await awa('GET', url)).status, 200, 'l’actionnaire le lit');
   assert.strictEqual((await pompiste('GET', url)).status, 403);
   assert.strictEqual((await gerant('GET', `/api/staff/${ctx.jean.id}/payslip.pdf?month=2026-13`)).status, 400);
+});
+
+test('paie : un mois passé payé le mois suivant n’est plus dû ; correction d’une avance ; libellés', async () => {
+  const L = monthOf(-1);
+  const M = monthOf();
+  const { ofMonth } = require('../src/payroll');
+  const get = async (name, month) => (await gerant('GET', `/api/staff?month=${month}`)).data.agents.find((a) => a.name === name);
+  const bosco = (await gerant('POST', '/api/staff', { name: 'Bosco', function: 'Autre', hiredOn: '2025-01-01', salary: 100, payFrom: L })).data;
+  // Last month unpaid: due then, and with this month.
+  assert.deepStrictEqual([(await get('Bosco', L)).sheet.due, (await get('Bosco', M)).sheet.due], [100, 200]);
+  // Paid from this month's line: last month is not owed any more.
+  assert.strictEqual((await gerant('POST', `/api/staff/${bosco.id}/payments`, { month: M, amount: 200, source: 'espèces' })).status, 201);
+  const last = (await get('Bosco', L)).sheet;
+  assert.deepStrictEqual([last.net, last.due, (await get('Bosco', M)).sheet.due], [100, 0, 0], 'reporté au mois suivant, payé avec lui');
+  const slip = (await gerant('GET', `/api/staff/${bosco.id}/payslip.pdf?month=${L}`)).raw.toString('latin1');
+  assert.ok(slip.includes('(Report\\351 au mois suivant)') && !slip.includes('(Reste \\340 payer)'));
+  assert.ok(slip.includes('(Pay\\351 pour ce mois)') && !slip.includes('avances et salaire'), 'pas de texte d’explication');
+
+  // « de » or « d’ » before the month.
+  const anna = (await gerant('POST', '/api/staff', { name: 'Anna', function: 'Autre', hiredOn: '2025-01-01', salary: 50, payFrom: '2026-08' })).data;
+  const aug = (await gerant('POST', `/api/staff/${anna.id}/payments`, { month: '2026-08', amount: 50, source: 'espèces' })).data;
+  const sep = (await gerant('POST', `/api/staff/${anna.id}/payments`, { month: '2026-09', amount: 50, source: 'espèces' })).data;
+  assert.deepStrictEqual([aug.description, sep.description], ['Salaire d’août 2026 : Anna', 'Salaire de septembre 2026 : Anna']);
+  assert.strictEqual(ofMonth('2026-10'), 'd’octobre 2026');
+
+  // An agent who starts next month is listed already, nothing to pay.
+  const next = monthOf(1);
+  await gerant('POST', '/api/staff', { name: 'Zoé', function: 'Pompiste', hiredOn: `${next}-01`, salary: 90 });
+  const zoe = await get('Zoé', M);
+  assert.ok(zoe, 'trouvée dans la liste');
+  assert.deepStrictEqual([zoe.sheet.salary.amount, zoe.sheet.due], [0, 0]);
+
+  // An advance from a shift's money, corrected after its closing: the shift is reconciled again.
+  let shift = (await gerant('GET', '/api/shifts/current')).data;
+  const till = (await gerant('POST', `/api/staff/${bosco.id}/advances`, { amount: 20, source: 'poste' })).data;
+  await nextSecond();
+  const ends = Object.fromEntries((await gerant('GET', '/api/stock/meters')).data.map((m) => [m.nozzleId, m.latest + 100]));
+  const closed = (await closeShift(shift, ends, { cash: 40, changeLeft: 0 })).data;
+  const fixed = await gerant('PUT', `/api/staff/${bosco.id}/operations/${till.id}`, { amount: 15 });
+  assert.deepStrictEqual([fixed.status, fixed.data.amount, fixed.data.staff_id, fixed.data.category], [200, 15, bosco.id, 'Salaires']);
+  shift = (await gerant('GET', `/api/shifts/${shift.id}`)).data;
+  assert.strictEqual(round2(closed.expenses_amount - shift.expenses_amount), 5);
+  assert.strictEqual((await get('Bosco', M)).sheet.advanced, 15);
+  const awa = client();
+  await awa('POST', '/api/auth/login', { login: 'awa', password: 'actionnaire2' });
+  assert.strictEqual((await awa('PUT', `/api/staff/${bosco.id}/operations/${till.id}`, { amount: 10 })).data.code, 'read_only');
 });

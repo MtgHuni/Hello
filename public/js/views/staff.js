@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { h, fmt, flags, edit, adminEdit, pageHeader, cardHeader, kpi, badge, button, table, field, formDialog, confirmDialog, toast, todayISO, setContent, shareButton } from '../ui.js';
+import { h, fmt, flags, edit, adminEdit, pageHeader, cardHeader, kpi, badge, button, table, field, formDialog, confirmDialog, actionSheet, toast, todayISO, setContent, shareButton } from '../ui.js';
 import { icon } from '../icons.js';
 
 // Agents: the pay of a month (#/agents) and each agent's record (#/agents/<id>). An advance or a
@@ -28,11 +28,11 @@ const monthsFrom = (first) => {
 const sourceLabel = (e) => (e.source === 'poste' ? `Argent du poste n°${e.shift_id}` : SOURCES.find(([v]) => v === e.source)?.[1] || e.source);
 const isZero = (n) => Math.abs(n) < 0.005;
 
-// What the month leaves: to pay, paid, or advanced too much.
+// What the month leaves: to pay, paid, or advanced too much; nothing yet before the first day.
 function netCell(sheet) {
-  if (isZero(sheet.net)) return badge('Payé', 'good');
-  if (sheet.net < 0) return h('span', { class: 'variance-neg' }, `Avancé ${fmt.money(-sheet.net)}`);
-  return h('strong', {}, fmt.money(sheet.net));
+  if (sheet.net < -0.005) return h('span', { class: 'variance-neg' }, `Avancé ${fmt.money(-sheet.net)}`);
+  if (sheet.due > 0.005) return h('strong', {}, fmt.money(sheet.due));
+  return sheet.salary.amount || sheet.advances.length || sheet.payments.length ? badge('Payé', 'good') : '—';
 }
 
 let shownMonth = null;
@@ -76,8 +76,8 @@ export async function renderStaff(page, ctx) {
             label: '',
             align: 'right',
             render: (a) =>
-              a.sheet.net > 0.005
-                ? edit(button('Payer', (e) => (e.stopPropagation(), payDialog(a, [{ month, net: a.sheet.net }], reload)), { variant: 'secondary' }))
+              a.sheet.due > 0.005
+                ? edit(button('Payer', (e) => (e.stopPropagation(), payDialog(a, [{ month, due: a.sheet.due }], reload)), { variant: 'secondary' }))
                 : null,
           },
         ],
@@ -93,7 +93,7 @@ export async function renderStaffDetail(page, ctx) {
   const s = data.staff;
   const reload = () => renderStaffDetail(page, ctx);
   // « Payer » goes to the oldest month still owed, else this month.
-  const owed = [...data.months].reverse().filter((m) => m.net > 0.005);
+  const owed = [...data.months].reverse().filter((m) => m.due > 0.005);
 
   setContent(
     page,
@@ -103,7 +103,7 @@ export async function renderStaffDetail(page, ctx) {
       [s.function, s.phone, s.user_name ? (s.user_name === s.name ? 'a un compte' : `compte ${s.user_name}`) : null].filter(Boolean).join(' · '),
       s.left_on ? badge(`Parti le ${fmt.date(s.left_on)}`, 'warning') : null,
       edit(button('Avance', () => advanceDialog(s, reload), { iconName: 'cash' })),
-      edit(button('Payer', () => payDialog(s, (owed.length ? owed : data.months.slice(0, 1)).map((m) => ({ month: m.month, net: m.net })), reload), { variant: 'secondary', iconName: 'wallet' })),
+      edit(button('Payer', () => payDialog(s, (owed.length ? owed : data.months.slice(0, 1)).map((m) => ({ month: m.month, due: m.due })), reload), { variant: 'secondary', iconName: 'wallet' })),
       adminEdit(button('Modifier', () => staffDialog(data, ctx, reload), { variant: 'secondary', iconName: 'edit' })),
     ),
     h(
@@ -114,7 +114,7 @@ export async function renderStaffDetail(page, ctx) {
       line('Paie depuis', capital(monthLabel(s.pay_from))),
       data.salaries.length > 1 ? data.salaries.map((x) => line(`Dès ${monthLabel(x.from_month)}`, fmt.money(x.amount))) : null,
     ),
-    data.months.map((m) => monthCard(s, m, reload)),
+    data.months.map((m, i) => monthCard(s, m, i === 0, reload)),
   );
 }
 
@@ -122,8 +122,8 @@ const line = (label, value, { total = false, lost = false } = {}) =>
   h('div', { class: `summary-line${total ? ' total' : ''}` }, h('span', {}, label), h('span', { class: `num${lost ? ' variance-neg' : ''}` }, value));
 
 // One month of the agent: salary, what the month before left, each advance and payment, the net.
-function monthCard(s, m, reload) {
-  const operations = [...m.advances, ...m.payments].sort((a, b) => (a.expense_date + a.id).localeCompare(b.expense_date + b.id));
+function monthCard(s, m, current, reload) {
+  const operations = [...m.advances, ...m.payments].sort((a, b) => a.expense_date.localeCompare(b.expense_date) || a.id - b.id);
   return h(
     'section',
     { class: 'card section' },
@@ -135,11 +135,39 @@ function monthCard(s, m, reload) {
       const row = line(`${e.pay_kind === 'avance' ? 'Avance' : 'Salaire'} du ${fmt.date(e.expense_date)} · ${sourceLabel(e)}`, fmt.money(-e.amount));
       if (flags.readonly) return row;
       row.classList.add('clickable');
-      Object.assign(row, { tabIndex: 0, role: 'button', onclick: () => cancelOperation(s, e, reload), onkeydown: (k) => k.key === 'Enter' && cancelOperation(s, e, reload) });
+      Object.assign(row, { tabIndex: 0, role: 'button', onclick: () => operationMenu(s, e, reload), onkeydown: (k) => k.key === 'Enter' && operationMenu(s, e, reload) });
       return row;
     }),
-    line(m.net < 0 ? 'Avancé en trop' : 'Net à payer', fmt.money(Math.abs(m.net)), { total: true, lost: m.net < 0 }),
+    m.net < -0.005
+      ? line('Avancé en trop', fmt.money(-m.net), { total: true, lost: true })
+      : !current && m.due < 0.005 && m.net > 0.005
+        ? line('Reporté au mois suivant', fmt.money(m.net), { total: true })
+        : line('Net à payer', fmt.money(current ? m.net : m.due), { total: true }),
   );
+}
+
+// Touched: its amount corrected, or cancelled.
+function operationMenu(s, e, reload) {
+  const what = e.pay_kind === 'avance' ? 'l’avance' : 'le paiement';
+  actionSheet({
+    title: `${e.pay_kind === 'avance' ? 'Avance' : 'Salaire'} · ${fmt.money(e.amount)} · ${fmt.date(e.expense_date)}`,
+    actions: [
+      { label: 'Corriger le montant', onClick: () => correctOperation(s, e, reload) },
+      { label: `Annuler ${what}`, destructive: true, onClick: () => cancelOperation(s, e, reload) },
+    ],
+  });
+}
+
+async function correctOperation(s, e, reload) {
+  const ok = await formDialog({
+    title: e.pay_kind === 'avance' ? 'Corriger l’avance' : 'Corriger le paiement',
+    fields: [{ name: 'amount', label: 'Montant ($)', type: 'number', step: '0.01', min: '0.01', required: true, value: e.amount }],
+    onSubmit: (d) => api.put(`/staff/${s.id}/operations/${e.id}`, { amount: Number(d.amount) }),
+  });
+  if (ok) {
+    toast('Montant corrigé.');
+    reload();
+  }
 }
 
 async function cancelOperation(s, e, reload) {
@@ -171,9 +199,9 @@ async function advanceDialog(s, reload) {
   }
 }
 
-// months: [{ month, net }], the first proposed; the amount follows the month chosen.
+// months: [{ month, due }], the first proposed; the amount follows the month chosen.
 async function payDialog(s, months, reload) {
-  const netOf = (m) => Math.max(0, months.find((x) => x.month === m)?.net || 0);
+  const netOf = (m) => months.find((x) => x.month === m)?.due || 0;
   const ok = await formDialog({
     title: `Payer — ${s.name}`,
     fields: [

@@ -151,7 +151,7 @@ async function expenseDialog(e, categories, reload) {
       // A category no longer offered (« Salaires » entered before Agents) stays on its expense.
       { name: 'category', label: 'Catégorie', type: 'select', options: [...categories, ...(e && !categories.includes(e.category) ? [e.category] : [])].map((c) => [c, c]), value: e?.category, required: true },
       { name: 'method', label: 'Payée par', type: 'select', options: METHODS, value: e?.method || 'espèces' },
-      { name: 'description', label: 'Description', value: e?.description, required: true, full: true, placeholder: 'Ex. : salaire de septembre, carburant du générateur…' },
+      { name: 'description', label: 'Description', value: e?.description, required: true, full: true, placeholder: 'Ex. : carburant du générateur…' },
       { name: 'beneficiary', label: 'Bénéficiaire', value: e?.beneficiary, placeholder: 'Facultatif', onInput: payTo.onInput },
       payTo.node,
       { name: 'reference', label: 'Référence / n° de reçu', value: e?.reference, placeholder: 'Facultatif' },
