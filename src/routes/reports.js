@@ -4,7 +4,8 @@ const { round, dateParam, fail, csvCell, money, transaction } = require('../util
 const { requireRole } = require('../auth');
 const { balanceSql, subscriberDues, creditAllocation } = require('../loyalty');
 const { ACCOUNTS, KINDS, balances, cashbook, supplierBalances } = require('../cashbook');
-const { attendantNamesSql, closingCutoff } = require('../checkpoints');
+const { attendantNamesSql, closingCutoff, currentPeriod, lastMeters } = require('../checkpoints');
+const { payroll, currentMonth } = require('../payroll');
 const { periodReportPdf } = require('../periodReport');
 const { withLiveStock } = require('../liveStock');
 const { ALERT_TYPES, userAlerts } = require('../alerts');
@@ -229,24 +230,45 @@ module.exports = function reportRoutes(db) {
     };
   }
 
+  // What the station is worth now: its money (both cash book balances, the money of the open shift and
+  // of the closed shifts not counted yet), the customers' credits and the fuel in the tanks at its purchase
+  // cost, less what it owes (suppliers, salaries still to pay, customers' advances, combos when they run).
+  // The open shift brings into the cash book, at its closing, what it received and sold less the credits
+  // and combos, plus the payments: its expenses have already left the cash book.
+  function stationValue({ settings, today, tanks, customers, combos, supplierDebt, cash, receivables: owed }) {
+    let shift = 0;
+    for (const s of db.prepare("SELECT * FROM shifts WHERE status = 'open'").all()) {
+      const readings = db.prepare('SELECT r.*, p.name AS product_name FROM shift_readings r JOIN products p ON p.id = r.product_id WHERE r.shift_id = ?').all(s.id);
+      const r = currentPeriod(db, s, readings, lastMeters(db, s.id) || new Map());
+      shift += r.received + r.sold - r.credits - r.combos + r.payments + (s.francs_received || 0);
+    }
+    // A closing without the money yet: the cash book only has its mobile money.
+    const uncounted = db.prepare("SELECT COALESCE(SUM(expected_amount - COALESCE(mobile_money, 0)), 0) AS v FROM shifts WHERE status = 'closed' AND counted_at IS NULL").get().v;
+    const fuel = tanks.map((t) => {
+      const cost = avgCost.get(t.product_id, today).cost;
+      return { id: t.id, name: t.name, product_id: t.product_id, product_name: t.product_name, liters: round(t.book_stock), cost, value: cost == null ? null : round(t.book_stock * cost) };
+    });
+    const assets = {
+      cash: cash.cash.balance,
+      momo: cash.momo.balance,
+      shift: round(shift),
+      uncounted: round(uncounted),
+      receivables: owed,
+      fuel: round(fuel.reduce((t, f) => t + (f.value || 0), 0)),
+    };
+    const debts = {
+      suppliers: supplierDebt,
+      salaries: payroll(db, currentMonth(db)).totals.net,
+      advances: round(customers.reduce((t, c) => t + Math.max(0, -c.balance), 0)),
+      combos: settings.combosEnabled ? round(combos.total * settings.comboValue) : 0,
+    };
+    const sum = (o) => Object.values(o).reduce((t, x) => t + x, 0);
+    return { assets, debts, tanks: fuel, net: round(sum(assets) - sum(debts)) };
+  }
+
   router.get('/dashboard', manager, (req, res) => {
     const settings = getSettings(db);
     const today = db.prepare("SELECT date('now', 'localtime') AS d").get().d;
-
-    const todayByProduct = db
-      .prepare(
-        `SELECT p.id, p.name, COALESCE(SUM(r.liters), 0) AS liters, COALESCE(SUM(r.amount), 0) AS amount
-         FROM products p
-         LEFT JOIN (SELECT r.* FROM shift_readings r JOIN shifts s ON s.id = r.shift_id
-                    WHERE s.status != 'open' AND ${DAY} = ?) r ON r.product_id = p.id
-         WHERE p.active = 1 GROUP BY p.id ORDER BY p.id`,
-      )
-      .all(today);
-    const todaySurcharge = surcharges(today, today);
-    for (const r of todayByProduct) {
-      r.liters = round(r.liters);
-      r.amount = round(r.amount + (todaySurcharge.get(`${today}|${r.id}`) || 0));
-    }
 
     const last7 = db
       .prepare(
@@ -259,26 +281,21 @@ module.exports = function reportRoutes(db) {
       .map((r) => ({ ...r, amount: round(r.amount), liters: round(r.liters) }));
 
     const { tanks, openShifts, customers, combos, alerts, toReview, supplierDebt } = stationAlerts(settings);
-    const todayExpenses = round(db.prepare('SELECT COALESCE(SUM(amount), 0) AS v FROM expenses WHERE expense_date = ?').get(today).v);
 
     const shown = userAlerts(db, req.user.id, alerts);
     const owed = receivables(customers);
+    const cash = balances(db);
     res.json({
       today,
       settings,
-      todayByProduct,
-      todayTotal: {
-        liters: round(todayByProduct.reduce((t, p) => t + p.liters, 0)),
-        amount: round(todayByProduct.reduce((t, p) => t + p.amount, 0)),
-      },
       last7,
       tanks,
       openShifts,
-      cash: balances(db),
+      cash,
       supplierDebt,
       receivables: owed.total,
       receivablesOld: owed.old,
-      todayExpenses,
+      value: stationValue({ settings, today, tanks, customers, combos, supplierDebt, cash, receivables: owed.total }),
       toReview,
       combos: { total: combos.total, value: round(combos.total * settings.comboValue), redeemable: combos.redeemable },
       alerts: shown.visible,

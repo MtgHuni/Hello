@@ -1,6 +1,6 @@
 import { flags, edit } from '../ui.js';
 import { api } from '../api.js';
-import { h, fmt, kpi, cardHeader, tankGauge, pageHeader, button, setContent, priceTotem, formDialog, toast, field, busy } from '../ui.js';
+import { h, fmt, kpi, cardHeader, tankGauge, pageHeader, button, setContent, priceTotem, formDialog, toast, field, busy, openDialog } from '../ui.js';
 import { icon } from '../icons.js';
 
 const ALERT_ICON = { critical: 'alert', serious: 'alert', warning: 'info' };
@@ -23,7 +23,7 @@ export async function renderDashboard(page, { state, navigate }) {
     h(
       'div',
       { class: 'grid grid-4' },
-      kpi("Ventes aujourd'hui", fmt.money(d.todayTotal.amount), [d.openShifts.length ? `${d.openShifts.length} poste${d.openShifts.length > 1 ? 's' : ''} en cours, compté${d.openShifts.length > 1 ? 's' : ''} à la clôture` : 'Postes clôturés', `Dépenses : ${fmt.money(d.todayExpenses)}`].join(' · ')),
+      valueKpi(d.value, flags.combos),
       shiftKpi(d.openShifts[0]),
       h(
         'a',
@@ -119,6 +119,56 @@ function facts(rows) {
 }
 
 // The station runs one shift at a time: who holds it, since when, or that none is open.
+// What the station is worth now (its money, credits and fuel at purchase cost, less what it owes);
+// touched, every line.
+function valueKpi(v, combos) {
+  const a = v.assets;
+  const money = a.cash + a.momo + a.shift + a.uncounted;
+  const debts = Object.values(v.debts).reduce((t, x) => t + x, 0);
+  const open = () => valueDetail(v, combos);
+  return h(
+    'div',
+    { class: 'card kpi kpi-link', role: 'button', tabIndex: 0, onclick: open, onkeydown: (e) => e.key === 'Enter' && open() },
+    h('div', { class: 'label' }, 'Valeur de la station'),
+    h('div', { class: 'value' }, fmt.money(v.net)),
+    h('div', { class: 'sub' }, `Argent ${fmt.money(money)} · crédits ${fmt.money(a.receivables)} · carburant ${fmt.money(a.fuel)} · dettes ${fmt.money(-debts)}`),
+  );
+}
+
+function valueDetail(v, combos) {
+  const line = (label, value, { total = false, lost = false } = {}) =>
+    h('div', { class: `summary-line${total ? ' total' : ''}` }, h('span', {}, label), h('span', { class: `num${lost ? ' variance-neg' : ''}` }, value));
+  const a = v.assets;
+  const d = v.debts;
+  openDialog((close) =>
+    h(
+      'div',
+      { class: 'sheet dialog-body' },
+      h('h2', {}, 'Valeur de la station'),
+      h('h3', { class: 'form-section' }, 'Ce qu’elle possède'),
+      line('Espèces (caisse)', fmt.money(a.cash)),
+      line('Mobile money', fmt.money(a.momo)),
+      line('Argent du poste en cours', fmt.money(a.shift)),
+      Math.abs(a.uncounted) >= 0.005 ? line('Argent à compter', fmt.money(a.uncounted)) : null,
+      line('Crédits clients', fmt.money(a.receivables)),
+      v.tanks.map((t) =>
+        line(
+          `${t.name} · ${fmt.liters(t.liters)}${t.cost == null ? '' : ` × ${fmt.price(t.cost)}`}`,
+          t.value == null ? 'prix d’achat manquant' : fmt.money(t.value),
+          { lost: t.value == null },
+        ),
+      ),
+      h('h3', { class: 'form-section' }, 'Ce qu’elle doit'),
+      line('Fournisseurs', fmt.money(-d.suppliers)),
+      line('Salaires à payer', fmt.money(-d.salaries)),
+      line('Avances des clients', fmt.money(-d.advances)),
+      combos ? line('Combos des clients', fmt.money(-d.combos)) : null,
+      line('Valeur nette', fmt.money(v.net), { total: true, lost: v.net < 0 }),
+      h('div', { class: 'dialog-actions' }, button('Fermer', close, { variant: 'cancel' })),
+    ),
+  );
+}
+
 function shiftKpi(s) {
   return h(
     'a',

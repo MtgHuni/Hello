@@ -178,8 +178,7 @@ test('poste : prix abonné, crédit sans combos, un crédit à la fois, rapproch
   assert.ok(pdfText.includes('(Cr\\351dits accord\\351s)'));
 
   const dash = (await gerant('GET', '/api/dashboard')).data;
-  assert.strictEqual(dash.todayTotal.amount, 610, 'ventes selon les index + supplément abonnés, comme le poste');
-  assert.strictEqual(dash.last7.at(-1).amount, 610, 'même chiffre que le graphique');
+  assert.strictEqual(dash.last7.at(-1).amount, 610, 'ventes selon les index + supplément abonnés, comme le poste');
   assert.ok(dash.alerts.some((a) => a.text.includes('écart de caisse')));
   // A remark for the attendant, read in the history. There is no validation step.
   assert.strictEqual((await pompiste('POST', `/api/shifts/${shift.id}/remark`, { comment: 'x' })).status, 403);
@@ -2249,4 +2248,62 @@ test('les mails : le logo MTG sans la bande verte et rouge', () => {
   const { html } = renderMail({ title: 'Essai', blocks: [] }, { name: 'Station', appUrl: 'https://station.example' });
   assert.ok(html.includes('/media/mail-logo.png'), 'logo MTG');
   assert.ok(!/#23c46b|#f0313a/i.test(html), 'ni vert gasoil ni rouge essence');
+});
+
+test('tableau de bord : valeur de la station (argent, crédits, carburant au prix d’achat, moins ce qu’elle doit)', async () => {
+  // The deduction tests aged credits of the open shift; a real shift's sales are never older than its opening.
+  db.prepare("UPDATE sales SET created_at = (SELECT opened_at FROM shifts WHERE id = sales.shift_id) WHERE shift_id IN (SELECT id FROM shifts WHERE status = 'open') AND created_at < (SELECT opened_at FROM shifts WHERE id = sales.shift_id)").run();
+  const total = (o) => round2(Object.values(o).reduce((t, x) => t + (x || 0), 0));
+  const salaries = (await gerant('GET', '/api/staff')).data.totals.net;
+  const dash = (await gerant('GET', '/api/dashboard')).data;
+  assert.strictEqual(dash.todayTotal, undefined, 'plus de ventes du jour');
+  let v = dash.value;
+  assert.strictEqual(v.assets.cash, dash.cash.cash.balance);
+  assert.strictEqual(v.assets.momo, dash.cash.momo.balance);
+  assert.strictEqual(v.assets.receivables, dash.receivables);
+  assert.strictEqual(v.debts.suppliers, dash.supplierDebt);
+  assert.strictEqual(v.debts.salaries, salaries);
+  assert.ok(v.tanks.length);
+  for (const t of v.tanks) assert.ok(t.cost == null ? t.value === null : Math.abs(t.value - t.liters * t.cost) < 0.011, `${t.name} : litres × prix d’achat`);
+  assert.strictEqual(v.assets.fuel, round2(v.tanks.reduce((s, t) => s + (t.value || 0), 0)));
+  assert.strictEqual(v.net, round2(total(v.assets) - total(v.debts)));
+  const value = async () => (await gerant('GET', '/api/dashboard')).data.value;
+
+  // A credit: the shift's money goes down, the credits up; the value stays.
+  const shift = (await gerant('GET', '/api/shifts/current')).data;
+  const c = (await gerant('POST', '/api/customers/quick', { name: 'Client Valeur' })).data;
+  assert.strictEqual((await gerant('POST', `/api/shifts/${shift.id}/sales`, { customerId: c.id, productId: ctx.diesel.id, payment: 'credit', amount: 10 })).status, 201);
+  let after = await value();
+  assert.strictEqual(after.assets.shift, round2(v.assets.shift - 10));
+  assert.strictEqual(after.assets.receivables, round2(v.assets.receivables + 10));
+  assert.strictEqual(after.net, v.net);
+  // An expense: the value goes down by it.
+  [v, after] = [after, null];
+  assert.strictEqual((await gerant('POST', `/api/shifts/${shift.id}/expenses`, { category: 'Fournitures', amount: 3, description: 'Chiffons' })).status, 201);
+  after = await value();
+  assert.strictEqual(after.net, round2(v.net - 3));
+  // A customer who paid more than they owe: money in, owed back to them; the value stays.
+  [v, after] = [after, null];
+  const ahead = (await gerant('POST', '/api/customers/quick', { name: 'Client Avance' })).data;
+  assert.strictEqual((await gerant('POST', `/api/customers/${ahead.id}/payments`, { amount: 5, method: 'espèces' })).status, 201);
+  after = await value();
+  assert.strictEqual(after.debts.advances, round2(v.debts.advances + 5));
+  assert.strictEqual(after.net, v.net);
+
+  // The closing with 200 more litres of gasoil: sold at the pump price, out of the tank at the purchase
+  // price; its money, not counted yet, still counts.
+  [v, after] = [after, null];
+  const { openMeters } = require('../src/liveStock');
+  const meters = openMeters(db);
+  const diesel = dieselOf(shift);
+  const ends = Object.fromEntries(meters.map((m) => [m.nozzleId, m.latest + (m.nozzleId === diesel.nozzle_id ? 200 : 0)]));
+  const closing = await closeShift(shift, ends);
+  assert.strictEqual(closing.status, 200, JSON.stringify(closing.data));
+  const closed = closing.data;
+  assert.strictEqual(closed.counted_at, null);
+  after = await value();
+  assert.strictEqual(after.assets.uncounted, round2(v.assets.uncounted + closed.expected_amount - closed.mobile_money));
+  assert.strictEqual(after.assets.shift, 0, 'le nouveau poste commence à zéro');
+  const cost = v.tanks.find((t) => t.id === meters.find((m) => m.nozzleId === diesel.nozzle_id).tankId).cost ?? 0;
+  assert.ok(Math.abs(after.net - round2(v.net + 200 * diesel.unit_price - 200 * cost)) < 0.02, `${after.net} ≠ ${v.net} + 200 L`);
 });
