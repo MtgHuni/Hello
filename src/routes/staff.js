@@ -202,21 +202,26 @@ module.exports = function staffRoutes(db, { mailer }) {
     res.json({ sale_id: sale.id, staff_id: staffId });
   });
 
-  // An expense kept from an agent's pay (once, whoever entered it).
+  // An expense kept from an agent's pay (from one agent at a time, whoever entered it; once forgiven to
+  // an agent, it may be kept from another one).
   router.post('/staff/:id/deductions', manager, (req, res) => {
     const staff = staffRow(req.params.id);
     const expense = db.prepare('SELECT * FROM expenses WHERE id = ?').get(Number(req.body?.expenseId));
     if (!expense) fail(404, 'Dépense introuvable.');
     if (expense.staff_id) fail(400, 'Une avance ou un salaire ne se retient pas.');
     const other = db
-      .prepare(`SELECT st.name FROM staff_deductions d JOIN staff st ON st.id = d.staff_id WHERE d.expense_id = ? GROUP BY d.staff_id HAVING SUM(d.amount) > 0.001 OR MAX(d.reason = 'pardon') = 1`)
-      .get(expense.id);
+      .prepare(
+        `SELECT st.name FROM staff_deductions d JOIN staff st ON st.id = d.staff_id WHERE d.expense_id = ? AND d.source_at = ?
+         GROUP BY d.staff_id HAVING SUM(d.amount) > 0.001 AND MAX(d.reason = 'pardon') = 0`,
+      )
+      .get(expense.id, expense.created_at);
     if (other) fail(409, `Cette dépense est déjà retenue sur le salaire de ${other.name}.`);
+    if (keptFor(db, staff.id, { expenseId: expense.id }).forgiven) fail(409, `Cette dépense est déjà pardonnée à ${staff.name}.`);
     const id = transaction(db, () => {
       const id = Number(
         db
-          .prepare("INSERT INTO staff_deductions (staff_id, expense_id, amount, reason, pay_month, user_id) VALUES (?, ?, ?, 'retenue', ?, ?)")
-          .run(staff.id, expense.id, expense.amount, currentMonth(db), req.user.id).lastInsertRowid,
+          .prepare("INSERT INTO staff_deductions (staff_id, expense_id, source_at, amount, reason, pay_month, user_id) VALUES (?, ?, ?, ?, 'retenue', ?, ?)")
+          .run(staff.id, expense.id, expense.created_at, expense.amount, currentMonth(db), req.user.id).lastInsertRowid,
       );
       audit(db, req, { category: 'agents', action: 'staff_deduction', entity: 'expenses', id: expense.id, summary: `Dépense retenue sur le salaire de ${staff.name} : ${expense.description}, ${money(expense.amount)}` });
       return id;
@@ -229,13 +234,16 @@ module.exports = function staffRoutes(db, { mailer }) {
     const staff = staffRow(req.params.id);
     const source = { saleId: Number(req.body?.saleId) || null, expenseId: Number(req.body?.expenseId) || null };
     if (!source.saleId === !source.expenseId) fail(400, 'Choisissez la retenue à pardonner.');
+    syncDeductions(db);
     const kept = keptFor(db, staff.id, source);
     if (kept.forgiven) fail(409, 'Cette retenue est déjà pardonnée.');
+    if (kept.net < 0.005) fail(409, 'Plus rien n’est retenu pour cette ligne.');
     transaction(db, () => {
-      db.prepare("INSERT INTO staff_deductions (staff_id, sale_id, expense_id, amount, reason, pay_month, user_id) VALUES (?, ?, ?, ?, 'pardon', ?, ?)").run(
+      db.prepare("INSERT INTO staff_deductions (staff_id, sale_id, expense_id, source_at, amount, reason, pay_month, user_id) VALUES (?, ?, ?, ?, ?, 'pardon', ?, ?)").run(
         staff.id,
         source.saleId,
         source.expenseId,
+        kept.source_at,
         round(-kept.net),
         currentMonth(db),
         req.user.id,

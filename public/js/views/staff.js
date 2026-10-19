@@ -148,12 +148,14 @@ function monthCard(s, m, current, reload) {
       Object.assign(row, { tabIndex: 0, role: 'button', onclick: () => operationMenu(s, e, reload), onkeydown: (k) => k.key === 'Enter' && operationMenu(s, e, reload) });
       return row;
     }),
-    // What is kept from the pay (−) or given back (+); touched, a deduction can be forgiven.
+    // What is kept from the pay (−) or given back (+); touched, what is still kept can be forgiven.
     m.deductions.map((d) => {
       const row = line(deductionLabel(d), fmt.signedMoney(-d.amount));
-      if (flags.readonly || d.reason !== 'retenue' || d.forgiven) return row;
+      const actions = deductionActions(s, d, reload);
+      if (flags.readonly || !actions.length) return row;
       row.classList.add('clickable');
-      Object.assign(row, { tabIndex: 0, role: 'button', onclick: () => deductionMenu(s, d, reload), onkeydown: (k) => k.key === 'Enter' && deductionMenu(s, d, reload) });
+      const open = () => actionSheet({ title: `${deductionLabel(d)} · ${fmt.money(d.amount)}`, actions });
+      Object.assign(row, { tabIndex: 0, role: 'button', onclick: open, onkeydown: (k) => k.key === 'Enter' && open() });
       return row;
     }),
     m.net < -0.005
@@ -164,38 +166,47 @@ function monthCard(s, m, current, reload) {
   );
 }
 
-function deductionMenu(s, d, reload) {
-  actionSheet({
-    title: `${deductionLabel(d)} · ${fmt.money(d.amount)}`,
-    actions: [
-      {
-        label: 'Pardonner',
-        onClick: async () => {
-          if (!(await confirmDialog('Pardonner la retenue ?', `${deductionLabel(d)} · ${fmt.money(d.amount)}`, { confirmLabel: 'Pardonner' }))) return;
-          try {
-            await api.post(`/staff/${s.id}/deductions/forgive`, d.sale_id ? { saleId: d.sale_id } : { expenseId: d.expense_id });
-            toast('Retenue pardonnée.');
-            reload();
-          } catch (err) {
-            toast(err.message, 'error');
-          }
-        },
-      },
-      d.sale_id && canAdmin() ? { label: 'Changer d’agent', onClick: () => creditAgentDialog({ id: d.sale_id, staff_id: s.id }, reload) } : null,
-    ].filter(Boolean),
-  });
+function deductionActions(s, d, reload) {
+  if (d.reason !== 'retenue' || d.forgiven) return [];
+  return [
+    d.kept > 0.005
+      ? {
+          label: 'Pardonner',
+          onClick: async () => {
+            if (!(await confirmDialog('Pardonner la retenue ?', `${deductionLabel(d)} · ${fmt.money(d.kept)}`, { confirmLabel: 'Pardonner' }))) return;
+            try {
+              await api.post(`/staff/${s.id}/deductions/forgive`, d.sale_id ? { saleId: d.sale_id } : { expenseId: d.expense_id });
+              toast('Retenue pardonnée.');
+              reload();
+            } catch (err) {
+              toast(err.message, 'error');
+            }
+          },
+        }
+      : null,
+    d.sale_id && canAdmin() ? { label: 'Changer d’agent', onClick: () => creditAgentDialog({ id: d.sale_id, staff_id: s.id }, reload) } : null,
+  ].filter(Boolean);
 }
 
 // The agents to choose from: those of this month's pay still there.
 const agentsList = async () => (await api.get('/staff')).agents.filter((a) => !a.left_on || a.left_on >= todayISO());
 
-// An expense kept from an agent's pay (the agent who entered it, by default).
+// An expense kept from an agent's pay (the agent who entered it, by default; else chosen).
 export async function keepExpenseDialog(expense, reload) {
   const agents = await agentsList();
   if (!agents.length) return toast('Aucun agent.', 'error');
   const ok = await formDialog({
     title: 'Retenir sur un salaire',
-    fields: [{ name: 'staffId', label: 'Agent', type: 'select', value: agents.find((a) => a.user_id === expense.user_id)?.id ?? agents[0].id, options: agents.map((a) => [a.id, a.name]) }],
+    fields: [
+      {
+        name: 'staffId',
+        label: 'Agent',
+        type: 'select',
+        required: true,
+        value: agents.find((a) => a.user_id === expense.user_id)?.id ?? '',
+        options: [['', 'Choisir…'], ...agents.map((a) => [a.id, a.name])],
+      },
+    ],
     submitLabel: 'Retenir',
     onSubmit: (d) => api.post(`/staff/${d.staffId}/deductions`, { expenseId: expense.id }),
   });

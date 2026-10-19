@@ -452,11 +452,13 @@ CREATE TABLE IF NOT EXISTS staff_salaries (
 -- over a month old, or an expense the manager marked. Movements only, never rewritten: amount > 0 kept
 -- (reason 'retenue'), < 0 given back ('rendu': paid by the customer, cancelled…; 'pardon'). The sale or
 -- the expense has no foreign key: it can be cancelled, which gives the money back (src/deductions.js).
+-- source_at is its created_at: the number of a cancelled row can go to a new one, another source.
 CREATE TABLE IF NOT EXISTS staff_deductions (
   id         INTEGER PRIMARY KEY,
   staff_id   INTEGER NOT NULL REFERENCES staff(id),
   sale_id    INTEGER,
   expense_id INTEGER,
+  source_at  TEXT,
   amount     REAL NOT NULL,
   reason     TEXT NOT NULL CHECK (reason IN ('retenue', 'rendu', 'pardon')),
   pay_month  TEXT NOT NULL,

@@ -2175,6 +2175,7 @@ test('retenues : crédits d’un particulier de plus d’un mois, rendu, pardon,
 
   // An expense marked: kept once; its amount corrected, the difference; cancelled, given back.
   const exp = (await gerant('POST', `/api/shifts/${shift.id}/expenses`, { category: 'Fournitures', amount: 8, description: 'Seau' })).data;
+  db.prepare("UPDATE expenses SET created_at = datetime('now', '-2 hours') WHERE id = ?").run(exp.id); // entered earlier
   assert.strictEqual((await gerant('POST', `/api/staff/${kito.id}/deductions`, { expenseId: exp.id })).status, 201);
   assert.strictEqual((await gerant('POST', `/api/staff/${lina.id}/deductions`, { expenseId: exp.id })).status, 409, 'une seule fois');
   assert.strictEqual((await sheet()).deducted, 8);
@@ -2185,6 +2186,53 @@ test('retenues : crédits d’un particulier de plus d’un mois, rendu, pardon,
   assert.strictEqual((await gerant('DELETE', `/api/shifts/${shift.id}/expenses/${exp.id}`)).status, 204);
   assert.strictEqual((await sheet()).deducted, 0);
   assert.ok((await gerant('GET', '/api/audit?category=agents')).data.some((a) => a.action === 'staff_deduction_forgiven'));
+});
+
+test('retenues : le numéro d’une ligne annulée repris par une autre ne la fait pas retenir ; pardon puis le bon agent', async () => {
+  const M = monthOf();
+  const agents = (await gerant('GET', `/api/staff?month=${M}`)).data.agents;
+  const kito = agents.find((a) => a.name === 'Kito');
+  const lina = agents.find((a) => a.name === 'Lina');
+  const sheet = async (who) => (await gerant('GET', `/api/staff?month=${M}`)).data.agents.find((a) => a.id === who.id).sheet;
+  const deducted = async () => [(await sheet(kito)).deducted, (await sheet(lina)).deducted];
+  const shift = (await gerant('GET', '/api/shifts/current')).data;
+  const before = await deducted();
+
+  // A marked expense cancelled: the next expense takes its number (an advance here), and is not kept.
+  const exp = (await gerant('POST', `/api/shifts/${shift.id}/expenses`, { category: 'Fournitures', amount: 8, description: 'Balai' })).data;
+  db.prepare("UPDATE expenses SET created_at = datetime('now', '-1 hour') WHERE id = ?").run(exp.id); // entered earlier
+  assert.strictEqual((await gerant('POST', `/api/staff/${lina.id}/deductions`, { expenseId: exp.id })).status, 201);
+  assert.strictEqual((await gerant('DELETE', `/api/shifts/${shift.id}/expenses/${exp.id}`)).status, 204);
+  const advance = (await gerant('POST', `/api/staff/${lina.id}/advances`, { amount: 50, source: 'espèces' })).data;
+  assert.strictEqual(advance.id, exp.id, 'même numéro');
+  assert.deepStrictEqual(await deducted(), before);
+
+  // A kept credit cancelled: a recent credit with its number is not kept.
+  const quick = async (name) => (await gerant('POST', '/api/customers/quick', { name })).data;
+  const sell = (customer, body) => gerant('POST', `/api/shifts/${shift.id}/sales`, { customerId: customer.id, productId: ctx.diesel.id, payment: 'credit', ...body });
+  const old = (await sell(await quick('Client Numéro'), { amount: 4 })).data;
+  await gerant('PUT', `/api/staff/credits/${old.id}`, { staffId: kito.id });
+  db.prepare("UPDATE sales SET created_at = datetime('now', '-40 days') WHERE id = ?").run(old.id);
+  assert.strictEqual((await sheet(kito)).deducted, before[0] + 4);
+  assert.strictEqual((await gerant('DELETE', `/api/shifts/${shift.id}/sales/${old.id}`)).status, 204);
+  const fresh = (await sell(await quick('Client Récent'), { amount: 3 })).data;
+  assert.strictEqual(fresh.id, old.id, 'même numéro');
+  await gerant('PUT', `/api/staff/credits/${fresh.id}`, { staffId: lina.id });
+  assert.deepStrictEqual(await deducted(), before);
+
+  // Marked for the wrong agent: forgiven, then marked for the right one; never again for the first.
+  const seau = (await gerant('POST', `/api/shifts/${shift.id}/expenses`, { category: 'Fournitures', amount: 6, description: 'Seau neuf' })).data;
+  await gerant('POST', `/api/staff/${kito.id}/deductions`, { expenseId: seau.id });
+  assert.strictEqual((await gerant('POST', `/api/staff/${kito.id}/deductions/forgive`, { expenseId: seau.id })).status, 200);
+  assert.strictEqual((await gerant('POST', `/api/staff/${kito.id}/deductions`, { expenseId: seau.id })).status, 409, 'pardonnée à Kito');
+  assert.strictEqual((await gerant('POST', `/api/staff/${lina.id}/deductions`, { expenseId: seau.id })).status, 201);
+  assert.deepStrictEqual(await deducted(), [before[0], before[1] + 6]);
+  const line = (await sheet(lina)).deductions.find((d) => d.expense_id === seau.id);
+  assert.strictEqual(line.kept, 6, 'ce qui est encore retenu');
+  // Nothing kept: nothing to forgive.
+  assert.strictEqual((await gerant('POST', `/api/staff/${kito.id}/deductions/forgive`, { saleId: 99999 })).status, 409);
+  assert.strictEqual((await gerant('POST', `/api/staff/${lina.id}/deductions/forgive`, { saleId: fresh.id })).status, 409);
+  assert.deepStrictEqual(await deducted(), [before[0], before[1] + 6]);
 });
 
 test('les PDF portent le logo MTG, sans les carrés vert et rouge', () => {

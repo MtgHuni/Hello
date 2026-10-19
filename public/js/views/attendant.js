@@ -317,7 +317,12 @@ function requestQueue(shift, reload, tol) {
       const sale = await api.post(`/requests/${r.id}/confirm`, adjust);
       toast(`${r.customer_name} : ${fmt.liters(sale.liters)} · ${fmt.money(sale.amount)}${flags.combos && sale.points ? ` · +${sale.points} combos` : sale.combos_used ? ` · −${sale.combos_used} combos` : ''}`);
     } catch (err) {
-      if (err.code === 'has_credit') return creditBlocked(r.customer_id, err.message);
+      if (err.code === 'has_credit') {
+        if (!(await creditBlocked(r.customer_id, err.message))) return;
+        await api.post(`/requests/${r.id}/confirm`, { ...adjust, grantCredit: true });
+        toast('Crédit accordé et signalé au gérant');
+        return reload();
+      }
       if (err.code !== 'over_limit') throw err;
       if (!(await confirmDialog('Accorder le crédit ?', err.message, { confirmLabel: 'Accorder' }))) return;
       await api.post(`/requests/${r.id}/confirm`, { ...adjust, grantCredit: true });
@@ -498,13 +503,12 @@ function customerSearch(customers, { allowNew = false, onPick } = {}) {
 // Credit entered by the attendant (paid sales are not entered: the indexes count them),
 // built for speed: one search field for the customer (name, plate or phone; an unknown
 // name creates the customer), one-tap product and unit, amount in dollars or litres.
-// A particulier who still owes a credit gets no other: a card in the middle of the screen says so,
-// with each credit still unpaid (when, what, how much is left, who entered it).
-// What the customer still owes; with confirmLabel, the attendant may grant the new credit all the same
-// (resolved true).
-export async function creditBlocked(customerId, fallback, { confirmLabel = null } = {}) {
-  const title = confirmLabel ? 'Crédit en cours' : 'Pas de nouveau crédit';
-  const options = confirmLabel ? { confirmLabel, level: 'serious' } : {};
+// A particulier who still owes a credit: a card in the middle of the screen says so, with each credit
+// still unpaid (when, what, how much is left, who entered it); the attendant may grant the new credit all
+// the same (resolved true).
+export async function creditBlocked(customerId, fallback) {
+  const title = 'Crédit en cours';
+  const options = { confirmLabel: 'Accorder quand même', level: 'serious' };
   const info = await api.get(`/customers/${customerId}/unpaid`).catch(() => null);
   if (!info) return noticeDialog(title, h('p', {}, fallback || 'Ce client doit encore un crédit.'), options);
   return noticeDialog(title, [
@@ -551,6 +555,7 @@ export async function addCredit(ctx, shift, reload) {
   const who = h('p', { class: 'hint-line' });
   const summary = h('div', { class: 'summary-line total' }, h('span', {}, 'Total'), h('span', {}, '—'));
   let alerted = null;
+  let granted = null; // the customer the attendant chose to grant a new credit all the same
   const update = (e) => {
     const form = e.target?.form ?? e;
     const text = form.elements.customer.value.trim();
@@ -565,15 +570,19 @@ export async function addCredit(ctx, shift, reload) {
     } else if (c) {
       const parts = [c.type === 'account' ? 'Abonné' : 'Particulier'];
       if (flags.combos) parts.push(`${c.points ?? 0} combos${c.points >= comboThreshold ? ` (= ${fmt.money(c.points * comboValue)})` : ''}`);
-      // An individual who still owes a credit: the alert card, once per customer picked.
+      // An individual who still owes a credit: asked once per customer picked, the answer goes with the
+      // credit (also when it waits to be sent).
       const owes = c.type !== 'account' && c.balance > 0.001;
       if (c.type === 'account') parts.push(c.late ? 'mois précédent impayé' : c.balance > 0 ? `doit ${fmt.money(c.balance)} ce mois` : 'à jour');
-      else parts.push(owes ? `doit encore ${fmt.money(c.balance)} : pas de nouveau crédit` : c.balance < 0 ? `avance ${fmt.money(-c.balance)}` : 'solde 0,00 $');
+      else parts.push(owes ? `doit encore ${fmt.money(c.balance)}` : c.balance < 0 ? `avance ${fmt.money(-c.balance)}` : 'solde 0,00 $');
       who.textContent = parts.join(' · ');
       who.className = c.late || owes ? 'hint-line variance-neg' : 'hint-line';
       if (owes && alerted !== c.id) {
         alerted = c.id;
-        creditBlocked(c.id);
+        granted = null;
+        creditBlocked(c.id).then((yes) => {
+          if (yes && alerted === c.id) granted = c.id;
+        });
       }
       if (c.plate && !form.elements.plate.value) form.elements.plate.value = c.plate;
     } else {
@@ -644,12 +653,13 @@ export async function addCredit(ctx, shift, reload) {
         [d.unit === 'amount' ? 'amount' : 'liters']: d.qty,
         plate: d.plate,
         clientRef,
+        ...(granted === customer.id ? { grantCredit: true } : {}),
       };
       try {
         return await api.post(`/shifts/${shift.id}/sales`, body, { queue: `Crédit · ${customer.name} · ${d.unit === 'amount' ? fmt.money(d.qty) : fmt.liters(d.qty)}` });
       } catch (err) {
         if (err.code === 'has_credit') {
-          if (!(await creditBlocked(customer.id, err.message, { confirmLabel: 'Accorder quand même' }))) throw new Error('Crédit non enregistré.');
+          if (!(await creditBlocked(customer.id, err.message))) throw new Error('Crédit non enregistré.');
           return api.post(`/shifts/${shift.id}/sales`, { ...body, grantCredit: true });
         }
         if (err.code !== 'over_limit') throw err;
