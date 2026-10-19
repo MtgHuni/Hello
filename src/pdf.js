@@ -129,6 +129,19 @@ class Pdf {
     return this;
   }
 
+  // A filled outline: ['M', x, y], ['L', x, y], ['C', x1, y1, x2, y2, x, y], ['Z'], in page coordinates.
+  shape(commands, color) {
+    const p = (x, y) => `${x.toFixed(2)} ${(PAGE_H - y).toFixed(2)}`;
+    const path = commands.map(([op, ...n]) => {
+      if (op === 'M') return `${p(n[0], n[1])} m`;
+      if (op === 'L') return `${p(n[0], n[1])} l`;
+      if (op === 'C') return `${p(n[0], n[1])} ${p(n[2], n[3])} ${p(n[4], n[5])} c`;
+      return 'h';
+    });
+    this.ops.push(`${rgb(color)} rg ${path.join(' ')} f`);
+    return this;
+  }
+
   toBuffer() {
     const objects = [];
     const add = (body) => objects.push(body) && objects.length;

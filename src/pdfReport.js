@@ -13,10 +13,48 @@ const HEAD = 8;
 const SMALLEST = 8.5;
 const GAP = 10; // space between columns
 const RULE = [214, 214, 208];
-const GASOIL = [35, 196, 107];
-const ESSENCE = [240, 49, 58];
 const GOOD = [18, 128, 66];
 const BAD = [196, 28, 38];
+
+// The MTG monogram (public/media/mtg-monogramme.svg) in its light-ground colours: the letters, then the
+// M's leg and the G's dot in blue. Units of the drawing, 360 high (the G's ring reaches 2 above and 10 below).
+const LETTERS = [20, 20, 22];
+const MTG_BLUE = [11, 132, 214];
+const G_GAP = Math.atan2(-99.3, 150.1); // where the G's opening ends, from its centre
+const poly = (...pts) => [['M', ...pts[0]], ...pts.slice(1).map((pt) => ['L', ...pt]), ['Z']];
+// Bézier quarters of a circle arc from angle a0 to a1 (radians, y down).
+function arc(cx, cy, r, a0, a1) {
+  const n = Math.ceil(Math.abs(a1 - a0) / (Math.PI / 2));
+  const d = (a1 - a0) / n;
+  const k = (4 / 3) * Math.tan(d / 4) * r;
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const s = a0 + i * d;
+    const e = s + d;
+    out.push(['C', cx + r * Math.cos(s) - k * Math.sin(s), cy + r * Math.sin(s) + k * Math.cos(s),
+      cx + r * Math.cos(e) + k * Math.sin(e), cy + r * Math.sin(e) - k * Math.cos(e), cx + r * Math.cos(e), cy + r * Math.sin(e)]);
+  }
+  return out;
+}
+const MONOGRAM = [
+  [LETTERS, poly([0, 0], [76, 0], [211, 182], [347, 0], [812, 0], [812, 62], [390, 62], [222, 298], [197, 298], [80, 138], [80, 348], [0, 348])],
+  [LETTERS, poly([495, 62], [583, 62], [583, 348], [495, 348])],
+  [LETTERS, [['M', 812 + 180 * Math.cos(G_GAP), 178 + 180 * Math.sin(G_GAP)], ...arc(812, 178, 180, G_GAP, -2 * Math.PI),
+    ['L', 912, 178], ...arc(812, 178, 100, 0, 2 * Math.PI + G_GAP), ['Z']]],
+  [LETTERS, poly([897, 178], [992, 178], [992, 300], [897, 300])],
+  [MTG_BLUE, poly([295, 286], [405, 138], [405, 348], [295, 348])],
+  [MTG_BLUE, [['M', 864, 178], ...arc(812, 178, 52, 0, 2 * Math.PI), ['Z']]],
+];
+const MONOGRAM_WIDTH = 992;
+
+// Draws the monogram at (x, y), its letters h high; returns its width.
+function monogram(pdf, x, y, h) {
+  const k = h / 348;
+  for (const [color, path] of MONOGRAM) {
+    pdf.shape(path.map(([op, ...n]) => [op, ...n.map((v, i) => (i % 2 ? y + v * k : x + v * k))]), color);
+  }
+  return MONOGRAM_WIDTH * k;
+}
 
 // SQLite timestamps are UTC 'YYYY-MM-DD HH:MM:SS'; 'YYYY-MM-DD' alone is a local day.
 const toDate = (s) => (s instanceof Date ? s : new Date(String(s).length === 10 ? `${s}T12:00:00Z` : `${String(s).replace(' ', 'T')}Z`));
@@ -44,8 +82,8 @@ class Report {
 
     const { pdf, L, R } = this;
     let y = this.TOP;
-    pdf.rect(L, y, 13, 13, GASOIL).rect(L + 16, y, 13, 13, ESSENCE);
-    pdf.text(L + 38, y + 11, stationName.toUpperCase(), { size: 11, bold: true });
+    const logo = monogram(pdf, L, y - 1, 14);
+    pdf.text(L + logo + 12, y + 11, stationName.toUpperCase(), { size: 11, bold: true });
     if (status) pdf.text(R, y + 11, status, { size: 9.5, bold: true, color: GREY, align: 'right' });
     y += 50;
     pdf.text(L, y, heading, { size: 24, bold: true });
@@ -223,4 +261,4 @@ class Report {
   }
 }
 
-module.exports = { Report, fmt, COLORS: { INK, GREY, RULE, GASOIL, ESSENCE, GOOD, BAD } };
+module.exports = { Report, fmt, COLORS: { INK, GREY, RULE, GOOD, BAD } };

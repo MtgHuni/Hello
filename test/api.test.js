@@ -2186,3 +2186,12 @@ test('retenues : crédits d’un particulier de plus d’un mois, rendu, pardon,
   assert.strictEqual((await sheet()).deducted, 0);
   assert.ok((await gerant('GET', '/api/audit?category=agents')).data.some((a) => a.action === 'staff_deduction_forgiven'));
 });
+
+test('les PDF portent le logo MTG, sans les carrés vert et rouge', () => {
+  const { Report } = require('../src/pdfReport');
+  const text = new Report({ title: 'Essai', stationName: 'Station', heading: 'Essai' }).finish().toString('latin1');
+  assert.ok(text.includes('0.043 0.518 0.839 rg'), 'bleu MTG');
+  assert.ok(text.includes('0.078 0.078 0.086 rg'), 'lettres MTG');
+  assert.ok(!text.includes('0.137 0.769 0.420 rg'), 'vert gasoil');
+  assert.ok(!text.includes('0.941 0.192 0.227 rg'), 'rouge essence');
+});
