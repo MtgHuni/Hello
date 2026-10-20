@@ -5,6 +5,7 @@
 // operations entered, and the money that should be in the till at that moment.
 const { round } = require('./util');
 const { isShiftTransport } = require('./transport');
+const { priceChanges, meterAmount, surchargeOf } = require('./shiftPrices');
 
 const attendantNamesSql = `(SELECT group_concat(name, ', ') FROM (SELECT u2.name FROM shift_attendants a JOIN users u2 ON u2.id = a.user_id
   WHERE a.shift_id = s.id GROUP BY u2.id ORDER BY MIN(a.id)))`;
@@ -44,6 +45,8 @@ function periodReport(db, shift, readings, end) {
 
   // Fuel drawn for an approved pump test went back into the tank: not sold.
   const tests = inPeriod('pump_tests').filter((t) => t.status === 'approved');
+  // A price changed during the shift: each part of the meter at its price.
+  const changes = priceChanges(db, shift.id);
   const nozzles = readings.map((r) => {
     const start = from.meters.get(r.nozzle_id) ?? r.start_meter;
     const stop = end.meters.get(r.nozzle_id) ?? start;
@@ -52,9 +55,8 @@ function periodReport(db, shift, readings, end) {
     // The photo of the meter sent with this relief (kept a week).
     // With what Claude read on it: the report shows an index typed differently.
     const photo = end.id ? db.prepare('SELECT id, read_index FROM meter_photos WHERE checkpoint_id = ? AND nozzle_id = ? ORDER BY id DESC LIMIT 1').get(end.id, r.nozzle_id) : null;
-    return { nozzle_id: r.nozzle_id, name: r.product_name, product_id: r.product_id, product_name: r.product_name, from: start, to: stop, tested, liters, amount: round(liters * r.unit_price), photo_id: photo?.id ?? null, photo_read: photo?.read_index ?? null };
+    return { nozzle_id: r.nozzle_id, name: r.product_name, product_id: r.product_id, product_name: r.product_name, from: start, to: stop, tested, liters, amount: meterAmount(changes, r, start, stop, tests.filter((t) => t.nozzle_id === r.nozzle_id)), photo_id: photo?.id ?? null, photo_read: photo?.read_index ?? null };
   });
-  const unitPrices = new Map(readings.map((r) => [r.nozzle_id, r.unit_price]));
   const customerName = new Map(db.prepare('SELECT id, name FROM customers').all().map((c) => [c.id, c.name]));
   const sales = inPeriod('sales');
   const payments = inPeriod('payments');
@@ -65,7 +67,7 @@ function periodReport(db, shift, readings, end) {
   const moved = movementsTotal(moves);
   const productName = new Map(readings.map((r) => [r.product_id, r.product_name]));
   // Subscribers pay more than the pump price used for the indexes.
-  const surcharge = round(sales.reduce((t, s) => t + (s.amount - s.liters * (unitPrices.get(s.nozzle_id) ?? s.unit_price)), 0));
+  const surcharge = surchargeOf(changes, readings, sales);
   const sold = round(nozzles.reduce((t, n) => t + n.amount, 0) + surcharge);
   const credits = round(sales.filter((s) => s.kind === 'credit').reduce((t, s) => t + s.amount, 0));
   const combos = round(sales.filter((s) => s.kind === 'combo').reduce((t, s) => t + s.amount, 0));
@@ -134,11 +136,13 @@ function closingCutoff(db, time = '15:30') {
     .get(time, time, time).t;
 }
 
-// The last index taken on each nozzle: the last checkpoint's, or a later one read at a delivery or a dip.
+// The last index taken on each nozzle: the last checkpoint's, or a later one read at a delivery, a dip or a price change.
 const lastMeters = (db, shiftId) => {
   const last = listCheckpoints(db, shiftId).at(-1);
   const meters = new Map(last ? last.meters : []);
-  for (const r of db.prepare('SELECT nozzle_id, MAX(meter) AS meter FROM stock_readings WHERE shift_id = ? GROUP BY nozzle_id').all(shiftId)) {
+  const read = `SELECT nozzle_id, MAX(meter) AS meter FROM (SELECT nozzle_id, meter FROM stock_readings WHERE shift_id = ?
+     UNION ALL SELECT nozzle_id, meter FROM shift_price_meters WHERE shift_id = ?) GROUP BY nozzle_id`;
+  for (const r of db.prepare(read).all(shiftId, shiftId)) {
     if (!(meters.get(r.nozzle_id) >= r.meter)) meters.set(r.nozzle_id, r.meter);
   }
   return meters.size ? meters : null;

@@ -194,10 +194,30 @@ async function customersDialog(s, reload) {
   }
 }
 
+// The index of each meter when the price changes during the open shift.
+async function pricedMeters(nozzles) {
+  return formDialog({
+    title: 'Index au changement de prix',
+    intro: 'Le poste en cours garde l’ancien prix jusqu’à ces index, puis passe au nouveau.',
+    submitLabel: 'Changer le prix',
+    grid: false,
+    fields: nozzles.map((n) => ({
+      name: `m_${n.nozzle_id}`,
+      label: `Index ${n.product_name}${nozzles.length > 1 ? ` · ${n.name}` : ''}`,
+      type: 'number',
+      step: '0.01',
+      min: String(n.last),
+      required: true,
+      meterPhoto: { product: n.product_name, last: n.last },
+    })),
+    onSubmit: (d, form) => nozzles.map((n) => ({ nozzleId: n.nozzle_id, meter: Number(d[`m_${n.nozzle_id}`]), photoId: form.elements[`m_${n.nozzle_id}`].dataset.photoId || undefined })),
+  });
+}
+
 async function productDialog(p, reload) {
   const ok = await formDialog({
     title: p ? `Prix — ${p.name}` : 'Nouveau produit',
-    intro: p ? `Actuellement : ${fmt.price(p.price)} public, ${fmt.price(p.subscriber_price)} abonnés. Un changement s’applique aux postes ouverts ensuite.` : 'Ajoutez ensuite une cuve et un compteur pour ce produit.',
+    intro: p ? `Actuellement : ${fmt.price(p.price)} public, ${fmt.price(p.subscriber_price)} abonnés. Un changement immédiat s’applique aussi au poste en cours, à partir de l’index relevé sur chaque compteur.` : 'Ajoutez ensuite une cuve et un compteur pour ce produit.',
     grid: false,
     fields: [
       { name: 'name', label: 'Nom', value: p?.name, required: true },
@@ -211,7 +231,19 @@ async function productDialog(p, reload) {
           ]
         : []),
     ],
-    onSubmit: (d) => (p ? api.put(`/products/${p.id}`, { ...d, effectiveAt: d.effectiveAt || undefined, cancelScheduled: d.cancelScheduled || undefined }) : api.post('/products', d)),
+    onSubmit: async (d) => {
+      if (!p) return api.post('/products', d);
+      const body = { ...d, effectiveAt: d.effectiveAt || undefined, cancelScheduled: d.cancelScheduled || undefined };
+      try {
+        return await api.put(`/products/${p.id}`, body);
+      } catch (err) {
+        if (err.code !== 'meters_required') throw err;
+        // The open shift changes price at the index of each of its meters of this fuel.
+        const meters = await pricedMeters(err.data.nozzles);
+        if (!meters) throw new Error('Prix non changé.');
+        return api.put(`/products/${p.id}`, { ...body, meters });
+      }
+    },
   });
   if (ok) {
     toast(!p ? 'Produit ajouté.' : ok.next_price_at && ok.next_price_at !== p.next_price_at ? 'Nouveau prix programmé.' : 'Prix mis à jour.');

@@ -466,6 +466,20 @@ CREATE TABLE IF NOT EXISTS staff_deductions (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_staff_deductions ON staff_deductions(staff_id, pay_month);
+-- A price changed while a shift is open (version 33): the index of each nozzle of that fuel then, and the
+-- prices before; the shift's readings take the new prices (src/shiftPrices.js).
+CREATE TABLE IF NOT EXISTS shift_price_meters (
+  id                    INTEGER PRIMARY KEY,
+  shift_id              INTEGER NOT NULL REFERENCES shifts(id),
+  nozzle_id             INTEGER NOT NULL REFERENCES nozzles(id),
+  meter                 REAL NOT NULL,
+  old_price             REAL NOT NULL,
+  old_subscriber_price  REAL,
+  photo_id              INTEGER,
+  user_id               INTEGER REFERENCES users(id),
+  created_at            TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_shift_price_meters ON shift_price_meters(shift_id, nozzle_id);
 CREATE TABLE IF NOT EXISTS customer_mail_prefs (
   customer_id INTEGER NOT NULL REFERENCES customers(id),
   kind        TEXT NOT NULL,
@@ -612,7 +626,7 @@ const MIGRATIONS = [
 ];
 
 // Bumped with every schema change; recorded in PRAGMA user_version.
-const SCHEMA_VERSION = 32;
+const SCHEMA_VERSION = 33;
 
 function missingColumns(db) {
   return MIGRATIONS.filter(([table, column]) => {

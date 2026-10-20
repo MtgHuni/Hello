@@ -564,7 +564,10 @@ test('sauvegarde téléchargeable et journal des changements', async () => {
   assert.strictEqual(backup.raw.subarray(0, 15).toString(), 'SQLite format 3', 'un vrai fichier SQLite');
   assert.strictEqual((await pompiste('GET', '/api/backup')).status, 403);
 
-  await gerant('PUT', `/api/products/${ctx.diesel.id}`, { price: 1.25 });
+  // During the open shift: the index of each gasoil meter first.
+  const asked = (await gerant('PUT', `/api/products/${ctx.diesel.id}`, { price: 1.25 })).data;
+  assert.strictEqual(asked.code, 'meters_required');
+  await gerant('PUT', `/api/products/${ctx.diesel.id}`, { price: 1.25, meters: asked.nozzles.map((n) => ({ nozzleId: n.nozzle_id, meter: n.last })) });
   const journal = (await gerant('GET', '/api/audit')).data;
   const accepted = journal.find((a) => a.action === 'cancel_accepted');
   assert.ok(accepted, 'annulation acceptée gardée au journal');
@@ -643,7 +646,7 @@ test('un seul poste à la fois, livre de caisse (espèces et mobile money), livr
 
   // Cash handed over goes into the till, mobile money into its own balance.
   const running = (await gerant('GET', `/api/shifts/${open.id}`)).data;
-  await bea('POST', `/api/shifts/${open.id}/momo`, { productId: ctx.diesel.id, liters: 25 }); // 25 L at 1,20 = 30 $
+  await bea('POST', `/api/shifts/${open.id}/momo`, { productId: ctx.diesel.id, liters: 24 }); // 24 L at 1,25 (changed during the shift before) = 30 $
   await bea('POST', `/api/shifts/${open.id}/expenses`, { category: 'Fournitures', amount: 5, description: 'Eau' }); // paid from the till
   await closeShift(running, Object.fromEntries(running.readings.map((r) => [r.nozzle_id, r.start_meter + 100])), { cash: 50 });
   let b = await cash();
@@ -2306,4 +2309,65 @@ test('tableau de bord : valeur de la station (argent, crédits, carburant au pri
   assert.strictEqual(after.assets.shift, 0, 'le nouveau poste commence à zéro');
   const cost = v.tanks.find((t) => t.id === meters.find((m) => m.nozzleId === diesel.nozzle_id).tankId).cost ?? 0;
   assert.ok(Math.abs(after.net - round2(v.net + 200 * diesel.unit_price - 200 * cost)) < 0.02, `${after.net} ≠ ${v.net} + 200 L`);
+});
+
+test('migration 33 : changement de prix pendant le poste', () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const { openDb, SCHEMA_VERSION } = require('../src/db');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'station-prices-'));
+  const file = path.join(dir, 'old.db');
+  let old = openDb(file);
+  old.exec('DROP TABLE IF EXISTS shift_price_meters; PRAGMA user_version = 32');
+  old.close();
+  old = openDb(file);
+  assert.ok(old.prepare("SELECT 1 FROM sqlite_master WHERE name = 'shift_price_meters'").get());
+  assert.strictEqual(old.prepare('PRAGMA user_version').get().user_version, SCHEMA_VERSION);
+  old.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('prix changé pendant le poste : les litres d’avant l’index au prix d’avant, la suite au nouveau', async () => {
+  const { openMeters } = require('../src/liveStock');
+  const shift = (await gerant('GET', '/api/shifts/current')).data;
+  assert.ok(!db.prepare("SELECT 1 FROM pump_tests WHERE shift_id = ? AND status = 'approved'").get(shift.id), 'pas de test de pompe dans ce poste');
+  const diesel = dieselOf(shift);
+  const old = { price: diesel.unit_price, subscriber: diesel.subscriber_price ?? diesel.unit_price };
+  const latest = new Map(openMeters(db).map((m) => [m.nozzleId, m.latest]));
+  const dieselNozzles = shift.readings.filter((r) => r.product_id === ctx.diesel.id);
+
+  // A subscriber's credit before the change: their surcharge stays on the pump price of its time.
+  const sub = (await gerant('POST', '/api/customers', { type: 'account', name: 'Abonné Prix' })).data;
+  const before = (await gerant('POST', `/api/shifts/${shift.id}/sales`, { customerId: sub.id, productId: ctx.diesel.id, payment: 'credit', liters: 10 })).data;
+  assert.strictEqual(before.unit_price, old.subscriber);
+  await nextSecond();
+
+  // Changed now: the index of each gasoil meter is asked, then the open shift takes the new price.
+  const next = { price: round2(old.price + 0.1), subscriberPrice: round2(old.subscriber + 0.1) };
+  const asked = await gerant('PUT', `/api/products/${ctx.diesel.id}`, next);
+  assert.strictEqual(asked.status, 409);
+  assert.strictEqual(asked.data.code, 'meters_required');
+  assert.deepStrictEqual(asked.data.nozzles.map((n) => n.nozzle_id), dieselNozzles.map((r) => r.nozzle_id));
+  const low = await gerant('PUT', `/api/products/${ctx.diesel.id}`, { ...next, meters: dieselNozzles.map((r) => ({ nozzleId: r.nozzle_id, meter: latest.get(r.nozzle_id) - 1 })) });
+  assert.strictEqual(low.status, 400, 'pas en dessous du dernier index');
+  const at = new Map(dieselNozzles.map((r) => [r.nozzle_id, latest.get(r.nozzle_id) + 100]));
+  const changed = await gerant('PUT', `/api/products/${ctx.diesel.id}`, { ...next, meters: [...at].map(([nozzleId, meter]) => ({ nozzleId, meter })) });
+  assert.strictEqual(changed.status, 200);
+  const now = (await gerant('GET', '/api/shifts/current')).data;
+  assert.strictEqual(dieselOf(now).unit_price, next.price);
+  const after = (await gerant('POST', `/api/shifts/${shift.id}/sales`, { customerId: sub.id, productId: ctx.diesel.id, payment: 'credit', liters: 10 })).data;
+  assert.strictEqual(after.unit_price, next.subscriberPrice, 'le nouveau prix pour la suite');
+
+  // The closing 50 L past the change: each part at its price.
+  const ends = Object.fromEntries(shift.readings.map((r) => [r.nozzle_id, at.has(r.nozzle_id) ? at.get(r.nozzle_id) + 50 : latest.get(r.nozzle_id)]));
+  const below = await closeShift(shift, { ...ends, [diesel.nozzle_id]: at.get(diesel.nozzle_id) - 1 });
+  assert.strictEqual(below.status, 400, 'pas en dessous de l’index du changement');
+  const closed = await closeShift(shift, ends);
+  assert.strictEqual(closed.status, 200, JSON.stringify(closed.data));
+  const reading = closed.data.readings.find((r) => r.nozzle_id === diesel.nozzle_id);
+  assert.strictEqual(reading.amount, round2((at.get(diesel.nozzle_id) - diesel.start_meter) * old.price + 50 * next.price));
+  const surcharge = round2(10 * (old.subscriber - old.price) + 10 * (next.subscriberPrice - next.price));
+  assert.strictEqual(closed.data.total_amount, round2(closed.data.readings.reduce((t, r) => t + r.amount, 0) + surcharge));
+  assert.ok((await gerant('GET', '/api/audit?category=prix')).data.some((a) => a.summary.includes('pendant le poste')));
 });

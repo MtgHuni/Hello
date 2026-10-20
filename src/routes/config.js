@@ -1,7 +1,7 @@
 const express = require('express');
 const { getSettings, syncCreditLimits } = require('../db');
 const { fail, num, str, bool, round, transaction } = require('../util');
-const { attendantNamesSql } = require('../checkpoints');
+const { attendantNamesSql, lastMeters } = require('../checkpoints');
 const { requireRole, requireAdmin } = require('../auth');
 const { audit } = require('../audit');
 const { applyScheduledPrices } = require('../prices');
@@ -153,19 +153,51 @@ module.exports = function configRoutes(db) {
       return res.json(db.prepare('SELECT * FROM products WHERE id = ?').get(product.id));
     }
 
+    // The open shift's meters of this fuel are read when its price changes: what was sold before keeps
+    // the price before (src/shiftPrices.js).
+    const moved = db
+      .prepare(
+        `SELECT r.*, n.name AS nozzle_name FROM shift_readings r JOIN shifts s ON s.id = r.shift_id AND s.status = 'open'
+         JOIN nozzles n ON n.id = r.nozzle_id
+         WHERE r.product_id = ? AND (r.unit_price != ? OR COALESCE(r.subscriber_price, r.unit_price) != ?) ORDER BY r.nozzle_id`,
+      )
+      .all(product.id, price, subscriberPrice)
+      .map((r) => ({ ...r, last: lastMeters(db, r.shift_id)?.get(r.nozzle_id) ?? r.start_meter }));
+    const given = new Map((Array.isArray(req.body?.meters) ? req.body.meters : []).map((m) => [Number(m?.nozzleId), m]));
+    if (moved.length && !moved.every((r) => given.has(r.nozzle_id))) {
+      fail(409, `Relevez l’index de chaque compteur ${name} : le poste en cours change de prix à cet index.`, 'meters_required', {
+        nozzles: moved.map((r) => ({ nozzle_id: r.nozzle_id, name: r.nozzle_name, product_name: name, last: r.last })),
+      });
+    }
+    const meters = moved.map((r) => {
+      const meter = num(given.get(r.nozzle_id).meter, `L’index du compteur ${name}`, { max: 1e12 });
+      if (meter < r.last - 0.001) fail(400, `L’index du compteur ${name} ne peut pas être inférieur au dernier relevé du poste (${r.last}).`);
+      return { ...r, meter, photoId: Number(given.get(r.nozzle_id).photoId) || null };
+    });
+
     transaction(db, () => {
       db.prepare('UPDATE products SET name = ?, price = ?, subscriber_price = ?, active = ? WHERE id = ?').run(name, price, subscriberPrice, active, product.id);
       const oldSubscriber = product.subscriber_price ?? product.price;
-      if (price !== product.price || subscriberPrice !== oldSubscriber) {
+      const insert = db.prepare(
+        'INSERT INTO shift_price_meters (shift_id, nozzle_id, meter, old_price, old_subscriber_price, photo_id, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      );
+      for (const m of meters) {
+        insert.run(m.shift_id, m.nozzle_id, m.meter, m.unit_price, m.subscriber_price ?? m.unit_price, m.photoId, req.user.id);
+        db.prepare('UPDATE shift_readings SET unit_price = ?, subscriber_price = ? WHERE id = ?').run(price, subscriberPrice, m.id);
+      }
+      if (price !== product.price || subscriberPrice !== oldSubscriber || meters.length) {
         db.prepare('INSERT INTO price_history (product_id, price, subscriber_price, user_id) VALUES (?, ?, ?, ?)').run(product.id, price, subscriberPrice, req.user.id);
+        const during = meters.length
+          ? `, pendant le poste n°${meters[0].shift_id} (index ${meters.map((m) => `${m.nozzle_name} ${m.meter}`).join(', ')})`
+          : '';
         audit(db, req, {
           category: 'prix',
           action: 'price',
           entity: 'products',
           id: product.id,
-          summary: `Prix ${name} : ${price3(product.price)} → ${price3(price)} $/L, abonnés ${price3(oldSubscriber)} → ${price3(subscriberPrice)} $/L`,
+          summary: `Prix ${name} : ${price3(product.price)} → ${price3(price)} $/L, abonnés ${price3(oldSubscriber)} → ${price3(subscriberPrice)} $/L${during}`,
           before: { price: product.price, subscriber_price: oldSubscriber },
-          after: { price, subscriber_price: subscriberPrice },
+          after: { price, subscriber_price: subscriberPrice, meters: meters.map((m) => ({ nozzle_id: m.nozzle_id, meter: m.meter })) },
         });
       }
     });

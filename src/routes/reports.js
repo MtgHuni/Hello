@@ -8,6 +8,7 @@ const { attendantNamesSql, closingCutoff, currentPeriod, lastMeters } = require(
 const { payroll, currentMonth } = require('../payroll');
 const { periodReportPdf } = require('../periodReport');
 const { withLiveStock } = require('../liveStock');
+const { pumpPriceSql } = require('../shiftPrices');
 const { ALERT_TYPES, userAlerts } = require('../alerts');
 const { mailUsage } = require('../mail');
 const { aiEnabled } = require('../claude');
@@ -30,7 +31,7 @@ module.exports = function reportRoutes(db) {
   // Subscribers pay their own price: the gap with the pump price, per closing day and product.
   // The meter amounts are at the pump price, so this is added to get the real sales.
   const surchargeStmt = db.prepare(
-    `SELECT ${DAY} AS date, sa.product_id, SUM(sa.amount - sa.liters * r.unit_price) AS surcharge
+    `SELECT ${DAY} AS date, sa.product_id, SUM(sa.amount - sa.liters * ${pumpPriceSql()}) AS surcharge
      FROM sales sa JOIN shifts s ON s.id = sa.shift_id
      JOIN shift_readings r ON r.shift_id = sa.shift_id AND r.nozzle_id = sa.nozzle_id
      WHERE s.status != 'open' AND ${DAY} BETWEEN ? AND ?

@@ -15,6 +15,7 @@ const { applyScheduledPrices } = require('../prices');
 const { audit } = require('../audit');
 const { addShiftTransport } = require('../transport');
 const { momoTotal, closingCutoff, attendantNamesSql, checkpointReports, currentPeriod, lastMeters, shiftMovements, movementsTotal } = require('../checkpoints');
+const { priceChanges, priceAt, meterAmount, surchargeOf } = require('../shiftPrices');
 const { aiEnabled } = require('../claude');
 
 const staff = requireRole('manager', 'attendant');
@@ -67,7 +68,13 @@ module.exports = function shiftRoutes(db) {
          WHERE t.shift_id = ? ORDER BY t.id`,
       )
       .all(id);
-    for (const r of shift.readings) r.tested = testedLiters(id, r.nozzle_id);
+    // A price changed during the shift: the index and the prices before (the closing form splits the litres).
+    const changes = priceChanges(db, id);
+    for (const r of shift.readings) {
+      r.tested = testedLiters(id, r.nozzle_id);
+      r.tests = approvedTests(id, r.nozzle_id);
+      r.changes = (changes.get(r.nozzle_id) || []).map((c) => ({ meter: c.meter, old_price: c.old_price, old_subscriber_price: c.old_subscriber_price, created_at: c.created_at }));
+    }
     shift.tanks = db
       .prepare(
         `SELECT st.*, t.name, t.capacity, t.low_level, p.name AS product_name, p.id AS product_id
@@ -111,6 +118,9 @@ module.exports = function shiftRoutes(db) {
     return out;
   }
 
+  // A nozzle's approved pump tests in a shift (litres and time, for their price).
+  const approvedTests = (shiftId, nozzleId) => db.prepare("SELECT liters, created_at FROM pump_tests WHERE shift_id = ? AND nozzle_id = ? AND status = 'approved'").all(shiftId, nozzleId);
+
   // Litres of a nozzle's approved pump tests in a shift: drawn, then poured back into the tank.
   const testedLiters = (shiftId, nozzleId) =>
     round(db.prepare("SELECT COALESCE(SUM(liters), 0) AS v FROM pump_tests WHERE shift_id = ? AND nozzle_id = ? AND status = 'approved'").get(shiftId, nozzleId).v);
@@ -120,10 +130,12 @@ module.exports = function shiftRoutes(db) {
   function applyTests(shiftId) {
     const readings = db.prepare('SELECT r.*, p.name AS label FROM shift_readings r JOIN products p ON p.id = r.product_id WHERE r.shift_id = ?').all(shiftId);
     const sales = db.prepare('SELECT nozzle_id, liters FROM sales WHERE shift_id = ?').all(shiftId);
+    const changes = priceChanges(db, shiftId);
     for (const r of readings) {
       if (r.end_meter == null) continue;
       const liters = netLiters(r, sales, testedLiters(shiftId, r.nozzle_id));
-      db.prepare('UPDATE shift_readings SET liters = ?, amount = ? WHERE id = ?').run(liters, round(liters * r.unit_price), r.id);
+      const amount = meterAmount(changes, r, r.start_meter, r.end_meter, approvedTests(shiftId, r.nozzle_id));
+      db.prepare('UPDATE shift_readings SET liters = ?, amount = ? WHERE id = ?').run(liters, amount, r.id);
       db.prepare('UPDATE tanks SET book_stock = ROUND(book_stock + ?, 2) WHERE id = ?').run(round((r.liters || 0) - liters), r.tank_id);
       db.prepare('UPDATE shift_tank_stock SET sold = ROUND(sold - ?, 2), stock_after = ROUND(stock_after + ?, 2) WHERE shift_id = ? AND tank_id = ?').run(
         round((r.liters || 0) - liters),
@@ -693,10 +705,12 @@ module.exports = function shiftRoutes(db) {
         const beneficiary = supplierOf(db, category, b.beneficiary === undefined ? item.beneficiary : str(b.beneficiary, 'Le bénéficiaire', { required: false, max: 120 }));
         db.prepare('UPDATE expenses SET category = ?, amount = ?, description = ?, beneficiary = ? WHERE id = ?').run(category, amount, description, beneficiary, item.id);
       } else {
-        const reading = db.prepare('SELECT unit_price, product_id FROM shift_readings WHERE shift_id = ? AND product_id = ? LIMIT 1').get(shift.id, Number(b.productId ?? item.product_id));
+        const reading = db.prepare('SELECT * FROM shift_readings WHERE shift_id = ? AND product_id = ? LIMIT 1').get(shift.id, Number(b.productId ?? item.product_id));
         if (!reading) fail(400, 'Choisissez le carburant.');
         const liters = round(num(b.liters ?? item.liters, 'Le nombre de litres', { min: 0.01, max: 1e5 }));
-        db.prepare('UPDATE momo_sales SET product_id = ?, liters = ?, unit_price = ?, amount = ? WHERE id = ?').run(reading.product_id, liters, reading.unit_price, round(liters * reading.unit_price), item.id);
+        // The price of its time (a price may have changed during the shift).
+        const { price } = priceAt(priceChanges(db, shift.id), reading, item.created_at);
+        db.prepare('UPDATE momo_sales SET product_id = ?, liters = ?, unit_price = ?, amount = ? WHERE id = ?').run(reading.product_id, liters, price, round(liters * price), item.id);
       }
       if (shift.status === 'closed') reconcile(shift.id);
       const changed = db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(item.id);
@@ -736,9 +750,8 @@ module.exports = function shiftRoutes(db) {
     const shift = db.prepare('SELECT * FROM shifts WHERE id = ?').get(shiftId);
     const readings = db.prepare('SELECT * FROM shift_readings WHERE shift_id = ?').all(shiftId);
     const sales = db.prepare('SELECT * FROM sales WHERE shift_id = ?').all(shiftId);
-    // Subscribers pay a higher price than the pump price used for the meters.
-    const unitPrices = new Map(readings.map((r) => [r.nozzle_id, r.unit_price]));
-    const surcharge = round(sales.reduce((t, s) => t + (s.amount - s.liters * unitPrices.get(s.nozzle_id)), 0));
+    // Subscribers pay a higher price than the pump price used for the meters (the one of their time).
+    const surcharge = surchargeOf(priceChanges(db, shiftId), readings, sales);
     const totalAmount = round(readings.reduce((t, r) => t + (r.amount || 0), 0) + surcharge);
     const creditAmount = round(sales.filter((s) => s.kind === 'credit').reduce((t, s) => t + s.amount, 0));
     const comboAmount = round(sales.filter((s) => s.kind === 'combo').reduce((t, s) => t + s.amount, 0));
@@ -784,6 +797,7 @@ module.exports = function shiftRoutes(db) {
         )
         .all(shift.id);
       const sales = db.prepare('SELECT * FROM sales WHERE shift_id = ?').all(shift.id);
+      const changes = priceChanges(db, shift.id);
 
       let totalLiters = 0;
       for (const r of readings) {
@@ -795,7 +809,8 @@ module.exports = function shiftRoutes(db) {
         if (lastTaken != null && end < lastTaken - 0.001) fail(400, `L'index de fin (${r.label}) ne peut pas être inférieur au dernier relevé du poste (${lastTaken}).`);
         const liters = netLiters({ ...r, end_meter: end }, sales, testedLiters(shift.id, r.nozzle_id));
         totalLiters += liters;
-        db.prepare('UPDATE shift_readings SET end_meter = ?, liters = ?, amount = ? WHERE id = ?').run(end, liters, round(liters * r.unit_price), r.id);
+        const amount = meterAmount(changes, r, r.start_meter, end, approvedTests(shift.id, r.nozzle_id));
+        db.prepare('UPDATE shift_readings SET end_meter = ?, liters = ?, amount = ? WHERE id = ?').run(end, liters, amount, r.id);
         db.prepare('UPDATE nozzles SET meter = ? WHERE id = ?').run(end, r.nozzle_id);
         db.prepare('UPDATE tanks SET book_stock = ROUND(book_stock - ?, 2) WHERE id = ?').run(liters, r.tank_id);
       }

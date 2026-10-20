@@ -1,4 +1,5 @@
 const { getSettings } = require('./db');
+const { priceChanges, priceAt } = require('./shiftPrices');
 const { fail, num, str, oneOf, round, transaction, clientRef } = require('./util');
 const { customerBalance } = require('./routes/customers');
 const { refreshCustomer, subscriberDues, creditAllocation } = require('./loyalty');
@@ -105,7 +106,9 @@ function updateSale(db, sale, input) {
   if (!customer) fail(400, 'Client inconnu.');
   const reading = db.prepare('SELECT * FROM shift_readings WHERE shift_id = ? AND product_id = ? ORDER BY id LIMIT 1').get(sale.shift_id, Number(input.productId ?? sale.product_id));
   if (!reading) fail(400, 'Ce produit ne fait pas partie du poste.');
-  const unitPrice = customer.type === 'account' ? withDelta(reading.subscriber_price ?? reading.unit_price, priceDelta(db, customer, reading.product_id)) : reading.unit_price;
+  // The prices of its time: a price may have changed during the shift.
+  const at = priceAt(priceChanges(db, sale.shift_id), reading, sale.created_at);
+  const unitPrice = customer.type === 'account' ? withDelta(at.subscriber ?? at.price, priceDelta(db, customer, reading.product_id)) : at.price;
   let liters;
   let amount;
   if (input.amount !== undefined && input.amount !== null && input.amount !== '') {

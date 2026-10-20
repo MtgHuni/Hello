@@ -44,7 +44,7 @@ function shiftReportPdf(shift, { stationName, combosEnabled, cashTolerance = 0, 
       { label: 'PRIX $/L', width: 56, align: 'right' },
       { label: 'MONTANT', align: 'right' },
     ],
-    readings.map((r) => [r.product_name, number(r.start_meter), number(r.end_meter), liters(r.liters), price(r.unit_price), money(r.amount)]),
+    readings.map((r) => [r.product_name, number(r.start_meter), number(r.end_meter), liters(r.liters), [...(r.changes || []).map((c) => `${price(c.old_price)} → `), price(r.unit_price)].join(''), money(r.amount)]),
     { totals },
   );
   // ---- Credits ----
