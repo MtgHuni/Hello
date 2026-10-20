@@ -385,7 +385,7 @@ export function shiftSummary(shift, tolerance, onEdit = null) {
           { label: 'Index fin', align: 'right', render: (r) => (r.end_meter == null ? '—' : h('span', { class: 'nowrap' }, meterPhotoLink(r.end_photo_id, r.end_photo_read, r.end_meter), fmt.number(r.end_meter))) },
           ...(shift.readings.some((r) => r.tested) ? [{ label: 'Tests (remis en cuve)', align: 'right', render: (r) => (r.tested ? `−${fmt.liters(r.tested)}` : '—') }] : []),
           { label: 'Litres vendus', align: 'right', render: (r) => (r.liters == null ? '—' : fmt.liters(r.liters)) },
-          { label: 'Prix', align: 'right', render: (r) => fmt.price(r.unit_price) },
+          { label: 'Prix', align: 'right', render: (r) => [...(r.changes || []).map((c) => `${fmt.price(c.old_price)} → `), fmt.price(r.unit_price)].join('') },
           { label: 'Montant', align: 'right', render: (r) => (r.amount == null ? '—' : fmt.money(r.amount)) },
         ],
         shift.readings,

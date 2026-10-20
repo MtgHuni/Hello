@@ -503,6 +503,23 @@ function customerSearch(customers, { allowNew = false, onPick } = {}) {
 // Credit entered by the attendant (paid sales are not entered: the indexes count them),
 // built for speed: one search field for the customer (name, plate or phone; an unknown
 // name creates the customer), one-tap product and unit, amount in dollars or litres.
+// A price changed during the shift (src/shiftPrices.js): the pump price at a time, and a meter's
+// litres between two indexes, each part at its price, less the approved pump tests.
+const priceAt = (r, at) => (r.changes || []).find((c) => c.created_at > at)?.old_price ?? r.unit_price;
+function meterAmount(r, from, to) {
+  let amount = 0;
+  let pos = from;
+  for (const c of r.changes || []) {
+    const upTo = Math.min(c.meter, to);
+    if (upTo > pos) {
+      amount += (upTo - pos) * c.old_price;
+      pos = upTo;
+    }
+  }
+  if (to > pos) amount += (to - pos) * r.unit_price;
+  return amount - (r.tests || []).reduce((t, x) => t + x.liters * priceAt(r, x.created_at), 0);
+}
+
 // A particulier who still owes a credit: a card in the middle of the screen says so, with each credit
 // still unpaid (when, what, how much is left, who entered it); the attendant may grant the new credit all
 // the same (resolved true).
@@ -921,12 +938,16 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
       }
       // Approved pump tests went back into the tank: not sold.
       const liters = Number(v) - r.start_meter - (r.tested || 0);
-      total += liters * r.unit_price;
-      out.textContent = Number(v) < r.start_meter ? 'Index inférieur au début !' : `${fmt.liters(liters)}${r.tested ? ` (tests −${fmt.liters(r.tested)})` : ''} · ${fmt.money(liters * r.unit_price)}`;
+      const amount = meterAmount(r, r.start_meter, Number(v));
+      total += amount;
+      out.textContent = Number(v) < r.start_meter ? 'Index inférieur au début !' : `${fmt.liters(liters)}${r.tested ? ` (tests −${fmt.liters(r.tested)})` : ''} · ${fmt.money(amount)}`;
       out.className = liters < 0 ? 'small variance-neg' : 'small muted';
     }
     // Subscribers' higher price is cashed on top of the pump price.
-    const surcharge = shift.sales.reduce((t, x) => t + (x.amount - x.liters * (shift.readings.find((r) => r.nozzle_id === x.nozzle_id)?.unit_price ?? 0)), 0);
+    const surcharge = shift.sales.reduce((t, x) => {
+      const r = shift.readings.find((n) => n.nozzle_id === x.nozzle_id);
+      return t + (x.amount - x.liters * (r ? priceAt(r, x.created_at) : 0));
+    }, 0);
     total += surcharge;
     const expected = received + francsReceived + total - credit - combos + payments - expenses + moved;
     const value = (name) => Number(form.elements[name]?.value) || 0;

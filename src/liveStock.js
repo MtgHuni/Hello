@@ -1,7 +1,7 @@
 const { round } = require('./util');
 
 // The tanks' book stock only loses the fuel sold at the closing. While the shift is open, the fuel
-// already sold is known from the latest meter index read (a checkpoint, a delivery or a dip):
+// already sold is known from the latest meter index read (a checkpoint, a delivery, a dip or a price change):
 // that index minus the opening one, less the approved pump tests. Taking it off the book stock
 // gives the stock now, so a delivery in the middle of a shift does not push a tank past its capacity.
 
@@ -13,7 +13,8 @@ function openMeters(db) {
          MAX(r.start_meter,
            COALESCE((SELECT MAX(c.meter) FROM checkpoint_readings c JOIN shift_checkpoints k ON k.id = c.checkpoint_id
                      WHERE k.shift_id = r.shift_id AND c.nozzle_id = r.nozzle_id), 0),
-           COALESCE((SELECT MAX(m.meter) FROM stock_readings m WHERE m.shift_id = r.shift_id AND m.nozzle_id = r.nozzle_id), 0)) AS latest
+           COALESCE((SELECT MAX(m.meter) FROM stock_readings m WHERE m.shift_id = r.shift_id AND m.nozzle_id = r.nozzle_id), 0),
+           COALESCE((SELECT MAX(m.meter) FROM shift_price_meters m WHERE m.shift_id = r.shift_id AND m.nozzle_id = r.nozzle_id), 0)) AS latest
        FROM shift_readings r JOIN shifts s ON s.id = r.shift_id AND s.status = 'open'
        JOIN products p ON p.id = r.product_id
        ORDER BY r.nozzle_id`,
