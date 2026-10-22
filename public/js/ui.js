@@ -310,7 +310,8 @@ export function kpi(label, value, sub, extra = {}) {
   return h('div', { class: 'card kpi' }, h('div', { class: 'label' }, label), h('div', { class: `value ${extra.small ? 'sm' : ''}` }, value), sub ? h('div', { class: 'sub' }, sub) : null);
 }
 
-export function table(columns, rows, { onRowClick, empty = 'Aucune donnée.', footer } = {}) {
+// `canClick(row)` limits `onRowClick` to some rows.
+export function table(columns, rows, { onRowClick, canClick = () => true, empty = 'Aucune donnée.', footer } = {}) {
   if (!rows.length) return h('div', { class: 'empty' }, empty);
   return h(
     'div',
@@ -322,18 +323,19 @@ export function table(columns, rows, { onRowClick, empty = 'Aucune donnée.', fo
       h(
         'tbody',
         {},
-        rows.map((row) =>
-          h(
+        rows.map((row) => {
+          const click = onRowClick && canClick(row) ? onRowClick : null;
+          return h(
             'tr',
             {
-              class: onRowClick ? 'clickable' : '',
-              tabindex: onRowClick ? '0' : null,
-              onClick: onRowClick ? () => onRowClick(row) : null,
-              onKeydown: onRowClick ? (e) => e.key === 'Enter' && onRowClick(row) : null,
+              class: click ? 'clickable' : '',
+              tabindex: click ? '0' : null,
+              onClick: click ? () => click(row) : null,
+              onKeydown: click ? (e) => e.key === 'Enter' && click(row) : null,
             },
             columns.map((c) => h('td', { class: [c.align === 'right' ? 'right' : '', c.wrap ? 'wrap' : ''].join(' ') }, c.render ? c.render(row) : row[c.key])),
-          ),
-        ),
+          );
+        }),
       ),
       footer ? h('tfoot', {}, h('tr', {}, columns.map((c) => h('td', { class: c.align === 'right' ? 'right' : '' }, footer[c.key] ?? '')))) : null,
     ),

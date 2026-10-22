@@ -2371,3 +2371,28 @@ test('prix changé pendant le poste : les litres d’avant l’index au prix d�
   assert.strictEqual(closed.data.total_amount, round2(closed.data.readings.reduce((t, r) => t + r.amount, 0) + surcharge));
   assert.ok((await gerant('GET', '/api/audit?category=prix')).data.some((a) => a.summary.includes('pendant le poste')));
 });
+
+test('jaugeage mal fait : le dernier d’une cuve s’annule, le stock revient, le journal le garde', async () => {
+  const tanks = (await gerant('GET', '/api/tanks')).data;
+  const tank = tanks.find((t) => t.active);
+  const other = tanks.find((t) => t.active && t.id !== tank.id);
+  const stock = async (id = tank.id) => (await gerant('GET', '/api/tanks')).data.find((t) => t.id === id).book_stock;
+  const before = await stock();
+  const first = (await gerant('POST', '/api/dips', { tankId: tank.id, measured: round2(before - 40) })).data;
+  await gerant('POST', '/api/dips', { tankId: other.id, measured: await stock(other.id) });
+  const wrong = (await gerant('POST', '/api/dips', { tankId: tank.id, measured: round2(before - 400), note: 'mal lu' })).data;
+  assert.strictEqual(await stock(), round2(before - 400));
+
+  // Only the last dip of a tank: an earlier one is the reference of the later.
+  assert.strictEqual((await gerant('DELETE', `/api/dips/${first.id}`)).status, 409);
+  assert.strictEqual((await pompiste('DELETE', `/api/dips/${wrong.id}`)).status, 403);
+  assert.strictEqual((await gerant('DELETE', `/api/dips/${wrong.id}`)).status, 204);
+  assert.strictEqual(await stock(), round2(before - 40), 'le stock du jaugeage d’avant');
+  assert.ok(!(await gerant('GET', '/api/dips')).data.some((d) => d.id === wrong.id));
+  assert.strictEqual((await gerant('DELETE', `/api/dips/${wrong.id}`)).status, 404);
+  const entry = (await gerant('GET', '/api/audit?category=donnees')).data.find((a) => a.action === 'dip_cancelled');
+  assert.ok(entry?.summary.includes(tank.name));
+  // Then the earlier one, now the last of its tank.
+  assert.strictEqual((await gerant('DELETE', `/api/dips/${first.id}`)).status, 204);
+  assert.strictEqual(await stock(), before);
+});

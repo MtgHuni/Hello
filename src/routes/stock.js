@@ -211,5 +211,28 @@ module.exports = function stockRoutes(db) {
     res.status(201).json(db.prepare('SELECT * FROM dips WHERE id = ?').get(id));
   });
 
+  // A dip done wrongly is cancelled: the book stock moves back by its variance and the meters it read go.
+  // Only the last dip of a tank: it is the reference the next one compares with.
+  router.delete('/dips/:id', manager, (req, res) => {
+    const dip = db.prepare('SELECT d.*, t.name AS tank_name FROM dips d JOIN tanks t ON t.id = d.tank_id WHERE d.id = ?').get(req.params.id);
+    if (!dip) fail(404, 'Jaugeage introuvable.');
+    const last = db.prepare('SELECT MAX(id) AS id FROM dips WHERE tank_id = ?').get(dip.tank_id).id;
+    if (last !== dip.id) fail(409, `Seul le dernier jaugeage de ${dip.tank_name} peut être annulé.`);
+    transaction(db, () => {
+      db.prepare('UPDATE tanks SET book_stock = ROUND(book_stock - ?, 2) WHERE id = ?').run(dip.variance, dip.tank_id);
+      db.prepare("DELETE FROM stock_readings WHERE source = 'dip' AND source_id = ?").run(dip.id);
+      db.prepare('DELETE FROM dips WHERE id = ?').run(dip.id);
+      audit(db, req, {
+        category: 'donnees',
+        action: 'dip_cancelled',
+        entity: 'dips',
+        id: dip.id,
+        summary: `Jaugeage annulé : ${dip.tank_name}, ${dip.measured} L mesurés le ${dip.created_at.slice(0, 10).split('-').reverse().join('/')} (écart ${dip.variance > 0 ? '+' : ''}${dip.variance} L)`,
+        before: dip,
+      });
+    });
+    res.status(204).end();
+  });
+
   return router;
 };
