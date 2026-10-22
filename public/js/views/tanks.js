@@ -10,6 +10,7 @@ export async function renderTanks(page, ctx) {
   const tol = ctx.state.settings.stockTolerance;
   const active = tanks.filter((t) => t.active);
   const reload = () => renderTanks(page, ctx);
+  const lastDips = new Set(active.map((t) => dips.find((d) => d.tank_id === t.id)?.id).filter(Boolean));
 
   setContent(page, 
     pageHeader(
@@ -103,7 +104,8 @@ export async function renderTanks(page, ctx) {
               { label: 'Note', wrap: true, render: (d) => d.note || '' },
             ],
             dips,
-            { empty: 'Aucun jaugeage enregistré.' },
+            // The last dip of a tank, done wrongly, is cancelled.
+            { empty: 'Aucun jaugeage enregistré.', onRowClick: flags.readonly ? undefined : (d) => cancelDip(d, reload), canClick: (d) => lastDips.has(d.id) },
           ),
     ),
   );
@@ -182,6 +184,28 @@ async function deliveryDialog(tanks, supplierNames, meters, reload) {
 }
 
 // The payment of a delivery, corrected afterwards: the litres stay, they made the stock.
+function cancelDip(d, reload) {
+  actionSheet({
+    title: `Jaugeage du ${fmt.dateTime(d.created_at)} · ${d.tank_name} · ${fmt.liters(d.measured)}`,
+    actions: [
+      {
+        label: 'Annuler ce jaugeage',
+        destructive: true,
+        onClick: async () => {
+          if (!(await confirmDialog('Annuler ce jaugeage ?', `${d.tank_name} · ${fmt.liters(d.measured)} mesurés · écart ${d.variance > 0 ? '+' : ''}${fmt.liters(d.variance)}`, { confirmLabel: 'Annuler le jaugeage', danger: true }))) return;
+          try {
+            await api.del(`/dips/${d.id}`);
+            toast('Jaugeage annulé.');
+            reload();
+          } catch (err) {
+            toast(err.message, 'error');
+          }
+        },
+      },
+    ],
+  });
+}
+
 async function deliveryPaymentDialog(d, supplierNames, reload) {
   const named = nameChips(supplierNames);
   const ok = await formDialog({
