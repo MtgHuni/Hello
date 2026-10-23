@@ -139,39 +139,76 @@ module.exports = function stockRoutes(db) {
     res.status(201).json(db.prepare('SELECT * FROM deliveries WHERE id = ?').get(id));
   });
 
-  // The payment of a delivery can be corrected (e.g. old deliveries entered to set the stock).
-  // The litres stay: they made the stock.
+  // Litres added to (or taken from) a tank by a correction of a delivery made at `since`. A dip after it
+  // measured the real fuel: the stock stays, that dip's variance takes the difference. Else the book stock
+  // moves, with the stock left at each closing since.
+  function moveStock(tankId, delta, since) {
+    if (Math.abs(delta) < 0.001) return;
+    const dip = db.prepare('SELECT * FROM dips WHERE tank_id = ? AND created_at > ? ORDER BY id LIMIT 1').get(tankId, since);
+    const closings = `UPDATE shift_tank_stock SET stock_after = ROUND(stock_after + ?, 2)
+      WHERE tank_id = ? AND shift_id IN (SELECT id FROM shifts WHERE closed_at > ? AND closed_at <= ?)`;
+    db.prepare(closings).run(delta, tankId, since, dip ? dip.created_at : '9999');
+    if (dip) db.prepare('UPDATE dips SET book_stock = ROUND(book_stock + ?, 2), variance = ROUND(variance - ?, 2) WHERE id = ?').run(delta, delta, dip.id);
+    else db.prepare('UPDATE tanks SET book_stock = ROUND(book_stock + ?, 2) WHERE id = ?').run(delta, tankId);
+  }
+
+  // Every detail of a delivery can be corrected: tank, litres, purchase price, supplier, delivery note,
+  // amount and payment. The stock follows the litres (moveStock).
   router.put('/deliveries/:id', manager, (req, res) => {
     const d = db.prepare('SELECT * FROM deliveries WHERE id = ?').get(req.params.id);
     if (!d) fail(404, 'Livraison introuvable.');
     const b = req.body || {};
-    const { payment, payMethod } = paymentOf(b);
+    const tank = b.tankId === undefined ? getTank(d.tank_id) : getTank(num(b.tankId, 'La cuve', { integer: true, min: 1 }));
+    const ordered = b.litersOrdered === undefined ? d.liters_ordered : num(b.litersOrdered, 'Les litres commandés', { min: 0.01, max: 1e7 });
+    const received = b.litersReceived === undefined ? d.liters_received : num(b.litersReceived, 'Les litres reçus', { min: 0.01, max: 1e7 });
+    const unitCost = b.unitCost === undefined ? d.unit_cost : num(b.unitCost === '' ? null : b.unitCost, "Le prix d'achat", { required: false, max: 1000 });
+    const { payment, payMethod } = paymentOf({ payment: b.payment ?? d.payment });
     const supplier = b.supplier === undefined ? d.supplier : str(b.supplier, 'Le fournisseur', { required: false, max: 100 });
     const reference = b.reference === undefined ? d.reference : str(b.reference, 'La référence', { required: false, max: 100 });
-    const amount = b.amount === undefined ? d.amount : b.amount === '' || b.amount === null ? null : round(num(b.amount, 'Le montant', { min: 0.01, max: 1e9 }));
+    const amount =
+      b.amount === undefined ? d.amount : b.amount === '' || b.amount === null ? (unitCost ? round(unitCost * received) : null) : round(num(b.amount, 'Le montant', { min: 0.01, max: 1e9 }));
     checkPayment(payment, supplier, amount);
     const expense = linkedExpense(d);
-    const after = { payment, pay_method: payMethod, supplier, reference, amount };
+    // More fuel than the tank holds now (no dip since the delivery to absorb it).
+    const added = tank.id === d.tank_id ? received - d.liters_received : received;
+    const dipSince = db.prepare('SELECT 1 FROM dips WHERE tank_id = ? AND created_at > ?').get(tank.id, d.created_at);
+    if (added > 0.001 && !dipSince && !b.force) {
+      const { live } = stockNow(tank);
+      if (live + added > tank.capacity + 0.5) {
+        fail(409, `${tank.name} contiendrait ${round(live + added)} L pour une capacité de ${tank.capacity} L. Vérifiez la cuve et les litres reçus.`, 'over_capacity');
+      }
+    }
+    const after = { tank_id: tank.id, liters_ordered: ordered, liters_received: received, unit_cost: unitCost ?? (amount ? round(amount / received, 4) : null), payment, pay_method: payMethod, supplier, reference, amount };
     transaction(db, () => {
+      if (tank.id === d.tank_id) moveStock(tank.id, round(received - d.liters_received), d.created_at);
+      else {
+        moveStock(d.tank_id, -d.liters_received, d.created_at);
+        moveStock(tank.id, received, d.created_at);
+      }
       let expenseId = d.expense_id;
+      const description = `Livraison ${tank.name}, ${received} L`;
       if (payment === 'shift' && expense) {
-        db.prepare('UPDATE expenses SET amount = ?, beneficiary = ?, reference = ? WHERE id = ?').run(amount, supplierName(supplier), reference, expense.id);
+        db.prepare('UPDATE expenses SET amount = ?, beneficiary = ?, reference = ?, description = ? WHERE id = ?').run(amount, supplierName(supplier), reference, description, expense.id);
       } else if (payment === 'shift') {
-        const tank = db.prepare('SELECT * FROM tanks WHERE id = ?').get(d.tank_id);
-        expenseId = shiftExpense(req, { tank, liters: d.liters_received, supplier: supplierName(supplier), reference, amount });
+        expenseId = shiftExpense(req, { tank, liters: received, supplier: supplierName(supplier), reference, amount });
       } else if (expense) {
         expenseId = null;
       }
-      db.prepare('UPDATE deliveries SET payment = ?, pay_method = ?, supplier = ?, reference = ?, amount = ?, expense_id = ? WHERE id = ?').run(payment, payMethod, supplierName(supplier), reference, amount, expenseId, d.id);
+      db.prepare(
+        `UPDATE deliveries SET tank_id = ?, liters_ordered = ?, liters_received = ?, unit_cost = ?, payment = ?, pay_method = ?, supplier = ?, reference = ?, amount = ?, expense_id = ?
+         WHERE id = ?`,
+      ).run(tank.id, ordered, received, after.unit_cost, payment, payMethod, supplierName(supplier), reference, amount, expenseId, d.id);
       if (expense && payment !== 'shift') db.prepare('DELETE FROM expenses WHERE id = ?').run(expense.id);
+      const before = { tank_id: d.tank_id, liters_ordered: d.liters_ordered, liters_received: d.liters_received, unit_cost: d.unit_cost, payment: d.payment, pay_method: d.pay_method, supplier: d.supplier, reference: d.reference, amount: d.amount };
+      const changed = Object.keys(after).filter((k) => (after[k] ?? null) !== (before[k] ?? null));
       audit(db, req, {
         category: 'donnees',
-        action: 'delivery_payment',
+        action: 'delivery_update',
         entity: 'deliveries',
         id: d.id,
-        summary: `Livraison du ${d.created_at.slice(0, 10)} (${d.liters_received} L) : paiement corrigé, ${PAYMENT_LABEL[d.payment] || '—'} → ${PAYMENT_LABEL[payment]}`,
-        before: { payment: d.payment, pay_method: d.pay_method, supplier: d.supplier, reference: d.reference, amount: d.amount },
-        after,
+        summary: `Livraison du ${d.created_at.slice(0, 10).split('-').reverse().join('/')} corrigée : ${tank.name}, ${received} L reçus, ${PAYMENT_LABEL[payment]}${amount ? `, ${amount} $` : ''}`,
+        before,
+        after: { ...after, changed },
       });
     });
     res.json(db.prepare('SELECT * FROM deliveries WHERE id = ?').get(d.id));
