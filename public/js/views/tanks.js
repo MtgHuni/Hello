@@ -84,7 +84,7 @@ export async function renderTanks(page, ctx) {
               { label: 'Paiement', render: (d) => (d.payment === 'credit' ? badge('À crédit', 'warning') : d.payment === 'prepaid' ? 'Déjà payée' : d.payment === 'shift' ? 'Argent du poste' : d.payment === 'cash' ? 'Caisse' : '—') },
             ],
             deliveries,
-            { empty: 'Aucune livraison enregistrée.', onRowClick: flags.readonly ? undefined : (d) => deliveryPaymentDialog(d, sup.names, reload) },
+            { empty: 'Aucune livraison enregistrée.', onRowClick: flags.readonly ? undefined : (d) => deliveryEditDialog(d, active, sup.names, reload) },
           )
         : table(
             [
@@ -206,22 +206,36 @@ function cancelDip(d, reload) {
   });
 }
 
-async function deliveryPaymentDialog(d, supplierNames, reload) {
+// Every detail of a delivery, corrected: the stock follows the litres.
+async function deliveryEditDialog(d, tanks, supplierNames, reload) {
   const named = nameChips(supplierNames);
+  const options = tankOptions(tanks.some((t) => t.id === d.tank_id) ? tanks : [...tanks, { id: d.tank_id, name: d.tank_name, product_name: d.product_name }]);
   const ok = await formDialog({
     title: `Livraison du ${fmt.date(d.created_at)}`,
-    intro: `${d.tank_name} · ${fmt.liters(d.liters_received)} reçus`,
     fields: [
-      { name: 'payment', label: 'Paiement', type: 'segment', full: true, options: PAYMENTS, value: d.payment || 'cash' },
+      { name: 'tankId', label: 'Cuve', type: 'select', options, value: d.tank_id, required: true, full: true },
+      { name: 'litersOrdered', label: 'Litres commandés (bon)', type: 'number', step: '0.01', min: '0.01', value: d.liters_ordered, required: true },
+      { name: 'litersReceived', label: 'Litres reçus (mesurés)', type: 'number', step: '0.01', min: '0.01', value: d.liters_received, required: true },
       { name: 'supplier', label: 'Fournisseur', value: d.supplier || '', onInput: named.onInput },
       named.node,
       { name: 'reference', label: 'N° du bon de livraison', value: d.reference || '' },
+      { name: 'unitCost', label: 'Prix d’achat ($/L)', type: 'number', step: '0.001', min: '0', value: d.unit_cost ?? '' },
       { name: 'amount', label: 'Montant ($)', type: 'number', step: '0.01', min: '0', value: d.amount ?? '' },
+      { name: 'payment', label: 'Paiement', type: 'segment', full: true, options: PAYMENTS, value: d.payment || 'cash' },
     ],
-    onSubmit: (v) => api.put(`/deliveries/${d.id}`, { payment: v.payment, supplier: v.supplier, reference: v.reference, amount: v.amount }),
+    onSubmit: async (v) => {
+      const body = { ...v, tankId: Number(v.tankId) };
+      try {
+        return await api.put(`/deliveries/${d.id}`, body);
+      } catch (err) {
+        if (err.code !== 'over_capacity') throw err;
+        if (!(await confirmDialog('Dépasser la capacité ?', err.message, { confirmLabel: 'Corriger quand même', danger: true }))) throw new Error('Livraison non corrigée.');
+        return api.put(`/deliveries/${d.id}`, { ...body, force: true });
+      }
+    },
   });
   if (ok) {
-    toast('Paiement de la livraison corrigé.');
+    toast('Livraison corrigée.');
     reload();
   }
 }

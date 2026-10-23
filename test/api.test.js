@@ -710,7 +710,7 @@ test('un seul poste à la fois, livre de caisse (espèces et mobile money), livr
   sup = (await gerant('GET', '/api/suppliers')).data.suppliers.find((s) => s.name === 'Ancien Fournisseur');
   assert.strictEqual(sup.balance, 3300);
   assert.strictEqual((await gerant('PUT', `/api/deliveries/${old.id}`, { payment: 'prepaid' })).data.payment, 'prepaid');
-  assert.ok((await gerant('GET', '/api/audit?category=donnees')).data.some((a) => a.action === 'delivery_payment'));
+  assert.ok((await gerant('GET', '/api/audit?category=donnees')).data.some((a) => a.action === 'delivery_update'));
   assert.strictEqual((await pompiste('PUT', `/api/deliveries/${old.id}`, { payment: 'cash' })).status, 403);
 });
 
@@ -2395,4 +2395,37 @@ test('jaugeage mal fait : le dernier d’une cuve s’annule, le stock revient, 
   // Then the earlier one, now the last of its tank.
   assert.strictEqual((await gerant('DELETE', `/api/dips/${first.id}`)).status, 204);
   assert.strictEqual(await stock(), before);
+});
+
+test('livraison corrigée en entier : cuve, litres, prix, fournisseur ; le stock suit, ou l’écart du jaugeage d’après', async () => {
+  const tanks = (await gerant('GET', '/api/tanks')).data.filter((t) => t.active);
+  const [a, b] = [tanks[0], tanks.find((t) => t.id !== tanks[0].id && t.product_id === tanks[0].product_id) || tanks[1]];
+  const stock = async (id) => (await gerant('GET', '/api/tanks')).data.find((t) => t.id === id).book_stock;
+  const [a0, b0] = [await stock(a.id), await stock(b.id)];
+  const d = (await gerant('POST', '/api/deliveries', { tankId: a.id, litersOrdered: 1000, litersReceived: 1000, unitCost: 1, supplier: 'Fournisseur Correction', payment: 'credit', force: true })).data;
+  assert.strictEqual(await stock(a.id), round2(a0 + 1000));
+
+  // Litres received and price corrected: the stock follows, the amount with the price.
+  const fixed = await gerant('PUT', `/api/deliveries/${d.id}`, { litersOrdered: 1000, litersReceived: 900, unitCost: 1.1, amount: '', reference: 'BL-7' });
+  assert.strictEqual(fixed.status, 200, JSON.stringify(fixed.data));
+  assert.deepStrictEqual([fixed.data.liters_received, fixed.data.unit_cost, fixed.data.amount, fixed.data.reference], [900, 1.1, 990, 'BL-7']);
+  assert.strictEqual(await stock(a.id), round2(a0 + 900));
+
+  // Into another tank: out of the first, into the second.
+  assert.strictEqual((await gerant('PUT', `/api/deliveries/${d.id}`, { tankId: b.id })).status, 200);
+  assert.deepStrictEqual([await stock(a.id), await stock(b.id)], [a0, round2(b0 + 900)]);
+
+  // A dip after it measured the real fuel: the stock stays, that dip's variance takes the difference.
+  await nextSecond();
+  const dipped = await gerant('POST', '/api/dips', { tankId: b.id, measured: 500 });
+  assert.strictEqual(dipped.status, 201, JSON.stringify(dipped.data));
+  const dip = dipped.data;
+  const afterDip = await stock(b.id);
+  assert.strictEqual((await gerant('PUT', `/api/deliveries/${d.id}`, { litersReceived: 920 })).status, 200);
+  assert.strictEqual(await stock(b.id), afterDip, 'le jaugeage a mesuré le vrai stock');
+  assert.strictEqual(db.prepare('SELECT variance FROM dips WHERE id = ?').get(dip.id).variance, round2(dip.variance - 20), '20 L de plus livrés : 20 L de moins d’écart');
+
+  assert.strictEqual((await pompiste('PUT', `/api/deliveries/${d.id}`, { litersReceived: 800 })).status, 403);
+  const entry = (await gerant('GET', '/api/audit?category=donnees')).data.find((x) => x.action === 'delivery_update');
+  assert.ok(entry?.summary.includes('920'));
 });
