@@ -268,17 +268,18 @@ test('échange de combos contre du carburant, déduit de la caisse', async () =>
   const expense = await pompiste('POST', `/api/shifts/${ctx.shift.id}/expenses`, { category: 'Autre', amount: 3, description: 'Erreur' });
   await pompiste('POST', `/api/shifts/${ctx.shift.id}/expenses/${expense.data.id}/cancel`);
 
-  // 10 L at 1,20 = 12 $ + 28 $ received − 2 $ in combos − 1 $ credit − 3 $ expense = 34 $.
-  const closed = await closeShift(ctx.shift, { [nozzle.nozzle_id]: 510 }, { cash: 37 });
+  // 10 L at 1,20 = 12 $ + 118 $ received (90 $ of it on the customers' records, in the shift too)
+  // − 2 $ in combos − 1 $ credit − 3 $ expense = 124 $.
+  const closed = await closeShift(ctx.shift, { [nozzle.nozzle_id]: 510 }, { cash: 127 });
   assert.strictEqual(closed.data.combo_amount, 2);
-  assert.strictEqual(closed.data.payments_amount, 28);
-  assert.strictEqual(closed.data.expected_amount, 34);
+  assert.strictEqual(closed.data.payments_amount, 118);
+  assert.strictEqual(closed.data.expected_amount, 124);
   assert.strictEqual(closed.data.variance, 3);
 
   // The manager decides after the closing; accepting it redoes the reconciliation.
   assert.strictEqual((await gerant('DELETE', `/api/shifts/${ctx.shift.id}/expenses/${expense.data.id}`)).status, 204);
   const after = (await gerant('GET', `/api/shifts/${ctx.shift.id}`)).data;
-  assert.strictEqual(after.expected_amount, 37);
+  assert.strictEqual(after.expected_amount, 127);
   assert.strictEqual(after.variance, 0);
   assert.strictEqual(after.total_amount, 12);
   await gerant('PUT', '/api/settings', { comboThreshold: 100 });
@@ -658,30 +659,30 @@ test('un seul poste à la fois, livre de caisse (espèces et mobile money), livr
   b = await cash();
   assert.strictEqual(b.cash.balance, 165);
   assert.strictEqual(b.momo.balance, 15);
-  // The manager's cash expense and a payment received by the manager.
+  // The manager's cash expense; a payment entered on the customer's record goes into the open shift's money.
   await gerant('POST', '/api/expenses', { category: 'Fournitures', amount: 10, description: 'Ampoules', method: 'espèces' });
   await gerant('POST', `/api/customers/${ctx.person.id}/payments`, { amount: 5, method: 'espèces' });
-  assert.strictEqual((await cash()).cash.balance, 160);
+  assert.strictEqual((await cash()).cash.balance, 155);
 
   // A delivery paid on the spot leaves the till; one on credit is a debt to the supplier.
   const tank = ctx.tanks[0];
   await gerant('POST', '/api/deliveries', { tankId: tank.id, litersOrdered: 30, litersReceived: 30, unitCost: 1, payment: 'cash', payMethod: 'mobile money' });
-  assert.strictEqual((await cash()).cash.balance, 130, 'payée comptant : toujours en espèces, jamais en mobile money');
+  assert.strictEqual((await cash()).cash.balance, 125, 'payée comptant : toujours en espèces, jamais en mobile money');
   // The manager works the pump too: always on duty on « Mon poste ».
   assert.strictEqual((await gerant('GET', '/api/shifts/state')).data.onDuty, true);
   assert.strictEqual((await gerant('POST', '/api/deliveries', { tankId: tank.id, litersOrdered: 100, litersReceived: 100, unitCost: 1.1, payment: 'credit' })).status, 400, 'fournisseur obligatoire');
   await gerant('POST', '/api/deliveries', { tankId: tank.id, litersOrdered: 100, litersReceived: 100, unitCost: 1.1, payment: 'credit', supplier: 'Total Goma' });
-  assert.strictEqual((await cash()).cash.balance, 130, 'à crédit : rien ne sort de la caisse');
+  assert.strictEqual((await cash()).cash.balance, 125, 'à crédit : rien ne sort de la caisse');
   let sup = (await gerant('GET', '/api/suppliers')).data.suppliers.find((s) => s.name === 'Total Goma');
   assert.strictEqual(sup.balance, 110);
   assert.ok((await gerant('GET', '/api/dashboard')).data.alerts.some((a) => a.text.includes('fournisseurs')));
   const paid = await gerant('POST', '/api/suppliers/payments', { supplier: 'total goma', amount: 60, method: 'espèces' });
   sup = paid.data.suppliers.find((s) => s.name === 'Total Goma');
   assert.strictEqual(sup.balance, 50, 'même fournisseur, quelle que soit la casse');
-  assert.strictEqual((await cash()).cash.balance, 70);
+  assert.strictEqual((await cash()).cash.balance, 65);
 
   // Counting the till keeps the gap; the book and its PDF.
-  const counted = await gerant('POST', '/api/cashbook/counts', { account: 'cash', counted: 69 });
+  const counted = await gerant('POST', '/api/cashbook/counts', { account: 'cash', counted: 64 });
   assert.strictEqual(counted.data.balances.cash.lastCount.diff, -1);
   const book = (await gerant('GET', '/api/cashbook?account=cash')).data;
   assert.ok(book.movements.some((m) => m.source === 'shift') && book.movements.some((m) => m.source === 'supplier_payment'));
@@ -690,7 +691,7 @@ test('un seul poste à la fois, livre de caisse (espèces et mobile money), livr
   assert.ok(spent, 'dépense du pompiste dans la caisse');
   const its = book.movements.find((m) => m.source === 'shift' && spent.link === m.link);
   assert.ok(its && its.label.includes('dépenses du poste'));
-  assert.strictEqual(book.days.at(-1).end, 70);
+  assert.strictEqual(book.days.at(-1).end, 65);
   const pdf = await gerant('GET', '/api/cashbook.pdf');
   assert.strictEqual(pdf.raw.subarray(0, 5).toString(), '%PDF-');
   assert.strictEqual((await pompiste('GET', '/api/cashbook')).status, 403);
@@ -731,7 +732,8 @@ test('relève, fermeture du soir et ouverture du matin : le poste continue', asy
   const preview = (await pompiste('POST', `/api/shifts/${shift.id}/checkpoints/preview`, { kind: 'releve', readings: at(20) })).data;
   assert.strictEqual(preview.liters, 20);
   assert.strictEqual(preview.credits, 6);
-  assert.strictEqual(preview.expected, Math.round((20 * diesel.unit_price - 6) * 100) / 100);
+  // + 5 $ paid on Marie's record, in this shift (test above).
+  assert.strictEqual(preview.expected, Math.round((20 * diesel.unit_price - 6 + 5) * 100) / 100);
   const relief = await pompiste('POST', `/api/shifts/${shift.id}/checkpoints`, { kind: 'releve', readings: at(20), cash: preview.expected });
   assert.strictEqual(relief.status, 201);
   assert.strictEqual(relief.data.report.variance, 0);
@@ -2428,4 +2430,14 @@ test('livraison corrigée en entier : cuve, litres, prix, fournisseur ; le stock
   assert.strictEqual((await pompiste('PUT', `/api/deliveries/${d.id}`, { litersReceived: 800 })).status, 403);
   const entry = (await gerant('GET', '/api/audit?category=donnees')).data.find((x) => x.action === 'delivery_update');
   assert.ok(entry?.summary.includes('920'));
+});
+
+test('règlement saisi sur la fiche client : dans le poste en cours', async () => {
+  const shift = (await gerant('GET', '/api/shifts/current')).data;
+  const c = (await gerant('POST', '/api/customers/quick', { name: 'Client Règlement Fiche' })).data;
+  assert.strictEqual((await gerant('POST', `/api/customers/${c.id}/payments`, { amount: 7, method: 'espèces', reference: 'fiche' })).status, 201);
+  const detail = (await gerant('GET', `/api/shifts/${shift.id}`)).data;
+  assert.ok(detail.payments.some((p) => p.customer_id === c.id && p.amount === 7), 'dans le poste');
+  const book = (await gerant('GET', '/api/cashbook')).data;
+  assert.ok(!JSON.stringify(book).includes('Règlement de Client Règlement Fiche'), 'pas directement dans la caisse : avec le poste à sa clôture');
 });
