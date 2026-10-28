@@ -349,8 +349,10 @@ function customerRoutes(db, { mailer } = {}) {
     const amount = round(num(req.body?.amount, 'Le montant', { min: 0.01, max: 1e8 }));
     const method = oneOf(req.body?.method, 'Le mode de règlement', ['espèces', 'mobile money']);
     const reference = str(req.body?.reference, 'La référence', { required: false, max: 100 });
+    // Into the money of the open shift (counted at its closing, then in the cash book).
+    const shift = db.prepare("SELECT id FROM shifts WHERE status = 'open' ORDER BY id DESC LIMIT 1").get();
     transaction(db, () => {
-      db.prepare('INSERT INTO payments (customer_id, amount, method, reference, user_id) VALUES (?, ?, ?, ?, ?)').run(customer.id, amount, method, reference, req.user.id);
+      db.prepare('INSERT INTO payments (customer_id, amount, method, reference, user_id, shift_id) VALUES (?, ?, ?, ?, ?, ?)').run(customer.id, amount, method, reference, req.user.id, shift?.id ?? null);
       refreshCustomer(db, customer.id); // paid-off credit sales now earn their combos
     });
     res.status(201).json({ balance: customerBalance(db, customer.id) });
