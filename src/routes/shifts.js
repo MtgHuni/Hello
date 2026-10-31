@@ -910,24 +910,41 @@ module.exports = function shiftRoutes(db) {
         .all(shift.id);
       // The next shift starts from these end indexes: it follows the correction while it is open.
       const next = db.prepare('SELECT * FROM shifts WHERE id > ? ORDER BY id LIMIT 1').get(shift.id);
-      for (const r of readings) {
-        const later = db.prepare('SELECT DISTINCT shift_id FROM shift_readings WHERE nozzle_id = ? AND shift_id > ?').all(r.nozzle_id, shift.id);
-        if (later.some((l) => !next || l.shift_id !== next.id || next.status !== 'open')) {
-          fail(409, `${r.label} a déjà servi dans un poste clôturé après celui-ci : la clôture ne peut plus être corrigée ici.`);
+      const ends = new Map((Array.isArray(req.body?.readings) ? req.body.readings : []).map((r) => [Number(r.nozzleId), Number(r.endMeter)]));
+      const sameMeters = readings.every((r) => ends.has(r.nozzle_id) && Math.abs(ends.get(r.nozzle_id) - r.end_meter) < 0.001);
+      const usedLater = readings.find((r) =>
+        db
+          .prepare('SELECT DISTINCT shift_id FROM shift_readings WHERE nozzle_id = ? AND shift_id > ?')
+          .all(r.nozzle_id, shift.id)
+          .some((l) => !next || l.shift_id !== next.id || next.status !== 'open'),
+      );
+      if (usedLater && !sameMeters) fail(409, `${usedLater.label} a déjà servi dans un poste clôturé après celui-ci : la clôture ne peut plus être corrigée ici.`);
+      if (usedLater) {
+        // A later shift started from these indexes: only the money is corrected (and passed on).
+        const b = req.body || {};
+        const counted = b.cash != null && b.cash !== '';
+        const m = counted ? moneyOf(b) : { cash: shift.cash, changeLeft: shift.change_left, francs: shift.francs };
+        const notes = b.notes === undefined ? shift.notes : str(b.notes, 'La remarque', { required: false, max: 500 });
+        db.prepare(
+          `UPDATE shifts SET cash = ?, change_left = ?, francs = ?, notes = ?, counted_at = CASE WHEN ? THEN COALESCE(counted_at, datetime('now')) ELSE counted_at END
+           WHERE id = ?`,
+        ).run(m.cash, m.changeLeft, m.francs, notes, counted ? 1 : 0, shift.id);
+        reconcile(shift.id);
+        passChange(shift);
+      } else {
+        for (const r of readings) {
+          db.prepare('UPDATE nozzles SET meter = ? WHERE id = ?').run(r.start_meter, r.nozzle_id);
+          db.prepare('UPDATE tanks SET book_stock = ROUND(book_stock + ?, 2) WHERE id = ?').run(r.liters || 0, r.tank_id);
         }
-      }
-      for (const r of readings) {
-        db.prepare('UPDATE nozzles SET meter = ? WHERE id = ?').run(r.start_meter, r.nozzle_id);
-        db.prepare('UPDATE tanks SET book_stock = ROUND(book_stock + ?, 2) WHERE id = ?').run(r.liters || 0, r.tank_id);
-      }
-      applyClosing(shift, req.body || {});
-      if (next?.status === 'open') {
-        db.prepare('UPDATE shifts SET (change_received, francs_received) = (SELECT change_left, francs FROM shifts WHERE id = ?) WHERE id = ?').run(shift.id, next.id);
-        const firstTaken = db.prepare('SELECT c.id FROM shift_checkpoints c WHERE c.shift_id = ? ORDER BY c.id LIMIT 1').get(next.id);
-        for (const r of db.prepare('SELECT nozzle_id, end_meter FROM shift_readings WHERE shift_id = ?').all(shift.id)) {
-          const taken = firstTaken && db.prepare('SELECT meter FROM checkpoint_readings WHERE checkpoint_id = ? AND nozzle_id = ?').get(firstTaken.id, r.nozzle_id);
-          if (taken && r.end_meter > taken.meter + 0.001) fail(409, `L’index corrigé dépasse le premier relevé du poste suivant (${taken.meter}).`);
-          db.prepare('UPDATE shift_readings SET start_meter = ? WHERE shift_id = ? AND nozzle_id = ?').run(r.end_meter, next.id, r.nozzle_id);
+        applyClosing(shift, req.body || {});
+        if (next?.status === 'open') {
+          db.prepare('UPDATE shifts SET (change_received, francs_received) = (SELECT change_left, francs FROM shifts WHERE id = ?) WHERE id = ?').run(shift.id, next.id);
+          const firstTaken = db.prepare('SELECT c.id FROM shift_checkpoints c WHERE c.shift_id = ? ORDER BY c.id LIMIT 1').get(next.id);
+          for (const r of db.prepare('SELECT nozzle_id, end_meter FROM shift_readings WHERE shift_id = ?').all(shift.id)) {
+            const taken = firstTaken && db.prepare('SELECT meter FROM checkpoint_readings WHERE checkpoint_id = ? AND nozzle_id = ?').get(firstTaken.id, r.nozzle_id);
+            if (taken && r.end_meter > taken.meter + 0.001) fail(409, `L’index corrigé dépasse le premier relevé du poste suivant (${taken.meter}).`);
+            db.prepare('UPDATE shift_readings SET start_meter = ? WHERE shift_id = ? AND nozzle_id = ?').run(r.end_meter, next.id, r.nozzle_id);
+          }
         }
       }
       const after = db.prepare('SELECT * FROM shifts WHERE id = ?').get(shift.id);
