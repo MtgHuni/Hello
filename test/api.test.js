@@ -603,7 +603,9 @@ test('créances par ancienneté, relevé PDF, prix programmé', async () => {
   assert.match(statement.raw.toString('latin1'), /\(Solde au d\\351but du mois\)/);
   const chosen = await gerant('GET', `/api/customers/${garage.id}/statement.pdf?from=${month}-01&to=${today()}`);
   assert.strictEqual(chosen.status, 200);
-  assert.match(chosen.raw.toString('latin1'), /\(Solde au d\\351but de la p\\351riode\)/);
+  // From the 1st to today is the whole month on its last day.
+  const lastDay = new Date(`${today()}T12:00:00Z`).getUTCMonth() !== new Date(Date.parse(`${today()}T12:00:00Z`) + 864e5).getUTCMonth();
+  assert.match(chosen.raw.toString('latin1'), lastDay ? /\(Solde au d\\351but du mois\)/ : /\(Solde au d\\351but de la p\\351riode\)/);
   assert.strictEqual((await gerant('GET', `/api/customers/${garage.id}/statement.pdf?from=${today()}&to=${month}-01`)).status, today() === `${month}-01` ? 200 : 400);
   assert.strictEqual((await gerant('GET', '/api/me/statement.pdf')).status, 403);
 
@@ -2440,4 +2442,33 @@ test('règlement saisi sur la fiche client : dans le poste en cours', async () =
   assert.ok(detail.payments.some((p) => p.customer_id === c.id && p.amount === 7), 'dans le poste');
   const book = (await gerant('GET', '/api/cashbook')).data;
   assert.ok(!JSON.stringify(book).includes('Règlement de Client Règlement Fiche'), 'pas directement dans la caisse : avec le poste à sa clôture');
+});
+
+test('clôture plus ancienne : l’argent se corrige si les index ne changent pas', async () => {
+  const { openMeters } = require('../src/liveStock');
+  const closeAtLatest = async () => {
+    const shift = (await gerant('GET', '/api/shifts/current')).data;
+    const ends = Object.fromEntries(openMeters(db).map((m) => [m.nozzleId, m.latest]));
+    const closed = (await closeShift(shift, ends)).data;
+    const cash = round2(closed.expected_amount - closed.mobile_money);
+    return { shift, ends, closed: (await gerant('POST', `/api/shifts/${shift.id}/count`, { cash })).data };
+  };
+  const first = await closeAtLatest();
+  const second = await closeAtLatest();
+  assert.strictEqual(first.closed.variance, 0);
+  const readings = (ends) => first.shift.readings.map((r) => ({ nozzleId: r.nozzle_id, endMeter: ends[r.nozzle_id] }));
+
+  // An index changed: still refused, a later shift started from it.
+  const moved = { ...first.ends, [first.shift.readings[0].nozzle_id]: first.ends[first.shift.readings[0].nozzle_id] + 1 };
+  assert.strictEqual((await gerant('POST', `/api/shifts/${first.shift.id}/correct`, { reason: 'index', readings: readings(moved), cash: first.closed.cash })).status, 409);
+
+  // The same indexes, the money corrected: 10 $ more counted, 4 $ of change left with the next shift.
+  const fixed = await gerant('POST', `/api/shifts/${first.shift.id}/correct`, { reason: 'Argent mal compté', readings: readings(first.ends), cash: round2(first.closed.cash + 6), changeLeft: 4 });
+  assert.strictEqual(fixed.status, 200, JSON.stringify(fixed.data));
+  assert.strictEqual(fixed.data.variance, 10);
+  assert.strictEqual(fixed.data.total_liters, first.closed.total_liters, 'les litres ne bougent pas');
+  const next = (await gerant('GET', `/api/shifts/${second.shift.id}`)).data;
+  assert.strictEqual(next.change_received, 4);
+  assert.strictEqual(next.expected_amount, round2(second.closed.expected_amount + 4), 'le poste suivant reçoit la monnaie');
+  assert.ok((await gerant('GET', '/api/audit?category=postes')).data.some((a) => a.action === 'shift_corrected' && a.reason === 'Argent mal compté'));
 });
