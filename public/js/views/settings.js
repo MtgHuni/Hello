@@ -106,6 +106,7 @@ export async function renderSettings(page, ctx) {
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Transport par poste'), h('span', {}, settings.shiftTransport > 0 ? fmt.money(settings.shiftTransport) : 'Aucun')),
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Téléphone (espace client)'), h('span', {}, settings.stationPhone || '—')),
         h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Questions à l’appli par mois'), h('span', {}, settings.askMonthLimit > 0 ? String(settings.askMonthLimit) : 'Aucune')),
+        flags.ai ? h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, 'Lecture des photos'), h('span', {}, settings.photoReading ? 'Activée' : 'Coupée')) : null,
       ),
 
       // ---- Mails (src/mail.js): what is sent today and this month, against Resend's limits ----
@@ -167,6 +168,7 @@ async function stationDialog(s) {
       { name: 'closingTime', label: 'Heure de clôture du poste', type: 'time', value: s.closingTime || '15:30', required: true, hint: 'Le gérant clôture chaque jour à cette heure ; le poste suivant s’ouvre aussitôt' },
       { name: 'shiftTransport', label: 'Transport par poste ($)', type: 'number', step: '0.01', min: '0', value: s.shiftTransport ?? 0, full: true, hint: 'Dépense « Transport » ajoutée à chaque poste à son ouverture, payée avec l’argent du poste ; 0 = aucune' },
       { name: 'askMonthLimit', label: 'Questions à l’appli par mois', type: 'number', step: '1', min: '0', value: s.askMonthLimit ?? 50, full: true, hint: 'Questions posées à Claude sur le tableau de bord par le gérant et l’actionnaire, pour toute la station (environ 0,07 $ chacune) ; 0 = aucune' },
+      ...(flags.ai ? [{ name: 'photoReading', label: 'Lecture des photos', type: 'checkbox', value: s.photoReading, full: true }] : []),
     ],
     onSubmit: (d) => api.put('/settings', d),
   });
