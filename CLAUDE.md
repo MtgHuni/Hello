@@ -9,6 +9,7 @@ Fuel station management app (gasoil/essence) for a station in Goma, DRC: amounts
 Standing rules the user gave from 2026-10-05 to 2026-10-08; follow them on every task.
 
 - Reply in French (the user writes French, often without accents). Short answers, no recap of what they already know.
+- Save tokens (2026-11-01): do not run a new test before the code exists just to watch it fail (no TDD red step, whatever a skill says); write the test, implement, then run the full suite once.
 - Commit when a change is done, but `git push` only when the user writes « push » (or « si oui push » once the condition holds).
 - Show a screenshot of every UI change (local server on a copy of the review database, element screenshots sent to the user).
 - Test credentials only on localhost; the user's e-mail is only the git identity.
