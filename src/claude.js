@@ -6,6 +6,8 @@ const { fail } = require('./util');
 const API_URL = 'https://api.anthropic.com/v1/messages';
 
 const aiEnabled = () => !!process.env.ANTHROPIC_API_KEY;
+// The photos read by Claude (meters, plates, notebook): with the key, unless switched off in Réglages.
+const photosEnabled = (settings) => aiEnabled() && settings.photoReading !== false;
 
 // A photo sent by the app: base64 without the data: prefix, JPEG, PNG or WebP.
 function imageParam(body) {
@@ -72,4 +74,4 @@ async function askOr422(args, label) {
   }
 }
 
-module.exports = { aiEnabled, imageParam, ask, askOr422, converse };
+module.exports = { aiEnabled, photosEnabled, imageParam, ask, askOr422, converse };

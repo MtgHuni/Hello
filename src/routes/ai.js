@@ -4,7 +4,7 @@ const { requireRole } = require('../auth');
 const { audit } = require('../audit');
 const { refreshCustomer } = require('../loyalty');
 const claude = require('../claude');
-const { aiEnabled, imageParam } = claude;
+const { aiEnabled, photosEnabled, imageParam } = claude;
 const reader = require('../meterReader');
 const assistant = require('../assistant');
 const { getSettings } = require('../db');
@@ -24,7 +24,7 @@ const plateKey = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 function aiRoutes(db, { photos } = {}) {
   const router = express.Router();
   const ready = () => {
-    if (!aiEnabled()) fail(409, 'La lecture des photos n’est pas disponible.', 'no_reader');
+    if (!photosEnabled(getSettings(db))) fail(409, 'La lecture des photos n’est pas disponible.', 'no_reader');
   };
 
   // ---------- Meter index ----------
@@ -69,7 +69,7 @@ function aiRoutes(db, { photos } = {}) {
   });
 
   router.post('/ask', asker, async (req, res) => {
-    ready();
+    if (!aiEnabled()) fail(409, 'La lecture des photos n’est pas disponible.', 'no_reader');
     const question = str(req.body?.question, 'La question', { max: 500 });
     const limit = getSettings(db).askMonthLimit;
     if (usedThisMonth() >= limit) fail(409, `Limite de ${limit} questions ce mois atteinte.`, 'ask_limit');

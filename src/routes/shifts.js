@@ -16,7 +16,7 @@ const { audit } = require('../audit');
 const { addShiftTransport } = require('../transport');
 const { momoTotal, closingCutoff, attendantNamesSql, checkpointReports, currentPeriod, lastMeters, shiftMovements, movementsTotal } = require('../checkpoints');
 const { priceChanges, priceAt, meterAmount, surchargeOf } = require('../shiftPrices');
-const { aiEnabled } = require('../claude');
+const { photosEnabled } = require('../claude');
 
 const staff = requireRole('manager', 'attendant');
 
@@ -436,7 +436,7 @@ module.exports = function shiftRoutes(db) {
     if (kind !== 'ouverture') {
       if (shift.station_closed_at) fail(409, 'La station est fermée : faites l’ouverture pour continuer le poste.', 'station_closed');
       if (req.user.role !== 'manager' && !onDuty(shift.id, req.user.id)) fail(403, 'Prenez d’abord le poste.', 'not_on_duty');
-      if (req.user.role === 'attendant' && aiEnabled()) needPhotos(shift, req.body?.readings);
+      if (req.user.role === 'attendant' && photosEnabled(getSettings(db))) needPhotos(shift, req.body?.readings);
     }
     const cash = round(num(req.body?.cash ?? 0, 'L’argent remis', { max: 1e8 }));
     const note = str(req.body?.note, 'La remarque', { required: false, max: 300 });

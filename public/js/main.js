@@ -98,6 +98,7 @@ async function boot() {
     flags.readonly = me.user.role === 'owner';
     flags.admin = !!me.user.admin;
     flags.ai = !!me.settings.ai;
+    flags.photos = !!me.settings.photos;
     flags.station = me.settings.stationName;
     flags.ask = !!me.settings.ask;
     setUser(me.user.id);

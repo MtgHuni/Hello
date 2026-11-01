@@ -24,7 +24,7 @@ export async function shrink(file) {
 }
 
 // Photos read by Claude are offered when the server has its key, never to the owner (read only).
-export const photosOn = () => flags.ai && !flags.readonly;
+export const photosOn = () => flags.photos && !flags.readonly;
 
 // A camera button: the phone's camera (or its photos), the picture reduced, then onImage(base64).
 // The button waits while it runs; an error becomes a toast. The file input lives outside the button's

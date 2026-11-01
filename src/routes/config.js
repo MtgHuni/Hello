@@ -24,6 +24,7 @@ const SETTING_LABELS = {
   station_phone: 'téléphone de la station',
   shift_transport: 'transport par poste',
   ask_month_limit: 'questions à l’appli par mois',
+  photo_reading: 'lecture des photos',
 };
 
 const manager = requireRole('manager');
@@ -60,6 +61,7 @@ module.exports = function configRoutes(db) {
       ask_month_limit: pick(b.askMonthLimit, cur.askMonthLimit, 'Les questions par mois', { max: 1000, integer: true }),
     };
     values.combos_enabled = bool(b.combosEnabled, cur.combosEnabled) ? 1 : 0;
+    values.photo_reading = bool(b.photoReading, cur.photoReading) ? 1 : 0;
     values.closing_time = b.closingTime === undefined ? cur.closingTime : str(b.closingTime, 'L’heure de clôture', { max: 5 });
     values.station_phone = b.stationPhone === undefined ? cur.stationPhone : str(b.stationPhone, 'Le téléphone de la station', { required: false, max: 30 }) || '';
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(values.closing_time)) fail(400, 'L’heure de clôture doit être au format HH:MM (ex. : 15:30).');

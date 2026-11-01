@@ -704,6 +704,7 @@ const DEFAULT_SETTINGS = {
   station_phone: '+243974105000', // shown at the bottom of the client space
   shift_transport: '0', // dollars: an expense « Transport » added to every shift when it opens (0: none)
   ask_month_limit: '50', // questions to Claude per month, for the whole station (0: none)
+  photo_reading: '1', // '0': the photos read by Claude (meters, plates, notebook) switched off, the indexes typed
 };
 
 // Rebuilds the sales table when its kind constraint is from an older release
@@ -914,6 +915,7 @@ function getSettings(db) {
     stationPhone: s.station_phone || '',
     shiftTransport: Number(s.shift_transport || 0),
     askMonthLimit: Number(s.ask_month_limit ?? 50),
+    photoReading: s.photo_reading !== '0',
     expenseCategories: EXPENSE_CATEGORIES.filter((c) => c !== SALARY),
   };
 }

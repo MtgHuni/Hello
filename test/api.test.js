@@ -2472,3 +2472,32 @@ test('clôture plus ancienne : l’argent se corrige si les index ne changent pa
   assert.strictEqual(next.expected_amount, round2(second.closed.expected_amount + 4), 'le poste suivant reçoit la monnaie');
   assert.ok((await gerant('GET', '/api/audit?category=postes')).data.some((a) => a.action === 'shift_corrected' && a.reason === 'Argent mal compté'));
 });
+
+test('lecture des photos coupée dans Réglages : index tapé, plus de photo demandée', async () => {
+  const reader = require('../src/meterReader');
+  const { readMeter } = reader;
+  process.env.ANTHROPIC_API_KEY = 'cle-de-test';
+  reader.readMeter = async () => ({ index: 1, suspect: false });
+  try {
+    assert.strictEqual((await gerant('GET', '/api/settings')).data.photoReading, true);
+    assert.strictEqual((await pompiste('GET', '/api/auth/me')).data.settings.photos, true);
+    const off = await gerant('PUT', '/api/settings', { photoReading: false });
+    assert.strictEqual(off.data.photoReading, false);
+    assert.ok((await gerant('GET', '/api/audit?category=reglages')).data.some((x) => /lecture des photos 1 → 0/.test(x.summary)));
+    const me = (await pompiste('GET', '/api/auth/me')).data.settings;
+    assert.deepStrictEqual([me.photos, me.ai], [false, true]);
+    assert.strictEqual((await gerant('POST', '/api/meters/read', { image: 'A'.repeat(400) })).data.code, 'no_reader');
+    assert.strictEqual((await gerant('POST', '/api/customers/plate/read', { image: 'A'.repeat(400) })).data.code, 'no_reader');
+    // The attendant's relief goes without photos.
+    const shift = (await gerant('GET', '/api/shifts/current')).data;
+    const meters = (await gerant('GET', '/api/stock/meters')).data;
+    await pompiste('POST', `/api/shifts/${shift.id}/join`, {});
+    const readings = shift.readings.map((r) => ({ nozzleId: r.nozzle_id, meter: meters.find((m) => m.nozzleId === r.nozzle_id).latest }));
+    const relief = await pompiste('POST', `/api/shifts/${shift.id}/checkpoints`, { kind: 'releve', cash: 0, readings });
+    assert.strictEqual(relief.status, 201, JSON.stringify(relief.data));
+    assert.strictEqual((await gerant('PUT', '/api/settings', { photoReading: true })).data.photoReading, true);
+  } finally {
+    reader.readMeter = readMeter;
+    delete process.env.ANTHROPIC_API_KEY;
+  }
+});
