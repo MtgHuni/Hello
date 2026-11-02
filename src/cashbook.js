@@ -218,12 +218,12 @@ function supplierExpenses(db) {
 }
 
 // Every supplier with its contacts, and what the station owes it: deliveries taken on credit minus
-// payments (in Cuves → Fournisseurs, or as an expense « Paiement fournisseur »).
+// payments (in Cuves → Fournisseurs, or as an expense « Paiement fournisseur »), plus the corrections.
 function supplierBalances(db) {
   const rows = new Map();
   const row = (name) => {
     const key = name.trim().toLowerCase();
-    if (!rows.has(key)) rows.set(key, { id: null, name: name.trim(), phone: null, email: null, owed: 0, paid: 0, balance: 0, last_delivery_at: null });
+    if (!rows.has(key)) rows.set(key, { id: null, name: name.trim(), phone: null, email: null, owed: 0, paid: 0, adjusted: 0, balance: 0, last_delivery_at: null });
     return rows.get(key);
   };
   for (const s of db.prepare('SELECT id, name, phone, email FROM suppliers ORDER BY name COLLATE NOCASE').all()) Object.assign(row(s.name), s);
@@ -236,7 +236,37 @@ function supplierBalances(db) {
     const r = row(p.supplier);
     r.paid = round(r.paid + p.amount);
   }
-  return [...rows.values()].map((r) => ({ ...r, balance: round(r.owed - r.paid) })).sort((a, b) => b.balance - a.balance || a.name.localeCompare(b.name));
+  for (const a of db.prepare('SELECT supplier, amount FROM supplier_adjustments').all()) {
+    const r = row(a.supplier);
+    r.adjusted = round(r.adjusted + a.amount);
+  }
+  return [...rows.values()].map((r) => ({ ...r, balance: round(r.owed + r.adjusted - r.paid) })).sort((a, b) => b.balance - a.balance || a.name.localeCompare(b.name));
 }
 
-module.exports = { ACCOUNTS, ACCOUNT_OF_METHOD, KINDS, shiftSign, cashbook, balances, supplierBalances, supplierExpenses, supplierOf };
+// One supplier's account: every delivery (only those on credit count), payment and correction.
+function supplierDetail(db, name) {
+  const key = String(name || '').trim().toLowerCase();
+  const supplier = supplierBalances(db).find((s) => s.name.toLowerCase() === key);
+  if (!supplier) return null;
+  const same = 'lower(trim(supplier)) = ?';
+  return {
+    supplier,
+    deliveries: db
+      .prepare(
+        `SELECT d.id, d.created_at, t.name AS tank, d.liters_received, d.amount, d.payment
+         FROM deliveries d JOIN tanks t ON t.id = d.tank_id WHERE lower(trim(d.supplier)) = ? ORDER BY d.id DESC`,
+      )
+      .all(key),
+    payments: [
+      ...db.prepare(`SELECT id, created_at, amount, method FROM supplier_payments WHERE ${same}`).all(key),
+      ...supplierExpenses(db)
+        .filter((e) => e.supplier.toLowerCase() === key)
+        .map((e) => ({ id: `depense-${e.id}`, expense_id: e.id, shift_id: e.shift_id, created_at: e.created_at, amount: e.amount, method: e.method })),
+    ].sort((a, b) => b.created_at.localeCompare(a.created_at)),
+    adjustments: db
+      .prepare(`SELECT a.id, a.created_at, a.amount, a.reason, u.name AS user_name FROM supplier_adjustments a LEFT JOIN users u ON u.id = a.user_id WHERE lower(trim(a.supplier)) = ? ORDER BY a.id DESC`)
+      .all(key),
+  };
+}
+
+module.exports = { ACCOUNTS, ACCOUNT_OF_METHOD, KINDS, shiftSign, cashbook, balances, supplierBalances, supplierDetail, supplierExpenses, supplierOf };

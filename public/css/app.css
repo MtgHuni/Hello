@@ -667,6 +667,9 @@ th, td { padding: 14px 28px; text-align: left; white-space: nowrap; }
 td { border-bottom: 1px solid var(--hairline); }
 th { color: var(--text-2); font-size: 13px; font-weight: 600; padding-top: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--separator); }
 td.wrap { white-space: normal; min-width: 200px; }
+/* A table inside a sheet (a supplier's account): narrower cells, so its columns fit the drawer. */
+.sheet-body th, .sheet-body td { padding: 12px 12px; }
+.sheet-body td.wrap { min-width: 120px; }
 tbody tr:last-child td { border-bottom: none; }
 tbody tr.clickable { cursor: pointer; transition: background-color 0.2s; }
 tbody tr.clickable:hover { background: var(--fill-4); }

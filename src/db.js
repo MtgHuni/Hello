@@ -243,6 +243,17 @@ CREATE TABLE IF NOT EXISTS supplier_payments (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- A supplier's debt corrected by hand (version 34): + adds to what the station owes, − takes off.
+-- Only the debt moves: no cash book, shift, expense or delivery.
+CREATE TABLE IF NOT EXISTS supplier_adjustments (
+  id         INTEGER PRIMARY KEY,
+  supplier   TEXT NOT NULL,
+  amount     REAL NOT NULL,
+  reason     TEXT NOT NULL,
+  user_id    INTEGER REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- One shift runs from the 15:30 closing to the next, across the night (station closed 19:00–6:30).
 -- Several attendants can be on it at once; they come and go (left_at: relief or evening closing).
 CREATE TABLE IF NOT EXISTS shift_attendants (
@@ -626,7 +637,7 @@ const MIGRATIONS = [
 ];
 
 // Bumped with every schema change; recorded in PRAGMA user_version.
-const SCHEMA_VERSION = 33;
+const SCHEMA_VERSION = 34;
 
 function missingColumns(db) {
   return MIGRATIONS.filter(([table, column]) => {

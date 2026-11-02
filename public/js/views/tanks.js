@@ -1,7 +1,8 @@
 import { api } from '../api.js';
 import { withMeterPhoto } from '../photo.js';
+import { icon } from '../icons.js';
 import { flags, edit, adminEdit, canAdmin } from '../ui.js';
-import { h, fmt, pageHeader, cardHeader, table, segmented, tankGauge, button, formDialog, confirmDialog, actionSheet, field, toast, badge, setContent, nameChips } from '../ui.js';
+import { h, fmt, pageHeader, cardHeader, table, segmented, tankGauge, button, formDialog, confirmDialog, actionSheet, openDialog, field, toast, badge, setContent, nameChips } from '../ui.js';
 
 let tab = 'deliveries';
 
@@ -250,6 +251,7 @@ function suppliersCard(sup, reload) {
   const contacts = (s) => [s.phone, s.email].filter(Boolean).join(' · ');
   const touch = (s) => {
     const actions = [
+      { label: 'Voir le détail', onClick: () => supplierDetailDialog(s, reload) },
       s.balance > 0 ? { label: `Payer ${s.name}`, onClick: () => supplierPaymentDialog(owing, s, reload) } : null,
       canAdmin() && s.id ? { label: 'Modifier la fiche', onClick: () => supplierDialog(s, reload) } : null,
     ].filter(Boolean);
@@ -270,7 +272,14 @@ function suppliersCard(sup, reload) {
         { label: 'Fournisseur', wrap: true, render: (s) => [h('strong', {}, s.name), contacts(s) ? h('div', { class: 'muted small' }, contacts(s)) : null] },
         { label: 'Livré à crédit', align: 'right', render: (s) => fmt.money(s.owed) },
         { label: 'Payé', align: 'right', render: (s) => fmt.money(s.paid) },
-        { label: 'Reste à payer', align: 'right', render: (s) => (s.balance > 0 ? h('strong', { class: 'variance-neg' }, fmt.money(s.balance)) : 'Soldé') },
+        {
+          label: 'Reste à payer',
+          align: 'right',
+          render: (s) => [
+            s.balance > 0 ? h('strong', { class: 'variance-neg' }, fmt.money(s.balance)) : 'Soldé',
+            s.adjusted ? h('div', { class: 'muted small' }, `corrigé ${s.adjusted > 0 ? '+' : '−'}${fmt.money(Math.abs(s.adjusted))}`) : null,
+          ],
+        },
       ],
       list,
       { empty: 'Aucun fournisseur.', onRowClick: flags.readonly ? undefined : touch },
@@ -330,6 +339,106 @@ async function supplierPaymentDialog(suppliers, s, reload) {
     toast('Paiement au fournisseur enregistré.');
     reload();
   }
+}
+
+const line = (label, value) => h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, label), h('span', { style: 'text-align:right' }, value));
+const DELIVERY_PAYMENT = { credit: 'À crédit', prepaid: 'Déjà payée', shift: 'Argent du poste', cash: 'Caisse' };
+
+// One supplier's account: every delivery, payment and correction; the admin corrects the debt.
+async function supplierDetailDialog(s, reload) {
+  let d;
+  try {
+    d = await api.get(`/suppliers/detail?name=${encodeURIComponent(s.name)}`);
+  } catch (err) {
+    return toast(err.message, 'error');
+  }
+  const t = d.supplier;
+  const signed = (n) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${fmt.money(Math.abs(n))}`;
+  const correct = adminEdit(button('Corriger la dette', async () => {
+    if (await correctSupplierDebt(t)) {
+      closeDetail();
+      reload();
+    }
+  }, { variant: 'large block' }));
+  let closeDetail;
+  openDialog((close) => {
+    closeDetail = close;
+    return h(
+      'div',
+      { class: 'sheet' },
+      h(
+        'div',
+        { class: 'sheet-handle' },
+        h('div', { class: 'sheet-grabber', 'aria-hidden': 'true' }),
+        h('div', { class: 'sheet-header' }, h('h2', {}, t.name), h('button', { class: 'circle-btn', type: 'button', 'aria-label': 'Fermer', title: 'Fermer', onClick: close }, icon('close'))),
+      ),
+      h(
+        'div',
+        { class: 'sheet-body' },
+        h(
+          'div',
+          { class: 'stack', style: 'gap:16px' },
+          h(
+            'div',
+            {},
+            line('Livré à crédit', fmt.money(t.owed)),
+            line('Payé', fmt.money(t.paid)),
+            t.adjusted ? line('Corrections', signed(t.adjusted)) : null,
+            line('Reste à payer', h('strong', { class: t.balance > 0 ? 'variance-neg' : '' }, t.balance > 0 ? fmt.money(t.balance) : t.balance < 0 ? `Avance ${fmt.money(-t.balance)}` : 'Soldé')),
+          ),
+          h('h3', {}, 'Livraisons'),
+          table(
+            [
+              { label: 'Date', render: (x) => [fmt.date(x.created_at), h('div', { class: 'muted small' }, x.tank)] },
+              { label: 'Reçu', align: 'right', render: (x) => fmt.liters(x.liters_received) },
+              { label: 'Paiement', render: (x) => (x.payment === 'credit' ? badge('À crédit', 'warning') : DELIVERY_PAYMENT[x.payment] || '—') },
+              { label: 'Montant', align: 'right', render: (x) => (x.amount == null ? '—' : fmt.money(x.amount)) },
+            ],
+            d.deliveries,
+            { empty: 'Aucune livraison.' },
+          ),
+          h('h3', {}, 'Paiements'),
+          table(
+            [
+              { label: 'Date', render: (x) => fmt.dateTime(x.created_at) },
+              { label: 'Mode', key: 'method' },
+              { label: 'Montant', align: 'right', render: (x) => fmt.money(x.amount) },
+            ],
+            d.payments,
+            { empty: 'Aucun paiement.' },
+          ),
+          d.adjustments.length
+            ? [
+                h('h3', {}, 'Corrections'),
+                table(
+                  [
+                    { label: 'Date', render: (x) => [fmt.dateTime(x.created_at), x.user_name ? h('div', { class: 'muted small' }, x.user_name) : null] },
+                    { label: 'Motif', wrap: true, key: 'reason' },
+                    { label: 'Montant', align: 'right', render: (x) => signed(x.amount) },
+                  ],
+                  d.adjustments,
+                ),
+              ]
+            : null,
+        ),
+      ),
+      correct ? h('div', { class: 'sheet-footer' }, correct) : null,
+    );
+  });
+}
+
+async function correctSupplierDebt(s) {
+  const ok = await formDialog({
+    title: `Corriger la dette · ${s.name}`,
+    grid: false,
+    fields: [
+      { name: 'balance', label: 'Reste à payer ($)', type: 'number', step: '0.01', value: s.balance.toFixed(2), required: true },
+      { name: 'reason', label: 'Motif', type: 'textarea', required: true },
+    ],
+    onSubmit: (d) => api.post('/suppliers/adjustments', { ...d, supplier: s.name }),
+  });
+  if (ok) toast('Dette corrigée.');
+  return ok;
 }
 
 async function removeSupplierPayment(p, reload) {
