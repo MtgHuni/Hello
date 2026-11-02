@@ -2502,37 +2502,19 @@ test('lecture des photos coupée dans Réglages : index tapé, plus de photo dem
   }
 });
 
-test('dette fournisseur : le détail de son compte, et la dette corrigée sans rien toucher d’autre', async () => {
+test('compte d’un fournisseur : ses livraisons et ses paiements', async () => {
   const tank = (await gerant('GET', '/api/tanks')).data[0];
   await gerant('POST', '/api/suppliers', { name: 'Dette Test' });
   const delivery = await gerant('POST', '/api/deliveries', { tankId: tank.id, litersOrdered: 100, litersReceived: 100, unitCost: 1, payment: 'credit', supplier: 'Dette Test', force: true });
   assert.strictEqual(delivery.status, 201, JSON.stringify(delivery.data));
-  await gerant('POST', '/api/suppliers/payments', { supplier: 'Dette Test', amount: 150, force: true });
+  await gerant('POST', '/api/suppliers/payments', { supplier: 'Dette Test', amount: 60 });
   const detail = (name) => gerant('GET', `/api/suppliers/detail?name=${encodeURIComponent(name)}`);
-  let d = (await detail('dette test')).data;
-  assert.deepStrictEqual([d.supplier.owed, d.supplier.paid, d.supplier.balance], [100, 150, -50]);
-  assert.deepStrictEqual([d.deliveries.length, d.deliveries[0].payment, d.payments.length, d.adjustments.length], [1, 'credit', 1, 0]);
+  const d = (await detail('dette test')).data;
+  assert.deepStrictEqual([d.supplier.owed, d.supplier.paid, d.supplier.balance], [100, 60, 40]);
+  assert.deepStrictEqual([d.deliveries.length, d.deliveries[0].payment, d.payments.length], [1, 'credit', 1]);
   assert.strictEqual((await detail('Inconnu')).status, 404);
-
-  const cash = (await gerant('GET', '/api/cashbook')).data.balances;
-  const chef = client();
-  await chef('POST', '/api/auth/login', { login: 'chef', password: 'gerant123' });
-  assert.strictEqual((await chef('POST', '/api/suppliers/adjustments', { supplier: 'Dette Test', balance: 100, reason: 'x' })).data.code, 'admin_only');
-  assert.strictEqual((await gerant('POST', '/api/suppliers/adjustments', { supplier: 'Dette Test', balance: 100 })).status, 400, 'motif obligatoire');
-  assert.strictEqual((await gerant('POST', '/api/suppliers/adjustments', { supplier: 'Dette Test', balance: -50, reason: 'x' })).status, 400, 'rien à corriger');
-  const fixed = await gerant('POST', '/api/suppliers/adjustments', { supplier: 'Dette Test', balance: 100, reason: 'Paiement compté deux fois' });
-  assert.strictEqual(fixed.status, 201, JSON.stringify(fixed.data));
-  assert.deepStrictEqual([fixed.data.supplier.balance, fixed.data.supplier.adjusted, fixed.data.adjustments[0].amount], [100, 150, 150]);
-  assert.strictEqual((await gerant('GET', '/api/suppliers')).data.suppliers.find((s) => s.name === 'Dette Test').balance, 100);
-  // Nothing else moved: the cash book, the payment, the delivery.
-  assert.deepStrictEqual((await gerant('GET', '/api/cashbook')).data.balances, cash);
-  assert.deepStrictEqual([fixed.data.supplier.owed, fixed.data.supplier.paid], [100, 150]);
-  const log = (await gerant('GET', '/api/audit?category=caisse')).data.find((x) => x.action === 'supplier_debt_corrected');
-  assert.ok(log && /Dette Test/.test(log.summary) && log.reason === 'Paiement compté deux fois');
-  // A rename takes the correction along.
-  const id = (await gerant('GET', '/api/suppliers')).data.suppliers.find((s) => s.name === 'Dette Test').id;
-  await gerant('PUT', `/api/suppliers/${id}`, { name: 'Dette Test Bis' });
-  assert.strictEqual((await detail('Dette Test Bis')).data.supplier.balance, 100);
+  // No correction by hand: the debt follows the deliveries and payments only.
+  assert.strictEqual((await gerant('POST', '/api/suppliers/adjustments', { supplier: 'Dette Test', balance: 100, reason: 'x' })).status, 404);
 });
 
 test('migration 34 : corrections de dette fournisseur', () => {

@@ -275,10 +275,7 @@ function suppliersCard(sup, reload) {
         {
           label: 'Reste à payer',
           align: 'right',
-          render: (s) => [
-            s.balance > 0 ? h('strong', { class: 'variance-neg' }, fmt.money(s.balance)) : 'Soldé',
-            s.adjusted ? h('div', { class: 'muted small' }, `corrigé ${s.adjusted > 0 ? '+' : '−'}${fmt.money(Math.abs(s.adjusted))}`) : null,
-          ],
+          render: (s) => (s.balance > 0 ? h('strong', { class: 'variance-neg' }, fmt.money(s.balance)) : 'Soldé'),
         },
       ],
       list,
@@ -344,7 +341,7 @@ async function supplierPaymentDialog(suppliers, s, reload) {
 const line = (label, value) => h('div', { class: 'summary-line' }, h('span', { class: 'muted' }, label), h('span', { style: 'text-align:right' }, value));
 const DELIVERY_PAYMENT = { credit: 'À crédit', prepaid: 'Déjà payée', shift: 'Argent du poste', cash: 'Caisse' };
 
-// One supplier's account: every delivery, payment and correction; the admin corrects the debt.
+// One supplier's account: every delivery and payment.
 async function supplierDetailDialog(s, reload) {
   let d;
   try {
@@ -353,17 +350,8 @@ async function supplierDetailDialog(s, reload) {
     return toast(err.message, 'error');
   }
   const t = d.supplier;
-  const signed = (n) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${fmt.money(Math.abs(n))}`;
-  const correct = adminEdit(button('Corriger la dette', async () => {
-    if (await correctSupplierDebt(t)) {
-      closeDetail();
-      reload();
-    }
-  }, { variant: 'large block' }));
-  let closeDetail;
-  openDialog((close) => {
-    closeDetail = close;
-    return h(
+  openDialog((close) =>
+    h(
       'div',
       { class: 'sheet' },
       h(
@@ -383,7 +371,6 @@ async function supplierDetailDialog(s, reload) {
             {},
             line('Livré à crédit', fmt.money(t.owed)),
             line('Payé', fmt.money(t.paid)),
-            t.adjusted ? line('Corrections', signed(t.adjusted)) : null,
             line('Reste à payer', h('strong', { class: t.balance > 0 ? 'variance-neg' : '' }, t.balance > 0 ? fmt.money(t.balance) : t.balance < 0 ? `Avance ${fmt.money(-t.balance)}` : 'Soldé')),
           ),
           h('h3', {}, 'Livraisons'),
@@ -407,38 +394,10 @@ async function supplierDetailDialog(s, reload) {
             d.payments,
             { empty: 'Aucun paiement.' },
           ),
-          d.adjustments.length
-            ? [
-                h('h3', {}, 'Corrections'),
-                table(
-                  [
-                    { label: 'Date', render: (x) => [fmt.dateTime(x.created_at), x.user_name ? h('div', { class: 'muted small' }, x.user_name) : null] },
-                    { label: 'Motif', wrap: true, key: 'reason' },
-                    { label: 'Montant', align: 'right', render: (x) => signed(x.amount) },
-                  ],
-                  d.adjustments,
-                ),
-              ]
-            : null,
         ),
       ),
-      correct ? h('div', { class: 'sheet-footer' }, correct) : null,
-    );
-  });
-}
-
-async function correctSupplierDebt(s) {
-  const ok = await formDialog({
-    title: `Corriger la dette · ${s.name}`,
-    grid: false,
-    fields: [
-      { name: 'balance', label: 'Reste à payer ($)', type: 'number', step: '0.01', value: s.balance.toFixed(2), required: true },
-      { name: 'reason', label: 'Motif', type: 'textarea', required: true },
-    ],
-    onSubmit: (d) => api.post('/suppliers/adjustments', { ...d, supplier: s.name }),
-  });
-  if (ok) toast('Dette corrigée.');
-  return ok;
+    ),
+  );
 }
 
 async function removeSupplierPayment(p, reload) {
