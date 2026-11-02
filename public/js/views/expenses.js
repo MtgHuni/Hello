@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { flags, edit } from '../ui.js';
-import { h, fmt, pageHeader, table, segmented, kpi, field, button, formDialog, confirmDialog, actionSheet, toast, todayISO, setContent, nameChips } from '../ui.js';
+import { h, fmt, pageHeader, table, segmented, kpi, field, button, formDialog, confirmDialog, confirmPayment, actionSheet, toast, todayISO, setContent, nameChips } from '../ui.js';
 import { PRESETS, presetRange } from './reports.js';
 import { keepExpenseDialog } from './staff.js';
 
@@ -161,7 +161,7 @@ async function expenseDialog(e, categories, reload) {
       payTo.node,
       { name: 'reference', label: 'Référence / n° de reçu', value: e?.reference, placeholder: 'Facultatif' },
     ],
-    onSubmit: (d) => (e ? api.put(`/expenses/${e.id}`, d) : api.post('/expenses', d)),
+    onSubmit: (d) => confirmPayment((x) => (e ? api.put(`/expenses/${e.id}`, { ...d, ...x }) : api.post('/expenses', { ...d, ...x }))),
   });
   if (ok) {
     toast(e ? 'Dépense modifiée' : 'Dépense enregistrée');

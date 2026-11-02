@@ -1,6 +1,6 @@
 const express = require('express');
-const { EXPENSE_CATEGORIES, SALARY, getSettings } = require('../db');
-const { supplierOf } = require('../cashbook');
+const { EXPENSE_CATEGORIES, SALARY, SUPPLIER_PAYMENT, getSettings } = require('../db');
+const { supplierOf, checkSupplierPayment } = require('../cashbook');
 
 // Money accounted for at the closing, in dollars: cash handed over, change left with the
 // attendants, francs kept by the manager to change, mobile money entered during the shift.
@@ -601,6 +601,7 @@ module.exports = function shiftRoutes(db) {
     const amount = round(num(req.body?.amount, 'Le montant', { min: 0.01, max: 1e7 }));
     const description = str(req.body?.description, 'La description', { max: 300 });
     const beneficiary = supplierOf(db, category, str(req.body?.beneficiary, 'Le bénéficiaire', { required: false, max: 120 }));
+    if (category === SUPPLIER_PAYMENT) checkSupplierPayment(db, { supplier: beneficiary, amount, force: req.body?.force === true });
     const id = db
       .prepare(
         `INSERT INTO expenses (expense_date, category, amount, description, beneficiary, method, shift_id, user_id, client_ref)
@@ -703,6 +704,7 @@ module.exports = function shiftRoutes(db) {
         const amount = round(num(b.amount ?? item.amount, 'Le montant', { min: 0.01, max: 1e7 }));
         const description = str(b.description ?? item.description, 'La description', { max: 300 });
         const beneficiary = supplierOf(db, category, b.beneficiary === undefined ? item.beneficiary : str(b.beneficiary, 'Le bénéficiaire', { required: false, max: 120 }));
+        if (category === SUPPLIER_PAYMENT) checkSupplierPayment(db, { supplier: beneficiary, amount, force: b.force === true, before: item });
         db.prepare('UPDATE expenses SET category = ?, amount = ?, description = ?, beneficiary = ? WHERE id = ?').run(category, amount, description, beneficiary, item.id);
       } else {
         const reading = db.prepare('SELECT * FROM shift_readings WHERE shift_id = ? AND product_id = ? LIMIT 1').get(shift.id, Number(b.productId ?? item.product_id));

@@ -667,6 +667,19 @@ export function formDialog({ title, intro, fields, submitLabel = 'Enregistrer', 
 }
 
 // iOS alert: title, message, two capsule buttons.
+// A payment to a supplier beyond what is owed, or the same payment again: the server asks first
+// (`over_debt`, `duplicate_payment`), and it goes only once confirmed (`force`).
+export const PAYMENT_CHECKS = ['over_debt', 'duplicate_payment'];
+export async function confirmPayment(send) {
+  try {
+    return await send({});
+  } catch (err) {
+    if (!PAYMENT_CHECKS.includes(err.code)) throw err;
+    if (!(await confirmDialog('Vérifier ce paiement', err.message, { confirmLabel: 'Enregistrer quand même', danger: true }))) throw new Error('Paiement non enregistré.');
+    return send({ force: true });
+  }
+}
+
 export function confirmDialog(title, text, { confirmLabel = 'Confirmer', danger = false } = {}) {
   return new Promise((resolve) => {
     openDialog(

@@ -2,7 +2,7 @@ import { api } from '../api.js';
 import { withMeterPhoto } from '../photo.js';
 import { icon } from '../icons.js';
 import { flags, edit, adminEdit, canAdmin } from '../ui.js';
-import { h, fmt, pageHeader, cardHeader, table, segmented, tankGauge, button, formDialog, confirmDialog, actionSheet, openDialog, field, toast, badge, setContent, nameChips } from '../ui.js';
+import { h, fmt, pageHeader, cardHeader, table, segmented, tankGauge, button, formDialog, confirmDialog, actionSheet, openDialog, confirmPayment, field, toast, badge, setContent, nameChips } from '../ui.js';
 
 let tab = 'deliveries';
 
@@ -333,7 +333,7 @@ async function supplierPaymentDialog(suppliers, s, reload) {
       { name: 'reference', label: 'Référence', placeholder: 'Facultatif (reçu, n° de transaction…)' },
     ],
     submitLabel: 'Enregistrer le paiement',
-    onSubmit: (d) => api.post('/suppliers/payments', d),
+    onSubmit: (d) => confirmPayment((x) => api.post('/suppliers/payments', { ...d, ...x })),
   });
   if (ok) {
     toast('Paiement au fournisseur enregistré.');

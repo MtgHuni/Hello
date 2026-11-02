@@ -2507,7 +2507,7 @@ test('dette fournisseur : le détail de son compte, et la dette corrigée sans r
   await gerant('POST', '/api/suppliers', { name: 'Dette Test' });
   const delivery = await gerant('POST', '/api/deliveries', { tankId: tank.id, litersOrdered: 100, litersReceived: 100, unitCost: 1, payment: 'credit', supplier: 'Dette Test', force: true });
   assert.strictEqual(delivery.status, 201, JSON.stringify(delivery.data));
-  await gerant('POST', '/api/suppliers/payments', { supplier: 'Dette Test', amount: 150 });
+  await gerant('POST', '/api/suppliers/payments', { supplier: 'Dette Test', amount: 150, force: true });
   const detail = (name) => gerant('GET', `/api/suppliers/detail?name=${encodeURIComponent(name)}`);
   let d = (await detail('dette test')).data;
   assert.deepStrictEqual([d.supplier.owed, d.supplier.paid, d.supplier.balance], [100, 150, -50]);
@@ -2550,4 +2550,36 @@ test('migration 34 : corrections de dette fournisseur', () => {
   assert.strictEqual(old.prepare('PRAGMA user_version').get().user_version, SCHEMA_VERSION);
   old.close();
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('paiement fournisseur au-delà de la dette, ou noté deux fois : demandé avant d’être enregistré', async () => {
+  await gerant('POST', '/api/suppliers', { name: 'Double Test' });
+  const tank = (await gerant('GET', '/api/tanks')).data[0];
+  await gerant('POST', '/api/deliveries', { tankId: tank.id, litersOrdered: 100, litersReceived: 100, unitCost: 2, payment: 'credit', supplier: 'Double Test', force: true });
+  const balance = async () => (await gerant('GET', '/api/suppliers')).data.suppliers.find((s) => s.name === 'Double Test').balance;
+  assert.strictEqual(await balance(), 200);
+  // « Payer »: more than owed is asked; the same amount again is asked.
+  const over = await gerant('POST', '/api/suppliers/payments', { supplier: 'Double Test', amount: 250 });
+  assert.deepStrictEqual([over.status, over.data.code], [409, 'over_debt']);
+  assert.strictEqual((await gerant('POST', '/api/suppliers/payments', { supplier: 'Double Test', amount: 80 })).status, 201);
+  const twice = await gerant('POST', '/api/suppliers/payments', { supplier: 'Double Test', amount: 80 });
+  assert.deepStrictEqual([twice.status, twice.data.code], [409, 'duplicate_payment']);
+  // The same payment noted again as an expense, outside a shift or in the shift: asked too.
+  const expense = { amount: 80, category: 'Paiement fournisseur', beneficiary: 'Double Test', description: 'Gasoil' };
+  assert.strictEqual((await gerant('POST', '/api/expenses', expense)).data.code, 'duplicate_payment');
+  const shift = (await gerant('GET', '/api/shifts/current')).data;
+  assert.strictEqual((await gerant('POST', `/api/shifts/${shift.id}/expenses`, expense)).data.code, 'duplicate_payment');
+  assert.strictEqual((await gerant('POST', `/api/shifts/${shift.id}/expenses`, { ...expense, amount: 150 })).data.code, 'over_debt');
+  assert.strictEqual(await balance(), 120, 'rien enregistré');
+  // Confirmed (`force`), it goes; editing its description asks nothing.
+  const kept = await gerant('POST', '/api/expenses', { ...expense, force: true });
+  assert.strictEqual(kept.status, 201);
+  assert.strictEqual(await balance(), 40);
+  assert.strictEqual((await gerant('PUT', `/api/expenses/${kept.data.id}`, { description: 'Gasoil, facture 12' })).status, 200);
+  // Raising it past the debt is asked; its own amount is not counted twice.
+  assert.strictEqual((await gerant('PUT', `/api/expenses/${kept.data.id}`, { amount: 120 })).status, 200, '40 + 80 dus');
+  assert.strictEqual((await gerant('PUT', `/api/expenses/${kept.data.id}`, { amount: 130 })).data.code, 'over_debt');
+  assert.strictEqual(await balance(), 0);
+  // Nothing owed: a payment would become an advance.
+  assert.match((await gerant('POST', '/api/suppliers/payments', { supplier: 'Double Test', amount: 10 })).data.error, /Rien n’est dû/);
 });

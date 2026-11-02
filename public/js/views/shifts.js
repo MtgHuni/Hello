@@ -1,6 +1,6 @@
 import { flags, edit, canAdmin } from '../ui.js';
 import { api } from '../api.js';
-import { shiftLine, h, fmt, pageHeader, card, cardHeader, table, segmented, shiftBadge, varianceCell, kpi, formDialog, confirmDialog, actionSheet, toast, button, badge, setContent, reportLink, buttonRow, nameChips } from '../ui.js';
+import { shiftLine, h, fmt, pageHeader, card, cardHeader, table, segmented, shiftBadge, varianceCell, kpi, formDialog, confirmDialog, confirmPayment, actionSheet, toast, button, badge, setContent, reportLink, buttonRow, nameChips } from '../ui.js';
 import { icon } from '../icons.js';
 import { renderClosing } from './attendant.js';
 import { reportCard } from './relay.js';
@@ -207,7 +207,7 @@ async function editOperation(ctx, shift, kind, item, reload) {
     submitLabel: 'Enregistrer la correction',
     grid: false,
     fields: forms.fields,
-    onSubmit: (d) => api.put(`/shifts/${shift.id}/${kind}/${item.id}`, forms.body(d)),
+    onSubmit: (d) => confirmPayment((x) => api.put(`/shifts/${shift.id}/${kind}/${item.id}`, { ...forms.body(d), ...x })),
   });
   if (ok) {
     toast('Opération corrigée.');

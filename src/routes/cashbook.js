@@ -3,7 +3,7 @@ const { fail, num, str, oneOf, round, dateParam, transaction, money } = require(
 const { requireRole, requireAdmin } = require('../auth');
 const { audit } = require('../audit');
 const { getSettings } = require('../db');
-const { ACCOUNTS, KINDS, cashbook, balances, supplierBalances, supplierDetail, supplierExpenses, shiftSign } = require('../cashbook');
+const { ACCOUNTS, KINDS, cashbook, balances, supplierBalances, supplierDetail, supplierExpenses, shiftSign, checkSupplierPayment } = require('../cashbook');
 const { cashbookPdf } = require('../cashbookReport');
 
 const manager = requireRole('manager');
@@ -223,6 +223,7 @@ module.exports = function cashbookRoutes(db, { mailer } = {}) {
     const reference = str(b.reference, 'La référence', { required: false, max: 100 });
     // Same spelling as on the deliveries, so the debt and its payment meet.
     const known = db.prepare('SELECT name AS supplier FROM suppliers WHERE name = ? COLLATE NOCASE').get(supplier);
+    checkSupplierPayment(db, { supplier: known?.supplier || supplier, amount, force: b.force === true });
     const id = transaction(db, () => {
       const r = db
         .prepare('INSERT INTO supplier_payments (supplier, amount, method, reference, user_id) VALUES (?, ?, ?, ?, ?)')

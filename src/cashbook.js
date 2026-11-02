@@ -243,6 +243,31 @@ function supplierBalances(db) {
   return [...rows.values()].map((r) => ({ ...r, balance: round(r.owed + r.adjusted - r.paid) })).sort((a, b) => b.balance - a.balance || a.name.localeCompare(b.name));
 }
 
+// A payment to a supplier (« Payer », or an expense « Paiement fournisseur » naming it) is asked
+// again (409, sent back with `force`) when it is more than what is still owed, or when the same
+// amount was already paid to that supplier in the last 7 days: a payment counted twice costs dearly.
+// `before`: the expense being corrected (its own amount is not counted again).
+function checkSupplierPayment(db, { supplier, amount, force = false, before = null }) {
+  if (force || !supplier) return;
+  if (before && db.prepare('SELECT 1 FROM deliveries WHERE expense_id = ?').get(before.id)) return; // a delivery's own payment
+  const key = supplier.trim().toLowerCase();
+  const s = supplierBalances(db).find((x) => x.name.toLowerCase() === key);
+  if (!s) return;
+  const own = before ? supplierExpenses(db).find((e) => e.id === before.id) : null;
+  if (own && own.supplier.toLowerCase() === key && Math.abs(own.amount - amount) < 0.005) return; // nothing changed
+  const since = db.prepare("SELECT datetime('now', '-7 days') AS d").get().d;
+  const same = [
+    ...db.prepare('SELECT created_at FROM supplier_payments WHERE lower(trim(supplier)) = ? AND abs(amount - ?) < 0.005 AND created_at >= ?').all(key, amount, since),
+    ...supplierExpenses(db).filter((e) => e.id !== before?.id && e.supplier.toLowerCase() === key && Math.abs(e.amount - amount) < 0.005 && e.created_at >= since),
+  ].sort((a, b) => b.created_at.localeCompare(a.created_at));
+  const day = (at) => db.prepare("SELECT strftime('%d/%m', ?, 'localtime') AS d").get(at).d;
+  if (same.length) fail(409, `Un paiement de ${money(amount)} à ${s.name} est déjà noté le ${day(same[0].created_at)}.`, 'duplicate_payment');
+  const owed = round(s.balance + (own && own.supplier.toLowerCase() === key ? own.amount : 0));
+  if (amount > owed + 0.005) {
+    fail(409, owed > 0 ? `Il reste ${money(owed)} à payer à ${s.name} : ce paiement de ${money(amount)} le dépasse.` : `Rien n’est dû à ${s.name} : ce paiement de ${money(amount)} deviendrait une avance.`, 'over_debt');
+  }
+}
+
 // One supplier's account: every delivery (only those on credit count), payment and correction.
 function supplierDetail(db, name) {
   const key = String(name || '').trim().toLowerCase();
@@ -269,4 +294,4 @@ function supplierDetail(db, name) {
   };
 }
 
-module.exports = { ACCOUNTS, ACCOUNT_OF_METHOD, KINDS, shiftSign, cashbook, balances, supplierBalances, supplierDetail, supplierExpenses, supplierOf };
+module.exports = { ACCOUNTS, ACCOUNT_OF_METHOD, KINDS, shiftSign, cashbook, balances, supplierBalances, supplierDetail, supplierExpenses, supplierOf, checkSupplierPayment };

@@ -116,7 +116,11 @@ export async function flush() {
   try {
     for (let item = pending()[0]; item; item = pending()[0]) {
       try {
-        await request('POST', item.url, item.body);
+        await request('POST', item.url, item.body).catch((err) => {
+          // A supplier payment the attendant already made from the till, sent late: it is kept, not lost.
+          if (['over_debt', 'duplicate_payment'].includes(err.code)) return request('POST', item.url, { ...item.body, force: true });
+          throw err;
+        });
         drop(item.id);
         sent.push(item);
       } catch (err) {
