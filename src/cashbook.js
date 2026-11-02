@@ -218,12 +218,12 @@ function supplierExpenses(db) {
 }
 
 // Every supplier with its contacts, and what the station owes it: deliveries taken on credit minus
-// payments (in Cuves → Fournisseurs, or as an expense « Paiement fournisseur »).
+// payments (in Cuves → Fournisseurs, or as an expense « Paiement fournisseur »), plus the corrections.
 function supplierBalances(db) {
   const rows = new Map();
   const row = (name) => {
     const key = name.trim().toLowerCase();
-    if (!rows.has(key)) rows.set(key, { id: null, name: name.trim(), phone: null, email: null, owed: 0, paid: 0, balance: 0, last_delivery_at: null });
+    if (!rows.has(key)) rows.set(key, { id: null, name: name.trim(), phone: null, email: null, owed: 0, paid: 0, adjusted: 0, balance: 0, last_delivery_at: null });
     return rows.get(key);
   };
   for (const s of db.prepare('SELECT id, name, phone, email FROM suppliers ORDER BY name COLLATE NOCASE').all()) Object.assign(row(s.name), s);
@@ -236,7 +236,62 @@ function supplierBalances(db) {
     const r = row(p.supplier);
     r.paid = round(r.paid + p.amount);
   }
-  return [...rows.values()].map((r) => ({ ...r, balance: round(r.owed - r.paid) })).sort((a, b) => b.balance - a.balance || a.name.localeCompare(b.name));
+  for (const a of db.prepare('SELECT supplier, amount FROM supplier_adjustments').all()) {
+    const r = row(a.supplier);
+    r.adjusted = round(r.adjusted + a.amount);
+  }
+  return [...rows.values()].map((r) => ({ ...r, balance: round(r.owed + r.adjusted - r.paid) })).sort((a, b) => b.balance - a.balance || a.name.localeCompare(b.name));
 }
 
-module.exports = { ACCOUNTS, ACCOUNT_OF_METHOD, KINDS, shiftSign, cashbook, balances, supplierBalances, supplierExpenses, supplierOf };
+// A payment to a supplier (« Payer », or an expense « Paiement fournisseur » naming it) is asked
+// again (409, sent back with `force`) when it is more than what is still owed, or when the same
+// amount was already paid to that supplier in the last 7 days: a payment counted twice costs dearly.
+// `before`: the expense being corrected (its own amount is not counted again).
+function checkSupplierPayment(db, { supplier, amount, force = false, before = null }) {
+  if (force || !supplier) return;
+  if (before && db.prepare('SELECT 1 FROM deliveries WHERE expense_id = ?').get(before.id)) return; // a delivery's own payment
+  const key = supplier.trim().toLowerCase();
+  const s = supplierBalances(db).find((x) => x.name.toLowerCase() === key);
+  if (!s) return;
+  const own = before ? supplierExpenses(db).find((e) => e.id === before.id) : null;
+  if (own && own.supplier.toLowerCase() === key && Math.abs(own.amount - amount) < 0.005) return; // nothing changed
+  const since = db.prepare("SELECT datetime('now', '-7 days') AS d").get().d;
+  const same = [
+    ...db.prepare('SELECT created_at FROM supplier_payments WHERE lower(trim(supplier)) = ? AND abs(amount - ?) < 0.005 AND created_at >= ?').all(key, amount, since),
+    ...supplierExpenses(db).filter((e) => e.id !== before?.id && e.supplier.toLowerCase() === key && Math.abs(e.amount - amount) < 0.005 && e.created_at >= since),
+  ].sort((a, b) => b.created_at.localeCompare(a.created_at));
+  const day = (at) => db.prepare("SELECT strftime('%d/%m', ?, 'localtime') AS d").get(at).d;
+  if (same.length) fail(409, `Un paiement de ${money(amount)} à ${s.name} est déjà noté le ${day(same[0].created_at)}.`, 'duplicate_payment');
+  const owed = round(s.balance + (own && own.supplier.toLowerCase() === key ? own.amount : 0));
+  if (amount > owed + 0.005) {
+    fail(409, owed > 0 ? `Il reste ${money(owed)} à payer à ${s.name} : ce paiement de ${money(amount)} le dépasse.` : `Rien n’est dû à ${s.name} : ce paiement de ${money(amount)} deviendrait une avance.`, 'over_debt');
+  }
+}
+
+// One supplier's account: every delivery (only those on credit count), payment and correction.
+function supplierDetail(db, name) {
+  const key = String(name || '').trim().toLowerCase();
+  const supplier = supplierBalances(db).find((s) => s.name.toLowerCase() === key);
+  if (!supplier) return null;
+  const same = 'lower(trim(supplier)) = ?';
+  return {
+    supplier,
+    deliveries: db
+      .prepare(
+        `SELECT d.id, d.created_at, t.name AS tank, d.liters_received, d.amount, d.payment
+         FROM deliveries d JOIN tanks t ON t.id = d.tank_id WHERE lower(trim(d.supplier)) = ? ORDER BY d.id DESC`,
+      )
+      .all(key),
+    payments: [
+      ...db.prepare(`SELECT id, created_at, amount, method FROM supplier_payments WHERE ${same}`).all(key),
+      ...supplierExpenses(db)
+        .filter((e) => e.supplier.toLowerCase() === key)
+        .map((e) => ({ id: `depense-${e.id}`, expense_id: e.id, shift_id: e.shift_id, created_at: e.created_at, amount: e.amount, method: e.method })),
+    ].sort((a, b) => b.created_at.localeCompare(a.created_at)),
+    adjustments: db
+      .prepare(`SELECT a.id, a.created_at, a.amount, a.reason, u.name AS user_name FROM supplier_adjustments a LEFT JOIN users u ON u.id = a.user_id WHERE lower(trim(a.supplier)) = ? ORDER BY a.id DESC`)
+      .all(key),
+  };
+}
+
+module.exports = { ACCOUNTS, ACCOUNT_OF_METHOD, KINDS, shiftSign, cashbook, balances, supplierBalances, supplierDetail, supplierExpenses, supplierOf, checkSupplierPayment };

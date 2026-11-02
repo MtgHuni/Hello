@@ -1,8 +1,8 @@
 const express = require('express');
-const { EXPENSE_CATEGORIES, SALARY } = require('../db');
+const { EXPENSE_CATEGORIES, SALARY, SUPPLIER_PAYMENT } = require('../db');
 const { fail, num, str, oneOf, round, dateParam, csvCell, money } = require('../util');
 const { audit } = require('../audit');
-const { supplierOf } = require('../cashbook');
+const { supplierOf, checkSupplierPayment } = require('../cashbook');
 const { requireRole } = require('../auth');
 
 const manager = requireRole('manager');
@@ -69,8 +69,14 @@ module.exports = function expenseRoutes(db) {
     });
   });
 
+  // A payment to a supplier beyond its debt, or the same one again, is asked first.
+  const checkPayment = (f, b, before = null) => {
+    if (f.category === SUPPLIER_PAYMENT) checkSupplierPayment(db, { supplier: f.beneficiary, amount: f.amount, force: b.force === true, before });
+  };
+
   router.post('/expenses', manager, (req, res) => {
     const f = fields(req.body || {});
+    checkPayment(f, req.body || {});
     const id = db
       .prepare(
         `INSERT INTO expenses (expense_date, category, amount, description, beneficiary, method, reference, user_id)
@@ -93,6 +99,7 @@ module.exports = function expenseRoutes(db) {
     const current = getEditable(req.params.id);
     if (current.staff_id) fail(409, 'Cette dépense est celle d’un agent : annulez-la depuis sa fiche dans Agents.', 'staff_expense');
     const f = fields(req.body || {}, current);
+    checkPayment(f, req.body || {}, current);
     db.prepare(
       `UPDATE expenses SET expense_date = ?, category = ?, amount = ?, description = ?, beneficiary = ?, method = ?, reference = ?
        WHERE id = ?`,

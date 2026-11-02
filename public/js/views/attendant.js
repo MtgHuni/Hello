@@ -1,6 +1,6 @@
 import { flags } from '../ui.js';
 import { api } from '../api.js';
-import { priceTotem, shiftLine, h, fmt, receipt, pageHeader, card, cardHeader, table, shiftBadge, varianceCell, button, formDialog, confirmDialog, toast, field, productColor, badge, kpi, parseServerDate, setContent, reportLink, busy, newRef, buttonRow, noticeDialog, nameChips } from '../ui.js';
+import { priceTotem, shiftLine, h, fmt, receipt, pageHeader, card, cardHeader, table, shiftBadge, varianceCell, button, formDialog, confirmDialog, confirmPayment, toast, field, productColor, badge, kpi, parseServerDate, setContent, reportLink, busy, newRef, buttonRow, noticeDialog, nameChips } from '../ui.js';
 import { icon } from '../icons.js';
 import { shiftSummary } from './shifts.js';
 import { renderJoin, renderCheckpoint, reportCard } from './relay.js';
@@ -875,7 +875,7 @@ export async function addExpense(ctx, shift, reload) {
       { name: 'beneficiary', label: 'Payé à', placeholder: 'Facultatif', onInput: payTo.onInput },
       payTo.node,
     ],
-    onSubmit: (d) => api.post(`/shifts/${shift.id}/expenses`, { ...d, clientRef }, { queue: `Dépense · ${d.description} · ${fmt.money(Number(d.amount))}` }),
+    onSubmit: (d) => confirmPayment((x) => api.post(`/shifts/${shift.id}/expenses`, { ...d, clientRef, ...x }, { queue: `Dépense · ${d.description} · ${fmt.money(Number(d.amount))}` })),
   });
   if (ok?.queued) return queued(reload);
   if (ok) {

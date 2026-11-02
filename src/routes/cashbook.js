@@ -3,7 +3,7 @@ const { fail, num, str, oneOf, round, dateParam, transaction, money } = require(
 const { requireRole, requireAdmin } = require('../auth');
 const { audit } = require('../audit');
 const { getSettings } = require('../db');
-const { ACCOUNTS, KINDS, cashbook, balances, supplierBalances, supplierExpenses, shiftSign } = require('../cashbook');
+const { ACCOUNTS, KINDS, cashbook, balances, supplierBalances, supplierDetail, supplierExpenses, shiftSign, checkSupplierPayment } = require('../cashbook');
 const { cashbookPdf } = require('../cashbookReport');
 
 const manager = requireRole('manager');
@@ -174,11 +174,45 @@ module.exports = function cashbookRoutes(db, { mailer } = {}) {
       if (f.name !== s.name) {
         db.prepare('UPDATE deliveries SET supplier = ? WHERE lower(trim(supplier)) = lower(?)').run(f.name, s.name);
         db.prepare('UPDATE supplier_payments SET supplier = ? WHERE lower(trim(supplier)) = lower(?)').run(f.name, s.name);
+        db.prepare('UPDATE supplier_adjustments SET supplier = ? WHERE lower(trim(supplier)) = lower(?)').run(f.name, s.name);
       }
       const before = { name: s.name, phone: s.phone, email: s.email };
       audit(db, req, { category: 'caisse', action: 'supplier_updated', entity: 'suppliers', id: s.id, summary: f.name !== s.name ? `Fournisseur ${s.name} renommé ${f.name}` : `Fournisseur ${f.name} modifié`, before, after: f });
     });
     res.json(db.prepare('SELECT * FROM suppliers WHERE id = ?').get(s.id));
+  });
+
+  // One supplier's account: its deliveries, payments and corrections.
+  router.get('/suppliers/detail', manager, (req, res) => {
+    const detail = supplierDetail(db, req.query.name);
+    if (!detail) fail(404, 'Fournisseur introuvable.');
+    res.json(detail);
+  });
+
+  // The admin sets what the station really owes a supplier: only the difference is written,
+  // nothing else moves (cash book, shifts, expenses, deliveries).
+  router.post('/suppliers/adjustments', manager, requireAdmin, (req, res) => {
+    const b = req.body || {};
+    const current = supplierDetail(db, b.supplier)?.supplier;
+    if (!current) fail(404, 'Fournisseur introuvable.');
+    const target = round(num(b.balance, 'Le reste à payer', { min: -1e9, max: 1e9 }));
+    const reason = str(b.reason, 'Le motif', { max: 300 });
+    const amount = round(target - current.balance);
+    if (Math.abs(amount) < 0.005) fail(400, `Le reste à payer est déjà de ${money(target)}.`);
+    transaction(db, () => {
+      const r = db.prepare('INSERT INTO supplier_adjustments (supplier, amount, reason, user_id) VALUES (?, ?, ?, ?)').run(current.name, amount, reason, req.user.id);
+      audit(db, req, {
+        category: 'caisse',
+        action: 'supplier_debt_corrected',
+        entity: 'supplier_adjustments',
+        id: Number(r.lastInsertRowid),
+        summary: `Dette envers ${current.name} corrigée : ${money(current.balance)} → ${money(target)}`,
+        before: { balance: current.balance },
+        after: { balance: target, amount },
+        reason,
+      });
+    });
+    res.status(201).json(supplierDetail(db, current.name));
   });
 
   router.post('/suppliers/payments', manager, (req, res) => {
@@ -189,6 +223,7 @@ module.exports = function cashbookRoutes(db, { mailer } = {}) {
     const reference = str(b.reference, 'La référence', { required: false, max: 100 });
     // Same spelling as on the deliveries, so the debt and its payment meet.
     const known = db.prepare('SELECT name AS supplier FROM suppliers WHERE name = ? COLLATE NOCASE').get(supplier);
+    checkSupplierPayment(db, { supplier: known?.supplier || supplier, amount, force: b.force === true });
     const id = transaction(db, () => {
       const r = db
         .prepare('INSERT INTO supplier_payments (supplier, amount, method, reference, user_id) VALUES (?, ?, ?, ?, ?)')
