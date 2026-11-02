@@ -243,8 +243,8 @@ CREATE TABLE IF NOT EXISTS supplier_payments (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
--- A supplier's debt corrected by hand (version 34): + adds to what the station owes, − takes off.
--- Only the debt moves: no cash book, shift, expense or delivery.
+-- A supplier's debt corrected by hand (version 34): removed on 2026-11-02 at the user's request
+-- (the debt follows the deliveries and payments only); the table is left over, unused.
 CREATE TABLE IF NOT EXISTS supplier_adjustments (
   id         INTEGER PRIMARY KEY,
   supplier   TEXT NOT NULL,
