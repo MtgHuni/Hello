@@ -4,7 +4,7 @@ const { requireRole, hashPassword, checkPasswordStrength } = require('../auth');
 const { audit } = require('../audit');
 const { emailParam } = require('./mail');
 const { statementPdf } = require('../statementReport');
-const { receiptPdf } = require('../receipt');
+const { receiptPdf, receiptLink, receiptSigned } = require('../receipt');
 const { getSettings, syncCreditLimits } = require('../db');
 const { balanceSql, refreshCustomer, subscriberDues, creditAllocation, unpaidCredits } = require('../loyalty');
 const { customerPriceList, price3 } = require('../prices');
@@ -306,32 +306,45 @@ function customerRoutes(db, { mailer } = {}) {
 
   // The receipt of a credit (?sale=) or of a payment (?payment=, or ?ref= the form's clientRef for the
   // credits of the shift paid at the pump, with ?method=), as a PDF shared on WhatsApp.
-  router.get('/customers/:id/receipt.pdf', requireRole('manager', 'attendant'), (req, res) => {
-    const customer = db.prepare('SELECT id, name, phone FROM customers WHERE id = ?').get(req.params.id);
+  function receiptOf(customerId, query, balance) {
+    const customer = db.prepare('SELECT id, name, phone FROM customers WHERE id = ?').get(customerId);
     if (!customer) fail(404, 'Client introuvable.');
     const withProduct = 'SELECT s.*, p.name AS product_name FROM sales s JOIN products p ON p.id = s.product_id';
     let kind = 'payment';
     let sale = null;
     let payment = null;
     let settled = [];
-    if (req.query.sale) {
+    if (query.sale) {
       kind = 'credit';
-      sale = db.prepare(`${withProduct} WHERE s.id = ? AND s.customer_id = ? AND s.kind = 'credit'`).get(Number(req.query.sale), customer.id);
+      // Still found once paid at the pump (the credit then became a paid sale).
+      sale = db.prepare(`${withProduct} WHERE s.id = ? AND s.customer_id = ? AND s.kind IN ('credit', 'paid')`).get(Number(query.sale), customer.id);
       if (!sale) fail(404, 'Crédit introuvable.');
     } else {
-      const ref = req.query.ref ? String(req.query.ref).slice(0, 100) : null;
-      if (req.query.payment) payment = db.prepare('SELECT * FROM payments WHERE id = ? AND customer_id = ?').get(Number(req.query.payment), customer.id);
+      const ref = query.ref ? String(query.ref).slice(0, 100) : null;
+      if (query.payment) payment = db.prepare('SELECT * FROM payments WHERE id = ? AND customer_id = ?').get(Number(query.payment), customer.id);
       if (ref) {
         payment = payment || db.prepare('SELECT * FROM payments WHERE client_ref = ? AND customer_id = ?').get(ref, customer.id) || null;
         settled = db.prepare(`${withProduct} WHERE s.settled_ref = ? AND s.customer_id = ? ORDER BY s.id`).all(ref, customer.id);
       }
       if (!payment && !settled.length) fail(404, 'Règlement introuvable.');
     }
-    const method = req.query.method ? oneOf(req.query.method, 'Le mode', ['espèces', 'mobile money']) : null;
+    const method = query.method ? oneOf(query.method, 'Le mode', ['espèces', 'mobile money']) : null;
     const s = getSettings(db);
-    const pdf = receiptPdf({ stationName: s.stationName, stationPhone: s.stationPhone, customer, kind, sale, settled, payment, method, balance: customerBalance(db, customer.id) });
+    const pdf = receiptPdf({ stationName: s.stationName, stationPhone: s.stationPhone, customer, kind, sale, settled, payment, method, balance: balance ?? customerBalance(db, customer.id) });
+    return { pdf, filename: `recu-${kind === 'credit' ? `credit-${sale.id}` : `reglement-${payment?.id || settled[0].id}`}.pdf` };
+  }
+  router.get('/customers/:id/receipt.pdf', requireRole('manager', 'attendant'), (req, res) => {
+    const { pdf, filename } = receiptOf(Number(req.params.id), req.query);
     res.set('Content-Type', 'application/pdf');
-    res.set('Content-Disposition', `attachment; filename="recu-${kind === 'credit' ? `credit-${sale.id}` : `reglement-${payment?.id || settled[0].id}`}.pdf"`);
+    res.set('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(pdf);
+  });
+  // The link sent to the customer on WhatsApp: no login, signed, with the balance of its time.
+  router.get('/receipts/:customerId', (req, res) => {
+    if (!receiptSigned(db, Number(req.params.customerId), req.query)) fail(404, 'Reçu introuvable.');
+    const { pdf, filename } = receiptOf(Number(req.params.customerId), req.query, Number(req.query.b));
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', `inline; filename="${filename}"`);
     res.send(pdf);
   });
 
@@ -388,7 +401,8 @@ function customerRoutes(db, { mailer } = {}) {
       refreshCustomer(db, customer.id); // paid-off credit sales now earn their combos
       return Number(r.lastInsertRowid);
     });
-    res.status(201).json({ id, balance: customerBalance(db, customer.id) });
+    const balance = customerBalance(db, customer.id);
+    res.status(201).json({ id, balance, receipt: receiptLink(db, customer, { payment: id }, balance) });
   });
 
   router.post('/customers/:id/old-debts', manager, (req, res) => {

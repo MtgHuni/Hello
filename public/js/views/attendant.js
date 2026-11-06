@@ -616,7 +616,6 @@ export async function addCredit(ctx, shift, reload) {
   };
 
   const search = customerSearch(customers, { allowNew: true, onPick: (form) => update(form) });
-  let sold = null; // the customer, for the receipt
   const fields = [
     {
       name: 'customer',
@@ -662,7 +661,6 @@ export async function addCredit(ctx, shift, reload) {
         forgetCustomers();
         form.elements.customer.value = customer.name;
       }
-      sold = customer;
       const body = {
         customerId: customer.id,
         productId: Number(d.productId),
@@ -690,7 +688,7 @@ export async function addCredit(ctx, shift, reload) {
   if (ok) {
     forgetCustomers(); // balances changed
     toast(ok.over_limit ? 'Crédit accordé et signalé au gérant' : `Crédit enregistré · ${fmt.liters(ok.liters)} · ${fmt.money(ok.amount)}`, 'info', {
-      action: receipt(sold, { sale: ok.id }),
+      action: receipt(ok.receipt),
     });
     reload();
   }
@@ -699,7 +697,6 @@ export async function addCredit(ctx, shift, reload) {
 export async function addPayment(ctx, shift, reload) {
   const customers = await customersList();
   const clientRef = newRef();
-  let paid = null; // the customer and the money, for the receipt
   const owes = h('p', { class: 'hint-line' });
   // A debt from before the app: asked when the payment is more than what the app knows.
   const oldField = h(
@@ -775,7 +772,6 @@ export async function addPayment(ctx, shift, reload) {
       // What the app does not know is a debt from before it (never an advance by mistake).
       const excess = Math.round((Number(d.amount) - known(choice)) * 100) / 100;
       const oldDebt = excess > 0 && form.elements.surplus.value !== 'advance' ? Number(form.elements.oldDebt.value) || excess : 0;
-      paid = { customer, method: d.method };
       return api.post(
         `/shifts/${shift.id}/payments`,
         { amount: d.amount, method: d.method, reference: d.reference, customerId: customer.id, oldDebt, clientRef },
@@ -788,7 +784,7 @@ export async function addPayment(ctx, shift, reload) {
     forgetCustomers();
     const done = ok.settled && ok.id == null ? 'Crédit payé' : 'Règlement encaissé';
     toast(ok.balance < 0 ? `${done} · avance du client ${fmt.money(-ok.balance)}` : `${done} · reste dû ${fmt.money(ok.balance)}`, 'info', {
-      action: receipt(paid.customer, { payment: ok.id, ref: clientRef, method: paid.method }),
+      action: receipt(ok.receipt),
     });
     reload();
   }
