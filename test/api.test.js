@@ -2565,3 +2565,31 @@ test('paiement fournisseur au-delà de la dette, ou noté deux fois : demandé a
   // Nothing owed: a payment would become an advance.
   assert.match((await gerant('POST', '/api/suppliers/payments', { supplier: 'Double Test', amount: 10 })).data.error, /Rien n’est dû/);
 });
+
+test('reçu en PDF : un crédit, un règlement, un crédit du poste payé à la pompe', async () => {
+  const shift = (await gerant('GET', '/api/shifts/current')).data;
+  const reading = shift.readings[0];
+  const customer = (await gerant('POST', '/api/customers/quick', { name: 'Reçu Test', phone: '0990001122' })).data;
+  const credit = await gerant('POST', `/api/shifts/${shift.id}/sales`, { customerId: customer.id, productId: reading.product_id, amount: 20, payment: 'credit', plate: '1234AB19', grantCredit: true });
+  assert.strictEqual(credit.status, 201, JSON.stringify(credit.data));
+  const pdf = (url) => gerant('GET', `/api/customers/${customer.id}/receipt.pdf?${url}`);
+  const text = (r) => r.raw.toString('latin1');
+  const r1 = await pdf(`sale=${credit.data.id}`);
+  assert.deepStrictEqual([r1.status, r1.raw.subarray(0, 5).toString()], [200, '%PDF-']);
+  assert.ok(text(r1).includes('(Re\\347u de cr\\351dit)') && text(r1).includes('(1234AB19)') && text(r1).includes('(Reste d\\373)'));
+  // Paid at the pump in the same shift: the credit becomes paid, the receipt finds it by the form's ref.
+  const paid = await gerant('POST', `/api/shifts/${shift.id}/payments`, { customerId: customer.id, amount: 25, method: 'espèces', clientRef: 'recu-test-1' });
+  assert.strictEqual(paid.status, 201, JSON.stringify(paid.data));
+  const r2 = await pdf(`payment=${paid.data.id ?? ''}&ref=recu-test-1&method=esp%C3%A8ces`);
+  assert.strictEqual(r2.status, 200);
+  assert.ok(text(r2).includes('(Re\\347u de r\\350glement)') && text(r2).includes('(Avance)'));
+  // A payment on the record has its receipt too.
+  const onRecord = await gerant('POST', `/api/customers/${customer.id}/payments`, { amount: 5, method: 'mobile money' });
+  assert.ok(onRecord.data.id);
+  assert.strictEqual((await pdf(`payment=${onRecord.data.id}`)).status, 200);
+  // Someone else's operation, or nothing: no receipt.
+  const other = (await gerant('POST', '/api/customers/quick', { name: 'Reçu Autre' })).data;
+  assert.strictEqual((await gerant('GET', `/api/customers/${other.id}/receipt.pdf?sale=${credit.data.id}`)).status, 404);
+  assert.strictEqual((await pdf('')).status, 404);
+  assert.strictEqual((await client()('GET', `/api/customers/${customer.id}/receipt.pdf?sale=${credit.data.id}`)).status, 401);
+});
