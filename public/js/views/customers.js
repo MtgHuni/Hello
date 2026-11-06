@@ -459,7 +459,6 @@ export function statement(acc, period, onPeriod, { onOldDebt, clientSpace = fals
 }
 
 async function paymentDialog(c, reload) {
-  let given = null; // the amount and the mode, for the receipt
   const ok = await formDialog({
     title: `Règlement — ${c.name}`,
     intro: `${c.balance < 0 ? `Avance actuelle : ${fmt.money(-c.balance)}` : `Solde dû actuel : ${fmt.money(c.balance)}`}`,
@@ -468,11 +467,11 @@ async function paymentDialog(c, reload) {
       { name: 'method', label: 'Mode', type: 'select', options: ['espèces', 'mobile money'].map((m) => [m, m[0].toUpperCase() + m.slice(1)]) },
       { name: 'reference', label: 'Référence', full: true, placeholder: 'N° de transaction mobile money…' },
     ],
-    onSubmit: (d) => ((given = d), api.post(`/customers/${c.id}/payments`, d)),
+    onSubmit: (d) => api.post(`/customers/${c.id}/payments`, d),
   });
   if (ok) {
     toast(`Règlement enregistré. Nouveau solde : ${fmt.money(ok.balance)}`, 'info', {
-      action: receipt(c, [`Règlement : ${fmt.money(Number(given.amount))} en ${given.method}`], ok.balance),
+      action: receipt(c, { payment: ok.id }),
     });
     reload();
   }

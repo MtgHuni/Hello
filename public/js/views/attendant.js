@@ -689,10 +689,8 @@ export async function addCredit(ctx, shift, reload) {
   if (ok?.queued) return queued(reload);
   if (ok) {
     forgetCustomers(); // balances changed
-    const product = products.find((r) => r.product_id === ok.product_id)?.product_name;
-    const line = `Crédit : ${[product, fmt.liters(ok.liters), fmt.money(ok.amount)].filter(Boolean).join(' · ')}`;
     toast(ok.over_limit ? 'Crédit accordé et signalé au gérant' : `Crédit enregistré · ${fmt.liters(ok.liters)} · ${fmt.money(ok.amount)}`, 'info', {
-      action: receipt(sold, [line, ok.plate ? `Plaque : ${ok.plate}` : null], ok.balance),
+      action: receipt(sold, { sale: ok.id }),
     });
     reload();
   }
@@ -777,7 +775,7 @@ export async function addPayment(ctx, shift, reload) {
       // What the app does not know is a debt from before it (never an advance by mistake).
       const excess = Math.round((Number(d.amount) - known(choice)) * 100) / 100;
       const oldDebt = excess > 0 && form.elements.surplus.value !== 'advance' ? Number(form.elements.oldDebt.value) || excess : 0;
-      paid = { customer, line: `Règlement : ${fmt.money(Number(d.amount))} en ${d.method}` };
+      paid = { customer, method: d.method };
       return api.post(
         `/shifts/${shift.id}/payments`,
         { amount: d.amount, method: d.method, reference: d.reference, customerId: customer.id, oldDebt, clientRef },
@@ -790,7 +788,7 @@ export async function addPayment(ctx, shift, reload) {
     forgetCustomers();
     const done = ok.settled && ok.id == null ? 'Crédit payé' : 'Règlement encaissé';
     toast(ok.balance < 0 ? `${done} · avance du client ${fmt.money(-ok.balance)}` : `${done} · reste dû ${fmt.money(ok.balance)}`, 'info', {
-      action: receipt(paid.customer, [paid.line], ok.balance),
+      action: receipt(paid.customer, { payment: ok.id, ref: clientRef, method: paid.method }),
     });
     reload();
   }

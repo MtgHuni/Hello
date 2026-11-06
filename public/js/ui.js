@@ -118,24 +118,27 @@ export function toast(message, type = 'info', { action } = {}) {
     { class: `toast ${type === 'error' ? 'error' : ''}`, role: type === 'error' ? 'alert' : 'status' },
     h('span', { class: 'toast-icon' }, icon(type === 'error' ? 'alert' : 'check')),
     h('span', {}, message),
-    action
+    action?.href
       ? h('a', { class: 'btn secondary sm toast-action', href: action.href, target: '_blank', rel: 'noopener', 'aria-label': action.ariaLabel, onClick: () => setTimeout(leave, 300) }, action.icon, action.label)
-      : null,
+      : action
+        ? h('button', { class: 'btn secondary sm toast-action', type: 'button', 'aria-label': action.ariaLabel, onClick: () => (action.onClick(), setTimeout(leave, 300)) }, action.icon, action.label)
+        : null,
   );
   document.getElementById('toasts').append(el);
   setTimeout(leave, action ? 8000 : type === 'error' ? 4500 : 2600);
 }
 
 // The customer's receipt through WhatsApp: to their number, or to a contact picked in WhatsApp.
-export function receipt(customer, lines, balance) {
-  const when = new Date().toLocaleString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-  const owed = balance > 0.001 ? `Vous devez : ${fmt.money(balance)}` : balance < -0.001 ? `Votre avance : ${fmt.money(-balance)}` : `Solde : ${fmt.money(0)}`;
-  const text = [flags.station, when, `Client : ${customer.name}`, ...lines, balance == null ? null : owed].filter(Boolean).join('\n');
+// The « Reçu » of a credit ({ sale }) or a payment ({ payment, ref, method }): its PDF, shared from the
+// phone's share sheet (WhatsApp, then the customer).
+export function receipt(customer, { sale, payment, ref, method } = {}) {
+  const query = new URLSearchParams(Object.entries({ sale, payment, ref, method }).filter(([, v]) => v != null && v !== '')).toString();
+  const name = sale ? `recu-credit-${sale}.pdf` : `recu-reglement-${payment || 'poste'}.pdf`;
   return {
     label: 'Reçu',
-    ariaLabel: 'Envoyer le reçu par WhatsApp',
+    ariaLabel: 'Envoyer le reçu en PDF',
     icon: h('span', { class: 'logo-whatsapp', 'aria-hidden': 'true' }),
-    href: `https://wa.me/${whatsappNumber(customer.phone) || ''}?text=${encodeURIComponent(text)}`,
+    onClick: () => sharePdf(`/api/customers/${customer.id}/receipt.pdf?${query}`, name),
   };
 }
 

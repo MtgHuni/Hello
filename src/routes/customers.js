@@ -4,6 +4,7 @@ const { requireRole, hashPassword, checkPasswordStrength } = require('../auth');
 const { audit } = require('../audit');
 const { emailParam } = require('./mail');
 const { statementPdf } = require('../statementReport');
+const { receiptPdf } = require('../receipt');
 const { getSettings, syncCreditLimits } = require('../db');
 const { balanceSql, refreshCustomer, subscriberDues, creditAllocation, unpaidCredits } = require('../loyalty');
 const { customerPriceList, price3 } = require('../prices');
@@ -303,6 +304,37 @@ function customerRoutes(db, { mailer } = {}) {
   router.get('/customers/:id/statement.pdf', manager, (req, res) => sendStatement(req, res, Number(req.params.id)));
   router.get('/me/statement.pdf', requireRole('customer'), (req, res) => sendStatement(req, res, req.user.customer_id));
 
+  // The receipt of a credit (?sale=) or of a payment (?payment=, or ?ref= the form's clientRef for the
+  // credits of the shift paid at the pump, with ?method=), as a PDF shared on WhatsApp.
+  router.get('/customers/:id/receipt.pdf', requireRole('manager', 'attendant'), (req, res) => {
+    const customer = db.prepare('SELECT id, name, phone FROM customers WHERE id = ?').get(req.params.id);
+    if (!customer) fail(404, 'Client introuvable.');
+    const withProduct = 'SELECT s.*, p.name AS product_name FROM sales s JOIN products p ON p.id = s.product_id';
+    let kind = 'payment';
+    let sale = null;
+    let payment = null;
+    let settled = [];
+    if (req.query.sale) {
+      kind = 'credit';
+      sale = db.prepare(`${withProduct} WHERE s.id = ? AND s.customer_id = ? AND s.kind = 'credit'`).get(Number(req.query.sale), customer.id);
+      if (!sale) fail(404, 'Crédit introuvable.');
+    } else {
+      const ref = req.query.ref ? String(req.query.ref).slice(0, 100) : null;
+      if (req.query.payment) payment = db.prepare('SELECT * FROM payments WHERE id = ? AND customer_id = ?').get(Number(req.query.payment), customer.id);
+      if (ref) {
+        payment = payment || db.prepare('SELECT * FROM payments WHERE client_ref = ? AND customer_id = ?').get(ref, customer.id) || null;
+        settled = db.prepare(`${withProduct} WHERE s.settled_ref = ? AND s.customer_id = ? ORDER BY s.id`).all(ref, customer.id);
+      }
+      if (!payment && !settled.length) fail(404, 'Règlement introuvable.');
+    }
+    const method = req.query.method ? oneOf(req.query.method, 'Le mode', ['espèces', 'mobile money']) : null;
+    const s = getSettings(db);
+    const pdf = receiptPdf({ stationName: s.stationName, stationPhone: s.stationPhone, customer, kind, sale, settled, payment, method, balance: customerBalance(db, customer.id) });
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', `attachment; filename="recu-${kind === 'credit' ? `credit-${sale.id}` : `reglement-${payment?.id || settled[0].id}`}.pdf"`);
+    res.send(pdf);
+  });
+
   // What a customer still owes, credit by credit (the alert when a particulier asks for another).
   router.get('/customers/:id/unpaid', requireRole('manager', 'attendant'), (req, res) => {
     const c = db.prepare('SELECT id, name, type, phone FROM customers WHERE id = ?').get(req.params.id);
@@ -351,11 +383,12 @@ function customerRoutes(db, { mailer } = {}) {
     const reference = str(req.body?.reference, 'La référence', { required: false, max: 100 });
     // Into the money of the open shift (counted at its closing, then in the cash book).
     const shift = db.prepare("SELECT id FROM shifts WHERE status = 'open' ORDER BY id DESC LIMIT 1").get();
-    transaction(db, () => {
-      db.prepare('INSERT INTO payments (customer_id, amount, method, reference, user_id, shift_id) VALUES (?, ?, ?, ?, ?, ?)').run(customer.id, amount, method, reference, req.user.id, shift?.id ?? null);
+    const id = transaction(db, () => {
+      const r = db.prepare('INSERT INTO payments (customer_id, amount, method, reference, user_id, shift_id) VALUES (?, ?, ?, ?, ?, ?)').run(customer.id, amount, method, reference, req.user.id, shift?.id ?? null);
       refreshCustomer(db, customer.id); // paid-off credit sales now earn their combos
+      return Number(r.lastInsertRowid);
     });
-    res.status(201).json({ balance: customerBalance(db, customer.id) });
+    res.status(201).json({ id, balance: customerBalance(db, customer.id) });
   });
 
   router.post('/customers/:id/old-debts', manager, (req, res) => {
