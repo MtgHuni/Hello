@@ -2569,7 +2569,8 @@ test('paiement fournisseur au-delà de la dette, ou noté deux fois : demandé a
 test('reçu en PDF : un crédit, un règlement, un crédit du poste payé à la pompe', async () => {
   const shift = (await gerant('GET', '/api/shifts/current')).data;
   const reading = shift.readings[0];
-  const customer = (await gerant('POST', '/api/customers/quick', { name: 'Reçu Test', phone: '0990001122' })).data;
+  const customer = (await gerant('POST', '/api/customers/quick', { name: 'Reçu Test' })).data;
+  assert.strictEqual((await gerant('PUT', `/api/customers/${customer.id}`, { phone: '0990001122' })).status, 200);
   const credit = await gerant('POST', `/api/shifts/${shift.id}/sales`, { customerId: customer.id, productId: reading.product_id, amount: 20, payment: 'credit', plate: '1234AB19', grantCredit: true });
   assert.strictEqual(credit.status, 201, JSON.stringify(credit.data));
   const pdf = (url) => gerant('GET', `/api/customers/${customer.id}/receipt.pdf?${url}`);
@@ -2592,4 +2593,14 @@ test('reçu en PDF : un crédit, un règlement, un crédit du poste payé à la 
   assert.strictEqual((await gerant('GET', `/api/customers/${other.id}/receipt.pdf?sale=${credit.data.id}`)).status, 404);
   assert.strictEqual((await pdf('')).status, 404);
   assert.strictEqual((await client()('GET', `/api/customers/${customer.id}/receipt.pdf?sale=${credit.data.id}`)).status, 401);
+  // The link sent on WhatsApp: no login, signed, the balance of its time, the customer's phone.
+  assert.strictEqual(credit.data.receipt.phone, '0990001122');
+  const anyone = client();
+  const sent = await anyone('GET', credit.data.receipt.path);
+  assert.deepStrictEqual([sent.status, sent.raw.subarray(0, 5).toString()], [200, '%PDF-']);
+  assert.ok(text(sent).includes('(Reste d\\373)') && text(sent).includes('(20,00 $)'), 'le solde du moment du crédit');
+  assert.strictEqual((await anyone('GET', credit.data.receipt.path.replace(/b=[^&]+/, 'b=0'))).status, 404, 'solde changé');
+  assert.strictEqual((await anyone('GET', credit.data.receipt.path.replace(/s=[^&]+/, 's=xxxxxxxxxxxxxxxxxxxxxxxx'))).status, 404, 'signature fausse');
+  assert.strictEqual((await anyone('GET', paid.data.receipt.path)).status, 200);
+  assert.strictEqual((await anyone('GET', onRecord.data.receipt.path)).status, 200);
 });

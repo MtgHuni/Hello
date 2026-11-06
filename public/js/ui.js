@@ -129,17 +129,15 @@ export function toast(message, type = 'info', { action } = {}) {
 }
 
 // The customer's receipt through WhatsApp: to their number, or to a contact picked in WhatsApp.
-// The « Reçu » of a credit ({ sale }) or a payment ({ payment, ref, method }): its PDF, shared from the
-// phone's share sheet (WhatsApp, then the customer).
-export function receipt(customer, { sale, payment, ref, method } = {}) {
-  const query = new URLSearchParams(Object.entries({ sale, payment, ref, method }).filter(([, v]) => v != null && v !== '')).toString();
-  const name = sale ? `recu-credit-${sale}.pdf` : `recu-reglement-${payment || 'poste'}.pdf`;
-  return {
-    label: 'Reçu',
-    ariaLabel: 'Envoyer le reçu en PDF',
-    icon: h('span', { class: 'logo-whatsapp', 'aria-hidden': 'true' }),
-    onClick: () => sharePdf(`/api/customers/${customer.id}/receipt.pdf?${query}`, name),
-  };
+// The « Reçu » of a credit or a payment (`link`: { path, phone } from the server, a signed link to its PDF):
+// WhatsApp opens on the customer's number with the link; without a number, the PDF goes to the share sheet.
+export function receipt(link) {
+  if (!link?.path) return undefined;
+  const url = `${location.origin}${link.path}`;
+  const number = whatsappNumber(link.phone);
+  const base = { label: 'Reçu', ariaLabel: 'Envoyer le reçu par WhatsApp', icon: h('span', { class: 'logo-whatsapp', 'aria-hidden': 'true' }) };
+  if (number) return { ...base, href: `https://wa.me/${number}?text=${encodeURIComponent(`${flags.station} · Reçu : ${url}`)}` };
+  return { ...base, onClick: () => sharePdf(url, 'recu.pdf') };
 }
 
 export function spinner() {

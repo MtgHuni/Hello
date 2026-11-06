@@ -8,6 +8,7 @@ const declared = (s) => round((s.cash || 0) + (s.change_left || 0) + (s.francs |
 const { fail, num, str, oneOf, round, dateParam, transaction, money, clientRef } = require('../util');
 const { requireRole } = require('../auth');
 const { customerBalance } = require('./customers');
+const { receiptLink } = require('../receipt');
 const { createSale, updateSale, settleInShift } = require('../sales');
 const { refreshCustomer } = require('../loyalty');
 const { shiftReportPdf } = require('../shiftReport');
@@ -478,7 +479,9 @@ module.exports = function shiftRoutes(db) {
     if (payment === 'paid') fail(400, 'Les ventes payées ne se saisissent pas : les index les comptent.', 'paid');
     const sale = createSale(db, shift, { ...(req.body || {}), payment, source: 'attendant', userId: req.user.id });
     lateEntry(req, shift, 'sales', sale);
-    res.status(201).json({ ...sale, balance: customerBalance(db, sale.customer_id) }); // for the receipt
+    const balance = customerBalance(db, sale.customer_id);
+    const customer = db.prepare('SELECT id, phone FROM customers WHERE id = ?').get(sale.customer_id);
+    res.status(201).json({ ...sale, balance, receipt: sale.kind === 'credit' && customer ? receiptLink(db, customer, { sale: sale.id }, balance) : null });
   });
 
   // A customer settling their account at the pump: the money goes into the shift's cash.
@@ -519,7 +522,9 @@ module.exports = function shiftRoutes(db) {
       refreshCustomer(db, customer.id); // paid-off credit sales now earn their combos
       return paymentId;
     });
-    res.status(201).json({ id: id == null ? null : Number(id), settled, balance: customerBalance(db, customer.id) });
+    const balance = customerBalance(db, customer.id);
+    const paymentId = id == null ? null : Number(id);
+    res.status(201).json({ id: paymentId, settled, balance, receipt: receiptLink(db, customer, { payment: paymentId, ref, method }, balance) });
   });
 
   // Fuel paid by mobile money: only the product and the litres, at the shift's price. The shift's

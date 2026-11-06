@@ -1,5 +1,6 @@
 // A customer's receipt (the « Reçu » after a credit or a payment, shared on WhatsApp as a PDF):
 // what was taken or paid, and what the customer owes now.
+const crypto = require('node:crypto');
 const { Report, fmt, COLORS } = require('./pdfReport');
 
 const METHOD = { espèces: 'Espèces', 'mobile money': 'Mobile money' };
@@ -41,4 +42,24 @@ function receiptPdf({ stationName, stationPhone, customer, kind, sale, settled =
   return report.finish();
 }
 
-module.exports = { receiptPdf };
+// The link sent on WhatsApp to the customer's number: no login, signed with the station's secret, and
+// carrying the balance at the time of the operation (`b`), so the receipt stays as it was sent.
+const RECEIPT_KEYS = ['sale', 'payment', 'ref', 'method', 'b'];
+function receiptSign(db, customerId, params) {
+  const secret = db.prepare("SELECT value FROM settings WHERE key = 'mail_secret'").get()?.value || 'mtg';
+  const text = `recu:${customerId}:${RECEIPT_KEYS.map((k) => `${k}=${params[k] ?? ''}`).join('&')}`;
+  return crypto.createHmac('sha256', secret).update(text).digest('base64url').slice(0, 24);
+}
+function receiptLink(db, customer, params, balance) {
+  const all = { ...params, b: Math.round(balance * 100) / 100 };
+  const query = new URLSearchParams(RECEIPT_KEYS.filter((k) => all[k] != null && all[k] !== '').map((k) => [k, String(all[k])]));
+  query.set('s', receiptSign(db, customer.id, all));
+  return { path: `/api/receipts/${customer.id}?${query}`, phone: customer.phone || null };
+}
+function receiptSigned(db, customerId, query) {
+  const expected = receiptSign(db, customerId, query);
+  const s = String(query.s || '');
+  return s.length === expected.length && crypto.timingSafeEqual(Buffer.from(s), Buffer.from(expected));
+}
+
+module.exports = { receiptPdf, receiptLink, receiptSigned };

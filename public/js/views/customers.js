@@ -471,7 +471,7 @@ async function paymentDialog(c, reload) {
   });
   if (ok) {
     toast(`Règlement enregistré. Nouveau solde : ${fmt.money(ok.balance)}`, 'info', {
-      action: receipt(c, { payment: ok.id }),
+      action: receipt(ok.receipt),
     });
     reload();
   }
