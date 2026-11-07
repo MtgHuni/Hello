@@ -2620,3 +2620,51 @@ test('reçu en PDF : un crédit, un règlement, un crédit du poste payé à la 
   assert.strictEqual((await anyone('GET', paid.data.receipt.path)).status, 200);
   assert.strictEqual((await anyone('GET', onRecord.data.receipt.path)).status, 200);
 });
+
+test('client « Interne » : ce qu’il prend est compté, jamais dû', async () => {
+  const created = await gerant('POST', '/api/customers', { type: 'internal', name: 'Véhicule de la station' });
+  assert.strictEqual(created.status, 201);
+  assert.deepStrictEqual([created.data.type, created.data.internal], ['individual', 1]);
+  const customer = created.data;
+  const shift = (await gerant('GET', '/api/shifts/current')).data;
+  const reading = shift.readings[0];
+  const before = shift.credit_amount;
+  const receivablesBefore = (await gerant('GET', '/api/customers/receivables')).data.totals;
+  // Two in a row, without « accorder quand même », at the pump price.
+  const first = await gerant('POST', `/api/shifts/${shift.id}/sales`, { customerId: customer.id, productId: reading.product_id, amount: 30, payment: 'credit' });
+  assert.strictEqual(first.status, 201, JSON.stringify(first.data));
+  const second = await gerant('POST', `/api/shifts/${shift.id}/sales`, { customerId: customer.id, productId: reading.product_id, amount: 20, payment: 'credit' });
+  assert.strictEqual(second.status, 201, JSON.stringify(second.data));
+  assert.strictEqual(second.data.unit_price ?? reading.unit_price, reading.unit_price);
+  // Out of the shift's money, like a credit; never a debt.
+  const now = (await gerant('GET', `/api/shifts/${shift.id}`)).data;
+  assert.strictEqual(now.credit_amount, round2(before + 50));
+  const acc = (await gerant('GET', `/api/customers/${customer.id}`)).data;
+  assert.deepStrictEqual([acc.balance, acc.consumed], [0, 50]);
+  assert.ok(acc.movements.every((m) => m.balance === 0));
+  assert.ok(!(await gerant('GET', '/api/customers/receivables')).data.rows.some((r) => r.id === customer.id));
+  assert.deepStrictEqual((await gerant('GET', '/api/customers/receivables')).data.totals, receivablesBefore);
+  assert.deepStrictEqual((await gerant('GET', `/api/customers/${customer.id}/unpaid`)).data.credits, []);
+  // Back to particulier: what he took becomes owed.
+  await gerant('PUT', `/api/customers/${customer.id}`, { type: 'individual' });
+  assert.strictEqual((await gerant('GET', `/api/customers/${customer.id}`)).data.balance, 50);
+  await gerant('PUT', `/api/customers/${customer.id}`, { type: 'internal' });
+  assert.strictEqual((await gerant('GET', `/api/customers/${customer.id}`)).data.balance, 0);
+});
+
+test('migration 35 : client interne', () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const { openDb, SCHEMA_VERSION } = require('../src/db');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'station-internal-'));
+  const file = path.join(dir, 'old.db');
+  let old = openDb(file);
+  old.exec("INSERT INTO customers (type, name) VALUES ('individual', 'Ancien'); ALTER TABLE customers DROP COLUMN internal; PRAGMA user_version = 34");
+  old.close();
+  old = openDb(file);
+  assert.strictEqual(old.prepare("SELECT internal FROM customers WHERE name = 'Ancien'").get().internal, 0);
+  assert.strictEqual(old.prepare('PRAGMA user_version').get().user_version, SCHEMA_VERSION);
+  old.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+});

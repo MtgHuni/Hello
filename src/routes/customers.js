@@ -76,7 +76,7 @@ function customerRoutes(db, { mailer } = {}) {
       opening = db
         .prepare(
           `SELECT
-             (SELECT COALESCE(SUM(amount), 0) FROM sales WHERE customer_id = ? AND kind = 'credit' AND date(created_at, 'localtime') < ?) +
+             (SELECT COALESCE(SUM(amount), 0) FROM sales WHERE customer_id = ? AND kind = 'credit' AND date(created_at, 'localtime') < ? AND NOT (SELECT internal FROM customers WHERE id = customer_id)) +
              (SELECT COALESCE(SUM(amount), 0) FROM old_debts WHERE customer_id = ? AND date(created_at, 'localtime') < ?) -
              (SELECT COALESCE(SUM(amount), 0) FROM payments WHERE customer_id = ? AND date(created_at, 'localtime') < ?) AS v`,
         )
@@ -91,12 +91,12 @@ function customerRoutes(db, { mailer } = {}) {
           s.kind === 'combo'
             ? `${s.product_name} — ${frNum(s.liters)} L échangés contre ${s.combos_used} combos`
             : `${s.product_name} — ${frNum(s.liters)} L à ${frNum(s.unit_price, 3)} $/L${s.plate ? ` (${s.plate})` : ''} — ${
-                s.kind === 'credit' ? `à crédit${s.over_limit === 2 ? ' (accordé malgré un crédit en cours)' : s.over_limit ? ' (accordé malgré le retard)' : ''}${s.points_due && !s.points ? ', combos à l’encaissement' : ''}` : 'payé'
+                s.kind === 'credit' && customer.internal ? 'interne, sans paiement' : s.kind === 'credit' ? `à crédit${s.over_limit === 2 ? ' (accordé malgré un crédit en cours)' : s.over_limit ? ' (accordé malgré le retard)' : ''}${s.points_due && !s.points ? ', combos à l’encaissement' : ''}` : 'payé'
               }`,
         liters: s.liters,
         points: s.points,
         combosUsed: s.combos_used,
-        debit: s.kind === 'credit' ? s.amount : 0,
+        debit: s.kind === 'credit' && !customer.internal ? s.amount : 0,
         amount: s.amount,
         credit: 0,
       })),
@@ -130,6 +130,8 @@ function customerRoutes(db, { mailer } = {}) {
       customer,
       prices: customerPriceList(db, customer), // what they pay per fuel, their own price for a subscriber
       balance: customerBalance(db, customer.id), // today, whatever the period shown
+      // What a customer « Interne » took over the period (never owed).
+      consumed: customer.internal ? round(sales.filter((x) => x.kind === 'credit').reduce((t, x) => t + x.amount, 0)) : null,
       dues: customer.type === 'account' ? subscriberDues(db, customer.id, settings.subscriberGraceDays) : null,
       combos: {
         balance: customer.loyalty_points,
@@ -178,9 +180,12 @@ function customerRoutes(db, { mailer } = {}) {
   });
 
   function customerFields(b, current = {}) {
-    const type = oneOf(b.type ?? current.type, 'Le type de client', ['account', 'individual']);
+    // « Interne »: a particulier for the rules of the record, whose fuel is only counted.
+    const chosen = oneOf(b.type ?? (current.internal ? 'internal' : current.type), 'Le type de client', ['account', 'individual', 'internal']);
+    const type = chosen === 'internal' ? 'individual' : chosen;
     return {
       type,
+      internal: chosen === 'internal' ? 1 : 0,
       name: str(b.name ?? current.name, 'Le nom', { max: 120 }),
       phone: str(b.phone ?? current.phone, 'Le téléphone', { required: false, max: 40 }),
       email: emailParam(b.email ?? current.email),
@@ -209,8 +214,8 @@ function customerRoutes(db, { mailer } = {}) {
     const f = customerFields(req.body || {});
     checkName(db, f.name);
     const id = db
-      .prepare('INSERT INTO customers (type, name, phone, email, address, plate, payment_day) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .run(f.type, f.name, f.phone, f.email, f.address, f.plate, f.payment_day).lastInsertRowid;
+      .prepare('INSERT INTO customers (type, internal, name, phone, email, address, plate, payment_day) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(f.type, f.internal, f.name, f.phone, f.email, f.address, f.plate, f.payment_day).lastInsertRowid;
     syncCreditLimits(db);
     res.status(201).json(db.prepare(`${listSql} WHERE c.id = ?`).get(id));
   });
@@ -223,15 +228,18 @@ function customerRoutes(db, { mailer } = {}) {
     if (nameKey(f.name) !== nameKey(current.name)) checkName(db, f.name, current.id);
     const active = bool(req.body?.active, !!current.active) ? 1 : 0;
     db.prepare(
-      'UPDATE customers SET type = ?, name = ?, phone = ?, email = ?, address = ?, plate = ?, payment_day = ?, active = ?, needs_review = 0 WHERE id = ?',
-    ).run(f.type, f.name, f.phone, f.email, f.address, f.plate, f.payment_day, active, current.id);
+      'UPDATE customers SET type = ?, internal = ?, name = ?, phone = ?, email = ?, address = ?, plate = ?, payment_day = ?, active = ?, needs_review = 0 WHERE id = ?',
+    ).run(f.type, f.internal, f.name, f.phone, f.email, f.address, f.plate, f.payment_day, active, current.id);
+    // Turned « Interne » or back: the combos of their credits follow (nothing is owed any more, or again).
+    if (f.internal !== current.internal) refreshCustomer(db, current.id);
     // A new address must be confirmed again (it is the one « mot de passe oublié » uses).
     if ((f.email || null) !== (current.email || null)) db.prepare('UPDATE customers SET email_verified_at = NULL WHERE id = ?').run(current.id);
     syncCreditLimits(db);
     db.prepare('UPDATE users SET active = ? WHERE customer_id = ?').run(active, current.id);
     const TYPE = { account: 'abonné', individual: 'particulier' };
+    const typeOf = (c) => (c.internal ? 'interne' : TYPE[c.type]);
     const changes = [
-      f.type !== current.type ? `${TYPE[current.type]} → ${TYPE[f.type]}` : null,
+      typeOf(f) !== typeOf(current) ? `${typeOf(current)} → ${typeOf(f)}` : null,
       active !== current.active ? (active ? 'réactivé' : 'désactivé') : null,
       f.payment_day && f.payment_day !== current.payment_day ? `paiement avant le ${f.payment_day}${current.payment_day ? ` (avant : le ${current.payment_day})` : ''}` : null,
     ].filter(Boolean);
@@ -242,8 +250,8 @@ function customerRoutes(db, { mailer } = {}) {
         entity: 'customers',
         id: current.id,
         summary: `Client ${f.name} : ${changes.join(', ')}`,
-        before: { type: current.type, active: current.active, payment_day: current.payment_day },
-        after: { type: f.type, active, payment_day: f.payment_day },
+        before: { type: current.type, internal: current.internal, active: current.active, payment_day: current.payment_day },
+        after: { type: f.type, internal: f.internal, active, payment_day: f.payment_day },
       });
     }
     res.json(db.prepare(`${listSql} WHERE c.id = ?`).get(current.id));
