@@ -24,16 +24,27 @@ export async function renderDashboard(page, { state, navigate }) {
       { class: 'register' },
       valueColumn(d.value, flags.combos),
       h(
-        'section',
-        { class: 'card register-side' },
-        cardHeader('Prix du jour'),
-        products
-          .filter((p) => p.active)
-          .map((p) => regRow({ tab: productColor(p.id), label: p.name, sub: p.subscriber_price != null && Number(p.subscriber_price) !== Number(p.price) ? `Abonnés ${fmt.price(p.subscriber_price)}` : null, value: fmt.price(p.price) })),
-        h('h3', { class: 'form-section' }, 'Argent'),
-        shiftRow(d.openShifts[0]),
-        regRow({ label: 'Caisse', sub: `Mobile money ${fmt.money(d.cash.momo.balance)}`, value: fmt.money(d.cash.cash.balance), lost: d.cash.cash.balance < 0, href: '#/caisse' }),
-        regRow({ label: 'Encours clients', sub: d.receivablesOld ? `${fmt.money(d.receivablesOld)} à plus de 30 jours` : null, value: fmt.money(d.receivables), href: '#/clients/creances' }),
+        'div',
+        { class: 'register-side' },
+        h(
+          'section',
+          { class: 'card' },
+          cardHeader('Prix du jour'),
+          products
+            .filter((p) => p.active)
+            .map((p) => regRow({ tab: productColor(p.id), label: p.name, sub: p.subscriber_price != null && Number(p.subscriber_price) !== Number(p.price) ? `Abonnés ${fmt.price(p.subscriber_price)}` : null, value: fmt.price(p.price) })),
+          shiftRow(d.openShifts[0]),
+        ),
+        h(
+          'section',
+          { class: 'card' },
+          cardHeader(
+            'Alertes',
+            [d.alerts.length ? `${d.alerts.length} point${d.alerts.length > 1 ? 's' : ''} à surveiller` : null, masked(d) ? `${masked(d)} masquée${masked(d) > 1 ? 's' : ''}` : null].filter(Boolean).join(' · ') || null,
+            button('Gérer', () => manageAlerts(d.alertsManage, () => renderDashboard(page, { state, navigate })), { variant: 'ghost sm', iconName: 'settings' }),
+          ),
+          alertList(d.alerts),
+        ),
       ),
     ),
 
@@ -43,17 +54,7 @@ export async function renderDashboard(page, { state, navigate }) {
     h(
       'div',
       { class: 'board section' },
-      h('section', { class: 'card board-chart' }, cardHeader('Ventes des 7 derniers jours', `Total ${fmt.money(d.last7.reduce((t, x) => t + x.amount, 0))}`), barChart(d.last7)),
-      h(
-        'section',
-        { class: 'card board-alerts' },
-        cardHeader(
-          'Alertes',
-          [d.alerts.length ? `${d.alerts.length} point${d.alerts.length > 1 ? 's' : ''} à surveiller` : null, masked(d) ? `${masked(d)} masquée${masked(d) > 1 ? 's' : ''}` : null].filter(Boolean).join(' · ') || null,
-          button('Gérer', () => manageAlerts(d.alertsManage, () => renderDashboard(page, { state, navigate })), { variant: 'ghost sm', iconName: 'settings' }),
-        ),
-        alertList(d.alerts),
-      ),
+      h('section', { class: 'card board-wide' }, cardHeader('Ventes des 7 derniers jours', `Total ${fmt.money(d.last7.reduce((t, x) => t + x.amount, 0))}`), barChart(d.last7)),
       h(
         'section',
         { class: 'card board-wide' },
@@ -136,15 +137,17 @@ function regRow({ tab, label, sub, value, lost = false, href }) {
 // The shift open now: who holds it and its credits so far.
 function shiftRow(s) {
   if (!s) return regRow({ label: 'Poste en cours', value: 'Aucun', href: '#/postes' });
-  return regRow({ label: 'Poste en cours', sub: `N°${s.id} · crédits ${fmt.money(s.credit_so_far)}`, value: s.station_closed_at ? 'Station fermée' : s.on_duty || 'Personne', href: `#/postes/${s.id}/etat` });
+  return regRow({ label: 'Poste en cours', sub: `N°${s.id}`, value: s.station_closed_at ? 'Station fermée' : s.on_duty || 'Personne', href: `#/postes/${s.id}/etat` });
 }
 
 // What the station is worth now, as one addition: its money, credits and fuel at purchase cost,
 // less what it owes, closed on a double rule.
 function valueColumn(v, combos) {
-  const line = (label, value, { total = false, lost = false } = {}) =>
-    h('div', { class: `summary-line${total ? ' total' : ''}` }, h('span', {}, label), h('span', { class: `num${lost ? ' variance-neg' : ''}` }, value));
+  // Red means owed or a gap: what the station owes, money below zero, a missing purchase price.
+  const line = (label, value, { total = false, lost = false, sub = null } = {}) =>
+    h('div', { class: `summary-line${total ? ' total' : ''}` }, h('span', {}, label, sub ? h('small', { class: 'line-sub' }, sub) : null), h('span', { class: `num${lost ? ' variance-neg' : ''}` }, value));
   const own = (label, n) => line(label, fmt.money(n), { lost: n < 0 });
+  const owe = (label, n) => line(label, fmt.money(-n), { lost: n > 0.005 });
   const a = v.assets;
   const d = v.debts;
   return h(
@@ -158,13 +161,13 @@ function valueColumn(v, combos) {
     Math.abs(a.uncounted) >= 0.005 ? own('Argent à compter', a.uncounted) : null,
     own('Crédits clients', a.receivables),
     v.tanks.map((t) =>
-      line(`${t.name} · ${fmt.liters(t.liters)}${t.cost == null ? '' : ` × ${fmt.price(t.cost)}`}`, t.value == null ? 'prix d’achat manquant' : fmt.money(t.value), { lost: t.value == null }),
+      line(t.name, t.value == null ? 'prix d’achat manquant' : fmt.money(t.value), { lost: t.value == null, sub: `${fmt.liters(t.liters)}${t.cost == null ? '' : ` × ${fmt.price(t.cost)}`}` }),
     ),
     h('h3', { class: 'form-section' }, 'Ce qu’elle doit'),
-    line('Fournisseurs', fmt.money(-d.suppliers)),
-    line('Salaires à payer', fmt.money(-d.salaries)),
-    line('Avances des clients', fmt.money(-d.advances)),
-    combos ? line('Combos des clients', fmt.money(-d.combos)) : null,
+    owe('Fournisseurs', d.suppliers),
+    owe('Salaires à payer', d.salaries),
+    owe('Avances des clients', d.advances),
+    combos ? owe('Combos des clients', d.combos) : null,
     line('Valeur nette', fmt.money(v.net), { total: true, lost: v.net < 0 }),
   );
 }
