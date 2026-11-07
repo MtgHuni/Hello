@@ -77,7 +77,7 @@ module.exports = function cashbookRoutes(db, { mailer } = {}) {
   router.post('/cashbook/movements/:id/shift', manager, requireAdmin, (req, res) => {
     const m = db.prepare('SELECT * FROM cash_movements WHERE id = ?').get(req.params.id);
     if (!m) fail(404, 'Mouvement introuvable.');
-    if (!shiftSign(m.kind, m.account)) fail(400, 'Seules les entrées et sorties d’espèces et les retraits de mobile money vont dans l’argent d’un poste.');
+    if (!shiftSign(m.kind, m.account)) fail(400, 'Un solde de départ ne va pas dans l’argent d’un poste.');
     const link = req.body?.link !== false;
     const shift = link
       ? db.prepare('SELECT id, status FROM shifts WHERE opened_at <= ? AND (closed_at IS NULL OR closed_at > ?) ORDER BY id DESC LIMIT 1').get(m.created_at, m.created_at)

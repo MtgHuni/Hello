@@ -3,7 +3,7 @@
 // already records (closed shifts, payments and expenses outside a shift, deliveries paid on
 // the spot, supplier payments); the manager adds the rest by hand (cash_movements).
 const { round, money, fail } = require('./util');
-const { attendantNamesSql, shiftMovements, movementsTotal } = require('./checkpoints');
+const { attendantNamesSql, shiftMovements, movementsTotal, momoMoved } = require('./checkpoints');
 
 const ACCOUNTS = { cash: 'Espèces', momo: 'Mobile money' };
 // Payment methods that move one of the two balances.
@@ -24,11 +24,12 @@ const KINDS = {
 };
 
 
-// What a manual movement does to the money of a shift's till: an entry or exit of the cash ±,
-// mobile money withdrawn into the cash +; nothing otherwise (0: it cannot go in a shift).
+// What a manual movement does to the money of a shift: an entry or exit of the cash or of the
+// mobile money ± (a mobile money one also moves the shift's mobile money, 2026-11-07, the user's
+// request), mobile money withdrawn into the cash +; an opening count never (0).
 function shiftSign(kind, account) {
   if (kind === 'retrait_momo') return 1;
-  if (account !== 'cash' || kind === 'opening') return 0;
+  if (kind === 'opening') return 0;
   return KINDS[kind]?.sign || 0;
 }
 
@@ -53,10 +54,14 @@ function allEntries(db) {
     // manager: both come back in the next shift's cash), plus what was
     // spent from it during the shift: those expenses go out on their own lines.
     const paidIn = s.cash;
-    const moved = movementsTotal(shiftMovements(db, s.id));
+    const moves = shiftMovements(db, s.id);
+    // The movements are on their own lines: the cash ones come off the cash, the mobile money ones
+    // off the shift's mobile money.
+    const momoMoves = momoMoved(moves);
+    const moved = round(movementsTotal(moves) - momoMoves);
     const detail = [s.counted_at ? null : 'argent à compter', s.change_left ? `monnaie laissée aux pompistes ${money(s.change_left)}` : null, s.francs ? `francs gardés à changer ${money(s.francs)}` : null, s.spent ? `avec les dépenses du poste (${money(s.spent)})` : null, moved ? `sans les mouvements de caisse déjà comptés (${money(moved)})` : null].filter(Boolean).join(', ');
     push({ ...base, account: 'cash', in: round(paidIn + s.spent - moved), label: `Clôture du poste n°${s.id} (${s.attendant})${detail ? ` : ${detail}` : ''}` });
-    push({ ...base, account: 'momo', in: s.mobile_money, label: `Mobile money du poste n°${s.id} (${s.attendant})` });
+    push({ ...base, account: 'momo', in: round(s.mobile_money - momoMoves), label: `Mobile money du poste n°${s.id} (${s.attendant})${momoMoves ? ` : sans les mouvements de mobile money déjà comptés (${money(momoMoves)})` : ''}` });
   }
 
   for (const p of db

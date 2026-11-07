@@ -1081,10 +1081,24 @@ test('une entrée de la caisse dans l’argent du poste compte dans ce qu’il r
 
   // Mobile money withdrawn into the open shift's till: more cash to hand over.
   const open = (await gerant('GET', '/api/shifts/current')).data;
+  const momoBalance = async () => (await gerant('GET', '/api/cashbook')).data.balances.momo.balance;
+  const momoBefore = await momoBalance();
   await gerant('POST', '/api/cashbook/movements', { kind: 'retrait_momo', account: 'momo', amount: 15, note: 'Retrait agent', toShift: true });
+  // A mobile money entry or exit goes in the shift's mobile money (and in what it must have).
   await gerant('POST', '/api/cashbook/movements', { kind: 'frais_momo', account: 'momo', amount: 1, toShift: true });
+  await gerant('POST', '/api/cashbook/movements', { kind: 'autre_entree', account: 'momo', amount: 12, note: 'Client', toShift: true });
   const now = (await gerant('GET', `/api/shifts/${open.id}`)).data;
-  assert.deepStrictEqual([now.movements.length, now.movements_amount], [1, 15]);
+  assert.deepStrictEqual([now.movements.length, now.movements_amount], [3, 26]);
+  assert.strictEqual(now.momo_total, round2(open.momo_total + 11), 'frais − 1, entrée + 12');
+  assert.ok(now.movements.find((m) => m.amount === 12).label.includes('mobile money'));
+
+  // Closed and counted: the cash to hand over moves only by the withdrawal; the mobile money book
+  // counts each movement once.
+  await nextSecond();
+  assert.strictEqual((await closeShift(now, {})).status, 200);
+  const done = (await gerant('GET', `/api/shifts/${open.id}`)).data;
+  assert.strictEqual(round2(done.expected_amount - done.mobile_money), round2(done.change_received + done.total_amount - done.credit_amount - done.combo_amount + done.payments_amount - done.expenses_amount + 15 - (done.mobile_money - 11)));
+  assert.strictEqual(await momoBalance(), round2(momoBefore - 15 - 1 + 12 + (done.mobile_money - 11)));
 });
 
 test('alertes : chacun masque une alerte ou coupe un type, pour lui seul', async () => {
