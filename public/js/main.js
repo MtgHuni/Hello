@@ -134,7 +134,7 @@ async function changePassword() {
   if (ok) toast('Mot de passe modifié');
 }
 
-// Mode nuit (par défaut) ou mode jour pour la pompe en plein soleil ; mémorisé sur l'appareil.
+// Night mode by default (index.html sets it before any script); light when chosen on this device.
 try {
   applyTheme(localStorage.getItem(THEME_KEY));
 } catch {

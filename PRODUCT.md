@@ -54,9 +54,9 @@ Everything is in US dollars and French, on the Africa/Lubumbashi timezone.
 
 ## Brand Commitments
 
-- Name: **MTG Station**. There is no logo or brand palette yet: the visual identity is to be created.
+- Name: **MTG Station**. The logo is the MTG monogram of MTG Industrie, with its blue.
 - The user wants an identity specific to the station, while keeping the quality and native gestures of Apple apps: sheets, fluid animations, iOS-level finish. This was previously stated as "exactement ce que fait Apple" and is now refined to "identité propre à la station".
-- Standing visual preference, chosen by the user on 2026-11-07 (« je veux tout changer »; the old « Totem de nuit » was « trop chargé » and « pas assez premium »): **clair et net**, built as « Registre ». Cool paper ground, white leaves ruled by one hairline, blue-black ink, the MTG blue for the main action, red only for what is owed and for gaps, fuels as small tabs, one family with tabular figures, totals on a double rule. Light by default, night optional. Only the MTG logo (monogram and its blue) is pinned; the fuel colours are free. No Apple logo, name or product imagery.
+- Standing visual preference: **version 2.0 « Verre »**, chosen by the user on 2026-11-07 after rejecting « Registre » (« juste changé les couleurs ») and five mock-ups; reference Apple Wallet / Santé and iOS liquid glass: sober, premium, few buttons. Manrope; a blurred world of colour behind everything; panels, bars and buttons in clear liquid glass (« comme un verre », « plus transparent »), only the main action in MTG-blue glass; colour by meaning only; arrivals rise out of a blur. Night by default, light optional. Only the MTG logo (monogram and its blue) is pinned. No Apple logo, name or product imagery.
 - Language: French.
 
 ## Evidence on Hand

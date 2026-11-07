@@ -789,13 +789,14 @@ export async function busy(btn, fn) {
 // Key of one form: sent with the record, it makes a second sending harmless.
 export const newRef = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`);
 
-// Light (default, readable in the sun) or night mode; remembered on the device.
+// Night (default, the user's choice on 2026-11-07) or light mode; remembered on the device.
 export const THEME_KEY = 'theme-registre';
 export function applyTheme(theme) {
-  if (theme === 'dark') document.documentElement.dataset.theme = 'dark';
+  const dark = theme !== 'light';
+  if (dark) document.documentElement.dataset.theme = 'dark';
   else delete document.documentElement.dataset.theme;
-  document.querySelector('meta[name=theme-color]')?.setAttribute('content', theme === 'dark' ? '#0f1318' : '#f3f5f7');
-  for (const b of document.querySelectorAll('.theme-btn')) b.setAttribute('aria-pressed', String(theme !== 'dark'));
+  document.querySelector('meta[name=theme-color]')?.setAttribute('content', dark ? '#070a10' : '#eef1f6');
+  for (const b of document.querySelectorAll('.theme-btn')) b.setAttribute('aria-pressed', String(!dark));
 }
 
 // The sun beside the account: lit while the light mode is on, one tap for night.
