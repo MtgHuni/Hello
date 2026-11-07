@@ -1738,3 +1738,5 @@ a.reg-row:hover { text-decoration: none; background: var(--fill-4); margin: 0 -1
 .line-sub { display: block; color: var(--text-3); font-size: 13px; font-weight: 500; white-space: nowrap; }
 .auth-card h1 { margin-bottom: 28px; }
 .auth-card .lead { margin-top: -16px; }
+/* Flat leaves: no sheen on the tank gauges */
+.meter-fill::after { display: none; }

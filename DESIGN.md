@@ -1,375 +1,318 @@
 ---
 name: MTG Station
-description: Totem de nuit, the station's price totem at night. Black ground, porcelain type, one colour field per fuel, figures in condensed bold, white action slabs, and a day mode with the same roles for full sun.
+description: Registre, the station's account book kept impeccably. Cool register paper, white leaves ruled by one hairline, blue-black ink, the MTG blue for the main action and the money that comes in, one red for what is owed, every total closing on a double rule. A night mode keeps the same roles.
 colors:
-  night-ground: "#0a0a0b"
-  night-panel: "#141416"
-  night-well: "#0f0f11"
-  night-raised: "#1f1f22"
-  porcelain: "#f5f4ef"
-  porcelain-dim: "#aaa9a3"
-  porcelain-faint: "#85847e"
-  porcelain-hairline: "rgba(245, 244, 239, 0.09)"
-  night-rule: "#2e2e33"
-  night-field-edge: "#48484f"
-  night-fill: "#34343a"
-  night-track: "#242428"
-  slab-white: "#ffffff"
-  slab-press: "#d9d8d2"
-  gasoil-green: "#23c46b"
-  essence-red: "#f0313a"
-  brand-yellow: "#ffc414"
-  series-sky: "#7fb2ff"
-  series-orange: "#ff8a1f"
-  status-green: "#2fd27a"
-  status-red: "#ff4d4f"
-  good-text: "#4ade8a"
-  bad-text: "#ff6b6b"
-  day-ground: "#f1f1ed"
-  day-panel: "#ffffff"
-  day-well: "#f7f7f4"
-  day-raised: "#e6e6e1"
-  day-ink: "#0a0a0b"
-  day-ink-dim: "#4d4d52"
-  day-ink-faint: "#6a6a70"
-  day-hairline: "rgba(10, 10, 11, 0.1)"
-  day-rule: "#d4d4cf"
-  day-field-edge: "#8a8a90"
-  day-slab-hover: "#26262a"
-  day-gasoil-green: "#1fb862"
-  day-essence-red: "#e4303a"
-  day-brand-yellow: "#e0a800"
-  day-focus: "#a87300"
-  day-series-blue: "#2f6fd6"
-  day-series-orange: "#d9650a"
-  day-status-green: "#17a35a"
-  day-status-red: "#d92d20"
-  day-good-text: "#0b7a40"
-  day-bad-text: "#c4281c"
+  register-paper: "#f3f5f7"
+  leaf-white: "#ffffff"
+  leaf-shade: "#f8f9fb"
+  leaf-well: "#eef1f5"
+  blue-black-ink: "#111827"
+  ink-secondary: "#4b5565"
+  ink-faint: "#6b7480"
+  hairline: "#e3e7ec"
+  rule: "#d5dbe2"
+  field-edge: "#b9c1cb"
+  fill: "#cfd5dd"
+  fill-quiet: "#f1f4f7"
+  track: "#e6eaef"
+  mtg-blue: "#0b6fc4"
+  mtg-blue-ink: "#0a5fa8"
+  mtg-blue-hover: "#0a63af"
+  mtg-blue-press: "#08548f"
+  mtg-blue-soft: "#e8f1fb"
+  gasoil-green: "#12895a"
+  essence-amber: "#d9822b"
+  owed-red: "#c8322a"
+  owed-red-text: "#b42318"
+  good-text: "#0d7a4e"
+  serious-orange: "#c26a12"
+  warning-yellow: "#b98900"
+  night-paper: "#0f1318"
+  night-leaf: "#171c23"
+  night-ink: "#e8ecf1"
+  night-hairline: "#262e38"
+  night-blue: "#3d9be9"
 typography:
   display:
-    fontFamily: "'Barlow Condensed', 'Inter', 'Arial Narrow', sans-serif"
-    fontSize: "64px"
+    fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+    fontSize: "34px"
     fontWeight: 700
-    lineHeight: 0.95
-    letterSpacing: "0"
-  totem-price:
-    fontFamily: "'Barlow Condensed', 'Inter', 'Arial Narrow', sans-serif"
-    fontSize: "84px"
-    fontWeight: 700
-    lineHeight: 0.8
-    letterSpacing: "-0.01em"
-    fontFeature: "tnum"
-  figure:
-    fontFamily: "'Barlow Condensed', 'Inter', 'Arial Narrow', sans-serif"
-    fontSize: "46px"
-    fontWeight: 700
-    lineHeight: 0.95
-    letterSpacing: "0"
-    fontFeature: "tnum"
+    lineHeight: 1.15
+    letterSpacing: "-0.025em"
   headline:
-    fontFamily: "'Barlow Condensed', 'Inter', 'Arial Narrow', sans-serif"
-    fontSize: "26px"
-    fontWeight: 600
-    lineHeight: 1.17
-    letterSpacing: "0.005em"
-  name:
-    fontFamily: "'Barlow Condensed', 'Inter', 'Arial Narrow', sans-serif"
-    fontSize: "24px"
+    fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+    fontSize: "22px"
     fontWeight: 700
-    lineHeight: 1
-    letterSpacing: "0.04em"
+    lineHeight: 1.25
+    letterSpacing: "-0.02em"
   title:
-    fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+    fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
     fontSize: "17px"
-    fontWeight: 600
-    lineHeight: 1.21
-    letterSpacing: "-0.012em"
+    fontWeight: 650
+    lineHeight: 1.25
+    letterSpacing: "-0.018em"
+  figure:
+    fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+    fontSize: "28px"
+    fontWeight: 650
+    lineHeight: 1.05
+    letterSpacing: "-0.03em"
+    fontFeature: "'tnum'"
   body:
-    fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
-    fontSize: "17px"
+    fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+    fontSize: "16px"
     fontWeight: 400
     lineHeight: 1.47
-    letterSpacing: "-0.022em"
-  small:
-    fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
-    fontSize: "14px"
-    fontWeight: 400
-    lineHeight: 1.43
-    letterSpacing: "-0.016em"
+    letterSpacing: "-0.011em"
   label:
-    fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+    fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
     fontSize: "13px"
-    fontWeight: 600
-    lineHeight: 1.4
+    fontWeight: 500
+    lineHeight: 1.3
     letterSpacing: "-0.005em"
-  column-head:
-    fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
-    fontSize: "12px"
-    fontWeight: 600
-    letterSpacing: "0.01em"
+  group-label:
+    fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+    fontSize: "13px"
+    fontWeight: 700
+    letterSpacing: "0.04em"
 rounded:
+  tab: "3px"
   sm: "6px"
-  md: "10px"
-  lg: "14px"
-  xl: "20px"
-  pill: "999px"
+  md: "8px"
+  lg: "10px"
+  xl: "12px"
 spacing:
-  xs: "4px"
-  sm: "8px"
-  md: "12px"
-  base: "16px"
+  row: "11px"
+  sm: "12px"
+  md: "16px"
   lg: "24px"
-  xl: "28px"
-  2xl: "32px"
-  page-x: "44px"
-  page-top: "48px"
 components:
   button-primary:
-    backgroundColor: "{colors.porcelain}"
-    textColor: "{colors.night-ground}"
+    backgroundColor: "{colors.mtg-blue}"
+    textColor: "{colors.leaf-white}"
     rounded: "{rounded.md}"
-    padding: "10px 20px"
-    height: "46px"
+    padding: "10px 18px"
+    height: "44px"
   button-primary-hover:
-    backgroundColor: "{colors.slab-white}"
-    textColor: "{colors.night-ground}"
+    backgroundColor: "{colors.mtg-blue-hover}"
   button-primary-active:
-    backgroundColor: "{colors.slab-press}"
-  button-primary-day:
-    backgroundColor: "{colors.day-ink}"
-    textColor: "{colors.day-panel}"
-    rounded: "{rounded.md}"
-  button-primary-day-hover:
-    backgroundColor: "{colors.day-slab-hover}"
+    backgroundColor: "{colors.mtg-blue-press}"
   button-secondary:
-    backgroundColor: "transparent"
-    textColor: "{colors.porcelain}"
+    backgroundColor: "{colors.leaf-white}"
+    textColor: "{colors.blue-black-ink}"
     rounded: "{rounded.md}"
-    padding: "10px 20px"
-    height: "46px"
-  button-large:
+    padding: "10px 18px"
+    height: "44px"
+  button-secondary-hover:
+    backgroundColor: "{colors.fill-quiet}"
+  button-return:
+    backgroundColor: "{colors.leaf-white}"
+    textColor: "{colors.mtg-blue-ink}"
     rounded: "{rounded.md}"
-    padding: "14px 26px"
-    height: "54px"
-  input:
-    backgroundColor: "{colors.night-well}"
-    textColor: "{colors.porcelain}"
+    height: "44px"
+  button-danger:
+    backgroundColor: "{colors.leaf-white}"
+    textColor: "{colors.owed-red-text}"
     rounded: "{rounded.md}"
-    padding: "25px 16px 8px"
-    height: "56px"
+    height: "44px"
   card:
-    backgroundColor: "{colors.night-panel}"
-    textColor: "{colors.porcelain}"
+    backgroundColor: "{colors.leaf-white}"
     rounded: "{rounded.lg}"
     padding: "24px"
-  totem-panel-gasoil:
-    backgroundColor: "{colors.gasoil-green}"
-    textColor: "{colors.night-ground}"
-    rounded: "{rounded.lg}"
-    padding: "18px 22px 20px"
-    height: "168px"
-  totem-panel-essence:
-    backgroundColor: "{colors.essence-red}"
-    textColor: "{colors.night-ground}"
-    rounded: "{rounded.lg}"
-    padding: "18px 22px 20px"
-    height: "168px"
-  side-nav-item:
-    backgroundColor: "transparent"
-    textColor: "{colors.porcelain-dim}"
+  input:
+    backgroundColor: "{colors.leaf-white}"
+    textColor: "{colors.blue-black-ink}"
     rounded: "{rounded.md}"
-    padding: "0 12px"
+    padding: "10px 16px"
     height: "44px"
-  side-nav-item-active:
-    backgroundColor: "{colors.night-raised}"
-    textColor: "{colors.porcelain}"
-  side-rail:
-    backgroundColor: "{colors.night-well}"
-    width: "252px"
-  tab-bar:
-    backgroundColor: "{colors.night-well}"
-    textColor: "{colors.porcelain-faint}"
-    height: "62px"
+  segment-option:
+    backgroundColor: "{colors.leaf-white}"
+    textColor: "{colors.blue-black-ink}"
+    rounded: "{rounded.md}"
+    height: "56px"
+  segment-option-selected:
+    backgroundColor: "{colors.mtg-blue-soft}"
+    textColor: "{colors.mtg-blue-ink}"
   badge:
-    backgroundColor: "{colors.night-raised}"
-    textColor: "{colors.porcelain}"
+    backgroundColor: "{colors.leaf-well}"
+    textColor: "{colors.blue-black-ink}"
     rounded: "{rounded.sm}"
     padding: "3px 10px"
+  nav-item-active:
+    backgroundColor: "{colors.mtg-blue-soft}"
+    textColor: "{colors.mtg-blue-ink}"
+    rounded: "{rounded.md}"
+  fuel-tab:
+    backgroundColor: "{colors.gasoil-green}"
+    rounded: "{rounded.tab}"
+    size: "10px"
 ---
 
 # Design System: MTG Station
 
 ## Overview
 
-**Creative North Star: "Totem de nuit"**
+**Creative North Star: "The Station's Credit Register"**
 
-The app is the station's price totem at night, seen from the forecourt: a black ground, porcelain type, and the day's prices lit in one colour field per fuel. Gasoil is green, essence is red, and each fuel owns its colour everywhere it appears (totem field, tank gauge, product swatch). Names and figures speak in Barlow Condensed, set big and bold like the numerals on a pylon; everything that is read rather than glanced at is in Inter. Actions and headers are lit like the forecourt's signs (user's request, 2026-10-05: "chaque en-tête ou bouton doit avoir une couleur différente du reste"): the main action is a solid yellow slab, every other action and every panel header is a sign of its own colour (sky, violet, orange) that neighbours never share. The brand is a single lit yellow drop.
+The app is the station's account book kept impeccably. Every screen reads like a clean column of figures that adds up: labels on the left in ink, figures on the right, tabular and aligned, rows ruled by one hairline, and the total closing the column on a double rule. The world replaces « Totem de nuit » entirely: no black ground by default, no coloured fields, no condensed display face, no lit coloured headers.
 
-Density is that of an operating tool: a wide-screen side rail with an icon nav, a condensed headline ruled off from its content, the totem, then figures on one ruled board. On phones the rail folds into a top bar with the page name and a bottom tab bar, and the totem drops to two columns. The attendant uses the app on a phone with customers queuing, so the figures are large and the actions are few. A day mode keeps every role and swaps the values, for the pump in full sun.
+Density is a ledger's, calm and even: white leaves (panels) laid on a cool register paper, flat, separated by hairlines rather than shadows. Colour is information, never decoration. The MTG blue marks the one main action of a region, links, the current place, and money coming in; one red marks what is owed and gaps; the two fuels are small tabs of ink beside their names. A night mode (the sun key beside the account) keeps every role under a lamp. Light is the default, chosen for outdoor phones in full sun.
 
-This world replaces the apple.com tile grid and centred top nav that came before it (and the "Midnight Line" recolour of that layout). Panels are ruled by hairlines, never floated on resting shadows.
+The surfaces still behave like native iOS: sheets, a right drawer for forms on wide screens, bottom sheets on phones, short fade-up entrances, and every motion respects reduced-motion.
 
 **Key Characteristics:**
-- Black ground (night) or bone ground (day), porcelain or ink text, no tinted neutrals.
-- Green and red belong to the fuels; yellow, sky, violet and orange are the signs of actions and headers.
-- Barlow Condensed for names and figures, Inter for reading.
-- Ruled boards: panels share one surface divided by 1px hairlines.
-- One shape everywhere: the rounded rectangle (14px panels, 10px controls, 6px small marks); no circle, no pill, and an inner radius follows its container.
-- Motion fills, counts and sweeps once per arrival, then stays still.
+- Cool paper ground, white leaves, one hairline; never cream, never black by default.
+- One family, Inter, figures tabular, right-aligned, one figure scale for every glanced number.
+- The addition column with its double rule is the signature.
+- Blue for the main action and money in, red only for what is owed and gaps, fuel as 10px ink tabs.
+- Flat at rest; shadows only on overlays (sheets, dialogs, toasts).
+- One shape: the rounded rectangle; no circle, no pill.
 
 ## Colors
 
-A near-neutral black and porcelain world with two saturated fuel fields and one lit yellow; every value has a day twin with the same role.
+A cool, nearly monochrome ink-on-paper palette with one blue voice, one red, and two small fuel inks.
 
 ### Primary
-- **Sign Yellow** (`--sign-yellow` #ffc414; day #f5b800): the signal colour. Since 2026-10-06 the primary buttons are porcelain (ink by day), no longer yellow. The main quick action's icon square, the segmented thumb (a tint with an edge), the selected choice tile and pump option, the checked box, the remark card. Text on it is always night-ground black. Hover #ffd34f, press #e8ac00.
-- **Signs Sky, Violet, Orange** (`--sign-sky` #7fb2ff, `--sign-violet` #b69cff, `--sign-orange` #ff9a3d; day #2f6fd6, #6a4bd1, #d9650a, with darker `-ink` twins for text on bone): every other action and every panel header, lit solid (user's request, 2026-10-05, "le plein"). `--solid` fills a sign and `--on-solid` writes on it: at night the light signs carry night-ground black; by day the deep `-ink` twins are the fills and carry white, and the yellow ones keep their bright yellow but write in white too (user's choice, 2026-10-05). Side by side, buttons take turns sky → violet → orange (`:nth-child(… of .btn.secondary)`). Panel headers are a solid band with the title written on it, panels taking turns in the same order; a header's other buttons become slabs of the page (night panel, day white) so they stand off the band, its main one stays yellow; table heads carry a faint (6%) wash of their panel's sign. Quick actions are solid tiles, each icon on a square of the tile's ink: the main one (Crédit) yellow, the others violet, orange, sky.
-- **Porcelain** (porcelain; day: day-ink): links and the caret.
+- **MTG Blue** (mtg-blue): the main action slab of a region (Confirmer, Enregistrer, État du poste), the active nav item's icon, the current stop of the shift line, focus rings and the field focus edge, the selected segment. Hover and press step darker (mtg-blue-hover, mtg-blue-press). Its soft tint (mtg-blue-soft) is the active nav item's ground, the quick-action icon square and the selected segment's ground.
+- **MTG Blue Ink** (mtg-blue-ink): links, the Retour button's text, the active nav label, text set on the soft tint.
 
 ### Secondary
-- **Gasoil Green** (gasoil-green; day: day-gasoil-green): the gasoil product colour. Its totem field, tank fill, swatch and series 1 in product data. Text on it is always night-ground black.
-- **Essence Red** (essence-red; day: day-essence-red): the essence product colour, same roles as gasoil, series 2. Text on it is always night-ground black.
-- **Series Sky** and **Series Orange** (series-sky, series-orange; day: day-series-blue, day-series-orange): products 3 and 4 if a station adds them. Product colour follows the product id, never its rank in a list.
+- **Gasoil Green** (gasoil-green) and **Essence Amber** (essence-amber): the fuels, only as small tabs (10px squares, 3px corners) before a fuel's name, a tank's name or a segment option, and as the fill of a tank's level bar and the chart series. Always through `productColor(id)` / the fuel tokens.
 
 ### Tertiary
-- **Brand Yellow** (brand-yellow; day: day-brand-yellow): the lit drop of the brand mark, the active nav icon (rail and tab bar), the done and current stops of the shift line, and the focus ring (day uses the deeper day-focus for contrast on bone).
+- **Owed Red** (owed-red; text in owed-red-text): what is owed, negative balances and gaps, destructive buttons' text and edge, critical status. Nothing else is red.
 
 ### Neutral
-- **Night Ground** (night-ground; day: day-ground): page background, the `theme-color`, and the text colour on fuel fields and on the porcelain slab.
-- **Night Panel** (night-panel; day: day-panel): cards, sheets, drawers, toasts.
-- **Night Well** (night-well; day: day-well): the side rail, the tab bar, table column heads and form fields; one step darker than the panel.
-- **Night Raised** (night-raised; day: day-raised): the active nav item, hovered board facts, avatars and circle buttons, badges.
-- **Porcelain / Porcelain Dim / Porcelain Faint** (porcelain, porcelain-dim, porcelain-faint; day: day-ink, day-ink-dim, day-ink-faint): primary text, secondary text (subtitles, labels), tertiary text (column heads, meta, inactive tabs).
-- **Porcelain Hairline** (porcelain-hairline; day: day-hairline): the 1px rule that edges every panel, divides the board and the figure band, separates rows and rules off headers.
-- **Night Rule** (night-rule; day: day-rule): stronger rule under table heads, above totals and as the resting edge of fields.
-- **Field Edge** (night-field-edge; day: day-field-edge): secondary button outline, choice tiles, pump options.
-- **Night Fill / Night Track** (night-fill, night-track): switch off state, unreached shift-line track, sheet grabber; gauge and bar tracks.
-
-### Status
-- **Status Green / Status Red** (status-green, status-red; day twins) fill dots, switches, toast icons and alert icons. Orange (#ff8a1f) is "serious", and the warning status shares the brand yellow hex as a dot or icon fill only.
-- **Good Text / Bad Text** (good-text, bad-text; day twins) are the readable text versions for variances and errors.
+- **Register Paper** (register-paper): the page ground, and the paper behind the rail on phones.
+- **Leaf White** (leaf-white): panels, the side rail, fields, secondary buttons, sheets. Leaf Shade (leaf-shade) is the table head; Leaf Well (leaf-well) is the badge ground.
+- **Blue-Black Ink** (blue-black-ink): all primary text, figures, the double rule. Ink Secondary (ink-secondary) for nav labels and table heads; Ink Faint (ink-faint) for notes under a label, units and group labels.
+- **Hairline** (hairline): the one rule between rows, around panels, under card headers and beside the rail. Rule (rule) is the heavier separator; Field Edge (field-edge) outlines inputs, secondary buttons and segment options; Fill Quiet (fill-quiet) is the hover ground of quiet controls and rows; Track (track) is the empty part of a level bar.
+- **Night set** (night-paper, night-leaf, night-ink, night-hairline, night-blue): the same roles in the night theme; the remaining night values live in `:root[data-theme='dark']`.
+- Status: good-text (green) for « Niveau correct »-type states, serious-orange and warning-yellow for alert squares and badge dots.
 
 ### Named Rules
-**The Colour Belongs to the Fuel Rule.** Green and red appear only where a fuel is meant: its totem field, its tank, its swatch, its series. Totals, revenue bars and every non-product figure are porcelain (night) or ink (day).
+**The One Red Rule.** Red means owed or a gap. A negative cash balance is red; a neutral « 0,00 $ » is ink. Never use red for emphasis or decoration.
 
-**The Lit Sign Rule.** Every button and every header is lit in a colour that sets it apart from what surrounds it: yellow for the one main action, sky, violet or orange for the rest, never the same colour as its neighbour. Yellow also keeps its signal roles (the brand drop, the active nav item, the shift line, focus).
+**The Blue Slab Rule.** One blue slab per region. Every other button is a white leaf with an ink edge.
 
-**The Black Text on Fuel Rule.** Text on a fuel field is always night-ground black, in both modes, at solid weight; never white, never translucent.
+**The Fuel Tab Rule.** A fuel is a 10px ink tab beside its name, never a coloured field, panel or header.
 
 ## Typography
 
-**Display Font:** Barlow Condensed 600/700 (with Inter, Arial Narrow), self-hosted
-**Body Font:** Inter variable (with -apple-system, Segoe UI, Roboto), self-hosted
+**Display Font:** Inter (self-hosted variable, with the system sans fallback)
+**Body Font:** Inter
+**Label Font:** Inter
 
-**Character:** Barlow Condensed is the pylon's numerals: narrow, heavy, set near zero tracking with tabular figures. Inter does the reading at an apple-tight body tracking (-0.022em).
+**Character:** One family carries everything, like a well-kept book in one hand. Hierarchy comes from weight (400 to 700, with 650 for figures and titles) and tight negative tracking, not from a second face.
 
 ### Hierarchy
-- **Totem price** (700, 84px, 0.8; 56px on phones, 48px under 420px): the price on each fuel field, with a 22px 600 "$/L" unit.
-- **Display** (700, 64px, 0.95; 40px under 834px): page h1 and the sign-in heading ("Connexion"), ruled off from the content below.
-- **Figure** (700, 46px, 0.95; 60px for the lead figure of a band; 36px under 834px): KPI values, board facts (44px), tank percentages (40px), the till result (72px).
-- **Headline** (600, 24-26px, 1.17): h2 and card header titles; 28-36px in sheet and drawer headers.
-- **Name** (700, 24px, 0.04em, uppercase): fuel names on the totem, the station name in the rail (27px) and the phone top bar title; the shift-line stop names (600, 17px, 0.03em, uppercase).
-- **Title** (Inter 600, 17px): h3, inside panels.
-- **Body** (Inter 400, 17px, 1.47): default text, inputs, buttons (16px 600).
-- **Small / Label** (Inter 14px; 13px 600): subtitles, KPI labels, hints, badges.
-- **Column head** (Inter 600, 12px, 0.01em, sentence case): table heads on the well colour.
+- **Display** (700, 34px, 1.15; 26px below 834px): the page title (« Bonjour, Gérant », Clients), the sign-in title.
+- **Headline** (700, 22px, 1.25): sheet and dialog titles.
+- **Title** (650, 17px, 1.25): card header titles; the topbar title on phones; h2 elsewhere 19px.
+- **Figure** (650, 28px, 1.05, -0.03em, tabular): every glanced figure: prices, KPI values, tank percentages, facts, and the net value total. One scale, one baseline for every figure band. Row figures are 17px 650; the big result of a closing is 48px (40px on phones).
+- **Body** (400, 16px, 1.47): rows, labels, fields (fields 17px to stop iOS zoom).
+- **Label** (500, 13px): notes under a row label, units, badge text (600), table heads (12px).
+- **Group label** (700, 13px, 0.04em, uppercase, ink-faint): a group of lines inside a column or form (« Ce qu’elle possède », « Ce qu’elle doit »). It heads lines; it never sits above a page or card title.
 
 ### Named Rules
-**The Condensed Speaks Names and Figures Rule.** Barlow Condensed is for headings, product and station names, and numbers that are glanced at. Sentences, labels, form text and buttons stay in Inter.
+**The Tabular Rule.** Every figure is tabular and right-aligned, so columns add up by eye.
 
-**The Tabular Figures Rule.** Every money, litre and percentage figure uses tabular numerals so counts and columns stay aligned.
+**The One Scale Rule.** Figures glanced at together share one size (28px). No hero number outgrows its siblings, except the closing's single result.
 
 ## Layout
 
-Wide screens (1024px and up): a two-column grid, a 252px side rail in the well colour ruled from the page by a hairline, then the main column padded 44px (32px under 1180px) with content capped at 1180px (720px for narrow pages). Each page opens with a header 48px from the top, the 64px headline and its subtitle on the left and actions on the right, ruled off by a hairline 24px below.
+Wide screens (1024px and up): a white side rail (248px) ruled off from the paper by one hairline, holding the monogram and name, the navigation, and the account with the sun key at its foot; the page sits on the paper at up to 1180px. Below 1024px: a top bar (56px), the paper all across, and a bottom tab bar (62px, four tabs + Plus). Forms open as a right drawer from 834px and as bottom sheets below.
 
-Under 1024px the rail disappears: a 56px sticky top bar (brand drop, page name in condensed uppercase, account button) with a blurred translucent ground, and a fixed 62px bottom tab bar (four tabs plus "Plus") on a solid well. Main padding drops to 16px. Under 834px every multi-column grid and form collapses to one column, the totem keeps two columns, and the board stacks.
+A page opens with its title and date (or a data line), the page actions on the right (a blue slab, then white leaves), and a hairline under the header. Panels sit in grids with 16px gaps (12px on phones); card padding is 24px, with the header ruled off across the full width (18px 24px 14px).
 
-The spacing rhythm is 4/8/12/16/24/28/32: 16px grid gaps (12px on phones), 24px card padding (20/18 on phones), 32px between sections, 12px between totem fields. Touch targets are at least 44px; primary buttons 46px, large 54px.
+The dashboard's register: the « Valeur de la station » addition column (about 1.25 parts) beside a side column (1 part) holding today's prices, the current shift and the alerts; one column below 834px. Register rows are 11px tall-padded, label left, figure right.
 
-### Named Rules
-**The Ruled Board Rule.** Related panels share one surface: a grid with a 1px gap over the hairline colour, an outer hairline border, a 14px outer radius and square inner cells. The manager's dashboard board (six columns: chart 4, alerts 2, facts 3+3) and every band of figures are built this way, not as separate floating tiles.
+Grouped buttons have equal width and are centred on mobile.
 
 ## Elevation & Depth
 
-Flat at rest. Depth is tonal (well, panel, raised) and edges are hairlines drawn as a 1px inset box-shadow. Shadows appear only on things that float above the page: drawers and sheets, alerts, action sheets, toasts, tooltips, and a hovered quick action.
+Flat. Panels carry no shadow at rest: they are white leaves with a 1px hairline edge on the paper, and depth comes from that tonal step (paper to leaf). Panels inside a board or KPI grid drop their own edge so the board reads as one sheet. Shadows appear only on things that float above the page.
 
 ### Shadow Vocabulary
-- **Panel hairline** (`box-shadow: inset 0 0 0 1px var(--hairline)`): the resting edge of every card.
-- **Float** (`--shadow-lift: 0 18px 44px rgba(0, 0, 0, 0.6)`; day `rgba(10, 10, 11, 0.18)`): drawers (paired with an inset left hairline), action sheets, toasts, tooltips, quick-action hover.
-- **Modal** (`0 30px 90px rgba(0, 0, 0, 0.25)`): centred alerts and phone sheets.
-- **Focus** (`outline: 2px solid var(--focus); outline-offset: 2px`; fields use `box-shadow: 0 0 0 2px var(--focus)` with the border going to text colour).
+- **Overlay lift** (`box-shadow: 0 0 0 1px var(--hairline), 0 12px 32px rgba(17, 24, 39, 0.14)`): sheets, alert dialogs, toasts. Night: `0 14px 36px rgba(0, 0, 0, 0.5)`.
+- **Field focus** (`box-shadow: 0 0 0 3px color-mix(in srgb, var(--mtg-blue) 18%, transparent)`): an input with focus, together with a blue edge.
 
 ### Named Rules
-**The Ruled, Not Floated Rule.** A panel at rest never carries a drop shadow; it is edged by a hairline or shares a ruled board.
+**The Flat Leaf Rule.** Nothing on the page casts a shadow; only overlays do.
 
 ## Shapes
 
-One shape: the rounded rectangle, everywhere (user's request, 2026-10-05: "si c'est oblong c'est oblong partout"). Panels, totem fields, the board and status icons are 14px; buttons, fields, nav items, choice tiles, segmented controls, the search field, icon buttons and quick-action icons 10px; avatars, alert icons and the switch track 8px; badges, checkboxes, shift-line stops, the switch knob, toast icons and the focus outline 6px; status dots, gauge and bar tracks 2-3px; drawers and phone sheets 20px on their open edge only. Nothing is a circle or a pill. A shape inside another keeps the same family and a concentric radius (the segmented thumb is 7px inside a 10px track with 3px of padding).
+One shape everywhere: the rounded rectangle. Controls (buttons, fields, segments, nav items) take 8px corners; panels and boards 10px; the largest containers 12px; badges and small squares 6px; fuel tabs and level bars 3px. No circle, no pill: status dots, avatars, stops of the shift line and alert icons are rounded squares too.
+
+The double rule (3px double, ink) is the system's one ornament: it closes every total (addition columns, table footers) and underlines the station name on the sign-in brand page. The line just above a total gives way to it.
 
 ## Components
 
 ### Buttons
-Lit signs, all built alike (user's request, 2026-10-05): a solid fill of the button's colour with the text written on it. Only the colour changes (user's request, 2026-10-06): porcelain for the main action (Confirmer, Enregistrer, Terminer; ink by day), the ground outlined for Annuler / Fermer (`.btn.cancel`), MTG blue for Retour (`.btn.return`; the ‹ link above a detail page too), sky, violet, orange for the others, red for a destructive one. Buttons grouped in one place are the same width (`buttonRow()` / `.btn-row`: each takes the width of the widest, up to four on a line; on a phone two by two at half the width, centred, an odd last one centred alone), and a status badge sits under the page title, not among the buttons. The requests queue keeps its three buttons on one line, equal, even on a phone.
-- **Shape:** 10px radius, 46px minimum height (34px small, 54px large).
-- **Primary:** the yellow sign, black text, Inter 16px 600, 10px 20px padding. Hover lightens the fill (14% white), press darkens it (14% black), with a 0.97 press scale.
-- **Secondary:** its sign solid (sky, then violet, then orange among its siblings), the text in `--on-solid`; same hover and press.
-- **Day mode key:** a sun on a 34px square beside the account (top bar on phones, beside the name in the side rail), as on iOS; lit yellow while day mode is on (`themeButton()` in `ui.js`).
-- **Ghost:** the sky sign with less side padding (light actions such as Modifier, + Ajouter). **Danger / Destructive:** the red sign with bad-text.
-- **Focus:** the global 2px brand-yellow outline at 2px offset.
+Quiet and certain: one blue slab, the rest white leaves.
+- **Shape:** gently rounded (8px), at least 44px tall (52px for large), 15px 600 text, an icon may lead.
+- **Primary:** MTG blue, white text; hover and press step darker.
+- **Secondary / Annuler / Fermer:** white leaf, ink text, field-edge outline; hover fill-quiet.
+- **Retour:** the same white leaf with blue ink text (and the ‹ link above a detail page).
+- **Ghost:** transparent, link-blue text.
+- **Danger / destructive:** white leaf, red text, a red-tinted edge; set apart from the others. A row's cancel square stays faint until the finger is on it, then turns red.
 
 ### Cards / Containers
-- **Corner Style:** 14px.
-- **Background:** night panel (day: white).
-- **Shadow Strategy:** inset hairline only (see Elevation).
-- **Header:** a solid band of the panel's sign across the top, 18px 24px 16px; title in condensed 26px written in `--on-solid`, the subtitle at 78% of it.
-- **Internal Padding:** 24px (20px 18px on phones). Flush cards carry tables edge to edge.
+- **Corner Style:** 10px.
+- **Background:** leaf white on register paper.
+- **Shadow Strategy:** none (see Elevation).
+- **Border:** 1px hairline; the header is ink text on no band, ruled off by a hairline.
+- **Internal Padding:** 24px.
+
+### Addition column (signature)
+The register's grammar: lines of label + figure, ruled by hairlines, optional group labels, closing on a double rule with the total in bold (on the dashboard the total figure is 28px 650 and the label stays 16px 700). Used for the station value, the closing, the shift report and a customer balance. A line may carry a faint note under its label.
+
+### Register rows
+One line of a side column: an optional fuel tab, the label (600) with a faint note, the figure right (17px 650). A row that links hovers with a fill-quiet ground across the row.
+
+### Today's prices
+A white leaf per fuel (or register rows on the dashboard): the fuel tab and name in ink-secondary, the price as a figure (28px) with its unit small and faint, the subscriber price as a note.
 
 ### Inputs / Fields
-- **Style:** floating-label fields, 56px tall, well background, night-rule border, 10px radius, Inter 17px; the label shrinks to 0.705 scale on focus or fill.
-- **Focus:** border goes to text colour plus a 2px brand-yellow ring.
-- **Error:** bad-text message with a short shake. Read-only fields sit on the well in dim text.
-- **Choice tiles** (segment fields): 56px tiles with a field-edge border; selected adds a 1px inset porcelain frame over the soft accent fill.
+- **Style:** white, 1px field-edge, 8px corners, 44px tall, 17px text.
+- **Focus:** blue edge plus a soft 3px blue halo.
+- **Segments:** option tiles (56px tall, field-edge outline); the selected one takes a blue edge, a blue tint and blue ink; a fuel option carries its tab.
+
+### Chips / Badges
+Rounded squares of the well tone (6px), 13px 600, with a 7px status dot (good, warning, serious, critical, blue for info). Alert icons are tinted squares of their status colour, never loud fills.
 
 ### Navigation
-- **Side rail:** well background, station name in condensed uppercase 27px beside the yellow drop, 44px items with 20px stroke icons in dim text; hover raises to the faintest fill, active is the raised colour with porcelain text at 600 and the icon lit brand yellow. The account sits at the foot above a hairline.
-- **Phone:** top bar with the page name in condensed uppercase 24px; bottom tab bar with 23px icons and 11px 600 labels in faint text, active in porcelain with a brand-yellow icon nudged up 1px.
+The rail: 15px labels in ink-secondary with line icons; hover fill-quiet; the active item a blue-soft ground, blue-ink 600 label and blue icon. Phones: top bar title 17px 650, bottom tabs with the active tab in blue.
 
-### Badges
-Small 6px-radius chips on the raised fill, 13px 600 text, led by a 7px status dot (good, warning, serious, critical, info).
+### Tank gauge
+The tank's name with its fuel tab, the percentage as a figure, an 8px level bar in the fuel's colour on the track, the alert threshold as a dark tick on the track, litres and a status badge below.
 
-### Price Totem (signature)
-One field per fuel, auto-fit at 220px minimum (two columns on phones), 168px tall, filled with the product colour, black text: the uppercase name at the top, the 84px price with its "$/L" unit at the foot, and a solid 14px 600 "Abonnés …" line when the subscriber price differs. On each arrival the fields fill from the bottom like a tank (0.9s, staggered 80ms), the prices count up, and one white sheen crosses them once.
+### Shift line
+Stops as rounded squares along a rule; done stops and the rule in blue, the current stop a blue ring that glows twice, labels 13px in ink.
 
-### Shift Line (signature)
-A four-stop line ("Ouverture", "Ventes", "Clôture", "Validation"): 20px round stops on a 4px track, done segments and stops filled brand yellow, the current stop a thick yellow ring that glows twice, labels in condensed uppercase 17px (faint, dim when done, porcelain when current). The track draws in left to right on arrival.
-
-### Figure Band and Board
-KPIs in one ruled band: 13px 600 label, 46px condensed figure (60px for the first), 13px faint sub-line. The dashboard board puts the chart, alerts and two linked facts (15px label, 44px figure, hover raised) on one ruled surface. Revenue bars are porcelain with 6px top corners; hovering dims the others to 0.4.
-
-### Sheets and Drawers
-Forms open as a 500px drawer from the right on wide screens (20px radius on the left edge, hairline on its inner edge, float shadow) and as a bottom sheet with a grabber on phones. The body scrolls and the footer stays pinned behind a hairline.
-
-### Sign-in
-A split screen: the HyperFrames brand film (`mtg-totem` webm/mp4 over a 1440px poster, fading in when playing) fills the left 1.05fr, the form sits on the right in a 420px column under a 64px condensed heading. On phones the film becomes a 40dvh band above the form.
-
-### Motion
-Arrivals only: the page fades up 20px (0.7s, staggered 60ms), bands and boards arrive as one piece, figures count up over 750ms (ease-out quartic, at most 12 per screen), tank meters grow and take one sheen, and route changes push, pop or fade with View Transitions (0.45s). The default ease is `cubic-bezier(0.22, 1, 0.36, 1)`. Under `prefers-reduced-motion`, everything settles instantly and figures are not counted.
+### Sign-in brand page
+A white leaf beside the form: the MTG monogram large, the station's name under a double rule. On phones it stacks above the form, ruled off by a hairline.
 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** give each fuel its colour field and keep the text on it night-ground black and solid.
-- **Do** build related panels as one ruled board: 1px hairline gaps, a 14px outer radius, square inner cells.
-- **Do** set names and glanced-at figures in Barlow Condensed with tabular numerals, and everything read in Inter.
-- **Do** keep one porcelain (day: ink) slab button per region; secondary actions are outlined.
-- **Do** define every new colour twice, in `:root` and `:root[data-theme='light']`, with the same role.
-- **Do** keep focus visible as the 2px brand-yellow ring.
+- **Do** close every total on a 3px double ink rule, label left, figure right, bold.
+- **Do** set every figure in Inter, tabular, right-aligned; glanced figures share the 28px figure scale.
+- **Do** keep one blue slab per region; every other button is a white leaf with an ink edge.
+- **Do** show a fuel as its 10px ink tab beside its name, through `productColor(id)` / the fuel tokens.
+- **Do** keep panels flat: white leaf, 1px hairline, 10px corners; shadows only on sheets, dialogs and toasts.
+- **Do** keep both themes in step: a new detail follows its siblings in the light and the night theme.
+- **Do** give grouped buttons equal width and centre them on mobile.
+- **Do** write all UI text in French.
+- **Do** use icons only from the existing set; a new icon is a PNG found on pngegg.com, never drawn.
+- **Do** respect reduced-motion for every entrance, count-up and glow.
 
 ### Don't:
-- **Don't** use gasoil green or essence red for anything that is not that fuel (totals, revenue, success, buttons).
-- **Don't** spread the brand yellow beyond the drop, the active nav icon, the shift line and focus.
-- **Don't** float resting panels on drop shadows or return to separate apple.com-style tiles and a centred top nav.
-- **Don't** put white or translucent text on a fuel field.
-- **Don't** set sentences, form labels or buttons in Barlow Condensed.
+- **Don't** add explanatory text outside Réglages: no form intro, field hint, descriptive subtitle or explanation sentence in a confirmation; only data, statuses, empty states and error messages.
+- **Don't** use red for anything but what is owed, gaps, destructive actions and critical status.
+- **Don't** bring back the totem: no black default ground, no coloured fuel fields, no lit coloured card headers, no condensed display face.
+- **Don't** use circles or pills; every shape is a rounded rectangle.
+- **Don't** use a cream or warm ground; the paper is cool.
+- **Don't** put a small uppercase label above a page or card title; the uppercase group label only heads a group of lines.
+- **Don't** label a figure twice.
+- **Don't** add shadows to panels, rows or buttons at rest.

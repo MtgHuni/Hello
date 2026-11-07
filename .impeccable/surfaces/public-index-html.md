@@ -13,7 +13,7 @@ Mode: Operate. Replacement world "Registre", chosen 2026-11-07 after the user fo
 
 THESIS: the app is the station's account book kept impeccably: every screen reads like a clean column of figures that adds up. It refuses the coloured-tile dashboard and the black totem it replaces.
 
-OWN-WORLD: cool register paper ground (no cream), white leaves ruled by one hairline, blue-black ink text, MTG blue for the primary action, links and money in, one red for what is owed and for gaps only, fuel as small ink-coloured tabs (gasoil green, essence amber). One family, Inter, figures tabular and right-aligned. Flat, no shadows at rest, 8px corners.
+OWN-WORLD: cool register paper ground (no cream), white leaves ruled by one hairline, blue-black ink text, MTG blue for the primary action, links and money in, one red for what is owed and for gaps only, fuel as small ink-coloured tabs (gasoil green, essence amber). One family, Inter, figures tabular and right-aligned. Flat, no shadows at rest, rounded rectangles: 8px for controls, 10px for panels.
 
 STORY: everyone sees today's prices and where the shift stands; the attendant records a credit in a few taps; the manager reads what the station is worth and who still owes as one addition.
 
