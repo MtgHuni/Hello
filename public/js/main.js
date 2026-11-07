@@ -1,6 +1,6 @@
 import { flags } from './ui.js';
 import { api, net, pending, setUser, forgetCache, isFlushing } from './api.js';
-import { h, errorState, toast, formDialog, actionSheet, openDialog, spinner, initials, applyTheme, toggleTheme, themeButton, noticeDialog } from './ui.js';
+import { h, errorState, toast, formDialog, actionSheet, openDialog, spinner, initials, applyTheme, toggleTheme, themeButton, THEME_KEY, noticeDialog } from './ui.js';
 import { icon, brandMark } from './icons.js';
 import { enhance } from './motion.js';
 import { renderLogin, renderSetup, renderForgot, renderReset } from './views/auth.js';
@@ -136,7 +136,7 @@ async function changePassword() {
 
 // Mode nuit (par défaut) ou mode jour pour la pompe en plein soleil ; mémorisé sur l'appareil.
 try {
-  applyTheme(localStorage.getItem('theme'));
+  applyTheme(localStorage.getItem(THEME_KEY));
 } catch {
   /* stockage indisponible : mode nuit */
 }
@@ -159,7 +159,7 @@ async function myMails() {
 
 function accountMenu() {
   const actions = [
-    { label: document.documentElement.dataset.theme === 'light' ? 'Passer en mode nuit' : 'Passer en mode jour (plein soleil)', onClick: toggleTheme },
+    { label: document.documentElement.dataset.theme === 'dark' ? 'Passer en mode clair' : 'Passer en mode nuit', onClick: toggleTheme },
     { label: 'Mes mails', onClick: myMails },
     { label: 'Changer le mot de passe', onClick: changePassword },
   ];

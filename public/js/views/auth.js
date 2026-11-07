@@ -3,28 +3,9 @@ import { api } from '../api.js';
 import { h, field, readForm, setContent } from '../ui.js';
 import { brandMark } from '../icons.js';
 
-// Le film de la marque (rendu avec HyperFrames) : en boucle, sans son ;
-// image fixe si l'appareil demande moins d'animations ou si la vidéo ne se charge pas.
-function filmPanel() {
-  const still = matchMedia('(prefers-reduced-motion: reduce)').matches || navigator.connection?.saveData;
-  if (still) return h('div', { class: 'auth-film' });
-  const video = h(
-    'video',
-    { class: 'auth-video', muted: true, playsinline: true, loop: true, preload: 'auto', poster: '/media/mtg-totem-poster.jpg?v=mtg', 'aria-hidden': 'true', tabindex: '-1' },
-    h('source', { src: '/media/mtg-totem.webm?v=mtg', type: 'video/webm' }),
-    h('source', { src: '/media/mtg-totem.mp4?v=mtg', type: 'video/mp4' }),
-  );
-  video.muted = true;
-  // The poster is the panel's background: the video only fades in once it really plays,
-  // so a blocked autoplay never leaves a black first frame on screen.
-  video.addEventListener('playing', () => video.classList.add('is-playing'));
-  video.addEventListener('pause', () => video.classList.remove('is-playing'));
-  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    video.autoplay = true;
-    // Ask again once data is there: a play() before the panel is in the page can be dropped.
-    video.addEventListener('canplay', () => video.play?.().catch(() => {}), { once: true });
-  }
-  return h('div', { class: 'auth-film' }, video);
+// The brand page beside the form: the MTG monogram on a white leaf, closed by a double rule.
+function brandPanel() {
+  return h('div', { class: 'auth-brand', 'aria-hidden': 'true' }, h('div', { class: 'auth-brand-inner' }, brandMark(), h('div', { class: 'auth-brand-name' }, flags.station || 'MTG Station')));
 }
 
 function authForm({ title, lead, fields, submitLabel, onSubmit, wide, footer, below }) {
@@ -53,7 +34,7 @@ function authForm({ title, lead, fields, submitLabel, onSubmit, wide, footer, be
   return authFrame(h('div', { class: `auth-card ${wide ? 'wide' : ''}` }, brandMark(), h('h1', {}, title), h('p', { class: 'lead' }, lead), form, footer ? h('p', { class: 'auth-footer' }, footer) : null));
 }
 
-const authFrame = (card) => h('div', { class: 'auth' }, filmPanel(), h('div', { class: 'auth-pane' }, card));
+const authFrame = (card) => h('div', { class: 'auth' }, brandPanel(), h('div', { class: 'auth-pane' }, card));
 
 // A screen with a message and one way on (link sent, link expired).
 function authMessage({ title, lead, action }) {

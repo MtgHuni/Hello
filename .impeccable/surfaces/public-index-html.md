@@ -7,20 +7,20 @@ related_targets: []
 
 # Surface: application shell (all screens: gérant, pompiste, client)
 
-Mode: Operate. Replacement world "Totem de nuit", rebuilt 2026-10-04 after the user rejected "Midnight Line" as a recolour of the apple.com layout ("change tout"). User pins: luxe sombre et premium; gasoil = vert, essence = rouge; design through the impeccable skill.
+Mode: Operate. Replacement world "Registre", chosen 2026-11-07 after the user found "Totem de nuit" too busy and not premium enough. User pins: clair et net; only the MTG logo (monogram and its blue) must stay; design through the impeccable skill. Code-led (no image generation on this machine).
 
 ## Direction contract
 
-THESIS: the app is the station's price totem at night: black ground, figures in condensed bold, one colour field per fuel. It refuses the apple.com tile grid and the centred top-nav it replaced.
+THESIS: the app is the station's account book kept impeccably: every screen reads like a clean column of figures that adds up. It refuses the coloured-tile dashboard and the black totem it replaces.
 
-OWN-WORLD: ground #0a0a0b, panels #141416 ruled by a 1px porcelain hairline (no resting shadow), porcelain text #f5f4ef, gasoil field #23c46b, essence field #f0313a, both with black text, brand yellow #ffc414 for the drop, the active nav icon and the shift line, white rectangular action slabs (10px radius). Barlow Condensed for names and figures, Inter for reading. Day mode with the same roles for full sun.
+OWN-WORLD: cool register paper ground (no cream), white leaves ruled by one hairline, blue-black ink text, MTG blue for the primary action, links and money in, one red for what is owed and for gaps only, fuel as small ink-coloured tabs (gasoil green, essence amber). One family, Inter, figures tabular and right-aligned. Flat, no shadows at rest, 8px corners.
 
-STORY: everyone sees today's prices first; the attendant knows where the shift stands and records a sale in a few taps; the manager reads sales, credit and stock on one ruled board.
+STORY: everyone sees today's prices and where the shift stands; the attendant records a credit in a few taps; the manager reads what the station is worth and who still owes as one addition.
 
-FIRST VIEWPORT: wide screens: 252px side rail (brand, icon nav, account at the foot), condensed 64px headline ruled off from content, the price totem (one colour field per fuel, 84px price), then one ruled band of figures. Phones: top bar with the page name, the same totem in two columns, bottom tab bar (four tabs + Plus).
+FIRST VIEWPORT: wide screens: a quiet paper rail (brand, nav, account), a page title with its date, then the "Valeur de la station" as an addition column ending on a double rule, beside today's prices and alerts. Phones: top bar, the same column, bottom tabs.
 
-SIGNATURE: the price totem: fields fill from the bottom like a tank, prices count up, one sheen crosses them. Also the four-stop shift line, forms as drawers from the right, and the HyperFrames brand film on the split sign-in screen.
+SIGNATURE: the addition column: signed lines, a double rule, the total; used for the station value, the closing, the shift report and a customer balance. Raises: same scale and baseline for every figure band (botanical folio); nothing labelled twice (catalog sleeve); destructive actions set apart (console).
 
-FORM: user-pinned dark luxury fused with the station price totem (forecourt pylon), roll seed 083e3a8b superseded by the pin.
+FORM: the station's credit register, candidate 1 of 7 (IMPECCABLE'S PICK, chosen over the assigned signage direction), seed 1f52e4a7.
 
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
