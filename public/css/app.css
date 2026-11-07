@@ -1699,3 +1699,36 @@ table th { background: var(--surface-2); color: var(--text-2); font-size: 12px; 
 
 /* The sun stays quiet while the light mode is on (the default) */
 .theme-btn[aria-pressed='true'] svg { background: var(--fill-3); color: var(--text); }
+
+/* ---------- The register (dashboard): the value as one addition, beside prices and money ---------- */
+.register { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.register .form-section { margin: 18px 0 2px; }
+.register .card-header + .form-section { margin-top: 0; }
+.value-col .summary-line.total { font-size: 28px; font-weight: 650; letter-spacing: -0.03em; align-items: baseline; }
+.value-col .summary-line.total span:first-child { font-size: 16px; font-weight: 700; letter-spacing: -0.011em; }
+.reg-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 11px 0; color: var(--text); border-bottom: 1px solid var(--hairline); }
+.reg-row:last-child { border-bottom: none; }
+a.reg-row:hover { text-decoration: none; background: var(--fill-4); margin: 0 -12px; padding-left: 12px; padding-right: 12px; border-radius: var(--radius-sm); }
+.reg-label { display: flex; align-items: center; gap: 10px; min-width: 0; font-weight: 600; }
+.reg-label > span { display: flex; flex-direction: column; min-width: 0; }
+.reg-label small { color: var(--text-3); font-size: 13px; font-weight: 500; }
+.reg-label .swatch, .tank-name .swatch, .seg-option .swatch { width: 10px; height: 10px; margin: 0; border-radius: 3px; flex: none; }
+.reg-value { font-size: 17px; font-weight: 650; letter-spacing: -0.02em; white-space: nowrap; }
+.page-slot.entering .register { animation: fade-up 0.6s var(--ease) both 0.08s; }
+@media (max-width: 833px) { .register { grid-template-columns: minmax(0, 1fr); } }
+
+/* One figure scale for every glanced figure (prices, figures, tanks, counts) */
+.totem-price, .kpi .value, .grid:not(.kpi-row) > .kpi.card:first-child .value, .tank-pct, .fact-value { font-size: 28px; font-weight: 650; letter-spacing: -0.03em; line-height: 1.05; }
+@media (max-width: 420px) { .totem-price { font-size: 28px; } }
+
+/* A tank's name carries its fuel's tab; the alert threshold is a tick on the track */
+.tank-name { display: flex; align-items: center; gap: 8px; }
+.meter-mark { background: color-mix(in srgb, var(--text) 55%, transparent); }
+.seg-option span { gap: 8px; }
+
+/* Add a tank: a dashed leaf with the drawn plus */
+.add-tile { display: flex; align-items: center; justify-content: center; gap: 8px; border: 1px dashed var(--field-border); cursor: pointer; font: inherit; color: var(--link); font-weight: 600; background: var(--surface); }
+.add-tile svg { width: 18px; height: 18px; }
+.add-tile:hover { background: var(--fill-4); }
+/* The line just above a total gives way to the double rule */
+.summary-line:has(+ .summary-line.total) { border-bottom: none; }

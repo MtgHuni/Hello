@@ -1,6 +1,6 @@
 import { flags, edit } from '../ui.js';
 import { api } from '../api.js';
-import { h, fmt, kpi, cardHeader, tankGauge, pageHeader, button, setContent, priceTotem, formDialog, toast, field, busy, openDialog } from '../ui.js';
+import { h, fmt, cardHeader, tankGauge, pageHeader, button, setContent, formDialog, toast, field, busy, productColor } from '../ui.js';
 import { icon } from '../icons.js';
 
 const ALERT_ICON = { critical: 'alert', serious: 'alert', warning: 'info' };
@@ -18,21 +18,23 @@ export async function renderDashboard(page, { state, navigate }) {
       edit(button('Nouvelle livraison', () => navigate('cuves'), { variant: 'secondary', iconName: 'truck' })),
     ),
 
-    priceTotem(products.filter((p) => p.active).map((p) => ({ id: p.id, name: p.name, price: p.price, subscriberPrice: p.subscriber_price }))),
-
+    // The register: what the station is worth as one addition, beside today's prices and its money.
     h(
       'div',
-      { class: 'grid grid-4' },
-      valueKpi(d.value, flags.combos),
-      shiftKpi(d.openShifts[0]),
+      { class: 'register' },
+      valueColumn(d.value, flags.combos),
       h(
-        'a',
-        { class: 'card kpi kpi-link', href: '#/caisse' },
-        h('div', { class: 'label' }, 'Caisse'),
-        h('div', { class: 'value' }, fmt.money(d.cash.cash.balance)),
-        h('div', { class: 'sub' }, `Mobile money ${fmt.money(d.cash.momo.balance)}${d.supplierDebt ? ` · fournisseurs ${fmt.money(d.supplierDebt)}` : ''}`),
+        'section',
+        { class: 'card register-side' },
+        cardHeader('Prix du jour'),
+        products
+          .filter((p) => p.active)
+          .map((p) => regRow({ tab: productColor(p.id), label: p.name, sub: p.subscriber_price != null && Number(p.subscriber_price) !== Number(p.price) ? `Abonnés ${fmt.price(p.subscriber_price)}` : null, value: fmt.price(p.price) })),
+        h('h3', { class: 'form-section' }, 'Argent'),
+        shiftRow(d.openShifts[0]),
+        regRow({ label: 'Caisse', sub: `Mobile money ${fmt.money(d.cash.momo.balance)}`, value: fmt.money(d.cash.cash.balance), lost: d.cash.cash.balance < 0, href: '#/caisse' }),
+        regRow({ label: 'Encours clients', sub: d.receivablesOld ? `${fmt.money(d.receivablesOld)} à plus de 30 jours` : null, value: fmt.money(d.receivables), href: '#/clients/creances' }),
       ),
-      h('a', { class: 'card kpi kpi-link', href: '#/clients/creances' }, h('div', { class: 'label' }, 'Encours clients'), h('div', { class: 'value' }, fmt.money(d.receivables)), h('div', { class: 'sub' }, d.receivablesOld ? `${fmt.money(d.receivablesOld)} à plus de 30 jours` : 'Rien à plus de 30 jours')),
     ),
 
     asked ? askCard(asked) : null,
@@ -60,7 +62,7 @@ export async function renderDashboard(page, { state, navigate }) {
       ),
       facts([
         flags.combos ? ['Combos des clients', fmt.number(d.combos.total), `Valeur ${fmt.money(d.combos.value)} en carburant · ${d.combos.redeemable} client${d.combos.redeemable > 1 ? 's peuvent' : ' peut'} échanger`, '#/clients'] : null,
-        ['Fiches clients à compléter', String(d.toReview), d.toReview ? 'Créées à la pompe avec le nom seulement' : 'Toutes les fiches sont complètes', '#/clients'],
+        ['Fiches clients à compléter', String(d.toReview), null, '#/clients'],
       ]),
     ),
   );
@@ -112,7 +114,7 @@ function facts(rows) {
     h(
       'a',
       { class: `card fact${list.length === 1 ? ' board-wide' : ''}`, href },
-      h('span', { class: 'fact-text' }, h('span', { class: 'fact-label' }, label), h('span', { class: 'fact-sub' }, sub)),
+      h('span', { class: 'fact-text' }, h('span', { class: 'fact-label' }, label), sub ? h('span', { class: 'fact-sub' }, sub) : null),
       h('span', { class: 'fact-value' }, value),
     ),
   );
@@ -121,61 +123,49 @@ function facts(rows) {
 // The station runs one shift at a time: who holds it, since when, or that none is open.
 // What the station is worth now (its money, credits and fuel at purchase cost, less what it owes);
 // touched, every line.
-function valueKpi(v, combos) {
-  const a = v.assets;
-  const money = a.cash + a.momo + a.shift + a.uncounted;
-  const debts = Object.values(v.debts).reduce((t, x) => t + x, 0);
-  const open = () => valueDetail(v, combos);
+// One line of the register: a fuel's tab or nothing, the label (and a note), the figure on the right.
+function regRow({ tab, label, sub, value, lost = false, href }) {
   return h(
-    'div',
-    { class: 'card kpi kpi-link', role: 'button', tabIndex: 0, onclick: open, onkeydown: (e) => e.key === 'Enter' && open() },
-    h('div', { class: 'label' }, 'Valeur de la station'),
-    h('div', { class: 'value' }, fmt.money(v.net)),
-    h('div', { class: 'sub' }, `Argent ${fmt.money(money)} · crédits ${fmt.money(a.receivables)} · carburant ${fmt.money(a.fuel)} · dettes ${fmt.money(-debts)}`),
+    href ? 'a' : 'div',
+    { class: 'reg-row', href },
+    h('span', { class: 'reg-label' }, tab ? h('i', { class: 'swatch', style: `background:${tab}` }) : null, h('span', {}, label, sub ? h('small', {}, sub) : null)),
+    h('span', { class: `reg-value num${lost ? ' variance-neg' : ''}` }, value),
   );
 }
 
-function valueDetail(v, combos) {
+// The shift open now: who holds it and its credits so far.
+function shiftRow(s) {
+  if (!s) return regRow({ label: 'Poste en cours', value: 'Aucun', href: '#/postes' });
+  return regRow({ label: 'Poste en cours', sub: `N°${s.id} · crédits ${fmt.money(s.credit_so_far)}`, value: s.station_closed_at ? 'Station fermée' : s.on_duty || 'Personne', href: `#/postes/${s.id}/etat` });
+}
+
+// What the station is worth now, as one addition: its money, credits and fuel at purchase cost,
+// less what it owes, closed on a double rule.
+function valueColumn(v, combos) {
   const line = (label, value, { total = false, lost = false } = {}) =>
     h('div', { class: `summary-line${total ? ' total' : ''}` }, h('span', {}, label), h('span', { class: `num${lost ? ' variance-neg' : ''}` }, value));
+  const own = (label, n) => line(label, fmt.money(n), { lost: n < 0 });
   const a = v.assets;
   const d = v.debts;
-  openDialog((close) =>
-    h(
-      'div',
-      { class: 'sheet dialog-body' },
-      h('h2', {}, 'Valeur de la station'),
-      h('h3', { class: 'form-section' }, 'Ce qu’elle possède'),
-      line('Espèces (caisse)', fmt.money(a.cash)),
-      line('Mobile money', fmt.money(a.momo)),
-      line('Argent du poste en cours', fmt.money(a.shift)),
-      Math.abs(a.uncounted) >= 0.005 ? line('Argent à compter', fmt.money(a.uncounted)) : null,
-      line('Crédits clients', fmt.money(a.receivables)),
-      v.tanks.map((t) =>
-        line(
-          `${t.name} · ${fmt.liters(t.liters)}${t.cost == null ? '' : ` × ${fmt.price(t.cost)}`}`,
-          t.value == null ? 'prix d’achat manquant' : fmt.money(t.value),
-          { lost: t.value == null },
-        ),
-      ),
-      h('h3', { class: 'form-section' }, 'Ce qu’elle doit'),
-      line('Fournisseurs', fmt.money(-d.suppliers)),
-      line('Salaires à payer', fmt.money(-d.salaries)),
-      line('Avances des clients', fmt.money(-d.advances)),
-      combos ? line('Combos des clients', fmt.money(-d.combos)) : null,
-      line('Valeur nette', fmt.money(v.net), { total: true, lost: v.net < 0 }),
-      h('div', { class: 'dialog-actions' }, button('Fermer', close, { variant: 'cancel' })),
-    ),
-  );
-}
-
-function shiftKpi(s) {
   return h(
-    'a',
-    { class: 'card kpi kpi-link', href: s ? `#/postes/${s.id}/etat` : '#/postes' },
-    h('div', { class: 'label' }, 'Poste en cours'),
-    h('div', { class: 'value sm' }, !s ? 'Aucun' : s.station_closed_at ? 'Station fermée' : s.on_duty || 'Personne'),
-    h('div', { class: 'sub' }, s ? `Poste n°${s.id} depuis le ${fmt.dateTime(s.opened_at)} · crédits ${fmt.money(s.credit_so_far)}` : 'Aucun poste ouvert'),
+    'section',
+    { class: 'card value-col' },
+    cardHeader('Valeur de la station'),
+    h('h3', { class: 'form-section' }, 'Ce qu’elle possède'),
+    own('Espèces (caisse)', a.cash),
+    own('Mobile money', a.momo),
+    own('Argent du poste en cours', a.shift),
+    Math.abs(a.uncounted) >= 0.005 ? own('Argent à compter', a.uncounted) : null,
+    own('Crédits clients', a.receivables),
+    v.tanks.map((t) =>
+      line(`${t.name} · ${fmt.liters(t.liters)}${t.cost == null ? '' : ` × ${fmt.price(t.cost)}`}`, t.value == null ? 'prix d’achat manquant' : fmt.money(t.value), { lost: t.value == null }),
+    ),
+    h('h3', { class: 'form-section' }, 'Ce qu’elle doit'),
+    line('Fournisseurs', fmt.money(-d.suppliers)),
+    line('Salaires à payer', fmt.money(-d.salaries)),
+    line('Avances des clients', fmt.money(-d.advances)),
+    combos ? line('Combos des clients', fmt.money(-d.combos)) : null,
+    line('Valeur nette', fmt.money(v.net), { total: true, lost: v.net < 0 }),
   );
 }
 

@@ -42,8 +42,9 @@ export async function renderTanks(page, ctx) {
       ),
       edit(h(
         'button',
-        { class: 'card empty no-print', style: 'border:1px dashed var(--field-border);cursor:pointer;font:inherit;color:var(--accent)', onClick: () => tankDialog(products, null, reload) },
-        '+ Ajouter une cuve',
+        { class: 'card empty no-print add-tile', onClick: () => tankDialog(products, null, reload) },
+        icon('plus'),
+        'Ajouter une cuve',
       )),
     ),
     suppliersCard(sup, reload),

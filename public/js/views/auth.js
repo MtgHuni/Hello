@@ -31,7 +31,7 @@ function authForm({ title, lead, fields, submitLabel, onSubmit, wide, footer, be
       submit.disabled = false;
     }
   });
-  return authFrame(h('div', { class: `auth-card ${wide ? 'wide' : ''}` }, brandMark(), h('h1', {}, title), h('p', { class: 'lead' }, lead), form, footer ? h('p', { class: 'auth-footer' }, footer) : null));
+  return authFrame(h('div', { class: `auth-card ${wide ? 'wide' : ''}` }, brandMark(), h('h1', {}, title), lead ? h('p', { class: 'lead' }, lead) : null, form, footer ? h('p', { class: 'auth-footer' }, footer) : null));
 }
 
 const authFrame = (card) => h('div', { class: 'auth' }, brandPanel(), h('div', { class: 'auth-pane' }, card));
@@ -115,7 +115,6 @@ export function renderLogin(root, stationName, onDone) {
   setContent(root, 
     authForm({
       title: 'Connexion',
-      lead: `Accédez à ${stationName}.`,
       submitLabel: 'Se connecter',
       fields: [
         { name: 'login', label: 'Identifiant ou téléphone', required: true, autocomplete: 'username' },

@@ -46,8 +46,8 @@ export const canAdmin = () => !flags.readonly && flags.admin;
 export const adminEdit = (node) => (canAdmin() ? node : null);
 
 export const fmt = {
-  money: (n) => moneyFmt.format(Number(n) || 0),
-  signedMoney: (n) => (n > 0 ? '+' : '') + moneyFmt.format(Number(n) || 0),
+  money: (n) => moneyFmt.format(Number(n) || 0).replace(/^-/, '−'), // the true minus, set tight
+  signedMoney: (n) => (n > 0 ? '+' : '') + moneyFmt.format(Number(n) || 0).replace(/^-/, '−'),
   liters: (n) => `${numFmt.format(Number(n) || 0)} L`,
   number: (n) => numFmt.format(Number(n) || 0),
   price: (n) => `${priceFmt.format(Number(n) || 0)} $/L`,
@@ -391,7 +391,7 @@ export function tankGauge(tank) {
     h(
       'div',
       { class: 'tank-head' },
-      h('div', {}, h('h3', {}, tank.name), h('div', { class: 'muted small' }, h('span', { class: 'swatch', style: `background:${productColor(tank.product_id)}` }), tank.product_name)),
+      h('h3', { class: 'tank-name' }, h('span', { class: 'swatch', style: `background:${productColor(tank.product_id)}`, title: tank.product_name }), tank.name),
       h('div', { class: 'tank-pct' }, `${Math.round(pct)} %`),
     ),
     h(
@@ -534,8 +534,9 @@ export function field(f) {
       h(
         'div',
         { class: 'seg-options' },
-        f.options.map(([v, l]) =>
-          h('label', { class: 'seg-option' }, h('input', { type: 'radio', name: f.name, value: String(v), checked: String(v) === current, onChange: f.onInput }), h('span', {}, l)),
+        // A third value is the option's colour (a fuel's tab).
+        f.options.map(([v, l, color]) =>
+          h('label', { class: 'seg-option' }, h('input', { type: 'radio', name: f.name, value: String(v), checked: String(v) === current, onChange: f.onInput }), h('span', {}, color ? h('i', { class: 'swatch', style: `background:${color}` }) : null, l)),
         ),
       ),
     );
