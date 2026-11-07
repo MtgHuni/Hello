@@ -2,8 +2,9 @@ const { round } = require('./util');
 const { getSettings } = require('./db');
 
 // What a customer owes (SQL, for a customer id column): credit sales and debts from
-// before the app, minus payments.
-const balanceSql = (id) => `(SELECT COALESCE(SUM(amount), 0) FROM sales WHERE customer_id = ${id} AND kind = 'credit') +
+// before the app, minus payments. What a customer « Interne » takes is never owed.
+const balanceSql = (id) => `(SELECT COALESCE(SUM(amount), 0) FROM sales WHERE customer_id = ${id} AND kind = 'credit'
+    AND NOT (SELECT internal FROM customers WHERE id = ${id})) +
   (SELECT COALESCE(SUM(amount), 0) FROM old_debts WHERE customer_id = ${id}) -
   (SELECT COALESCE(SUM(amount), 0) FROM payments WHERE customer_id = ${id})`;
 
@@ -17,9 +18,9 @@ function creditAllocation(db, customerId) {
   const sales = db
     .prepare(
       `SELECT id, amount, points, points_due, date(created_at, 'localtime') AS day, 0 AS old
-       FROM sales WHERE customer_id = ? AND kind = 'credit' ORDER BY created_at, id`,
+       FROM sales WHERE customer_id = ? AND kind = 'credit' AND NOT (SELECT internal FROM customers WHERE id = ?) ORDER BY created_at, id`,
     )
-    .all(customerId);
+    .all(customerId, customerId);
   const credits = [...oldDebts, ...sales];
   return credits.map((c) => {
     const paid = Math.min(remaining, c.amount);

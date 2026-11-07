@@ -7,7 +7,8 @@ import { photoButton, photosOn } from '../photo.js';
 let typeFilter = 'all';
 let search = '';
 
-const TYPE_LABEL = { account: 'Abonné', individual: 'Particulier' };
+const TYPE_LABEL = { account: 'Abonné', individual: 'Particulier', internal: 'Interne' };
+const typeOf = (c) => (c.internal ? 'internal' : c.type);
 // Names compared as the server does: without case, accents nor extra spaces.
 const nameKey = (s) => String(s || '').normalize('NFD').replace(/\p{M}/gu, '').replace(/\s+/g, ' ').trim().toLowerCase();
 
@@ -23,7 +24,7 @@ export async function renderCustomers(page, ctx) {
     const q = search.trim().toLowerCase();
     const rows = customers.filter(
       (c) =>
-        (typeFilter === 'all' || (typeFilter === 'review' ? c.needs_review && c.active : c.type === typeFilter)) &&
+        (typeFilter === 'all' || (typeFilter === 'review' ? c.needs_review && c.active : typeOf(c) === typeFilter)) &&
         (!q || [c.name, c.phone, c.plate, c.email].some((v) => v?.toLowerCase().includes(q))),
     );
     setContent(listHost, 
@@ -32,7 +33,7 @@ export async function renderCustomers(page, ctx) {
           { label: 'Client', render: (c) => h('div', {}, h('div', { style: 'font-weight:600' }, c.name), h('div', { class: 'muted small' }, [c.phone, c.plate].filter(Boolean).join(' · ') || '—')) },
           {
             label: 'Type',
-            render: (c) => (namesake(c) ? badge('Même nom', 'warning') : !c.active ? badge('Désactivé') : c.needs_review ? badge('À compléter', 'warning') : TYPE_LABEL[c.type]),
+            render: (c) => (namesake(c) ? badge('Même nom', 'warning') : !c.active ? badge('Désactivé') : c.needs_review ? badge('À compléter', 'warning') : TYPE_LABEL[typeOf(c)]),
           },
           { label: 'Solde dû', align: 'right', render: (c) => (c.balance < 0 ? `Avance ${fmt.money(-c.balance)}` : c.balance ? fmt.money(c.balance) : '—') },
           ...(flags.combos ? [{ label: 'Combos', align: 'right', render: (c) => fmt.number(c.loyalty_points) }] : []),
@@ -83,6 +84,7 @@ export async function renderCustomers(page, ctx) {
             ['all', 'Tous'],
             ['account', 'Abonnés'],
             ['individual', 'Particuliers'],
+            ...(customers.some((c) => c.internal) ? [['internal', 'Internes']] : []),
             ...(toReview ? [['review', `À compléter (${toReview})`]] : []),
           ],
           typeFilter,
@@ -161,10 +163,11 @@ async function customerDialog(customer, ctx, onDone) {
         name: 'type',
         label: 'Catégorie',
         type: 'segment',
-        value: customer?.type || 'individual',
+        value: customer ? typeOf(customer) : 'individual',
         options: [
           ['individual', 'Particulier'],
           ['account', 'Abonné'],
+          ['internal', 'Interne'],
         ],
         full: true,
         onInput: (e) => {
@@ -279,9 +282,10 @@ export async function renderCustomerDetail(page, ctx) {
       h('a', { class: 'back no-print', href: '#/clients' }, icon('back'), 'Clients'),
       pageHeader(
         c.name,
-        [TYPE_LABEL[c.type], c.type === 'account' && c.payment_day ? `paie avant le ${c.payment_day} du mois` : null, c.phone, c.email, c.plate].filter(Boolean).join(' · '),
-        edit(button('Règlement', () => paymentDialog(c, reload), { iconName: 'card' })),
-        edit(button('Ancienne dette', () => oldDebtDialog(c, reload), { variant: 'secondary', iconName: 'plus' })),
+        [TYPE_LABEL[typeOf(c)], c.type === 'account' && c.payment_day ? `paie avant le ${c.payment_day} du mois` : null, c.phone, c.email, c.plate].filter(Boolean).join(' · '),
+        // A customer « Interne » never owes: no payment, no old debt.
+        c.internal ? null : edit(button('Règlement', () => paymentDialog(c, reload), { iconName: 'card' })),
+        c.internal ? null : edit(button('Ancienne dette', () => oldDebtDialog(c, reload), { variant: 'secondary', iconName: 'plus' })),
         edit(button('Modifier', () => customerDialog(c, ctx, reload), { variant: 'secondary', iconName: 'edit' })),
         edit(button(c.login ? 'Accès client' : 'Créer un accès', () => loginDialog(c, ctx, reload), { variant: 'secondary', iconName: 'user' })),
         edit(button('Supprimer', () => removeCustomer(c, ctx), { variant: 'secondary', iconName: 'trash' })),
@@ -402,7 +406,8 @@ export function statement(acc, period, onPeriod, { onOldDebt, clientSpace = fals
     h(
       'div',
       { class: `grid ${subscriber && flags.combos && !clientSpace ? 'grid-2' : ''}` },
-      kpi(
+      // A customer « Interne » owes nothing: what they took over the period.
+      c.internal ? kpi('Pris sur la période', fmt.money(acc.consumed || 0)) : kpi(
         c.balance < 0 ? 'Avance du client' : 'Solde dû',
         h('span', { class: c.type !== 'account' && c.balance > 0.001 ? 'variance-neg' : '' }, fmt.money(Math.abs(c.balance))),
         [

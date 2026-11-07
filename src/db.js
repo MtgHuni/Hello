@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS customers (
   plate          TEXT,
   credit_limit   REAL NOT NULL DEFAULT 0, -- copied from the settings of the customer's category
   loyalty_points INTEGER NOT NULL DEFAULT 0,
+  internal       INTEGER NOT NULL DEFAULT 0, -- « Interne » (version 35): takes fuel without paying, only counted
   active         INTEGER NOT NULL DEFAULT 1,
   created_at     TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -634,10 +635,13 @@ const MIGRATIONS = [
   ['expenses', 'pay_kind', 'TEXT'],
   // The agent who granted a credit, given by the admin (version 32); else the record of its login.
   ['sales', 'staff_id', 'INTEGER REFERENCES staff(id)'],
+  // A customer « Interne » (version 35, 2026-11-07): neither particulier nor abonné, takes fuel without
+  // paying; what they take is only counted (out of the shift's money, never a debt).
+  ['customers', 'internal', 'INTEGER NOT NULL DEFAULT 0'],
 ];
 
 // Bumped with every schema change; recorded in PRAGMA user_version.
-const SCHEMA_VERSION = 34;
+const SCHEMA_VERSION = 35;
 
 function missingColumns(db) {
   return MIGRATIONS.filter(([table, column]) => {
