@@ -2010,3 +2010,32 @@ a.tile:hover { text-decoration: none; background: linear-gradient(160deg, rgba(2
   .tabbar, .topbar { background: rgba(255, 255, 255, 0.72); -webkit-backdrop-filter: blur(30px) saturate(1.6); backdrop-filter: blur(30px) saturate(1.6); }
   :root[data-theme='dark'] :is(.tabbar, .topbar) { background: linear-gradient(rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.11)), rgba(18, 23, 33, 0.6); }
 }
+
+/* ---------- The attendant's shift in version 2.0 (2026-11-07) ---------- */
+/* The shift's figures: tiles two by two, also on a phone */
+.tiles.tiles-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 560px) {
+  .tiles.tiles-2 { gap: 10px; }
+  .tiles-2 .tile { padding: 13px 14px 14px; }
+  .tiles-2 .tile-head { font-size: 14px; }
+  .tiles-2 .tile-value { font-size: 25px; }
+  .tiles-2 .tile-value small { font-size: 13px; }
+}
+/* An operation row, touched, asks for its cancellation: no bin on every line */
+.op-row.tappable { cursor: pointer; margin: 0 -12px; padding-left: 12px; padding-right: 12px; border-radius: 0; transition: background 0.2s var(--ease); -webkit-tap-highlight-color: transparent; }
+.op-row.tappable:hover { background: rgba(255, 255, 255, 0.06); }
+.op-row.tappable:active { background: rgba(255, 255, 255, 0.12); }
+:root:not([data-theme='dark']) .op-row.tappable:hover { background: rgba(255, 255, 255, 0.4); }
+.op-row.tappable:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+/* A total closes on one fine line, not the old double rule */
+.summary-line.total, tfoot td { border-top: 1px solid var(--separator); }
+.summary-line.total { padding-top: 14px; font-weight: 800; }
+/* The shift line on glass: round stops on a thin track */
+.shift-line li::before { top: 9px; height: 2px; border-radius: 1px; background: var(--separator); }
+.shift-line .stop { width: 20px; height: 20px; border-radius: 50%; background: var(--glass-btn); box-shadow: var(--glass-rim); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+.shift-line .done .stop { background: var(--mtg-blue); box-shadow: none; }
+.shift-line .now .stop { background: var(--glass-btn); box-shadow: inset 0 0 0 5px var(--mtg-blue); }
+.shift-line .stop-label { font-family: var(--font); font-size: 13px; font-weight: 700; letter-spacing: 0; text-transform: none; }
+@keyframes stop-glow { 50% { box-shadow: inset 0 0 0 5px var(--mtg-blue), 0 0 0 6px color-mix(in srgb, var(--mtg-blue) 25%, transparent); } }
+.op-row.tappable:first-child { padding-top: 14px; margin-top: -14px; }
+:root:not([data-theme='dark']) .op-row.tappable:active { background: rgba(255, 255, 255, 0.6); }

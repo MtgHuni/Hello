@@ -311,6 +311,17 @@ export function kpi(label, value, sub, extra = {}) {
   return h('div', { class: 'card kpi' }, h('div', { class: 'label' }, label), h('div', { class: `value ${extra.small ? 'sm' : ''}` }, value), sub ? h('div', { class: 'sub' }, sub) : null);
 }
 
+// A glanced figure on glass, coloured by meaning (`c-blue`, `c-green`, `c-amber`, `c-red`, `c-gold`):
+// the manager's « Aujourd’hui » and the attendant's shift.
+export function tile({ color, ic, title, side, value, unit, sub, lost = false, chart, href, wide = false }) {
+  return h(
+    href ? 'a' : 'div',
+    { class: `tile ${color}${wide ? ' wide' : ''}`, href },
+    h('div', { class: 'tile-head' }, h('span', { class: 'tile-ic' }, icon(ic)), title, side ? h('small', {}, side) : null),
+    h('div', { class: 'tile-body' }, h('div', {}, h('span', { class: `tile-value${lost ? ' lost' : ''}` }, value, unit ? h('small', {}, unit) : null), sub ? h('p', { class: 'tile-sub' }, sub) : null), chart || null),
+  );
+}
+
 // `canClick(row)` limits `onRowClick` to some rows.
 export function table(columns, rows, { onRowClick, canClick = () => true, empty = 'Aucune donnée.', footer } = {}) {
   if (!rows.length) return h('div', { class: 'empty' }, empty);

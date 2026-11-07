@@ -230,10 +230,13 @@ Soft, continuous corners: controls and fields 12px, cards and tiles 20px, the ra
 A 56px glass squircle (18px corners, `blur(10px) saturate(1.6)`, the thin rim) holding the 24px glyph (stroke 1.9), the label beneath in 13px 700. The attendant's main one is MTG-blue glass. Pressed, it shrinks to 0.94. Four in a row.
 
 ### Hero (the station's value)
-A button of blue glass (24px corners): the monogram in white at the top right, the label, the value in 44px 800 (pink-white `#ffd2cf` when negative), a sub line. Touched, it opens the `valueDetail()` sheet with the addition column (`valueColumn()`), which still closes on a double rule.
+A button of blue glass (24px corners): the monogram in white at the top right, the label, the value in 44px 800 (pink-white `#ffd2cf` when negative), a sub line. Touched, it opens the `valueDetail()` sheet with the addition column (`valueColumn()`), which closes on one fine line (the old double rule is gone, 2026-11-07).
 
 ### Tiles
 Glass, 20px corners: a head with a 22px coloured icon square, the title in the tile's colour and a faint side note; the value (30px 800) with its unit and a sub line; on the right bars (7px, the last one full) or a ring filled to the tank's level. A tile that links brightens on hover; `.wide` spans both columns.
+
+### The attendant's shift
+The prices, the four glass squircles (Crédit in blue glass), Test de pompe, then the shift's figures as tiles two by two (25px figures on a phone), then « Opérations du poste »: rows without a bin, touched to ask for a cancellation; a badge only where the row differs from a plain credit. The shift line (elsewhere) has round glass stops on a 2px track, done in MTG blue.
 
 ### Cards, sheets, fields
 Cards are glass panels (20px). Sheets, dialogs, menus and toasts are glass strong (24px for sheets), their footer transparent over a hairline. Fields are white at 0.7 with a translucent edge and 12px corners.

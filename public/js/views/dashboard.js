@@ -1,6 +1,6 @@
 import { flags, edit } from '../ui.js';
 import { api } from '../api.js';
-import { h, fmt, cardHeader, pageHeader, button, buttonRow, setContent, formDialog, toast, field, busy, productColor, openDialog } from '../ui.js';
+import { h, fmt, cardHeader, pageHeader, button, buttonRow, setContent, formDialog, toast, field, busy, productColor, openDialog, tile } from '../ui.js';
 import { icon, brandMark } from '../icons.js';
 
 const ALERT_ICON = { critical: 'alert', serious: 'alert', warning: 'info' };
@@ -11,13 +11,6 @@ export async function renderDashboard(page, { state, navigate }) {
   const hello = hour < 18 ? 'Bonjour' : 'Bonsoir';
 
   const s = d.openShifts[0];
-  const tile = ({ color, ic, title, side, value, unit, sub, lost = false, chart, href, wide = false }) =>
-    h(
-      href ? 'a' : 'div',
-      { class: `tile ${color}${wide ? ' wide' : ''}`, href },
-      h('div', { class: 'tile-head' }, h('span', { class: 'tile-ic' }, icon(ic)), title, side ? h('small', {}, side) : null),
-      h('div', { class: 'tile-body' }, h('div', {}, h('span', { class: `tile-value${lost ? ' lost' : ''}` }, value, unit ? h('small', {}, unit) : null), sub ? h('p', { class: 'tile-sub' }, sub) : null), chart || null),
-    );
   const bars = (values) => {
     const max = Math.max(1, ...values);
     return h('div', { class: 'tile-bars', 'aria-hidden': 'true' }, values.map((v, i) => h('i', { style: `height:${Math.round((v / max) * 100)}%;animation-delay:${i * 40}ms` })));
