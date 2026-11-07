@@ -80,10 +80,10 @@ typography:
     letterSpacing: "-0.005em"
 rounded:
   sm: "8px"
-  md: "14px"
-  squircle: "21px"
-  lg: "24px"
-  xl: "28px"
+  md: "12px"
+  squircle: "18px"
+  lg: "20px"
+  xl: "24px"
 spacing:
   sm: "10px"
   md: "12px"
@@ -116,7 +116,7 @@ components:
     backgroundColor: "{colors.glass-shade}"
     textColor: "{colors.ink}"
     rounded: "{rounded.squircle}"
-    size: "62px"
+    size: "56px"
   card:
     backgroundColor: "{colors.glass-leaf}"
     rounded: "{rounded.lg}"
@@ -153,10 +153,10 @@ The user rejected « Registre » as « juste changé les couleurs », then five 
 
 **Key Characteristics:**
 - A blurred world of colour behind everything (`.ambient`); the page colour sits on `html` only so it shows through.
-- Clear glass everywhere: a white-to-clear gradient, `blur(18px) saturate(1.8)`, a bright rim inside the top edge, a soft drop.
+- Thin clear glass everywhere (2026-11-07: « les verres ont l'air gros, je veux que ça soit fin »): a white-to-clear gradient, `blur(14px) saturate(1.6)`, one 0.5px light edge all round, a faint top light, a short soft shadow.
 - One family, Manrope, heavy (700–800) for titles and figures, figures tabular.
 - The station's value on MTG-blue glass (`.hero`), the one blue surface of the manager's home.
-- Glass squircles (62px, 21px corners) for the quick actions, the glyph inside and the label beneath.
+- Glass squircles (56px, 18px corners) for the quick actions, the glyph inside and the label beneath.
 - Arrivals rise out of a blur, figures count up, rings fill; all of it gives way to reduced motion.
 - Night by default (the user's choice, 2026-11-07); light optional, through the sun key, remembered on the device.
 
@@ -208,33 +208,33 @@ Gaps are 12px between tiles and boards, 28px between the columns and the section
 
 ## Elevation & Depth
 
-Depth is glass, not shadow: every panel carries the rim (`--glass-rim`: a bright 1.5px line inside the top edge, a fainter one at the bottom) and a soft drop (`--glass-drop`, `0 12px 30px rgba(20, 40, 80, 0.08)`). Sheets, dialogs and toasts lift further (`0 24px 60px rgba(10, 20, 40, 0.22)`); the hero `0 24px 50px rgba(10, 40, 90, 0.24)`; the main button carries a blue glow (`0 8px 20px rgba(11, 111, 196, 0.22)`).
+Depth is thin glass, not shadow: every panel carries the rim (`--glass-rim`: a 0.5px light edge all round plus a 0.5px top light; night at 0.14 / 0.22) and a short drop (`--glass-drop`, `0 2px 10px rgba(20, 40, 80, 0.06)`, night `0 2px 12px rgba(0, 0, 0, 0.28)`). Sheets, dialogs and toasts lift a little more (`0 12px 36px rgba(10, 20, 40, 0.2)`); the hero `0 8px 24px rgba(10, 40, 90, 0.2)`; the main button `0 2px 8px rgba(11, 111, 196, 0.18)`. Never a thick rim, a light-catch blob or a deep shadow: the glass must look thin.
 
 Where `backdrop-filter` is missing the glass turns solid (white at 0.92, night `rgba(23, 28, 38, 0.95)`); with `prefers-reduced-transparency` it takes the denser `--glass-strong`.
 
 ## Shapes
 
-Soft, continuous corners: controls and fields 14px, cards and tiles 24px, the rail and the phone bars 18–24px, the hero and sheets 28px, quick-action squircles 21px, badges and small marks 8px; a tile's icon square 7px. Rings are circles (54px, 7px stroke, round caps). Quick actions carry a light catch, a blurred white oval across their top third.
+Soft, continuous corners: controls and fields 12px, cards and tiles 20px, the rail and the phone bars 18–22px, the hero and sheets 24px, quick-action squircles 18px, badges and small marks 8px; a tile's icon square 7px. Rings are circles (54px, 7px stroke, round caps).
 
 ## Components
 
 ### Buttons
-- **Primary:** MTG-blue glass (`--blue-btn`), white 700 text, 14px corners, at least 44px, the rim and a blue glow; hover a little brighter, press a little deeper.
+- **Primary:** MTG-blue glass (`--blue-btn`), white 700 text, 12px corners, at least 44px, a thin light edge and a faint blue shadow; hover a little brighter, press a little deeper.
 - **Secondary / Annuler / Fermer:** clear glass (`--glass-btn`) with the rim, ink text.
 - **Retour:** clear glass, blue ink text. **Danger:** clear glass, red text; a row's cancel square stays faint until touched.
 - **Ghost:** no glass, link-blue text.
 
 ### Quick actions
-A 62px glass squircle (21px corners, `blur(6px) saturate(1.8) brightness(1.06)`, the rim, the light catch) holding the 26px glyph, the label beneath in 13px 700. The attendant's main one is MTG-blue glass. Pressed, it shrinks to 0.94. Four in a row.
+A 56px glass squircle (18px corners, `blur(10px) saturate(1.6)`, the thin rim) holding the 24px glyph (stroke 1.9), the label beneath in 13px 700. The attendant's main one is MTG-blue glass. Pressed, it shrinks to 0.94. Four in a row.
 
 ### Hero (the station's value)
-A button of blue glass (28px corners): the monogram in white at the top right, the label, the value in 44px 800 (pink-white `#ffd2cf` when negative), a sub line. Touched, it opens the `valueDetail()` sheet with the addition column (`valueColumn()`), which still closes on a double rule.
+A button of blue glass (24px corners): the monogram in white at the top right, the label, the value in 44px 800 (pink-white `#ffd2cf` when negative), a sub line. Touched, it opens the `valueDetail()` sheet with the addition column (`valueColumn()`), which still closes on a double rule.
 
 ### Tiles
-Glass, 24px corners: a head with a 22px coloured icon square, the title in the tile's colour and a faint side note; the value (30px 800) with its unit and a sub line; on the right bars (7px, the last one full) or a ring filled to the tank's level. A tile that links brightens on hover; `.wide` spans both columns.
+Glass, 20px corners: a head with a 22px coloured icon square, the title in the tile's colour and a faint side note; the value (30px 800) with its unit and a sub line; on the right bars (7px, the last one full) or a ring filled to the tank's level. A tile that links brightens on hover; `.wide` spans both columns.
 
 ### Cards, sheets, fields
-Cards are glass panels (24px). Sheets, dialogs, menus and toasts are glass strong (28px for sheets), their footer transparent over a hairline. Fields are white at 0.7 with a translucent edge and 14px corners.
+Cards are glass panels (20px). Sheets, dialogs, menus and toasts are glass strong (24px for sheets), their footer transparent over a hairline. Fields are white at 0.7 with a translucent edge and 12px corners.
 
 ### Navigation
 The rail's active item is brighter glass with the rim and a blue-ink label; hover a faint white wash. Phones: floating glass top bar and tab bar.
@@ -267,7 +267,7 @@ The brand panel is glass over the world, the MTG monogram large; the form beside
 - **Don't** add explanatory text outside Réglages: no form intro, field hint, descriptive subtitle or explanation sentence in a confirmation; only data, statuses, empty states and error messages.
 - **Don't** put a solid page colour on `body` or a full-screen opaque layer: it hides the world behind the glass.
 - **Don't** colour buttons beyond the one blue: the user found coloured glass « trop coloré ».
-- **Don't** make glass less transparent than it is now: the user asked « plus transparent ».
+- **Don't** make glass less transparent than it is now (« plus transparent ») or thicker (« fin »): no thick rim, no light-catch blob, no deep shadow.
 - **Don't** bring back « Registre » (paper, white leaves, flat panels) or the « Totem de nuit » (black ground, coloured fuel fields, condensed face).
 - **Don't** build SVG with `h('svg')`: it lands in the HTML namespace; use `innerHTML` (as the rings do).
 - **Don't** use Apple's logo, name or product imagery.

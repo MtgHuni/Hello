@@ -231,7 +231,7 @@
       "refersTo": "button-primary",
       "description": "The one MTG-blue glass button of a region.",
       "html": "<button class=\"ds-btn-primary\">Enregistrer</button>",
-      "css": ".ds-btn-primary{min-height:44px;padding:10px 18px;border:none;border-radius:14px;background:linear-gradient(155deg,rgba(18,108,200,.9),rgba(8,64,128,.94));color:#fff;font:700 15px/1.2 Manrope, system-ui, sans-serif;backdrop-filter:blur(10px) saturate(1.6);box-shadow:inset 0 1.5px 1px rgba(255,255,255,.55),inset 0 -1px 1px rgba(255,255,255,.15),0 8px 20px rgba(11,111,196,.22);cursor:pointer}"
+      "css": ".ds-btn-primary{min-height:44px;padding:10px 18px;border:none;border-radius:12px;background:linear-gradient(155deg,rgba(18,108,200,.9),rgba(8,64,128,.94));color:#fff;font:700 15px/1.2 Manrope, system-ui, sans-serif;backdrop-filter:blur(10px) saturate(1.6);box-shadow:inset 0 1.5px 1px rgba(255,255,255,.55),inset 0 -1px 1px rgba(255,255,255,.15),0 8px 20px rgba(11,111,196,.22);cursor:pointer}"
     },
     {
       "name": "Secondary Button",
@@ -239,7 +239,7 @@
       "refersTo": "button-secondary",
       "description": "Clear glass, ink text.",
       "html": "<button class=\"ds-btn-secondary\">Annuler</button>",
-      "css": ".ds-btn-secondary{min-height:44px;padding:10px 18px;border:none;border-radius:14px;background:linear-gradient(155deg,rgba(255,255,255,.34),rgba(255,255,255,.06) 45%,rgba(255,255,255,.14));color:#0b0d12;font:700 15px/1.2 Manrope, system-ui, sans-serif;backdrop-filter:blur(10px);box-shadow:inset 0 1.5px 1px rgba(255,255,255,.95),inset 0 -1px 1px rgba(255,255,255,.4),0 6px 16px rgba(20,40,80,.08);cursor:pointer}"
+      "css": ".ds-btn-secondary{min-height:44px;padding:10px 18px;border:none;border-radius:12px;background:linear-gradient(155deg,rgba(255,255,255,.34),rgba(255,255,255,.06) 45%,rgba(255,255,255,.14));color:#0b0d12;font:700 15px/1.2 Manrope, system-ui, sans-serif;backdrop-filter:blur(10px);box-shadow:inset 0 1.5px 1px rgba(255,255,255,.95),inset 0 -1px 1px rgba(255,255,255,.4),0 6px 16px rgba(20,40,80,.08);cursor:pointer}"
     },
     {
       "name": "Quick Action",
@@ -247,7 +247,7 @@
       "refersTo": "quick-action",
       "description": "Glass squircle with the glyph, the label beneath.",
       "html": "<a class=\"ds-act\"><span class=\"ds-sq\">＋</span>Crédit</a>",
-      "css": ".ds-act{display:inline-flex;flex-direction:column;align-items:center;gap:8px;font:700 13px Manrope, system-ui, sans-serif;color:inherit}.ds-sq{display:grid;place-items:center;width:62px;height:62px;border-radius:21px;background:linear-gradient(155deg,rgba(255,255,255,.34),rgba(255,255,255,.06) 45%,rgba(255,255,255,.14));backdrop-filter:blur(6px) saturate(1.8) brightness(1.06);box-shadow:inset 0 1.5px 1px rgba(255,255,255,.95),inset 0 -1px 1px rgba(255,255,255,.4),0 8px 20px rgba(20,40,80,.1);font-size:26px}"
+      "css": ".ds-act{display:inline-flex;flex-direction:column;align-items:center;gap:8px;font:700 13px Manrope, system-ui, sans-serif;color:inherit}.ds-sq{display:grid;place-items:center;width:56px;height:56px;border-radius:18px;background:linear-gradient(155deg,rgba(255,255,255,.34),rgba(255,255,255,.06) 45%,rgba(255,255,255,.14));backdrop-filter:blur(6px) saturate(1.8) brightness(1.06);box-shadow:inset 0 1.5px 1px rgba(255,255,255,.95),inset 0 -1px 1px rgba(255,255,255,.4),0 8px 20px rgba(20,40,80,.1);font-size:26px}"
     },
     {
       "name": "Hero",
@@ -255,7 +255,7 @@
       "refersTo": "hero",
       "description": "The station value on blue glass.",
       "html": "<div class=\"ds-hero\"><div class=\"l\">Valeur de la station</div><div class=\"v\">12 480,00 $</div></div>",
-      "css": ".ds-hero{padding:22px 22px 24px;border-radius:28px;color:#fff;font-family:Manrope, system-ui, sans-serif;background:linear-gradient(155deg,rgba(20,110,200,.62),rgba(8,60,120,.72));backdrop-filter:blur(24px) saturate(1.6);box-shadow:inset 0 1.5px 1px rgba(255,255,255,.55),0 24px 50px rgba(10,40,90,.24)}.ds-hero .l{font:600 13px Manrope, system-ui, sans-serif;opacity:.82}.ds-hero .v{margin-top:8px;font:800 44px/1 Manrope, system-ui, sans-serif;letter-spacing:-.045em;font-variant-numeric:tabular-nums}"
+      "css": ".ds-hero{padding:22px 22px 24px;border-radius:24px;color:#fff;font-family:Manrope, system-ui, sans-serif;background:linear-gradient(155deg,rgba(20,110,200,.62),rgba(8,60,120,.72));backdrop-filter:blur(24px) saturate(1.6);box-shadow:inset 0 1.5px 1px rgba(255,255,255,.55),0 24px 50px rgba(10,40,90,.24)}.ds-hero .l{font:600 13px Manrope, system-ui, sans-serif;opacity:.82}.ds-hero .v{margin-top:8px;font:800 44px/1 Manrope, system-ui, sans-serif;letter-spacing:-.045em;font-variant-numeric:tabular-nums}"
     },
     {
       "name": "Tile",
@@ -263,7 +263,7 @@
       "refersTo": "tile",
       "description": "A glanced figure of today, coloured by meaning.",
       "html": "<div class=\"ds-tile\"><div class=\"h\">Gasoil</div><div class=\"v\">6 000<small>L</small></div></div>",
-      "css": ".ds-tile{padding:15px 16px 16px;border-radius:24px;font-family:Manrope, system-ui, sans-serif;background:linear-gradient(160deg,rgba(255,255,255,.42),rgba(255,255,255,.16));backdrop-filter:blur(18px) saturate(1.8);box-shadow:inset 0 1.5px 1px rgba(255,255,255,.95),0 12px 30px rgba(20,40,80,.08)}.ds-tile .h{font-weight:700;color:#0f8f5c}.ds-tile .v{margin-top:12px;font:800 30px/1 Manrope, system-ui, sans-serif;letter-spacing:-.04em;font-variant-numeric:tabular-nums}.ds-tile small{margin-left:3px;font-size:15px;opacity:.6}"
+      "css": ".ds-tile{padding:15px 16px 16px;border-radius:20px;font-family:Manrope, system-ui, sans-serif;background:linear-gradient(160deg,rgba(255,255,255,.42),rgba(255,255,255,.16));backdrop-filter:blur(18px) saturate(1.8);box-shadow:inset 0 1.5px 1px rgba(255,255,255,.95),0 12px 30px rgba(20,40,80,.08)}.ds-tile .h{font-weight:700;color:#0f8f5c}.ds-tile .v{margin-top:12px;font:800 30px/1 Manrope, system-ui, sans-serif;letter-spacing:-.04em;font-variant-numeric:tabular-nums}.ds-tile small{margin-left:3px;font-size:15px;opacity:.6}"
     },
     {
       "name": "Text Field",
@@ -271,7 +271,7 @@
       "refersTo": "input",
       "description": "Translucent field, 14px corners.",
       "html": "<input class=\"ds-input\" placeholder=\"Montant\">",
-      "css": ".ds-input{height:44px;padding:10px 16px;border:1px solid rgba(15,25,45,.16);border-radius:14px;background:rgba(255,255,255,.7);font:500 17px Manrope, system-ui, sans-serif}"
+      "css": ".ds-input{height:44px;padding:10px 16px;border:1px solid rgba(15,25,45,.16);border-radius:12px;background:rgba(255,255,255,.7);font:500 17px Manrope, system-ui, sans-serif}"
     }
   ],
   "narrative": {
