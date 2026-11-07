@@ -1,6 +1,6 @@
 import { flags } from '../ui.js';
 import { api } from '../api.js';
-import { priceTotem, shiftLine, h, fmt, receipt, pageHeader, card, cardHeader, table, shiftBadge, varianceCell, button, formDialog, confirmDialog, confirmPayment, toast, field, productColor, badge, kpi, parseServerDate, setContent, reportLink, busy, newRef, buttonRow, noticeDialog, nameChips } from '../ui.js';
+import { priceTotem, shiftLine, h, fmt, receipt, pageHeader, card, cardHeader, table, shiftBadge, varianceCell, button, formDialog, confirmDialog, confirmPayment, toast, field, productColor, badge, parseServerDate, setContent, reportLink, busy, newRef, buttonRow, noticeDialog, nameChips, tile } from '../ui.js';
 import { icon } from '../icons.js';
 import { shiftSummary } from './shifts.js';
 import { renderJoin, renderCheckpoint, reportCard } from './relay.js';
@@ -148,8 +148,12 @@ async function cancelEntry(ctx, x, reload) {
     toast(err.message, 'error');
   }
 }
+// The badges of a row, or nothing when none applies (a plain credit needs none).
+const tagRow = (...tags) => (tags.some(Boolean) ? h('span', { class: 'row', style: 'gap:6px' }, tags) : null);
+
 function renderOpenShift(page, ctx, shift, remarks = null) {
   const reload = () => renderAttendant(page, ctx);
+  const bare = (n) => fmt.money(n).replace(/\s?\$$/, '');
 
   // One list of everything recorded during the shift, newest first.
   const entries = [
@@ -157,10 +161,8 @@ function renderOpenShift(page, ctx, shift, remarks = null) {
       at: s.created_at,
       title: s.customer_name,
       detail: `${s.product_name} · ${fmt.liters(s.liters)}${s.plate ? ` · ${s.plate}` : ''}`,
-      tag: h(
-        'span',
-        { class: 'row', style: 'gap:6px' },
-        s.kind === 'credit' ? (s.over_limit ? badge(s.over_limit === 2 ? 'Crédit malgré un crédit en cours' : 'Crédit malgré le retard', 'serious') : badge('Crédit', 'info')) : s.kind === 'combo' ? badge(`Combos −${s.combos_used}`, 'warning') : badge('Payé', 'good'),
+      tag: tagRow(
+        s.kind === 'credit' ? (s.over_limit ? badge(s.over_limit === 2 ? 'Crédit malgré un crédit en cours' : 'Crédit malgré le retard', 'serious') : null) : s.kind === 'combo' ? badge(`Combos −${s.combos_used}`, 'warning') : badge('Payé', 'good'),
         s.points && flags.combos ? badge(`+${s.points} combos`) : null,
         s.source === 'customer' ? badge('Demande client') : null,
       ),
@@ -211,7 +213,6 @@ function renderOpenShift(page, ctx, shift, remarks = null) {
       `Poste n°${shift.id} · depuis le ${fmt.dateTime(shift.opened_at)}${shift.on_duty.length ? ` · en service : ${shift.on_duty.join(', ')}` : ''}`,
       shiftBadge('open'),
     ),
-    shiftLine('open'),
     remarks,
     shift.closing_due
       ? h('p', { class: 'offline-strip', role: 'status', style: 'margin-bottom:16px' }, `L’heure de clôture (${ctx.state.settings.closingTime || '15:30'}) est passée : le gérant doit clôturer le poste.`)
@@ -235,19 +236,28 @@ function renderOpenShift(page, ctx, shift, remarks = null) {
       requestQueue(shift, reload, ctx.state.settings.cashTolerance),
       h(
         'div',
-        { class: 'grid kpi-row' },
-        kpi('Crédit', fmt.money(shift.credit_amount)),
-        kpi('Mobile money', fmt.money(shift.momo_total)),
-        kpi('Règlements', fmt.money(shift.payments_amount)),
-        kpi('Dépenses', fmt.money(shift.expenses_amount)),
+        { class: 'tiles tiles-2' },
+        tile({ color: 'c-gold', ic: 'users', title: 'Crédit', value: bare(shift.credit_amount), unit: '$' }),
+        tile({ color: 'c-blue', ic: 'phone', title: 'Mobile money', value: bare(shift.momo_total), unit: '$' }),
+        tile({ color: 'c-green', ic: 'cash', title: 'Règlements', value: bare(shift.payments_amount), unit: '$' }),
+        tile({ color: 'c-red', ic: 'wallet', title: 'Dépenses', value: bare(shift.expenses_amount), unit: '$' }),
       ),
       card(
         cardHeader('Opérations du poste', null),
         entries.length
-          ? entries.map((x) =>
-              h(
+          ? entries.map((x) => {
+              // Touched, the row asks for its cancellation (the manager cancels at once).
+              const open = x.remove && !x.remove.pending ? () => cancelEntry(ctx, x, reload) : null;
+              return h(
                 'div',
-                { class: 'nozzle-row op-row' },
+                {
+                  class: `nozzle-row op-row${open ? ' tappable' : ''}`,
+                  role: open ? 'button' : null,
+                  tabindex: open ? '0' : null,
+                  'aria-label': open ? `${x.title} · ${x.amount} · ${x.remove.label}` : null,
+                  onClick: open,
+                  onKeydown: open ? (e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), open()) : null,
+                },
                 h(
                   'div',
                   { class: 'grow' },
@@ -255,14 +265,10 @@ function renderOpenShift(page, ctx, shift, remarks = null) {
                   h('div', { class: 'muted small' }, `${fmt.time(x.at)} · ${x.detail}`),
                 ),
                 h('div', { class: 'num', style: 'font-weight:600' }, x.amount),
-                !x.remove
-                  ? null
-                  : x.remove.pending
-                  ? badge('Annulation demandée', 'warning')
-                  : h('button', { class: 'btn danger sm', 'aria-label': x.remove.label, title: x.remove.label, onClick: () => cancelEntry(ctx, x, reload) }, icon('trash')),
-                h('div', { class: 'op-tags' }, x.tag),
-              ),
-            )
+                x.remove?.pending ? badge('Annulation demandée', 'warning') : null,
+                x.tag ? h('div', { class: 'op-tags' }, x.tag) : null,
+              );
+            })
           : h('p', { class: 'muted' }, 'Aucune opération pour le moment.'),
       ),
       card(
@@ -1003,7 +1009,7 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
       combos ? h('div', { class: 'summary-line' }, h('span', {}, 'Échangé contre des combos'), h('span', { class: 'num' }, `− ${fmt.money(combos)}`)) : null,
       payments ? h('div', { class: 'summary-line' }, h('span', {}, 'Règlements reçus'), h('span', { class: 'num' }, `+ ${fmt.money(payments)}`)) : null,
       expenses ? h('div', { class: 'summary-line' }, h('span', {}, 'Dépenses payées'), h('span', { class: 'num' }, `− ${fmt.money(expenses)}`)) : null,
-      moves.map((m) => h('div', { class: 'summary-line' }, h('span', {}, m.signed > 0 ? `Entrée de la caisse · ${m.note || m.label}` : `Sortie de la caisse · ${m.note || m.label}`), h('span', { class: 'num' }, `${m.signed > 0 ? '+' : '−'} ${fmt.money(Math.abs(m.signed))}`))),
+      moves.map((m) => h('div', { class: 'summary-line' }, h('span', {}, `${m.signed > 0 ? 'Entrée' : 'Sortie'} ${m.momo ? 'mobile money' : 'de la caisse'} · ${m.note || m.label}`), h('span', { class: 'num' }, `${m.signed > 0 ? '+' : '−'} ${fmt.money(Math.abs(m.signed))}`))),
       h('div', { class: 'summary-line' }, h('span', {}, 'À remettre'), lines.expected),
       momo ? h('div', { class: 'summary-line' }, h('span', {}, 'Reçu en mobile money'), h('span', { class: 'num' }, `− ${fmt.money(momo)}`)) : null,
       showMoney

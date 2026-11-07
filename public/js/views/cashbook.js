@@ -198,21 +198,19 @@ async function openingDialog(balances, reload) {
 
 async function movementDialog(acc, reload) {
   const label = ACCOUNTS.find(([v]) => v === acc)[1];
-  // In the shift's money: any cash entry or exit; on mobile money, only a withdrawal into the cash.
-  const counts = (kind) => acc === 'cash' || kind === 'retrait_momo';
+  // Every movement may go in the open shift's money (a mobile money one in its mobile money).
   const toShift = field({ name: 'toShift', label: 'Dans l’argent du poste en cours', type: 'checkbox', value: true, full: true });
-  toShift.hidden = !counts('autre_entree');
   const ok = await formDialog({
     title: `Mouvement · ${label}`,
     grid: false,
     fields: [
-      { name: 'kind', label: 'Mouvement', type: 'segment', full: true, options: KINDS[acc], value: 'autre_entree', onInput: (e) => (toShift.hidden = !counts(e.target.value)) },
+      { name: 'kind', label: 'Mouvement', type: 'segment', full: true, options: KINDS[acc], value: 'autre_entree' },
       { name: 'amount', label: 'Montant ($)', type: 'number', step: '0.01', min: '0.01', required: true },
       { name: 'note', label: 'Motif', required: true, placeholder: 'Ex. : apport du propriétaire, monnaie, bordereau n°…' },
       { name: 'toShiftRow', type: 'node', node: toShift },
     ],
     submitLabel: 'Enregistrer',
-    onSubmit: (d, form) => api.post('/cashbook/movements', { ...d, account: acc, toShift: counts(d.kind) && form.elements.toShift.checked }),
+    onSubmit: (d, form) => api.post('/cashbook/movements', { ...d, account: acc, toShift: form.elements.toShift.checked }),
   });
   if (ok) {
     toast('Mouvement enregistré.');

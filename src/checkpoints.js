@@ -14,7 +14,7 @@ const attendantNamesSql = `(SELECT group_concat(name, ', ') FROM (SELECT u2.name
 function momoTotal(db, shiftId) {
   const fuel = db.prepare('SELECT COALESCE(SUM(amount), 0) AS v FROM momo_sales WHERE shift_id = ?').get(shiftId).v;
   const paid = db.prepare("SELECT COALESCE(SUM(amount), 0) AS v FROM payments WHERE shift_id = ? AND method = 'mobile money'").get(shiftId).v;
-  return round(fuel + paid);
+  return round(fuel + paid + momoMoved(shiftMovements(db, shiftId)));
 }
 
 // Cash book movements made in a shift's till (cash_movements.shift_id): + an entry, − an exit.
@@ -23,9 +23,14 @@ function shiftMovements(db, shiftId, from = '0000', to = '9999') {
   return db
     .prepare('SELECT * FROM cash_movements WHERE shift_id = ? AND created_at >= ? AND created_at <= ? ORDER BY id')
     .all(shiftId, from, to)
-    .map((m) => ({ ...m, label: `${KINDS[m.kind]?.label || m.kind}${m.note ? ` : ${m.note}` : ''}`, signed: round(shiftSign(m.kind, m.account) * m.amount) }));
+    .map((m) => {
+      // A mobile money entry or exit (not a withdrawal into the cash) moves the shift's mobile money.
+      const momo = m.account === 'momo' && m.kind !== 'retrait_momo';
+      return { ...m, momo, label: `${KINDS[m.kind]?.label || m.kind}${momo ? ' (mobile money)' : ''}${m.note ? ` : ${m.note}` : ''}`, signed: round(shiftSign(m.kind, m.account) * m.amount) };
+    });
 }
 const movementsTotal = (list) => round(list.reduce((t, m) => t + m.signed, 0));
+const momoMoved = (list) => round(list.filter((m) => m.momo).reduce((t, m) => t + m.signed, 0));
 
 const KIND_LABEL = { releve: 'Relève', fermeture: 'Fermeture du soir', ouverture: 'Ouverture du matin' };
 
@@ -75,7 +80,7 @@ function periodReport(db, shift, readings, end) {
   const spent = round(expenses.reduce((t, e) => t + e.amount, 0));
   // The cash is passed on; mobile money stays on the station's account.
   const received = round(from.cash || 0);
-  const mobileMoney = round(momo.reduce((t, m) => t + m.amount, 0) + payments.filter((p) => p.method === 'mobile money').reduce((t, p) => t + p.amount, 0));
+  const mobileMoney = round(momo.reduce((t, m) => t + m.amount, 0) + payments.filter((p) => p.method === 'mobile money').reduce((t, p) => t + p.amount, 0) + momoMoved(moves));
   // Money on the attendant = what they received + sales − credits − combos + payments − expenses
   //                          ± cash book movements made in the till.
   const expected = round(received + sold - credits - combos + paid - spent + moved);
@@ -108,7 +113,7 @@ function periodReport(db, shift, readings, end) {
       ...sales.filter((s) => s.kind !== 'paid').map((s) => ({ at: s.created_at, type: s.kind === 'combo' ? 'Combos' : 'Crédit', label: customerName.get(s.customer_id) || '', amount: s.amount })),
       ...payments.map((p) => ({ at: p.created_at, type: 'Règlement', label: customerName.get(p.customer_id) || '', amount: p.amount })),
       ...expenses.map((e) => ({ at: e.created_at, type: 'Dépense', label: e.description, amount: e.amount })),
-      ...moves.map((m) => ({ at: m.created_at, type: 'Caisse', label: m.label, amount: m.signed })),
+      ...moves.map((m) => ({ at: m.created_at, type: m.momo ? 'Mobile money' : 'Caisse', label: m.label, amount: m.signed })),
       ...momo.map((m) => ({ at: m.created_at, type: 'Mobile money', label: `${productName.get(m.product_id) || ''} · ${String(m.liters).replace('.', ',')} L`, amount: m.amount })),
     ].sort((a, b) => a.at.localeCompare(b.at)),
   };
@@ -148,4 +153,4 @@ const lastMeters = (db, shiftId) => {
   return meters.size ? meters : null;
 };
 
-module.exports = { momoTotal, closingCutoff, attendantNamesSql, KIND_LABEL, listCheckpoints, checkpointReports, currentPeriod, lastMeters, shiftMovements, movementsTotal };
+module.exports = { momoTotal, closingCutoff, attendantNamesSql, KIND_LABEL, listCheckpoints, checkpointReports, currentPeriod, lastMeters, shiftMovements, movementsTotal, momoMoved };
