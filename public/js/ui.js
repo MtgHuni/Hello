@@ -46,8 +46,8 @@ export const canAdmin = () => !flags.readonly && flags.admin;
 export const adminEdit = (node) => (canAdmin() ? node : null);
 
 export const fmt = {
-  money: (n) => moneyFmt.format(Number(n) || 0),
-  signedMoney: (n) => (n > 0 ? '+' : '') + moneyFmt.format(Number(n) || 0),
+  money: (n) => moneyFmt.format(Number(n) || 0).replace(/^-/, '−'), // the true minus, set tight
+  signedMoney: (n) => (n > 0 ? '+' : '') + moneyFmt.format(Number(n) || 0).replace(/^-/, '−'),
   liters: (n) => `${numFmt.format(Number(n) || 0)} L`,
   number: (n) => numFmt.format(Number(n) || 0),
   price: (n) => `${priceFmt.format(Number(n) || 0)} $/L`,
@@ -391,7 +391,7 @@ export function tankGauge(tank) {
     h(
       'div',
       { class: 'tank-head' },
-      h('div', {}, h('h3', {}, tank.name), h('div', { class: 'muted small' }, h('span', { class: 'swatch', style: `background:${productColor(tank.product_id)}` }), tank.product_name)),
+      h('h3', { class: 'tank-name' }, h('span', { class: 'swatch', style: `background:${productColor(tank.product_id)}`, title: tank.product_name }), tank.name),
       h('div', { class: 'tank-pct' }, `${Math.round(pct)} %`),
     ),
     h(
@@ -534,8 +534,9 @@ export function field(f) {
       h(
         'div',
         { class: 'seg-options' },
-        f.options.map(([v, l]) =>
-          h('label', { class: 'seg-option' }, h('input', { type: 'radio', name: f.name, value: String(v), checked: String(v) === current, onChange: f.onInput }), h('span', {}, l)),
+        // A third value is the option's colour (a fuel's tab).
+        f.options.map(([v, l, color]) =>
+          h('label', { class: 'seg-option' }, h('input', { type: 'radio', name: f.name, value: String(v), checked: String(v) === current, onChange: f.onInput }), h('span', {}, color ? h('i', { class: 'swatch', style: `background:${color}` }) : null, l)),
         ),
       ),
     );
@@ -788,24 +789,25 @@ export async function busy(btn, fn) {
 // Key of one form: sent with the record, it makes a second sending harmless.
 export const newRef = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`);
 
-// Night (default) or day mode for the pump in full sun; remembered on the device.
+// Light (default, readable in the sun) or night mode; remembered on the device.
+export const THEME_KEY = 'theme-registre';
 export function applyTheme(theme) {
-  if (theme === 'light') document.documentElement.dataset.theme = 'light';
+  if (theme === 'dark') document.documentElement.dataset.theme = 'dark';
   else delete document.documentElement.dataset.theme;
-  document.querySelector('meta[name=theme-color]')?.setAttribute('content', theme === 'light' ? '#ffffff' : '#0a0a0b');
-  for (const b of document.querySelectorAll('.theme-btn')) b.setAttribute('aria-pressed', String(theme === 'light'));
+  document.querySelector('meta[name=theme-color]')?.setAttribute('content', theme === 'dark' ? '#0f1318' : '#f3f5f7');
+  for (const b of document.querySelectorAll('.theme-btn')) b.setAttribute('aria-pressed', String(theme !== 'dark'));
 }
 
-// The sun beside the account, as on iOS: one tap for day mode, lit while it is on.
+// The sun beside the account: lit while the light mode is on, one tap for night.
 export function themeButton() {
-  return h('button', { class: 'theme-btn', type: 'button', 'aria-label': 'Mode jour (plein soleil)', 'aria-pressed': String(document.documentElement.dataset.theme === 'light'), onClick: toggleTheme }, icon('sun'));
+  return h('button', { class: 'theme-btn', type: 'button', 'aria-label': 'Mode clair', 'aria-pressed': String(document.documentElement.dataset.theme !== 'dark'), onClick: toggleTheme }, icon('sun'));
 }
 
 export function toggleTheme() {
-  const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+  const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
   applyTheme(next);
   try {
-    localStorage.setItem('theme', next);
+    localStorage.setItem(THEME_KEY, next);
   } catch {
     /* storage unavailable: the choice lasts until the page closes */
   }

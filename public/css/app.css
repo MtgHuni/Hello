@@ -1,9 +1,9 @@
 /* =====================================================================
-   MTG Station — « Totem de nuit »
-   The forecourt at night: black ground, porcelain type, the price totem lit up.
-   Gasoil green and essence red own their fields; actions and headers are lit like the
-   forecourt's signs: the main action yellow, the others sky, violet or orange.
-   One shape everywhere: the rounded rectangle (no circle, no pill).
+   MTG Station — « Registre »
+   The station's account book kept impeccably: cool register paper, white leaves ruled by one
+   hairline, blue-black ink, the MTG blue for the main action and the money that comes in, one red
+   for what is owed and for gaps. Every total closes on a double rule, like a column that adds up.
+   Flat panels, no shadow at rest, one shape: the 8px rounded rectangle.
    ===================================================================== */
 
 /* Inter, served by the station itself (no third-party request on weak networks) */
@@ -16,191 +16,146 @@
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
-/* Barlow Condensed, the price-totem face, served by the station itself */
-@font-face {
-  font-family: 'Barlow Condensed';
-  font-style: normal;
-  font-weight: 600;
-  font-display: swap;
-  src: url('/fonts/barlow-condensed-600.woff2') format('woff2');
-}
-@font-face {
-  font-family: 'Barlow Condensed';
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url('/fonts/barlow-condensed-700.woff2') format('woff2');
-}
-
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 
-  /* The forecourt at night: black ground, porcelain type, the price totem lit up.
-     Each fuel owns a colour field (gasoil green, essence red); the brand is lit yellow; actions are white. */
+  /* Grounds: register paper (cool, never cream), white leaves */
+  --bg: #f3f5f7;
+  --surface: #ffffff;
+  --surface-2: #f8f9fb;
+  --surface-3: #eef1f5;
 
-  /* Grounds */
-  --bg: #0a0a0b;
-  --surface: #141416;
-  --surface-2: #0f0f11;
-  --surface-3: #1f1f22;
+  /* Ink */
+  --text: #111827;
+  --text-2: #4b5565;
+  --text-3: #6b7480;
 
-  /* Text */
-  --text: #f5f4ef;
-  --text-2: #aaa9a3;
-  --text-3: #85847e;
+  /* Fills & rules */
+  --fill: #cfd5dd;
+  --fill-2: #dde2e8;
+  --fill-3: #e9edf2;
+  --fill-4: #f1f4f7;
+  --separator: #d5dbe2;
+  --hairline: #e3e7ec;
+  --field-border: #b9c1cb;
 
-  /* Fills & lines */
-  --fill: #34343a;
-  --fill-2: #2a2a2f;
-  --fill-3: #232327;
-  --fill-4: #1a1a1d;
-  --separator: #2e2e33;
-  --hairline: rgba(245, 244, 239, 0.09);
-  --field-border: #48484f;
+  /* The MTG blue: main action, links, the money that comes in */
+  --mtg-blue: #0b6fc4;
+  --mtg-blue-ink: #0a5fa8;
+  --mtg-blue-soft: #e8f1fb;
+  --accent: var(--mtg-blue);
+  --accent-hover: #0a63af;
+  --accent-press: #08548f;
+  --accent-soft: var(--mtg-blue-soft);
+  --link: var(--mtg-blue-ink);
+  --on-accent: #ffffff;
+  --focus: #0b6fc4;
+  --brand: var(--mtg-blue);
+  --on-sign: #ffffff;
 
-  /* Action and links */
-  --accent: #f5f4ef;
-  --accent-hover: #ffffff;
-  --accent-press: #d9d8d2;
-  --accent-soft: rgba(245, 244, 239, 0.1);
-  --link: #f5f4ef;
-  --on-accent: #0a0a0b;
-  --focus: #ffc414;
-  --brand: #ffc414;
-  --mtg-blue: #1e9bf0; /* the blue of the MTG logo */
-  --mtg-blue-ink: #1e9bf0;
+  /* Fuels: small tabs of ink, never fields */
+  --gasoil: #12895a;
+  --essence: #d9822b;
+  --on-fuel: #ffffff;
 
-  /* Signs: each action and each header is lit in its own colour (solid, and ink on a tint). */
-  --sign-yellow: #ffc414;
-  --sign-yellow-hover: #ffd34f;
-  --sign-yellow-press: #e8ac00;
-  --sign-yellow-ink: #ffc414;
-  --sign-sky: #7fb2ff;
-  --sign-sky-ink: #8fbcff;
-  --sign-violet: #b69cff;
-  --sign-violet-ink: #c2acff;
-  --sign-orange: #ff9a3d;
-  --sign-orange-ink: #ffa552;
-  --on-sign: #0a0a0b;
-  --sign-tint: 15%;
-
-  /* Fuels */
-  --gasoil: #23c46b;
-  --essence: #f0313a;
-  --on-fuel: #0a0a0b;
-
-  /* Status: fills (dots, switches) and text (readable in the sun) */
-  --green: #2fd27a;
-  --red: #ff4d4f;
-  --orange: #ff8a1f;
-  --yellow: #ffc414;
-  --good-text: #4ade8a;
-  --bad-text: #ff6b6b;
+  /* Status */
+  --green: #12895a;
+  --red: #c8322a;
+  --orange: #c26a12;
+  --yellow: #b98900;
+  --good-text: #0d7a4e;
+  --bad-text: #b42318;
   --good: var(--green);
   --warning: var(--yellow);
   --serious: var(--orange);
   --critical: var(--red);
 
-  /* Data: one colour per product, in product order */
+  /* Data: the total in ink, one colour per product */
   --series-1: var(--gasoil);
   --series-2: var(--essence);
-  --series-3: #7fb2ff;
-  --series-4: #ff8a1f;
-  --track: #242428;
+  --series-3: #0b6fc4;
+  --series-4: #6b7480;
+  --track: #e6eaef;
 
   /* Bars and overlays */
-  --nav-bg: rgba(12, 12, 14, 0.9);
-  --nav-solid: #0f0f11;
-  --backdrop: rgba(0, 0, 0, 0.66);
-  --shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
-  --shadow-lift: 0 18px 44px rgba(0, 0, 0, 0.6);
-  --thumb: #3c3c42;
+  --nav-bg: rgba(255, 255, 255, 0.94);
+  --nav-solid: #ffffff;
+  --backdrop: rgba(17, 24, 39, 0.38);
+  --shadow: 0 2px 10px rgba(17, 24, 39, 0.06);
+  --shadow-lift: 0 12px 32px rgba(17, 24, 39, 0.14);
+  --thumb: #ffffff;
 
   /* Shape */
-  --radius-xl: 20px;
-  --radius-lg: 14px;
-  --radius: 14px;
-  --radius-md: 10px;
+  --radius-xl: 12px;
+  --radius-lg: 10px;
+  --radius: 10px;
+  --radius-md: 8px;
   --radius-sm: 6px;
 
-  /* Type: Inter for reading, Barlow Condensed for names and figures */
+  /* Type: one family, figures tabular */
   --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
-  --font-display: 'Barlow Condensed', 'Inter', 'Arial Narrow', sans-serif;
+  --font-display: var(--font);
 
   /* Motion */
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-out: cubic-bezier(0.25, 0.1, 0.25, 1);
   --ease-menu: cubic-bezier(0.4, 0, 0.6, 1);
 
-  /* Tracking (Barlow Condensed reads best near zero) */
-  --track-h1: 0;
-  --track-h1-sm: 0;
-  --track-h2: 0.005em;
-  --track-h3: -0.01em;
+  --track-h1: -0.025em;
+  --track-h1-sm: -0.02em;
+  --track-h2: -0.018em;
+  --track-h3: -0.012em;
   --track-sub: -0.014em;
 
-  --side-w: 252px;
+  --side-w: 248px;
   --top-h: 56px;
   --tab-h: 62px;
   --gnav-h: 56px;
   --lnav-h: 56px;
 }
 
-/* Day mode: the same totem in daylight, for the pump in full sun (account menu). */
-:root[data-theme='light'] {
-  color-scheme: light;
-  --bg: #f1f1ed;
-  --surface: #ffffff;
-  --surface-2: #f7f7f4;
-  --surface-3: #e6e6e1;
-  --text: #0a0a0b;
-  --text-2: #4d4d52;
-  --text-3: #6a6a70;
-  --fill: #cfcfca;
-  --fill-2: #dededa;
-  --fill-3: #e8e8e4;
-  --fill-4: #f3f3f0;
-  --separator: #d4d4cf;
-  --hairline: rgba(10, 10, 11, 0.1);
-  --field-border: #8a8a90;
-  --accent: #0a0a0b;
-  --accent-hover: #26262a;
-  --accent-press: #000000;
-  --accent-soft: rgba(10, 10, 11, 0.08);
-  --link: #0a0a0b;
-  --on-accent: #ffffff;
-  --focus: #a87300;
-  --brand: #e0a800;
-  --mtg-blue: #0b84d6;
-  --mtg-blue-ink: #0a6fb5; /* white text and links on paper */
-  --sign-yellow: #f5b800;
-  --sign-yellow-hover: #ffc414;
-  --sign-yellow-press: #d9a200;
-  --sign-yellow-ink: #6f5000;
-  --sign-sky: #2f6fd6;
-  --sign-sky-ink: #1f5bbd;
-  --sign-violet: #6a4bd1;
-  --sign-violet-ink: #5a3cc0;
-  --sign-orange: #d9650a;
-  --sign-orange-ink: #a84a00;
-  --sign-tint: 12%;
-  --gasoil: #1fb862;
-  --essence: #e4303a;
-  --green: #17a35a;
-  --red: #d92d20;
-  --orange: #d9650a;
-  --yellow: #f2b100;
-  --good-text: #0b7a40;
-  --bad-text: #c4281c;
-  --series-3: #2f6fd6;
-  --series-4: #d9650a;
-  --track: #e2e2dd;
-  --nav-bg: rgba(255, 255, 255, 0.92);
-  --nav-solid: #ffffff;
-  --backdrop: rgba(10, 10, 11, 0.42);
-  --shadow: 0 4px 24px rgba(10, 10, 11, 0.1);
-  --shadow-lift: 0 18px 44px rgba(10, 10, 11, 0.18);
-  --thumb: #ffffff;
+/* Night: the same register under a lamp (the account menu). */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0f1318;
+  --surface: #171c23;
+  --surface-2: #12171d;
+  --surface-3: #1e252e;
+  --text: #e8ecf1;
+  --text-2: #a7b0bc;
+  --text-3: #8a94a1;
+  --fill: #3a4350;
+  --fill-2: #2d3540;
+  --fill-3: #252c36;
+  --fill-4: #1c222a;
+  --separator: #2f3742;
+  --hairline: #262e38;
+  --field-border: #4a5462;
+  --mtg-blue: #3d9be9;
+  --mtg-blue-ink: #6cb4f0;
+  --mtg-blue-soft: #16304a;
+  --accent-hover: #55a8ee;
+  --accent-press: #2c86d1;
+  --on-accent: #0b1220;
+  --focus: #6cb4f0;
+  --on-sign: #0b1220;
+  --gasoil: #34b37c;
+  --essence: #e8964a;
+  --on-fuel: #0b1220;
+  --green: #34b37c;
+  --red: #ef5a50;
+  --orange: #e8964a;
+  --yellow: #e0b23a;
+  --good-text: #5cc995;
+  --bad-text: #ff7b72;
+  --series-4: #8a94a1;
+  --track: #252c36;
+  --nav-bg: rgba(23, 28, 35, 0.94);
+  --nav-solid: #171c23;
+  --backdrop: rgba(0, 0, 0, 0.6);
+  --shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  --shadow-lift: 0 14px 36px rgba(0, 0, 0, 0.5);
+  --thumb: #3a4350;
 }
 
 /* ---------- Base ---------- */
@@ -222,7 +177,7 @@ body {
   text-rendering: optimizeLegibility;
   caret-color: var(--accent);
 }
-::selection { background: color-mix(in srgb, var(--sign-yellow) 34%, transparent); }
+::selection { background: color-mix(in srgb, var(--mtg-blue) 34%, transparent); }
 
 h1, h2, h3 { margin: 0; font-family: var(--font-display); text-wrap: balance; }
 h1 { font-size: 48px; line-height: 1.08; font-weight: 600; letter-spacing: var(--track-h1); }
@@ -306,7 +261,7 @@ a.btn:hover { text-decoration: none; }
 }
 .side-nav a svg { width: 20px; height: 20px; stroke-width: 1.8; flex: none; }
 .side-nav a:hover { color: var(--text); background: var(--fill-4); text-decoration: none; }
-.side-nav a.active { color: var(--text); background: color-mix(in oklab, var(--sign-yellow) var(--sign-tint), var(--surface-2)); font-weight: 600; }
+.side-nav a.active { color: var(--text); background: color-mix(in oklab, var(--mtg-blue) 10%, var(--surface-2)); font-weight: 600; }
 .side-nav a.active svg { color: var(--brand); }
 .side-foot {
   display: flex;
@@ -354,7 +309,7 @@ dialog.nav-dialog { inset: 0; margin: 0; width: 100vw; max-width: 100vw; height:
 .theme-btn { display: grid; place-items: center; flex: none; width: 44px; height: 44px; padding: 0; border: none; background: none; color: var(--text-2); cursor: pointer; }
 .theme-btn svg { width: 34px; height: 34px; padding: 7px; border-radius: 8px; background: var(--surface-3); stroke-width: 2; transition: background-color 0.2s var(--ease), color 0.2s; }
 .theme-btn:hover svg { color: var(--text); }
-.theme-btn[aria-pressed='true'] svg { background: var(--sign-yellow); color: var(--on-sign); }
+.theme-btn[aria-pressed='true'] svg { background: var(--mtg-blue); color: var(--on-sign); }
 .theme-btn:focus-visible { outline: none; }
 .theme-btn:focus-visible svg { box-shadow: 0 0 0 2px var(--focus); }
 .who { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.25; }
@@ -454,9 +409,9 @@ dialog.nav-dialog { inset: 0; margin: 0; width: 100vw; max-width: 100vw; height:
 /* The header is a lit band across the top of the panel: a tint of its sign, the title in that
    colour. Panels take turns (sky, violet, orange), so neighbouring headers never match. */
 /* Every sign is lit solid: --solid fills it, --on-solid writes on it. */
-.card { --hue: var(--sign-sky); --hue-ink: var(--sign-sky-ink); --solid: var(--hue); --on-solid: var(--on-sign); }
-.card:nth-child(3n + 2 of section.card) { --hue: var(--sign-violet); --hue-ink: var(--sign-violet-ink); }
-.card:nth-child(3n + 3 of section.card) { --hue: var(--sign-orange); --hue-ink: var(--sign-orange-ink); }
+.card { --hue: var(--text); --hue-ink: var(--text); --solid: var(--hue); --on-solid: var(--on-sign); }
+.card:nth-child(3n + 2 of section.card) { --hue: var(--text); --hue-ink: var(--text); }
+.card:nth-child(3n + 3 of section.card) { --hue: var(--text); --hue-ink: var(--text); }
 .card-header {
   display: flex;
   align-items: center;
@@ -640,7 +595,7 @@ dialog.nav-dialog { inset: 0; margin: 0; width: 100vw; max-width: 100vw; height:
 .badge.warning .dot { background: var(--warning); }
 .badge.serious .dot { background: var(--serious); }
 .badge.critical .dot { background: var(--critical); }
-.badge.info .dot { background: var(--sign-sky); }
+.badge.info .dot { background: var(--text); }
 .badge.over { background: color-mix(in srgb, var(--orange) 16%, transparent); }
 
 .alert-list { display: flex; flex-direction: column; }
@@ -712,9 +667,9 @@ tfoot td { font-weight: 600; border-top: 1px solid var(--separator); border-bott
 .btn:active { background: color-mix(in oklab, var(--solid) 86%, #000); }
 .btn:disabled { opacity: 0.42; cursor: default; }
 .btn svg { width: 18px; height: 18px; stroke-width: 2; }
-.btn.secondary, .btn.ghost { --hue: var(--sign-sky); --hue-ink: var(--sign-sky-ink); }
-.btn.secondary:nth-child(3n + 2 of .btn.secondary) { --hue: var(--sign-violet); --hue-ink: var(--sign-violet-ink); }
-.btn.secondary:nth-child(3n + 3 of .btn.secondary) { --hue: var(--sign-orange); --hue-ink: var(--sign-orange-ink); }
+.btn.secondary, .btn.ghost { --hue: var(--text); --hue-ink: var(--text); }
+.btn.secondary:nth-child(3n + 2 of .btn.secondary) { --hue: var(--text); --hue-ink: var(--text); }
+.btn.secondary:nth-child(3n + 3 of .btn.secondary) { --hue: var(--text); --hue-ink: var(--text); }
 .btn.ghost { padding-left: 12px; padding-right: 12px; }
 .btn.danger, .btn.destructive { --hue: var(--red); --hue-ink: var(--bad-text); }
 .btn:not(.secondary, .ghost, .danger, .destructive, .cancel, .return):hover { background: color-mix(in oklab, var(--solid) 84%, var(--bg)); }
@@ -725,10 +680,6 @@ tfoot td { font-weight: 600; border-top: 1px solid var(--separator); border-bott
 .btn.return { --hue: var(--mtg-blue); --hue-ink: var(--mtg-blue-ink); --on-solid: var(--on-sign); }
 /* Day: deep fills with white ink (the yellow keeps its dark ink). */
 /* Day: every sign writes in white, the yellow ones too (user's choice). */
-:root[data-theme='light'] :is(.btn, .card.remark-card) { --on-solid: #fff; }
-:root[data-theme='light'] :is(.btn.secondary, .btn.ghost, .btn.danger, .btn.destructive, .btn.return, .card:not(.remark-card)) { --solid: var(--hue-ink); --on-solid: #fff; }
-:root[data-theme='light'] .btn.cancel { --solid: var(--surface); --on-solid: var(--text); }
-:root[data-theme='light'] .card-header .btn:is(.secondary, .ghost) { --solid: var(--surface); --on-solid: var(--text); }
 .more-link { display: inline-flex; align-items: center; gap: 2px; font-size: 15px; font-weight: 600; white-space: nowrap; }
 .more-link svg { width: 16px; height: 16px; stroke-width: 2.2; margin-top: 1px; }
 .btn.large { min-height: 54px; padding: 14px 26px; font-size: 17px; }
@@ -900,7 +851,7 @@ input[type='checkbox']:not(.switch)::after {
   transform: rotate(45deg) scale(0);
   transition: transform 0.25s var(--ease);
 }
-input[type='checkbox']:not(.switch):checked { background: var(--sign-yellow); border-color: var(--sign-yellow); }
+input[type='checkbox']:not(.switch):checked { background: var(--mtg-blue); border-color: var(--mtg-blue); }
 input[type='checkbox']:not(.switch):checked::after { transform: rotate(45deg) scale(1); }
 input[type='checkbox']:not(.switch):focus { box-shadow: none; }
 
@@ -923,8 +874,8 @@ input[type='checkbox']:not(.switch):focus { box-shadow: none; }
   left: 0;
   width: 0;
   border-radius: 7px; /* 10px outside, 3px of padding */
-  background: color-mix(in oklab, var(--sign-yellow) calc(var(--sign-tint) + 6%), var(--surface));
-  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--sign-yellow) 55%, transparent);
+  background: color-mix(in oklab, var(--mtg-blue) calc(10% + 6%), var(--surface));
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--mtg-blue) 55%, transparent);
   transition: transform 0.4s var(--ease), width 0.4s var(--ease);
 }
 .segmented button {
@@ -944,7 +895,7 @@ input[type='checkbox']:not(.switch):focus { box-shadow: none; }
   white-space: nowrap;
   transition: color 0.2s;
 }
-.segmented button.active { color: var(--sign-yellow-ink); font-weight: 600; }
+.segmented button.active { color: var(--mtg-blue-ink); font-weight: 600; }
 .search { max-width: 320px; min-height: 40px; padding: 8px 16px 8px 38px; font-size: 15px; border-radius: var(--radius-md); border-color: var(--separator); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2386868b' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-4-4'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: 14px center; background-size: 16px; }
 
 /* ---------- Activity indicator ---------- */
@@ -1158,7 +1109,7 @@ dialog.action-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; 
   cursor: pointer;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
-.pump-option:has(input:checked) { border-color: var(--sign-yellow); box-shadow: inset 0 0 0 1px var(--sign-yellow); background: color-mix(in oklab, var(--sign-yellow) var(--sign-tint), var(--surface)); }
+.pump-option:has(input:checked) { border-color: var(--mtg-blue); box-shadow: inset 0 0 0 1px var(--mtg-blue); background: color-mix(in oklab, var(--mtg-blue) 10%, var(--surface)); }
 .pump-option.disabled { opacity: 0.45; cursor: default; }
 .summary-line { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; font-size: 17px; font-variant-numeric: tabular-nums; }
 .summary-line .num { white-space: nowrap; }
@@ -1191,16 +1142,14 @@ dialog.action-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; 
 .quick-action:hover { box-shadow: var(--shadow-lift); }
 /* Each action is its own lit sign, all built alike: a solid tile with its icon on a square of the
    tile's ink. The main action (Crédit) is yellow, the others violet, orange, sky. */
-.quick-action { --hue: var(--sign-sky); --hue-ink: var(--sign-sky-ink); --solid: var(--hue); --on-solid: var(--on-sign); background: var(--solid); color: var(--on-solid); }
-.quick-action:nth-child(4n + 2) { --hue: var(--sign-violet); --hue-ink: var(--sign-violet-ink); }
-.quick-action:nth-child(4n + 3) { --hue: var(--sign-orange); --hue-ink: var(--sign-orange-ink); }
-:root[data-theme='light'] .quick-action { --solid: var(--hue-ink); --on-solid: #fff; }
+.quick-action { --hue: var(--text); --hue-ink: var(--text); --solid: var(--hue); --on-solid: var(--on-sign); background: var(--solid); color: var(--on-solid); }
+.quick-action:nth-child(4n + 2) { --hue: var(--text); --hue-ink: var(--text); }
+.quick-action:nth-child(4n + 3) { --hue: var(--text); --hue-ink: var(--text); }
 .quick-action:hover { background: color-mix(in oklab, var(--solid) 88%, #fff); box-shadow: var(--shadow-lift); }
 .quick-action .qa-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--radius-md); background: var(--on-solid); color: var(--solid); }
 .quick-action .qa-icon svg { width: 21px; height: 21px; }
-.quick-action.primary { --hue: var(--sign-yellow); --hue-ink: var(--sign-yellow-ink); }
+.quick-action.primary { --hue: var(--mtg-blue); --hue-ink: var(--mtg-blue-ink); }
 /* By day Crédit stays bright yellow and writes in white like the others; its + is yellow on a white square. */
-:root[data-theme='light'] .quick-action.primary { --solid: var(--hue); --on-solid: #fff; }
 .kpi-row { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .kpi-row .card { padding: 18px; }
 .kpi-row .kpi .label { font-size: 13px; }
@@ -1230,8 +1179,8 @@ dialog.action-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; 
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 .seg-option:hover span { border-color: var(--text-2); }
-.seg-option input:checked + span { border-color: var(--sign-yellow); box-shadow: inset 0 0 0 1px var(--sign-yellow); background: color-mix(in oklab, var(--sign-yellow) var(--sign-tint), var(--surface)); color: var(--sign-yellow-ink); }
-.seg-option input:focus-visible + span { box-shadow: inset 0 0 0 1px var(--sign-yellow), 0 0 0 2px var(--focus); }
+.seg-option input:checked + span { border-color: var(--mtg-blue); box-shadow: inset 0 0 0 1px var(--mtg-blue); background: color-mix(in oklab, var(--mtg-blue) 10%, var(--surface)); color: var(--mtg-blue-ink); }
+.seg-option input:focus-visible + span { box-shadow: inset 0 0 0 1px var(--mtg-blue), 0 0 0 2px var(--focus); }
 .hint-line { min-height: 20px; font-size: 15px; color: var(--text-2); }
 .hint-line.new { color: var(--link); font-weight: 600; }
 .hint-line.variance-neg { color: var(--bad-text); font-weight: 600; }
@@ -1244,7 +1193,7 @@ dialog.action-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; 
   padding: 22px;
   border-radius: var(--radius);
   background: var(--surface);
-  box-shadow: inset 0 0 0 2px var(--sign-yellow);
+  box-shadow: inset 0 0 0 2px var(--mtg-blue);
   animation: fade-up 0.5s var(--ease) both;
 }
 .queue-card .who { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
@@ -1253,7 +1202,7 @@ dialog.action-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; 
 .queue-card .actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .queue-card .actions .btn { min-height: 48px; padding-left: 10px; padding-right: 10px; }
 .queue-title { display: flex; align-items: center; gap: 10px; font-size: 24px; }
-.queue-title .pulse { width: 10px; height: 10px; border-radius: 3px; background: var(--sign-yellow); animation: pulse 1.4s ease-in-out infinite; }
+.queue-title .pulse { width: 10px; height: 10px; border-radius: 3px; background: var(--mtg-blue); animation: pulse 1.4s ease-in-out infinite; }
 
 /* Customer: fill-up request status */
 .fill-card { text-align: center; padding: 32px 24px; }
@@ -1413,27 +1362,7 @@ html[data-nav='fade']::view-transition-new(page) { animation: fade-up 0.5s var(-
   .totem-price { font-size: 48px; }
 }
 
-/* ---------- Totem de nuit : finitions ----------
-   Names and figures speak in Barlow Condensed, reading text in Inter.
-   Panels are ruled, never shadowed at rest; colour belongs to the fuels. */
-h1 { font-size: 64px; line-height: 0.95; font-weight: 700; letter-spacing: 0; }
-h2 { font-weight: 600; letter-spacing: 0.005em; }
-h3 { font-family: var(--font); font-size: 17px; font-weight: 600; letter-spacing: -0.012em; }
-html { background: var(--bg); }
-.toasts { top: calc(env(safe-area-inset-top, 0px) + 16px); }
-.badge { border-radius: 6px; }
-.segmented { border-radius: var(--radius-md); }
-table th { color: var(--text-2); font-size: 12px; letter-spacing: 0.01em; background: color-mix(in oklab, var(--hue, var(--sign-sky)) 6%, var(--surface-2)); }
-input, select, textarea { background: var(--surface-2); border-color: var(--separator); }
-input:focus, select:focus, textarea:focus { border-color: var(--text); }
-.sheet, .alert, .toast { box-shadow: inset 0 0 0 1px var(--hairline), var(--shadow-lift); }
-.sheet-header h2, .alert h2 { font-family: var(--font-display); }
-.tank-pct { font-size: 40px; font-weight: 700; line-height: 1; }
-.meter { height: 10px; border-radius: 3px; }
-.meter-fill { border-radius: 3px; }
-.big-result .value { font-family: var(--font-display); font-size: 72px; font-weight: 700; }
-
-/* The shift is a line with four stops; the current stop is lit in the brand yellow. */
+/* The shift is a line with its stops; the current stop is marked in the MTG blue. */
 .shift-line {
   position: relative;
   display: grid;
@@ -1584,7 +1513,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--text); }
 }
 
 /* The manager's remarks to the attendant: a yellow sign, one remark per slide, swiped or stepped. */
-.card.remark-card { --hue: var(--sign-yellow); --hue-ink: var(--sign-yellow-ink); margin-bottom: 20px; }
+.card.remark-card { --hue: var(--mtg-blue); --hue-ink: var(--mtg-blue-ink); margin-bottom: 20px; }
 .remark-text { margin: 0 0 12px; font-size: 17px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 .remark-card .card-header { flex-wrap: nowrap; }
 .remark-card .card-header .btn-row { flex: none; }
@@ -1623,3 +1552,420 @@ input:focus, select:focus, textarea:focus { border-color: var(--text); }
   .print-only { display: block !important; }
 }
 .print-only { display: none; }
+
+/* =====================================================================
+   Registre : the book's grammar, over every component above.
+   ===================================================================== */
+body { font-size: 16px; letter-spacing: -0.011em; }
+h1 { font-size: 34px; line-height: 1.15; font-weight: 700; letter-spacing: -0.025em; }
+h2 { font-size: 19px; line-height: 1.25; font-weight: 650; letter-spacing: -0.018em; }
+h3 { font-size: 16px; line-height: 1.3; font-weight: 600; letter-spacing: -0.012em; }
+::selection { background: color-mix(in srgb, var(--mtg-blue) 22%, transparent); }
+:focus-visible { outline-color: var(--focus); }
+* { scrollbar-color: var(--fill) transparent; }
+
+/* Shell: a white rail ruled off from the paper */
+.shell { background: linear-gradient(to right, var(--surface) calc(var(--side-w) - 1px), var(--hairline) 0, var(--hairline) var(--side-w), transparent 0); }
+.side { background: var(--surface); border-right-color: var(--hairline); }
+.side-brand { font-size: 17px; font-weight: 700; letter-spacing: -0.02em; text-transform: none; }
+.side-brand .brand-mark { width: 46px; height: 17px; }
+.side-nav a { font-size: 15px; color: var(--text-2); }
+.side-nav a:hover { background: var(--fill-4); color: var(--text); }
+.side-nav a.active { background: var(--mtg-blue-soft); color: var(--mtg-blue-ink); font-weight: 600; }
+.side-nav a.active svg { color: var(--mtg-blue); }
+.topbar-title { font-size: 17px; font-weight: 650; letter-spacing: -0.015em; text-transform: none; }
+.tabbar .active, .tabbar .active svg { color: var(--mtg-blue); }
+
+/* Panels: white leaves ruled by one hairline, the title written in ink above a rule */
+.card { box-shadow: none; border: 1px solid var(--hairline); }
+.board > .card, .grid > .kpi.card, .grid:has(> .kpi) > .card { border: none; }
+.card-header { margin: -24px -24px 18px; padding: 18px 24px 14px; background: none; color: var(--text); border-bottom: 1px solid var(--hairline); }
+.card.flush .card-header { margin: 0; }
+.card-header h2 { font-size: 17px; color: var(--text); }
+.card-header p { color: var(--text-3); }
+.card-header a:not(.btn) { color: var(--link); }
+.grid:has(> .kpi), .board { border-radius: var(--radius-lg); }
+
+/* Figures: Inter, tabular, tight; one scale and one baseline for every band */
+.kpi .label { font-size: 13px; font-weight: 500; color: var(--text-2); }
+.kpi .value { margin-top: 8px; font-size: min(32px, 15cqi); font-weight: 650; line-height: 1.05; letter-spacing: -0.03em; }
+.grid:not(.kpi-row) > .kpi.card:first-child .value { font-size: min(32px, 15cqi); }
+.kpi .value.sm { font-size: 20px; letter-spacing: -0.02em; }
+.kpi .sub { color: var(--text-3); }
+.kpi-row .kpi .value { font-size: 22px; }
+.fact-value { font-size: 28px; font-weight: 650; letter-spacing: -0.03em; }
+.tank-pct { font-size: 26px; font-weight: 650; line-height: 1; letter-spacing: -0.03em; }
+.big-result .value { font-size: 48px; font-weight: 650; letter-spacing: -0.035em; }
+.queue-card .what, .fill-card .big { font-weight: 650; letter-spacing: -0.03em; }
+.recv-total { font-size: 22px; font-weight: 650; letter-spacing: -0.025em; }
+.bar-value { font-size: 12px; font-weight: 600; }
+.remark-count { font-size: 15px; font-weight: 600; color: var(--text-2); }
+
+/* Today's prices: a white leaf per fuel, the fuel as a small tab of ink */
+.totem { gap: 12px; margin-bottom: 24px; }
+.totem-panel { min-height: 0; padding: 16px 20px 18px; background: var(--surface); color: var(--text); border: 1px solid var(--hairline); }
+.totem-panel::after { display: none; }
+.page-slot.entering .totem-panel { animation: fade-up 0.5s var(--ease) both; }
+.totem-name { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; letter-spacing: -0.01em; text-transform: none; color: var(--text-2); }
+.totem-name::before { content: ''; width: 10px; height: 10px; border-radius: 3px; background: var(--product); flex: none; }
+.totem-price { padding-top: 12px; font-size: 40px; font-weight: 650; line-height: 1; letter-spacing: -0.035em; }
+.totem-price small { font-size: 15px; font-weight: 500; letter-spacing: -0.01em; color: var(--text-3); }
+.totem-sub { margin-top: 6px; font-size: 13px; font-weight: 500; color: var(--text-3); }
+@media (max-width: 420px) { .totem-price { font-size: 32px; } }
+
+/* The signature: every total closes an addition column on a double rule */
+.summary-line { padding: 9px 0; font-size: 16px; }
+.summary-line:not(.total):not(:last-child) { border-bottom: 1px solid var(--hairline); }
+.summary-line.total { margin-top: 6px; padding-top: 12px; border-top: 3px double var(--text); font-weight: 700; }
+tfoot td { border-top: 3px double var(--text); font-weight: 700; }
+
+/* Buttons: one blue slab per region; the others are white with an ink edge */
+.btn { --solid: var(--mtg-blue); --on-solid: var(--on-accent); min-height: 44px; padding: 10px 18px; border-radius: var(--radius-md); font-size: 15px; }
+.btn:not(.secondary, .ghost, .danger, .destructive, .cancel, .return):hover { background: var(--accent-hover); }
+.btn:not(.secondary, .ghost, .danger, .destructive, .cancel, .return):active { background: var(--accent-press); }
+.btn.secondary, .btn.cancel, .btn.return, .card-header .btn:is(.secondary, .ghost) { --solid: var(--surface); --on-solid: var(--text); border-color: var(--field-border); }
+.btn.return { --on-solid: var(--mtg-blue-ink); }
+.btn.ghost { --solid: transparent; --on-solid: var(--link); border-color: transparent; }
+.btn:is(.secondary, .cancel, .return, .ghost):hover { background: var(--fill-4); }
+.btn:is(.secondary, .cancel, .return, .ghost):active { background: var(--fill-3); }
+.btn.danger, .btn.destructive { --solid: var(--surface); --on-solid: var(--bad-text); border-color: color-mix(in oklab, var(--red) 45%, var(--surface)); }
+.btn.danger:hover, .btn.destructive:hover { background: color-mix(in oklab, var(--red) 8%, var(--surface)); }
+.btn.large { min-height: 52px; font-size: 16px; }
+
+/* Quick actions: white leaves, the main one blue */
+.quick-action { background: var(--surface); color: var(--text); border: 1px solid var(--hairline); }
+.quick-action:hover { background: var(--fill-4); box-shadow: none; }
+.quick-action .qa-icon { background: var(--mtg-blue-soft); color: var(--mtg-blue-ink); }
+.quick-action.primary { background: var(--mtg-blue); color: var(--on-accent); border-color: transparent; }
+.quick-action.primary:hover { background: var(--accent-hover); }
+.quick-action.primary .qa-icon { background: color-mix(in srgb, var(--on-accent) 18%, transparent); color: var(--on-accent); }
+
+/* Fields */
+input, select, textarea { background: var(--surface); border-color: var(--field-border); }
+input:focus, select:focus, textarea:focus { border-color: var(--mtg-blue); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mtg-blue) 18%, transparent); }
+.form-section { letter-spacing: 0.04em; }
+
+/* Tables: a quiet head, ruled rows */
+table th { background: var(--surface-2); color: var(--text-2); font-size: 12px; letter-spacing: 0; }
+
+/* Status: tinted squares, never loud fills */
+.badge.info .dot { background: var(--mtg-blue); }
+.alert-icon { color: var(--text); }
+.alert-icon.critical { background: color-mix(in oklab, var(--critical) 13%, var(--surface)); color: var(--critical); }
+.alert-icon.serious { background: color-mix(in oklab, var(--serious) 14%, var(--surface)); color: var(--serious); }
+.alert-icon.warning { background: color-mix(in oklab, var(--warning) 16%, var(--surface)); color: var(--warning); }
+.alert-icon.good { background: color-mix(in oklab, var(--good) 13%, var(--surface)); color: var(--good); }
+.alert-text { font-size: 15px; }
+
+/* The shift line: stops in ink, the current one in blue */
+.shift-line .stop-label { font-size: 13px; letter-spacing: -0.005em; text-transform: none; }
+
+/* Sheets */
+.sheet-header h2, .alert h2 { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+.sheet, .alert, .toast { box-shadow: 0 0 0 1px var(--hairline), var(--shadow-lift); }
+.bar { border-radius: 4px 4px 0 0; }
+.remark-dots span.on { background: var(--mtg-blue); }
+
+@media (max-width: 833px) {
+  h1 { font-size: 26px; line-height: 1.2; }
+  .big-result .value { font-size: 40px; }
+  .fact-value { font-size: 24px; }
+}
+
+/* Sign-in: the brand page, a white leaf with the monogram, ruled off from the form */
+.auth-brand { display: grid; place-items: center; padding: 56px 44px; background: var(--surface); border-right: 1px solid var(--hairline); }
+.auth-brand-inner { display: flex; flex-direction: column; align-items: flex-start; gap: 22px; width: min(360px, 100%); }
+.auth-brand .brand-mark { width: 100%; height: auto; aspect-ratio: 40 / 15; }
+.auth-brand-name { width: 100%; padding-top: 14px; border-top: 3px double var(--text); font-size: 20px; font-weight: 650; letter-spacing: -0.02em; }
+.auth-card h1 { font-size: 34px; letter-spacing: -0.03em; }
+.auth-card .lead { font-size: 16px; }
+.auth-card { --focus: var(--mtg-blue); --accent: var(--mtg-blue); }
+@media (max-width: 833px) {
+  .auth-brand { padding: 32px 24px 24px; border-right: none; border-bottom: 1px solid var(--hairline); }
+  .auth-brand-inner { width: min(220px, 100%); gap: 14px; }
+  .auth-brand-name { font-size: 16px; padding-top: 10px; }
+  .auth-card h1 { font-size: 28px; }
+}
+
+/* Phones: no rail, the paper all across */
+@media (max-width: 1023px) { .shell { background: var(--bg); } }
+
+/* A row's cancel: a quiet square that turns red only under the finger */
+.btn.danger.sm:not(:has(> span)) { --on-solid: var(--text-3); border-color: var(--hairline); }
+.btn.danger.sm:not(:has(> span)):hover { --on-solid: var(--bad-text); border-color: color-mix(in oklab, var(--red) 45%, var(--surface)); }
+
+/* A lone figure at the end of the board takes the whole row */
+.board > .fact:last-child:not(.fact + .fact), .board > .fact + .fact + .fact:last-child { grid-column: 1 / -1; }
+
+/* The sun stays quiet while the light mode is on (the default) */
+.theme-btn[aria-pressed='true'] svg { background: var(--fill-3); color: var(--text); }
+
+/* ---------- The register (dashboard): the value as one addition, beside prices and money ---------- */
+.register { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.register .form-section { margin: 18px 0 2px; }
+.register .card-header + .form-section { margin-top: 0; }
+.value-col .summary-line.total { font-size: 28px; font-weight: 650; letter-spacing: -0.03em; align-items: baseline; }
+.value-col .summary-line.total span:first-child { font-size: 16px; font-weight: 700; letter-spacing: -0.011em; }
+.reg-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 11px 0; color: var(--text); border-bottom: 1px solid var(--hairline); }
+.reg-row:last-child { border-bottom: none; }
+a.reg-row:hover { text-decoration: none; background: var(--fill-4); margin: 0 -12px; padding-left: 12px; padding-right: 12px; border-radius: var(--radius-sm); }
+.reg-label { display: flex; align-items: center; gap: 10px; min-width: 0; font-weight: 600; }
+.reg-label > span { display: flex; flex-direction: column; min-width: 0; }
+.reg-label small { color: var(--text-3); font-size: 13px; font-weight: 500; }
+.reg-label .swatch, .tank-name .swatch, .seg-option .swatch { width: 10px; height: 10px; margin: 0; border-radius: 3px; flex: none; }
+.reg-value { font-size: 17px; font-weight: 650; letter-spacing: -0.02em; white-space: nowrap; }
+.page-slot.entering .register { animation: fade-up 0.6s var(--ease) both 0.08s; }
+@media (max-width: 833px) { .register { grid-template-columns: minmax(0, 1fr); } }
+
+/* One figure scale for every glanced figure (prices, figures, tanks, counts) */
+.totem-price, .kpi .value, .grid:not(.kpi-row) > .kpi.card:first-child .value, .tank-pct, .fact-value { font-size: 28px; font-weight: 650; letter-spacing: -0.03em; line-height: 1.05; }
+@media (max-width: 420px) { .totem-price { font-size: 28px; } }
+
+/* A tank's name carries its fuel's tab; the alert threshold is a tick on the track */
+.tank-name { display: flex; align-items: center; gap: 8px; }
+.meter-mark { background: color-mix(in srgb, var(--text) 55%, transparent); }
+.seg-option span { gap: 8px; }
+
+/* Add a tank: a dashed leaf with the drawn plus */
+.add-tile { display: flex; align-items: center; justify-content: center; gap: 8px; border: 1px dashed var(--field-border); cursor: pointer; font: inherit; color: var(--link); font-weight: 600; background: var(--surface); }
+.add-tile svg { width: 18px; height: 18px; }
+.add-tile:hover { background: var(--fill-4); }
+/* The line just above a total gives way to the double rule */
+.summary-line:has(+ .summary-line.total) { border-bottom: none; }
+.register-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.register-side .reg-row:last-child { border-bottom: none; }
+.summary-line > span:first-child { min-width: 0; }
+.line-sub { display: block; color: var(--text-3); font-size: 13px; font-weight: 500; white-space: nowrap; }
+.auth-card h1 { margin-bottom: 28px; }
+.auth-card .lead { margin-top: -16px; }
+/* Flat leaves: no sheen on the tank gauges */
+.meter-fill::after { display: none; }
+
+/* =====================================================================
+   MTG Station — version 2.0 « Verre » (2026-11-07, the user's choice)
+   Manrope; a soft world of colour, blurred, behind everything; panels, bars and buttons
+   in clear liquid glass that lets it through, light caught on the rim; the station's
+   value on MTG-blue glass; arrivals rise out of a blur. Overrides every layer above.
+   ===================================================================== */
+@font-face { font-family: 'Manrope'; font-style: normal; font-weight: 400 800; font-display: swap; src: url('/fonts/manrope-latin.woff2') format('woff2'); }
+
+:root {
+  --font: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-display: var(--font);
+  --bg: #eef1f6;
+  --text: #0b0d12;
+  --text-2: #4a5160;
+  --text-3: #646b79;
+  --hairline: rgba(15, 25, 45, 0.08);
+  --separator: rgba(15, 25, 45, 0.12);
+  --field-border: rgba(15, 25, 45, 0.16);
+  --fill-3: rgba(15, 25, 45, 0.06);
+  --fill-4: rgba(255, 255, 255, 0.35);
+  --surface: rgba(255, 255, 255, 0.55);
+  --surface-2: rgba(255, 255, 255, 0.35);
+  --surface-3: rgba(255, 255, 255, 0.5);
+  --gasoil: #0f8f5c;
+  --essence: #db7d1f;
+  --glass: linear-gradient(160deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.16));
+  --glass-strong: rgba(246, 248, 252, 0.78);
+  --glass-blur: blur(18px) saturate(1.8);
+  --glass-rim: inset 0 1.5px 1px rgba(255, 255, 255, 0.95), inset 0 -1px 1px rgba(255, 255, 255, 0.4);
+  --glass-drop: 0 12px 30px rgba(20, 40, 80, 0.08);
+  --glass-btn: linear-gradient(155deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.06) 45%, rgba(255, 255, 255, 0.14));
+  --blue-glass: linear-gradient(155deg, rgba(20, 110, 200, 0.62), rgba(8, 60, 120, 0.72));
+  --blue-btn: linear-gradient(155deg, rgba(18, 108, 200, 0.9), rgba(8, 64, 128, 0.94));
+  --field-bg: rgba(255, 255, 255, 0.7);
+  --blob-1: #4aa3ff;
+  --blob-2: #7ae0ff;
+  --blob-3: #ffb36b;
+  --blob-o: 0.8;
+  --radius-xl: 28px;
+  --radius-lg: 24px;
+  --radius: 22px;
+  --radius-md: 14px;
+  --radius-sm: 8px;
+  --backdrop: rgba(20, 30, 50, 0.22);
+}
+:root[data-theme='dark'] {
+  --bg: #070a10;
+  --text: #eef2f8;
+  --text-2: #aab3c3;
+  --text-3: #8f99a9;
+  --hairline: rgba(255, 255, 255, 0.08);
+  --separator: rgba(255, 255, 255, 0.12);
+  --field-border: rgba(255, 255, 255, 0.16);
+  --fill-3: rgba(255, 255, 255, 0.08);
+  --fill-4: rgba(255, 255, 255, 0.06);
+  --surface: rgba(30, 36, 48, 0.6);
+  --surface-2: rgba(255, 255, 255, 0.04);
+  --surface-3: rgba(255, 255, 255, 0.08);
+  --glass: linear-gradient(160deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
+  --glass-strong: rgba(22, 27, 37, 0.82);
+  --glass-rim: inset 0 1px 1px rgba(255, 255, 255, 0.22), inset 0 -1px 1px rgba(255, 255, 255, 0.06);
+  --glass-drop: 0 14px 34px rgba(0, 0, 0, 0.45);
+  --glass-btn: linear-gradient(155deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.03) 45%, rgba(255, 255, 255, 0.07));
+  --blue-glass: linear-gradient(155deg, rgba(40, 130, 230, 0.5), rgba(10, 60, 130, 0.62));
+  --field-bg: rgba(255, 255, 255, 0.06);
+  --blob-1: #1d4f9a;
+  --blob-2: #0e6a8a;
+  --blob-3: #7a4a1c;
+  --blob-o: 0.7;
+  --backdrop: rgba(0, 0, 0, 0.5);
+}
+
+/* The page colour sits on the root only, so the blurred world shows through the body */
+html { background: var(--bg); }
+body { background: transparent; font-family: var(--font); letter-spacing: -0.012em; }
+
+/* The world behind the glass: three soft fields of colour, blurred, drifting slowly */
+.ambient { position: fixed; inset: -12%; z-index: -1; pointer-events: none; filter: blur(70px) saturate(1.2); }
+.ambient i { position: absolute; border-radius: 50%; opacity: var(--blob-o); }
+.ambient i:nth-child(1) { width: 60vmax; height: 60vmax; left: -15vmax; top: -20vmax; background: var(--blob-1); }
+.ambient i:nth-child(2) { width: 45vmax; height: 45vmax; right: -12vmax; top: 10vmax; background: var(--blob-2); }
+.ambient i:nth-child(3) { width: 40vmax; height: 40vmax; left: 20vmax; bottom: -18vmax; background: var(--blob-3); opacity: calc(var(--blob-o) * 0.55); }
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .ambient i:nth-child(1) { animation: drift 18s ease-in-out infinite alternate; }
+  .ambient i:nth-child(2) { animation: drift 22s ease-in-out infinite alternate-reverse; }
+  .ambient i:nth-child(3) { animation: drift 26s ease-in-out infinite alternate; }
+}
+@keyframes drift { to { transform: translate(6vmax, 4vmax) scale(1.08); } }
+
+/* Type */
+h1 { font-size: 36px; font-weight: 800; letter-spacing: -0.035em; }
+h2 { font-weight: 800; letter-spacing: -0.025em; }
+h3 { font-weight: 700; }
+.card-header h2 { font-size: 18px; font-weight: 800; }
+
+/* Glass: panels, rail and bars */
+.shell { background: none; }
+.card, .side, .topbar, .tabbar, .totem-panel { background: var(--glass); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); box-shadow: var(--glass-rim), var(--glass-drop); border: none; }
+.card { border-radius: var(--radius-lg); }
+.card-header { border-bottom-color: var(--hairline); }
+.board, .grid:has(> .kpi) { gap: 12px; background: none; border: none; overflow: visible; border-radius: 0; }
+.board > .card, .grid > .kpi.card, .grid:has(> .kpi) > .card { border-radius: var(--radius-lg); box-shadow: var(--glass-rim), var(--glass-drop); }
+.side { position: sticky; top: 12px; height: calc(100dvh - 24px); margin: 12px 0 12px 12px; border-radius: var(--radius-lg); }
+.shell { grid-template-columns: calc(var(--side-w) + 12px) minmax(0, 1fr); }
+.side-nav a.active { background: rgba(255, 255, 255, 0.55); color: var(--mtg-blue-ink); box-shadow: var(--glass-rim); }
+:root[data-theme='dark'] .side-nav a.active { background: rgba(255, 255, 255, 0.1); }
+.side-nav a:hover { background: rgba(255, 255, 255, 0.3); }
+.side-foot { border-top-color: var(--hairline); }
+.report-ops > .card { background: rgba(255, 255, 255, 0.25); box-shadow: var(--glass-rim); }
+
+/* Fields */
+input, select, textarea { background: var(--field-bg); border-color: var(--field-border); border-radius: var(--radius-md); }
+table th { background: transparent; }
+
+/* Sheets, menus, toasts: denser glass */
+.sheet, .alert, .toast, .action-group, .nav-drawer { background: var(--glass-strong); -webkit-backdrop-filter: blur(30px) saturate(1.8); backdrop-filter: blur(30px) saturate(1.8); box-shadow: var(--glass-rim), 0 24px 60px rgba(10, 20, 40, 0.22); }
+.sheet-footer { background: transparent; border-top-color: var(--hairline); }
+.sheet { border-radius: var(--radius-xl); }
+
+/* Buttons: liquid glass. The main action is MTG-blue glass, every other one clear glass. */
+.btn { background: var(--blue-btn); color: #fff; border: none; border-radius: var(--radius-md); -webkit-backdrop-filter: blur(10px) saturate(1.6); backdrop-filter: blur(10px) saturate(1.6); box-shadow: inset 0 1.5px 1px rgba(255, 255, 255, 0.55), inset 0 -1px 1px rgba(255, 255, 255, 0.15), 0 8px 20px rgba(11, 111, 196, 0.22); font-weight: 700; }
+.btn:not(.secondary, .ghost, .danger, .destructive, .cancel, .return):hover { background: linear-gradient(155deg, rgba(28, 122, 215, 0.92), rgba(10, 74, 145, 0.95)); }
+.btn:not(.secondary, .ghost, .danger, .destructive, .cancel, .return):active { background: linear-gradient(155deg, rgba(14, 92, 175, 0.95), rgba(7, 52, 105, 0.97)); }
+.btn.secondary, .btn.cancel, .btn.return, .btn.danger, .btn.destructive, .card-header .btn:is(.secondary, .ghost) { background: var(--glass-btn); color: var(--text); box-shadow: var(--glass-rim), 0 6px 16px rgba(20, 40, 80, 0.08); border: none; }
+.btn.return { color: var(--mtg-blue-ink); }
+.btn.danger, .btn.destructive { color: var(--bad-text); }
+.btn:is(.secondary, .cancel, .return, .danger, .destructive):hover, .card-header .btn:is(.secondary, .ghost):hover { background: linear-gradient(155deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.18)); }
+.btn.ghost { background: transparent; color: var(--link); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.btn.ghost:hover { background: rgba(255, 255, 255, 0.3); }
+.btn.danger.sm:not(:has(> span)) { color: var(--text-3); }
+.btn.danger.sm:not(:has(> span)):hover { color: var(--bad-text); }
+.circle-btn, .theme-btn svg { background: var(--glass-btn); box-shadow: var(--glass-rim); }
+
+/* Quick actions: glass squircles with the glyph, the label beneath (the attendant's four, the manager's row) */
+.quick-actions { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.quick-action, .quick-action:hover, .quick-action.primary, .quick-action.primary:hover { min-height: 0; padding: 0; gap: 8px; background: none; border: none; box-shadow: none; color: var(--text); font-size: 13px; font-weight: 700; }
+.quick-action .qa-icon, .act-glass { position: relative; display: grid; place-items: center; width: 62px; height: 62px; border-radius: 21px; isolation: isolate; color: var(--text); background: var(--glass-btn); -webkit-backdrop-filter: blur(6px) saturate(1.8) brightness(1.06); backdrop-filter: blur(6px) saturate(1.8) brightness(1.06); box-shadow: inset 0 1.5px 1px rgba(255, 255, 255, 0.95), inset 0 -1px 1px rgba(255, 255, 255, 0.4), 0 8px 20px rgba(20, 40, 80, 0.1); transition: transform 0.25s var(--ease); }
+.quick-action .qa-icon::after, .act-glass::after { content: ''; position: absolute; left: 14%; right: 14%; top: 6%; height: 30%; border-radius: 50%; background: linear-gradient(rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0)); filter: blur(2px); opacity: 0.6; pointer-events: none; }
+.quick-action .qa-icon svg, .act-glass svg { width: 26px; height: 26px; stroke-width: 2.2; position: relative; z-index: 1; }
+.quick-action.primary .qa-icon { background: var(--blue-btn); color: #fff; }
+.quick-action:active .qa-icon, .act:active .act-glass { transform: scale(0.94); }
+@media (max-width: 420px) { .quick-actions { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; } .quick-action { font-size: 12px; } }
+
+/* Prices and figures on glass */
+.totem-panel { border-radius: var(--radius-lg); }
+.badge { background: rgba(255, 255, 255, 0.5); box-shadow: inset 0 0 0 1px var(--hairline); }
+:root[data-theme='dark'] .badge { background: rgba(255, 255, 255, 0.08); }
+.kpi .value, .tile-value, .totem-price, .fact-value, .tank-pct { font-weight: 800; letter-spacing: -0.04em; }
+.meter { background: rgba(15, 25, 45, 0.08); }
+
+/* ---------- Dashboard 2.0: the value on blue glass, the shortcuts, the pinned tiles ---------- */
+.hero { position: relative; display: block; width: 100%; padding: 22px 22px 24px; border: none; border-radius: var(--radius-xl); overflow: hidden; color: #fff; text-align: left; font: inherit; cursor: pointer; background: var(--blue-glass); -webkit-backdrop-filter: blur(24px) saturate(1.6); backdrop-filter: blur(24px) saturate(1.6); box-shadow: inset 0 1.5px 1px rgba(255, 255, 255, 0.55), inset 0 -1px 1px rgba(255, 255, 255, 0.18), 0 24px 50px rgba(10, 40, 90, 0.24); }
+.hero .brand-mark { position: absolute; right: 20px; top: 22px; width: 46px; height: 17px; color: #fff; }
+.hero .brand-mark :is(path, rect, circle) { fill: currentColor; }
+.hero-label { font-size: 13px; font-weight: 600; color: rgba(255, 255, 255, 0.82); }
+.hero-value { display: block; margin-top: 8px; font-size: 44px; font-weight: 800; line-height: 1; letter-spacing: -0.045em; font-variant-numeric: tabular-nums; }
+.hero-value.lost { color: #ffd2cf; }
+.hero-sub { margin-top: 10px; font-size: 14px; font-weight: 600; color: rgba(255, 255, 255, 0.82); }
+.acts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
+.act { display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--text); font-size: 13px; font-weight: 700; text-align: center; }
+.act:hover { text-decoration: none; }
+.dash { display: grid; grid-template-columns: minmax(0, 380px) minmax(0, 1fr); gap: 28px; align-items: start; }
+.sec-title { display: flex; justify-content: space-between; align-items: baseline; margin: 0 2px 12px; }
+.sec-title h2 { font-size: 22px; }
+.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.tile { display: block; padding: 15px 16px 16px; border-radius: var(--radius-lg); color: var(--text); background: var(--glass); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); box-shadow: var(--glass-rim), var(--glass-drop); }
+a.tile:hover { text-decoration: none; background: linear-gradient(160deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.22)); }
+.tile-head { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; color: var(--c, var(--text)); }
+.tile-head .tile-ic { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 7px; background: var(--c, var(--text)); color: #fff; }
+.tile-head .tile-ic svg { width: 13px; height: 13px; stroke-width: 2.6; }
+.tile-head small { margin-left: auto; color: var(--text-3); font-size: 13px; font-weight: 600; }
+.tile-body { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; margin-top: 12px; }
+.tile-value { display: block; font-size: 30px; line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tile-value small { margin-left: 3px; font-size: 15px; font-weight: 700; letter-spacing: 0; color: var(--text-3); }
+.tile-value.lost { color: var(--bad-text); }
+.tile-sub { margin-top: 5px; color: var(--text-2); font-size: 13px; font-weight: 500; }
+.tile-bars { display: flex; align-items: flex-end; gap: 4px; height: 44px; flex: none; }
+.tile-bars i { width: 7px; min-height: 3px; border-radius: 4px; background: var(--c); opacity: 0.3; transform-origin: bottom; animation: grow-y 0.9s var(--ease) both; }
+.tile-bars i:last-child { opacity: 1; }
+.tile-ring { width: 54px; height: 54px; flex: none; transform: rotate(-90deg); }
+.tile-ring circle { fill: none; stroke-width: 7; stroke-linecap: round; }
+.tile-ring .ring-track { stroke: rgba(15, 25, 45, 0.08); }
+:root[data-theme='dark'] .tile-ring .ring-track { stroke: rgba(255, 255, 255, 0.1); }
+.tile-ring .ring-fill { stroke: var(--c); stroke-dasharray: 138.2; stroke-dashoffset: calc(138.2 - 138.2 * var(--p) / 100); animation: ring-fill 1.4s var(--ease) both 0.3s; }
+@keyframes ring-fill { from { stroke-dashoffset: 138.2; } }
+.tile.wide { grid-column: 1 / -1; }
+.tile .alert-list { margin-top: 8px; }
+.c-blue { --c: var(--mtg-blue); }
+.c-gold { --c: #b8860b; }
+.c-red { --c: #e0393e; }
+.c-green { --c: var(--gasoil); }
+.c-amber { --c: var(--essence); }
+.dash-below { margin-top: 28px; }
+@media (max-width: 1023px) { .dash { grid-template-columns: minmax(0, 1fr); gap: 0; } .dash > div + div { margin-top: 28px; } }
+@media (max-width: 560px) { .tiles { grid-template-columns: minmax(0, 1fr); } .hero-value { font-size: 40px; } }
+
+/* Arrivals rise out of a blur, one after the other */
+@keyframes rise { from { opacity: 0; transform: translateY(16px) scale(0.985); filter: blur(6px); } }
+.page-slot.entering :is(.hero, .tile, .card, .totem-panel) { animation: rise 0.8s var(--ease) both; }
+.page-slot.entering .tiles > :nth-child(2) { animation-delay: 0.05s; }
+.page-slot.entering .tiles > :nth-child(3) { animation-delay: 0.1s; }
+.page-slot.entering .tiles > :nth-child(4) { animation-delay: 0.15s; }
+.page-slot.entering .tiles > :nth-child(5) { animation-delay: 0.2s; }
+.page-slot.entering .tiles > :nth-child(n + 6) { animation-delay: 0.25s; }
+.page-slot.entering .acts > *, .page-slot.entering .quick-actions > * { animation: rise 0.7s var(--ease) both 0.1s; }
+
+/* Phones: floating glass bars */
+@media (max-width: 1023px) {
+  .shell { grid-template-columns: none; }
+  .topbar { top: 8px; margin: 8px 10px 0; border-radius: 18px; }
+  .tabbar { left: 10px; right: 10px; bottom: calc(8px + env(safe-area-inset-bottom, 0px)); height: var(--tab-h); border-radius: 22px; padding-bottom: 0; }
+}
+
+/* Where glass cannot be drawn (old browsers, or less transparency asked), panels turn solid */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .card, .side, .topbar, .tabbar, .totem-panel, .tile, .sheet, .toast { background: rgba(255, 255, 255, 0.92); }
+  :root[data-theme='dark'] :is(.card, .side, .topbar, .tabbar, .totem-panel, .tile, .sheet, .toast) { background: rgba(23, 28, 38, 0.95); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .card, .side, .topbar, .tabbar, .totem-panel, .tile, .sheet, .toast { background: var(--glass-strong); }
+}
+.value-sheet .value-col { background: none; box-shadow: none; padding: 0; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.value-sheet .value-col .card-header { margin: 0 0 12px; padding: 0 0 12px; }
+.tile-ring-box { display: block; flex: none; line-height: 0; }
+
+/* Sign-in on glass: the world behind, the monogram on a clear leaf */
+.auth { background: none; }
+.auth-brand { background: var(--glass); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border-right: none; box-shadow: var(--glass-rim); }

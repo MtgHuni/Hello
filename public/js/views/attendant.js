@@ -231,7 +231,7 @@ function renderOpenShift(page, ctx, shift, remarks = null) {
         quick('Dépense', 'wallet', () => addExpense(ctx, shift, reload)),
       ),
       // Fuel drawn for a test and poured back into the tank: not sold once the manager approves.
-      button('Test de pompe (remis en cuve)', (e) => busy(e.currentTarget, () => addTest(ctx, shift, reload)), { variant: 'secondary block', iconName: 'pump' }),
+      button('Test de pompe', (e) => busy(e.currentTarget, () => addTest(ctx, shift, reload)), { variant: 'secondary block', iconName: 'pump' }),
       requestQueue(shift, reload, ctx.state.settings.cashTolerance),
       h(
         'div',
@@ -638,7 +638,7 @@ export async function addCredit(ctx, shift, reload) {
       },
     },
     { name: 'customerChips', type: 'node', node: search.chips },
-    { name: 'productId', label: 'Produit', type: 'segment', options: products.map((r) => [r.product_id, r.product_name]), onInput: update },
+    { name: 'productId', label: 'Produit', type: 'segment', options: products.map((r) => [r.product_id, r.product_name, productColor(r.product_id)]), onInput: update },
     { name: 'unit', label: 'Unité', type: 'segment', options: [['amount', '$'], ['liters', 'L']], onInput: update },
     { name: 'qty', label: 'Quantité', type: 'number', step: '0.01', min: '0.01', required: true, onInput: update, inputmode: 'decimal' },
     { name: 'plate', label: 'Plaque', placeholder: 'Facultatif' },

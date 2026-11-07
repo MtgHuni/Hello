@@ -1,7 +1,7 @@
 import { flags, edit } from '../ui.js';
 import { api } from '../api.js';
-import { h, fmt, kpi, cardHeader, tankGauge, pageHeader, button, setContent, priceTotem, formDialog, toast, field, busy, openDialog } from '../ui.js';
-import { icon } from '../icons.js';
+import { h, fmt, cardHeader, pageHeader, button, buttonRow, setContent, formDialog, toast, field, busy, productColor, openDialog } from '../ui.js';
+import { icon, brandMark } from '../icons.js';
 
 const ALERT_ICON = { critical: 'alert', serious: 'alert', warning: 'info' };
 
@@ -10,60 +10,102 @@ export async function renderDashboard(page, { state, navigate }) {
   const hour = new Date().getHours();
   const hello = hour < 18 ? 'Bonjour' : 'Bonsoir';
 
-  setContent(page, 
-    pageHeader(
-      `${hello}, ${state.user.name.split(' ')[0]}`,
-      fmt.longDay(d.today),
-      d.openShifts[0] ? button('État du poste', () => navigate(`postes/${d.openShifts[0].id}/etat`), { iconName: 'chart' }) : null,
-      edit(button('Nouvelle livraison', () => navigate('cuves'), { variant: 'secondary', iconName: 'truck' })),
-    ),
+  const s = d.openShifts[0];
+  const tile = ({ color, ic, title, side, value, unit, sub, lost = false, chart, href, wide = false }) =>
+    h(
+      href ? 'a' : 'div',
+      { class: `tile ${color}${wide ? ' wide' : ''}`, href },
+      h('div', { class: 'tile-head' }, h('span', { class: 'tile-ic' }, icon(ic)), title, side ? h('small', {}, side) : null),
+      h('div', { class: 'tile-body' }, h('div', {}, h('span', { class: `tile-value${lost ? ' lost' : ''}` }, value, unit ? h('small', {}, unit) : null), sub ? h('p', { class: 'tile-sub' }, sub) : null), chart || null),
+    );
+  const bars = (values) => {
+    const max = Math.max(1, ...values);
+    return h('div', { class: 'tile-bars', 'aria-hidden': 'true' }, values.map((v, i) => h('i', { style: `height:${Math.round((v / max) * 100)}%;animation-delay:${i * 40}ms` })));
+  };
+  // The tank's level as a ring that fills on arrival (SVG needs its own namespace: built from markup).
+  const ring = (pct) => {
+    const box = h('span', { class: 'tile-ring-box', 'aria-hidden': 'true' });
+    box.innerHTML = `<svg class="tile-ring" viewBox="0 0 54 54" style="--p:${Math.round(Math.max(0, Math.min(100, pct)))}"><circle class="ring-track" cx="27" cy="27" r="22"/><circle class="ring-fill" cx="27" cy="27" r="22"/></svg>`;
+    return box;
+  };
+  const price = (productId) => products.find((p) => p.id === productId)?.price;
+  const bare = (n) => fmt.money(n).replace(/\s?\$$/, '');
+  const total7 = d.last7.reduce((t, x) => t + x.amount, 0);
 
-    priceTotem(products.filter((p) => p.active).map((p) => ({ id: p.id, name: p.name, price: p.price, subscriberPrice: p.subscriber_price }))),
-
+  setContent(
+    page,
+    pageHeader(`${hello}, ${state.user.name.split(' ')[0]}`, fmt.longDay(d.today)),
     h(
       'div',
-      { class: 'grid grid-4' },
-      valueKpi(d.value, flags.combos),
-      shiftKpi(d.openShifts[0]),
+      { class: 'dash' },
       h(
-        'a',
-        { class: 'card kpi kpi-link', href: '#/caisse' },
-        h('div', { class: 'label' }, 'Caisse'),
-        h('div', { class: 'value' }, fmt.money(d.cash.cash.balance)),
-        h('div', { class: 'sub' }, `Mobile money ${fmt.money(d.cash.momo.balance)}${d.supplierDebt ? ` · fournisseurs ${fmt.money(d.supplierDebt)}` : ''}`),
-      ),
-      h('a', { class: 'card kpi kpi-link', href: '#/clients/creances' }, h('div', { class: 'label' }, 'Encours clients'), h('div', { class: 'value' }, fmt.money(d.receivables)), h('div', { class: 'sub' }, d.receivablesOld ? `${fmt.money(d.receivablesOld)} à plus de 30 jours` : 'Rien à plus de 30 jours')),
-    ),
-
-    asked ? askCard(asked) : null,
-
-    // One ruled board: sales, alerts, stock and customer facts share a single surface.
-    h(
-      'div',
-      { class: 'board section' },
-      h('section', { class: 'card board-chart' }, cardHeader('Ventes des 7 derniers jours', `Total ${fmt.money(d.last7.reduce((t, x) => t + x.amount, 0))}`), barChart(d.last7)),
-      h(
-        'section',
-        { class: 'card board-alerts' },
-        cardHeader(
-          'Alertes',
-          [d.alerts.length ? `${d.alerts.length} point${d.alerts.length > 1 ? 's' : ''} à surveiller` : null, masked(d) ? `${masked(d)} masquée${masked(d) > 1 ? 's' : ''}` : null].filter(Boolean).join(' · ') || null,
-          button('Gérer', () => manageAlerts(d.alertsManage, () => renderDashboard(page, { state, navigate })), { variant: 'ghost sm', iconName: 'settings' }),
+        'div',
+        {},
+        // What the station is worth now, on blue glass; touched, every line of the addition.
+        h(
+          'button',
+          { class: 'hero', type: 'button', onClick: () => valueDetail(d.value, flags.combos) },
+          brandMark(),
+          h('span', { class: 'hero-label' }, 'Valeur de la station'),
+          h('span', { class: `hero-value${d.value.net < 0 ? ' lost' : ''}` }, fmt.money(d.value.net)),
+          s ? h('p', { class: 'hero-sub' }, `Poste n°${s.id} · ${s.station_closed_at ? 'station fermée' : s.on_duty || 'personne en service'}`) : null,
         ),
-        alertList(d.alerts),
+        h(
+          'nav',
+          { class: 'acts', 'aria-label': 'Raccourcis' },
+          s ? act('chart', 'État du poste', `#/postes/${s.id}/etat`) : null,
+          edit(act('truck', 'Livraison', '#/cuves')),
+          act('cash', 'Caisse', '#/caisse'),
+          act('users', 'Clients', '#/clients'),
+        ),
       ),
       h(
-        'section',
-        { class: 'card board-wide' },
-        cardHeader('Niveau des cuves', null, h('a', { class: 'more-link', href: '#/cuves' }, 'Voir les cuves', icon('chevron'))),
-        d.tanks.length ? h('div', { class: 'grid grid-2', style: 'gap:28px' }, d.tanks.map(tankGauge)) : h('div', { class: 'empty' }, 'Aucune cuve configurée.'),
+        'div',
+        {},
+        h('div', { class: 'sec-title' }, h('h2', {}, 'Aujourd’hui')),
+        h(
+          'div',
+          { class: 'tiles' },
+          tile({ color: 'c-blue', ic: 'chart', title: 'Ventes', side: '7 jours', value: bare(total7), unit: '$', chart: bars(d.last7.map((x) => x.amount)), href: '#/rapports' }),
+          tile({ color: 'c-gold', ic: 'users', title: 'Crédits clients', value: bare(d.receivables), unit: '$', sub: d.receivablesOld ? `${fmt.money(d.receivablesOld)} à plus de 30 jours` : null, href: '#/clients/creances' }),
+          d.tanks.map((t) => {
+            const pct = (t.book_stock / t.capacity) * 100;
+            return h(
+              'a',
+              { class: 'tile', href: '#/cuves', style: `--c:${productColor(t.product_id)}` },
+              h('div', { class: 'tile-head' }, h('span', { class: 'tile-ic' }, icon('tank')), t.product_name, price(t.product_id) != null ? h('small', {}, fmt.price(price(t.product_id))) : null),
+              h('div', { class: 'tile-body' }, h('div', {}, h('span', { class: 'tile-value' }, fmt.number(Math.round(t.book_stock)), h('small', {}, 'L')), h('p', { class: 'tile-sub' }, `${t.name} à ${Math.round(pct)} %`)), ring(pct)),
+            );
+          }),
+          tile({ color: 'c-blue', ic: 'cash', title: 'Caisse', value: bare(d.cash.cash.balance), unit: '$', lost: d.cash.cash.balance < 0, sub: `Mobile money ${fmt.money(d.cash.momo.balance)}`, href: '#/caisse' }),
+          d.supplierDebt ? tile({ color: 'c-red', ic: 'truck', title: 'Fournisseurs', value: bare(d.supplierDebt), unit: '$', lost: true, href: '#/cuves' }) : null,
+          flags.combos ? tile({ color: 'c-gold', ic: 'card', title: 'Combos des clients', value: fmt.number(d.combos.total), sub: `Valeur ${fmt.money(d.combos.value)}`, href: '#/clients' }) : null,
+          d.toReview ? tile({ color: 'c-red', ic: 'user', title: 'Fiches à compléter', value: String(d.toReview), href: '#/clients' }) : null,
+        ),
       ),
-      facts([
-        flags.combos ? ['Combos des clients', fmt.number(d.combos.total), `Valeur ${fmt.money(d.combos.value)} en carburant · ${d.combos.redeemable} client${d.combos.redeemable > 1 ? 's peuvent' : ' peut'} échanger`, '#/clients'] : null,
-        ['Fiches clients à compléter', String(d.toReview), d.toReview ? 'Créées à la pompe avec le nom seulement' : 'Toutes les fiches sont complètes', '#/clients'],
-      ]),
+    ),
+    asked ? askCard(asked) : null,
+    h(
+      'section',
+      { class: 'card dash-below' },
+      cardHeader(
+        'Alertes',
+        [d.alerts.length ? `${d.alerts.length} point${d.alerts.length > 1 ? 's' : ''} à surveiller` : null, masked(d) ? `${masked(d)} masquée${masked(d) > 1 ? 's' : ''}` : null].filter(Boolean).join(' · ') || null,
+        button('Gérer', () => manageAlerts(d.alertsManage, () => renderDashboard(page, { state, navigate })), { variant: 'ghost sm', iconName: 'settings' }),
+      ),
+      alertList(d.alerts),
     ),
   );
+}
+
+// A shortcut in glass: the glyph in a clear squircle, its name beneath.
+function act(iconName, label, href) {
+  return h('a', { class: 'act', href }, h('span', { class: 'act-glass' }, icon(iconName)), label);
+}
+
+// The station's value, every line of the addition, in a sheet.
+function valueDetail(v, combos) {
+  openDialog((close) => h('div', { class: 'sheet dialog-body value-sheet' }, valueColumn(v, combos), buttonRow([button('Fermer', close, { variant: 'cancel' })])));
 }
 
 // « Demander à l'appli »: a question on the station's figures, answered by Claude from the database.
@@ -105,77 +147,38 @@ function askCard(data) {
   return h('section', { class: 'card ask-card section' }, cardHeader('Question', left), form, list);
 }
 
-// Customer facts as ruled rows: label and note on the left, the figure on the right.
-function facts(rows) {
-  const list = rows.filter(Boolean);
-  return list.map(([label, value, sub, href]) =>
-    h(
-      'a',
-      { class: `card fact${list.length === 1 ? ' board-wide' : ''}`, href },
-      h('span', { class: 'fact-text' }, h('span', { class: 'fact-label' }, label), h('span', { class: 'fact-sub' }, sub)),
-      h('span', { class: 'fact-value' }, value),
-    ),
-  );
-}
 
-// The station runs one shift at a time: who holds it, since when, or that none is open.
-// What the station is worth now (its money, credits and fuel at purchase cost, less what it owes);
-// touched, every line.
-function valueKpi(v, combos) {
-  const a = v.assets;
-  const money = a.cash + a.momo + a.shift + a.uncounted;
-  const debts = Object.values(v.debts).reduce((t, x) => t + x, 0);
-  const open = () => valueDetail(v, combos);
-  return h(
-    'div',
-    { class: 'card kpi kpi-link', role: 'button', tabIndex: 0, onclick: open, onkeydown: (e) => e.key === 'Enter' && open() },
-    h('div', { class: 'label' }, 'Valeur de la station'),
-    h('div', { class: 'value' }, fmt.money(v.net)),
-    h('div', { class: 'sub' }, `Argent ${fmt.money(money)} · crédits ${fmt.money(a.receivables)} · carburant ${fmt.money(a.fuel)} · dettes ${fmt.money(-debts)}`),
-  );
-}
 
-function valueDetail(v, combos) {
-  const line = (label, value, { total = false, lost = false } = {}) =>
-    h('div', { class: `summary-line${total ? ' total' : ''}` }, h('span', {}, label), h('span', { class: `num${lost ? ' variance-neg' : ''}` }, value));
+
+// What the station is worth now, as one addition: its money, credits and fuel at purchase cost,
+// less what it owes, closed on a double rule.
+function valueColumn(v, combos) {
+  // Red means owed or a gap: what the station owes, money below zero, a missing purchase price.
+  const line = (label, value, { total = false, lost = false, sub = null } = {}) =>
+    h('div', { class: `summary-line${total ? ' total' : ''}` }, h('span', {}, label, sub ? h('small', { class: 'line-sub' }, sub) : null), h('span', { class: `num${lost ? ' variance-neg' : ''}` }, value));
+  const own = (label, n) => line(label, fmt.money(n), { lost: n < 0 });
+  const owe = (label, n) => line(label, fmt.money(-n), { lost: n > 0.005 });
   const a = v.assets;
   const d = v.debts;
-  openDialog((close) =>
-    h(
-      'div',
-      { class: 'sheet dialog-body' },
-      h('h2', {}, 'Valeur de la station'),
-      h('h3', { class: 'form-section' }, 'Ce qu’elle possède'),
-      line('Espèces (caisse)', fmt.money(a.cash)),
-      line('Mobile money', fmt.money(a.momo)),
-      line('Argent du poste en cours', fmt.money(a.shift)),
-      Math.abs(a.uncounted) >= 0.005 ? line('Argent à compter', fmt.money(a.uncounted)) : null,
-      line('Crédits clients', fmt.money(a.receivables)),
-      v.tanks.map((t) =>
-        line(
-          `${t.name} · ${fmt.liters(t.liters)}${t.cost == null ? '' : ` × ${fmt.price(t.cost)}`}`,
-          t.value == null ? 'prix d’achat manquant' : fmt.money(t.value),
-          { lost: t.value == null },
-        ),
-      ),
-      h('h3', { class: 'form-section' }, 'Ce qu’elle doit'),
-      line('Fournisseurs', fmt.money(-d.suppliers)),
-      line('Salaires à payer', fmt.money(-d.salaries)),
-      line('Avances des clients', fmt.money(-d.advances)),
-      combos ? line('Combos des clients', fmt.money(-d.combos)) : null,
-      line('Valeur nette', fmt.money(v.net), { total: true, lost: v.net < 0 }),
-      h('div', { class: 'dialog-actions' }, button('Fermer', close, { variant: 'cancel' })),
-    ),
-  );
-}
-
-function shiftKpi(s) {
   return h(
-    'a',
-    { class: 'card kpi kpi-link', href: s ? `#/postes/${s.id}/etat` : '#/postes' },
-    h('div', { class: 'label' }, 'Poste en cours'),
-    h('div', { class: 'value sm' }, !s ? 'Aucun' : s.station_closed_at ? 'Station fermée' : s.on_duty || 'Personne'),
-    h('div', { class: 'sub' }, s ? `Poste n°${s.id} depuis le ${fmt.dateTime(s.opened_at)} · crédits ${fmt.money(s.credit_so_far)}` : 'Aucun poste ouvert'),
+    'section',
+    { class: 'card value-col' },
+    cardHeader('Valeur de la station'),
+    h('h3', { class: 'form-section' }, 'Ce qu’elle possède'),
+    own('Espèces (caisse)', a.cash),
+    own('Mobile money', a.momo),
+    own('Argent du poste en cours', a.shift),
+    Math.abs(a.uncounted) >= 0.005 ? own('Argent à compter', a.uncounted) : null,
+    own('Crédits clients', a.receivables),
+    v.tanks.map((t) =>
+      line(t.name, t.value == null ? 'prix d’achat manquant' : fmt.money(t.value), { lost: t.value == null, sub: `${fmt.liters(t.liters)}${t.cost == null ? '' : ` × ${fmt.price(t.cost)}`}` }),
+    ),
+    h('h3', { class: 'form-section' }, 'Ce qu’elle doit'),
+    owe('Fournisseurs', d.suppliers),
+    owe('Salaires à payer', d.salaries),
+    owe('Avances des clients', d.advances),
+    combos ? owe('Combos des clients', d.combos) : null,
+    line('Valeur nette', fmt.money(v.net), { total: true, lost: v.net < 0 }),
   );
 }
 
@@ -221,35 +224,3 @@ function alertList(alerts) {
   );
 }
 
-// Single-series bar chart: one hue, no legend, hover tooltip per bar, table fallback via aria.
-function barChart(days) {
-  if (!days.some((d) => d.amount > 0)) return h('div', { class: 'empty' }, 'Aucune vente ces 7 derniers jours.');
-  const max = Math.max(...days.map((d) => d.amount), 1);
-  const tip = h('div', { class: 'tooltip', hidden: true });
-  const chart = h(
-    'div',
-    { class: 'chart' },
-    h(
-      'div',
-      { class: 'bars', role: 'img', 'aria-label': days.map((d) => `${fmt.day(d.date)} : ${fmt.money(d.amount)}`).join(', ') },
-      days.map((d, i) => {
-        const col = h(
-          'div',
-          { class: 'bar-col' },
-          h('div', { class: 'bar', style: `height:${(d.amount / max) * 100}%;--i:${i}` }, d.amount ? h('span', { class: 'bar-value', 'aria-hidden': 'true' }, fmt.number(Math.round(d.amount))) : null),
-        );
-        col.addEventListener('mouseenter', () => {
-          setContent(tip, h('div', { style: 'font-weight:600' }, fmt.money(d.amount)), h('div', { class: 'muted' }, `${fmt.day(d.date)} · ${fmt.liters(d.liters)}`));
-          tip.hidden = false;
-          tip.style.left = `${col.offsetLeft + col.offsetWidth / 2}px`;
-          tip.style.top = `${col.offsetTop + col.offsetHeight * (1 - d.amount / max) - 6}px`;
-        });
-        col.addEventListener('mouseleave', () => (tip.hidden = true));
-        return col;
-      }),
-    ),
-    h('div', { class: 'bar-labels' }, days.map((d) => h('span', {}, fmt.day(d.date)))),
-    tip,
-  );
-  return chart;
-}

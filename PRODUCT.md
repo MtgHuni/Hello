@@ -56,7 +56,7 @@ Everything is in US dollars and French, on the Africa/Lubumbashi timezone.
 
 - Name: **MTG Station**. There is no logo or brand palette yet: the visual identity is to be created.
 - The user wants an identity specific to the station, while keeping the quality and native gestures of Apple apps: sheets, fluid animations, iOS-level finish. This was previously stated as "exactement ce que fait Apple" and is now refined to "identité propre à la station".
-- Standing visual preference, chosen by the user (2026-10-03, rebuilt 2026-10-04 at their request to "change everything"): **luxe sombre et premium**, built as "Totem de nuit". Black ground, porcelain type, the price totem as signature (Barlow Condensed figures on a colour field per fuel: gasoil green, essence red), white action slabs, side rail on wide screens and bottom tabs on phones, drawers for forms. A brand film rendered with HyperFrames plays on the sign-in screen. A day mode exists for full sun. No Apple logo, name or product imagery.
+- Standing visual preference, chosen by the user on 2026-11-07 (« je veux tout changer »; the old « Totem de nuit » was « trop chargé » and « pas assez premium »): **clair et net**, built as « Registre ». Cool paper ground, white leaves ruled by one hairline, blue-black ink, the MTG blue for the main action, red only for what is owed and for gaps, fuels as small tabs, one family with tabular figures, totals on a double rule. Light by default, night optional. Only the MTG logo (monogram and its blue) is pinned; the fuel colours are free. No Apple logo, name or product imagery.
 - Language: French.
 
 ## Evidence on Hand
