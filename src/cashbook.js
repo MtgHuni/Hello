@@ -18,6 +18,8 @@ const KINDS = {
   versement_banque: { label: 'Versement à la banque', sign: -1, accounts: ['cash'], old: true },
   retrait_banque: { label: 'Retrait à la banque', sign: 1, accounts: ['cash'], old: true },
   retrait_momo: { label: 'Retrait du mobile money vers la caisse', sign: 0, accounts: ['momo'] }, // transfer
+  // Someone sends mobile money to the station and gets the same in cash from the till (2026-11-07).
+  echange_momo: { label: 'Échange : mobile money reçu, espèces données', sign: 0, accounts: ['momo'] }, // transfer
   frais_momo: { label: 'Frais mobile money', sign: -1, accounts: ['momo'] },
   autre_entree: { label: 'Entrée', sign: 1, accounts: ['cash', 'momo'] },
   autre_sortie: { label: 'Sortie', sign: -1, accounts: ['cash', 'momo'] },
@@ -29,6 +31,7 @@ const KINDS = {
 // request), mobile money withdrawn into the cash +; an opening count never (0).
 function shiftSign(kind, account) {
   if (kind === 'retrait_momo') return 1;
+  if (kind === 'echange_momo') return -1;
   if (kind === 'opening') return 0;
   return KINDS[kind]?.sign || 0;
 }
@@ -120,6 +123,9 @@ function allEntries(db) {
     if (m.kind === 'retrait_momo') {
       push({ ...base, account: 'momo', out: m.amount, label });
       push({ ...base, account: 'cash', in: m.amount, label });
+    } else if (m.kind === 'echange_momo') {
+      push({ ...base, account: 'momo', in: m.amount, label });
+      push({ ...base, account: 'cash', out: m.amount, label });
     } else {
       push({ ...base, account: m.account, [kind.sign > 0 ? 'in' : 'out']: m.amount, label });
     }
