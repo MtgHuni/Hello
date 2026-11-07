@@ -1740,3 +1740,232 @@ a.reg-row:hover { text-decoration: none; background: var(--fill-4); margin: 0 -1
 .auth-card .lead { margin-top: -16px; }
 /* Flat leaves: no sheen on the tank gauges */
 .meter-fill::after { display: none; }
+
+/* =====================================================================
+   MTG Station — version 2.0 « Verre » (2026-11-07, the user's choice)
+   Manrope; a soft world of colour, blurred, behind everything; panels, bars and buttons
+   in clear liquid glass that lets it through, light caught on the rim; the station's
+   value on MTG-blue glass; arrivals rise out of a blur. Overrides every layer above.
+   ===================================================================== */
+@font-face { font-family: 'Manrope'; font-style: normal; font-weight: 400 800; font-display: swap; src: url('/fonts/manrope-latin.woff2') format('woff2'); }
+
+:root {
+  --font: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-display: var(--font);
+  --bg: #eef1f6;
+  --text: #0b0d12;
+  --text-2: #4a5160;
+  --text-3: #646b79;
+  --hairline: rgba(15, 25, 45, 0.08);
+  --separator: rgba(15, 25, 45, 0.12);
+  --field-border: rgba(15, 25, 45, 0.16);
+  --fill-3: rgba(15, 25, 45, 0.06);
+  --fill-4: rgba(255, 255, 255, 0.35);
+  --surface: rgba(255, 255, 255, 0.55);
+  --surface-2: rgba(255, 255, 255, 0.35);
+  --surface-3: rgba(255, 255, 255, 0.5);
+  --gasoil: #0f8f5c;
+  --essence: #db7d1f;
+  --glass: linear-gradient(160deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.16));
+  --glass-strong: rgba(246, 248, 252, 0.78);
+  --glass-blur: blur(18px) saturate(1.8);
+  --glass-rim: inset 0 1.5px 1px rgba(255, 255, 255, 0.95), inset 0 -1px 1px rgba(255, 255, 255, 0.4);
+  --glass-drop: 0 12px 30px rgba(20, 40, 80, 0.08);
+  --glass-btn: linear-gradient(155deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.06) 45%, rgba(255, 255, 255, 0.14));
+  --blue-glass: linear-gradient(155deg, rgba(20, 110, 200, 0.62), rgba(8, 60, 120, 0.72));
+  --blue-btn: linear-gradient(155deg, rgba(18, 108, 200, 0.9), rgba(8, 64, 128, 0.94));
+  --field-bg: rgba(255, 255, 255, 0.7);
+  --blob-1: #4aa3ff;
+  --blob-2: #7ae0ff;
+  --blob-3: #ffb36b;
+  --blob-o: 0.8;
+  --radius-xl: 28px;
+  --radius-lg: 24px;
+  --radius: 22px;
+  --radius-md: 14px;
+  --radius-sm: 8px;
+  --backdrop: rgba(20, 30, 50, 0.22);
+}
+:root[data-theme='dark'] {
+  --bg: #070a10;
+  --text: #eef2f8;
+  --text-2: #aab3c3;
+  --text-3: #8f99a9;
+  --hairline: rgba(255, 255, 255, 0.08);
+  --separator: rgba(255, 255, 255, 0.12);
+  --field-border: rgba(255, 255, 255, 0.16);
+  --fill-3: rgba(255, 255, 255, 0.08);
+  --fill-4: rgba(255, 255, 255, 0.06);
+  --surface: rgba(30, 36, 48, 0.6);
+  --surface-2: rgba(255, 255, 255, 0.04);
+  --surface-3: rgba(255, 255, 255, 0.08);
+  --glass: linear-gradient(160deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.04));
+  --glass-strong: rgba(22, 27, 37, 0.82);
+  --glass-rim: inset 0 1px 1px rgba(255, 255, 255, 0.22), inset 0 -1px 1px rgba(255, 255, 255, 0.06);
+  --glass-drop: 0 14px 34px rgba(0, 0, 0, 0.45);
+  --glass-btn: linear-gradient(155deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.03) 45%, rgba(255, 255, 255, 0.07));
+  --blue-glass: linear-gradient(155deg, rgba(40, 130, 230, 0.5), rgba(10, 60, 130, 0.62));
+  --field-bg: rgba(255, 255, 255, 0.06);
+  --blob-1: #1d4f9a;
+  --blob-2: #0e6a8a;
+  --blob-3: #7a4a1c;
+  --blob-o: 0.7;
+  --backdrop: rgba(0, 0, 0, 0.5);
+}
+
+/* The page colour sits on the root only, so the blurred world shows through the body */
+html { background: var(--bg); }
+body { background: transparent; font-family: var(--font); letter-spacing: -0.012em; }
+
+/* The world behind the glass: three soft fields of colour, blurred, drifting slowly */
+.ambient { position: fixed; inset: -12%; z-index: -1; pointer-events: none; filter: blur(70px) saturate(1.2); }
+.ambient i { position: absolute; border-radius: 50%; opacity: var(--blob-o); }
+.ambient i:nth-child(1) { width: 60vmax; height: 60vmax; left: -15vmax; top: -20vmax; background: var(--blob-1); }
+.ambient i:nth-child(2) { width: 45vmax; height: 45vmax; right: -12vmax; top: 10vmax; background: var(--blob-2); }
+.ambient i:nth-child(3) { width: 40vmax; height: 40vmax; left: 20vmax; bottom: -18vmax; background: var(--blob-3); opacity: calc(var(--blob-o) * 0.55); }
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .ambient i:nth-child(1) { animation: drift 18s ease-in-out infinite alternate; }
+  .ambient i:nth-child(2) { animation: drift 22s ease-in-out infinite alternate-reverse; }
+  .ambient i:nth-child(3) { animation: drift 26s ease-in-out infinite alternate; }
+}
+@keyframes drift { to { transform: translate(6vmax, 4vmax) scale(1.08); } }
+
+/* Type */
+h1 { font-size: 36px; font-weight: 800; letter-spacing: -0.035em; }
+h2 { font-weight: 800; letter-spacing: -0.025em; }
+h3 { font-weight: 700; }
+.card-header h2 { font-size: 18px; font-weight: 800; }
+
+/* Glass: panels, rail and bars */
+.shell { background: none; }
+.card, .side, .topbar, .tabbar, .totem-panel { background: var(--glass); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); box-shadow: var(--glass-rim), var(--glass-drop); border: none; }
+.card { border-radius: var(--radius-lg); }
+.card-header { border-bottom-color: var(--hairline); }
+.board, .grid:has(> .kpi) { gap: 12px; background: none; border: none; overflow: visible; border-radius: 0; }
+.board > .card, .grid > .kpi.card, .grid:has(> .kpi) > .card { border-radius: var(--radius-lg); box-shadow: var(--glass-rim), var(--glass-drop); }
+.side { position: sticky; top: 12px; height: calc(100dvh - 24px); margin: 12px 0 12px 12px; border-radius: var(--radius-lg); }
+.shell { grid-template-columns: calc(var(--side-w) + 12px) minmax(0, 1fr); }
+.side-nav a.active { background: rgba(255, 255, 255, 0.55); color: var(--mtg-blue-ink); box-shadow: var(--glass-rim); }
+:root[data-theme='dark'] .side-nav a.active { background: rgba(255, 255, 255, 0.1); }
+.side-nav a:hover { background: rgba(255, 255, 255, 0.3); }
+.side-foot { border-top-color: var(--hairline); }
+.report-ops > .card { background: rgba(255, 255, 255, 0.25); box-shadow: var(--glass-rim); }
+
+/* Fields */
+input, select, textarea { background: var(--field-bg); border-color: var(--field-border); border-radius: var(--radius-md); }
+table th { background: transparent; }
+
+/* Sheets, menus, toasts: denser glass */
+.sheet, .alert, .toast, .action-group, .nav-drawer { background: var(--glass-strong); -webkit-backdrop-filter: blur(30px) saturate(1.8); backdrop-filter: blur(30px) saturate(1.8); box-shadow: var(--glass-rim), 0 24px 60px rgba(10, 20, 40, 0.22); }
+.sheet-footer { background: transparent; border-top-color: var(--hairline); }
+.sheet { border-radius: var(--radius-xl); }
+
+/* Buttons: liquid glass. The main action is MTG-blue glass, every other one clear glass. */
+.btn { background: var(--blue-btn); color: #fff; border: none; border-radius: var(--radius-md); -webkit-backdrop-filter: blur(10px) saturate(1.6); backdrop-filter: blur(10px) saturate(1.6); box-shadow: inset 0 1.5px 1px rgba(255, 255, 255, 0.55), inset 0 -1px 1px rgba(255, 255, 255, 0.15), 0 8px 20px rgba(11, 111, 196, 0.22); font-weight: 700; }
+.btn:not(.secondary, .ghost, .danger, .destructive, .cancel, .return):hover { background: linear-gradient(155deg, rgba(28, 122, 215, 0.92), rgba(10, 74, 145, 0.95)); }
+.btn:not(.secondary, .ghost, .danger, .destructive, .cancel, .return):active { background: linear-gradient(155deg, rgba(14, 92, 175, 0.95), rgba(7, 52, 105, 0.97)); }
+.btn.secondary, .btn.cancel, .btn.return, .btn.danger, .btn.destructive, .card-header .btn:is(.secondary, .ghost) { background: var(--glass-btn); color: var(--text); box-shadow: var(--glass-rim), 0 6px 16px rgba(20, 40, 80, 0.08); border: none; }
+.btn.return { color: var(--mtg-blue-ink); }
+.btn.danger, .btn.destructive { color: var(--bad-text); }
+.btn:is(.secondary, .cancel, .return, .danger, .destructive):hover, .card-header .btn:is(.secondary, .ghost):hover { background: linear-gradient(155deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.18)); }
+.btn.ghost { background: transparent; color: var(--link); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.btn.ghost:hover { background: rgba(255, 255, 255, 0.3); }
+.btn.danger.sm:not(:has(> span)) { color: var(--text-3); }
+.btn.danger.sm:not(:has(> span)):hover { color: var(--bad-text); }
+.circle-btn, .theme-btn svg { background: var(--glass-btn); box-shadow: var(--glass-rim); }
+
+/* Quick actions: glass squircles with the glyph, the label beneath (the attendant's four, the manager's row) */
+.quick-actions { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.quick-action, .quick-action:hover, .quick-action.primary, .quick-action.primary:hover { min-height: 0; padding: 0; gap: 8px; background: none; border: none; box-shadow: none; color: var(--text); font-size: 13px; font-weight: 700; }
+.quick-action .qa-icon, .act-glass { position: relative; display: grid; place-items: center; width: 62px; height: 62px; border-radius: 21px; isolation: isolate; color: var(--text); background: var(--glass-btn); -webkit-backdrop-filter: blur(6px) saturate(1.8) brightness(1.06); backdrop-filter: blur(6px) saturate(1.8) brightness(1.06); box-shadow: inset 0 1.5px 1px rgba(255, 255, 255, 0.95), inset 0 -1px 1px rgba(255, 255, 255, 0.4), 0 8px 20px rgba(20, 40, 80, 0.1); transition: transform 0.25s var(--ease); }
+.quick-action .qa-icon::after, .act-glass::after { content: ''; position: absolute; left: 14%; right: 14%; top: 6%; height: 30%; border-radius: 50%; background: linear-gradient(rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0)); filter: blur(2px); opacity: 0.6; pointer-events: none; }
+.quick-action .qa-icon svg, .act-glass svg { width: 26px; height: 26px; stroke-width: 2.2; position: relative; z-index: 1; }
+.quick-action.primary .qa-icon { background: var(--blue-btn); color: #fff; }
+.quick-action:active .qa-icon, .act:active .act-glass { transform: scale(0.94); }
+@media (max-width: 420px) { .quick-actions { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; } .quick-action { font-size: 12px; } }
+
+/* Prices and figures on glass */
+.totem-panel { border-radius: var(--radius-lg); }
+.badge { background: rgba(255, 255, 255, 0.5); box-shadow: inset 0 0 0 1px var(--hairline); }
+:root[data-theme='dark'] .badge { background: rgba(255, 255, 255, 0.08); }
+.kpi .value, .tile-value, .totem-price, .fact-value, .tank-pct { font-weight: 800; letter-spacing: -0.04em; }
+.meter { background: rgba(15, 25, 45, 0.08); }
+
+/* ---------- Dashboard 2.0: the value on blue glass, the shortcuts, the pinned tiles ---------- */
+.hero { position: relative; display: block; width: 100%; padding: 22px 22px 24px; border: none; border-radius: var(--radius-xl); overflow: hidden; color: #fff; text-align: left; font: inherit; cursor: pointer; background: var(--blue-glass); -webkit-backdrop-filter: blur(24px) saturate(1.6); backdrop-filter: blur(24px) saturate(1.6); box-shadow: inset 0 1.5px 1px rgba(255, 255, 255, 0.55), inset 0 -1px 1px rgba(255, 255, 255, 0.18), 0 24px 50px rgba(10, 40, 90, 0.24); }
+.hero .brand-mark { position: absolute; right: 20px; top: 22px; width: 46px; height: 17px; color: #fff; }
+.hero .brand-mark :is(path, rect, circle) { fill: currentColor; }
+.hero-label { font-size: 13px; font-weight: 600; color: rgba(255, 255, 255, 0.82); }
+.hero-value { display: block; margin-top: 8px; font-size: 44px; font-weight: 800; line-height: 1; letter-spacing: -0.045em; font-variant-numeric: tabular-nums; }
+.hero-value.lost { color: #ffd2cf; }
+.hero-sub { margin-top: 10px; font-size: 14px; font-weight: 600; color: rgba(255, 255, 255, 0.82); }
+.acts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
+.act { display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--text); font-size: 13px; font-weight: 700; text-align: center; }
+.act:hover { text-decoration: none; }
+.dash { display: grid; grid-template-columns: minmax(0, 380px) minmax(0, 1fr); gap: 28px; align-items: start; }
+.sec-title { display: flex; justify-content: space-between; align-items: baseline; margin: 0 2px 12px; }
+.sec-title h2 { font-size: 22px; }
+.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.tile { display: block; padding: 15px 16px 16px; border-radius: var(--radius-lg); color: var(--text); background: var(--glass); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); box-shadow: var(--glass-rim), var(--glass-drop); }
+a.tile:hover { text-decoration: none; background: linear-gradient(160deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.22)); }
+.tile-head { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; color: var(--c, var(--text)); }
+.tile-head .tile-ic { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 7px; background: var(--c, var(--text)); color: #fff; }
+.tile-head .tile-ic svg { width: 13px; height: 13px; stroke-width: 2.6; }
+.tile-head small { margin-left: auto; color: var(--text-3); font-size: 13px; font-weight: 600; }
+.tile-body { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; margin-top: 12px; }
+.tile-value { display: block; font-size: 30px; line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tile-value small { margin-left: 3px; font-size: 15px; font-weight: 700; letter-spacing: 0; color: var(--text-3); }
+.tile-value.lost { color: var(--bad-text); }
+.tile-sub { margin-top: 5px; color: var(--text-2); font-size: 13px; font-weight: 500; }
+.tile-bars { display: flex; align-items: flex-end; gap: 4px; height: 44px; flex: none; }
+.tile-bars i { width: 7px; min-height: 3px; border-radius: 4px; background: var(--c); opacity: 0.3; transform-origin: bottom; animation: grow-y 0.9s var(--ease) both; }
+.tile-bars i:last-child { opacity: 1; }
+.tile-ring { width: 54px; height: 54px; flex: none; transform: rotate(-90deg); }
+.tile-ring circle { fill: none; stroke-width: 7; stroke-linecap: round; }
+.tile-ring .ring-track { stroke: rgba(15, 25, 45, 0.08); }
+:root[data-theme='dark'] .tile-ring .ring-track { stroke: rgba(255, 255, 255, 0.1); }
+.tile-ring .ring-fill { stroke: var(--c); stroke-dasharray: 138.2; stroke-dashoffset: calc(138.2 - 138.2 * var(--p) / 100); animation: ring-fill 1.4s var(--ease) both 0.3s; }
+@keyframes ring-fill { from { stroke-dashoffset: 138.2; } }
+.tile.wide { grid-column: 1 / -1; }
+.tile .alert-list { margin-top: 8px; }
+.c-blue { --c: var(--mtg-blue); }
+.c-gold { --c: #b8860b; }
+.c-red { --c: #e0393e; }
+.c-green { --c: var(--gasoil); }
+.c-amber { --c: var(--essence); }
+.dash-below { margin-top: 28px; }
+@media (max-width: 1023px) { .dash { grid-template-columns: minmax(0, 1fr); gap: 0; } .dash > div + div { margin-top: 28px; } }
+@media (max-width: 560px) { .tiles { grid-template-columns: minmax(0, 1fr); } .hero-value { font-size: 40px; } }
+
+/* Arrivals rise out of a blur, one after the other */
+@keyframes rise { from { opacity: 0; transform: translateY(16px) scale(0.985); filter: blur(6px); } }
+.page-slot.entering :is(.hero, .tile, .card, .totem-panel) { animation: rise 0.8s var(--ease) both; }
+.page-slot.entering .tiles > :nth-child(2) { animation-delay: 0.05s; }
+.page-slot.entering .tiles > :nth-child(3) { animation-delay: 0.1s; }
+.page-slot.entering .tiles > :nth-child(4) { animation-delay: 0.15s; }
+.page-slot.entering .tiles > :nth-child(5) { animation-delay: 0.2s; }
+.page-slot.entering .tiles > :nth-child(n + 6) { animation-delay: 0.25s; }
+.page-slot.entering .acts > *, .page-slot.entering .quick-actions > * { animation: rise 0.7s var(--ease) both 0.1s; }
+
+/* Phones: floating glass bars */
+@media (max-width: 1023px) {
+  .shell { grid-template-columns: none; }
+  .topbar { top: 8px; margin: 8px 10px 0; border-radius: 18px; }
+  .tabbar { left: 10px; right: 10px; bottom: calc(8px + env(safe-area-inset-bottom, 0px)); height: var(--tab-h); border-radius: 22px; padding-bottom: 0; }
+}
+
+/* Where glass cannot be drawn (old browsers, or less transparency asked), panels turn solid */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .card, .side, .topbar, .tabbar, .totem-panel, .tile, .sheet, .toast { background: rgba(255, 255, 255, 0.92); }
+  :root[data-theme='dark'] :is(.card, .side, .topbar, .tabbar, .totem-panel, .tile, .sheet, .toast) { background: rgba(23, 28, 38, 0.95); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .card, .side, .topbar, .tabbar, .totem-panel, .tile, .sheet, .toast { background: var(--glass-strong); }
+}
+.value-sheet .value-col { background: none; box-shadow: none; padding: 0; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.value-sheet .value-col .card-header { margin: 0 0 12px; padding: 0 0 12px; }
+.tile-ring-box { display: block; flex: none; line-height: 0; }
+
+/* Sign-in on glass: the world behind, the monogram on a clear leaf */
+.auth { background: none; }
+.auth-brand { background: var(--glass); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); border-right: none; box-shadow: var(--glass-rim); }
