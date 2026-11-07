@@ -212,6 +212,8 @@ Depth is thin glass, not shadow: every panel carries the rim (`--glass-rim`: a 0
 
 Where `backdrop-filter` is missing the glass turns solid (white at 0.92, night `rgba(23, 28, 38, 0.95)`); with `prefers-reduced-transparency` it takes the denser `--glass-strong`.
 
+Frosted (2026-11-07, « le verre moins transparent, un peu blanc »): `--glass` white 0.62 → 0.4 (night 0.2 → 0.12), `--glass-btn` 0.55 → 0.3 (night 0.2 → 0.11), `blur(20px) saturate(1.5)`; the phone's top bar and tab bar are frosted (white 0.72; night a white veil over `rgba(18, 23, 33, 0.6)`, `blur(30px)`), and the tab bar sits low, `max(4px, env(safe-area-inset-bottom) − 18px)` from the bottom.
+
 ## Shapes
 
 Soft, continuous corners: controls and fields 12px, cards and tiles 20px, the rail and the phone bars 18–22px, the hero and sheets 24px, quick-action squircles 18px, badges and small marks 8px; a tile's icon square 7px. Rings are circles (54px, 7px stroke, round caps).

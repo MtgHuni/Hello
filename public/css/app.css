@@ -1993,3 +1993,20 @@ a.tile:hover { text-decoration: none; background: linear-gradient(160deg, rgba(2
 .quick-action .qa-icon svg, .act-glass svg { width: 24px; height: 24px; stroke-width: 1.9; }
 .hero { box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.3), inset 0 0.5px 0 rgba(255, 255, 255, 0.5), 0 8px 24px rgba(10, 40, 90, 0.2); }
 .side-nav a.active { box-shadow: var(--glass-rim); }
+
+/* ---------- Frosted glass (2026-11-07, the user: « le verre moins transparent, un peu blanc »;
+   « la barre en bas est un peu haute, descends-la ») ---------- */
+:root {
+  --glass: linear-gradient(160deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.4));
+  --glass-btn: linear-gradient(155deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.3));
+  --glass-blur: blur(20px) saturate(1.5);
+}
+:root[data-theme='dark'] {
+  --glass: linear-gradient(160deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.12));
+  --glass-btn: linear-gradient(155deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.11));
+}
+@media (max-width: 1023px) {
+  .tabbar { bottom: max(4px, calc(env(safe-area-inset-bottom, 0px) - 18px)); }
+  .tabbar, .topbar { background: rgba(255, 255, 255, 0.72); -webkit-backdrop-filter: blur(30px) saturate(1.6); backdrop-filter: blur(30px) saturate(1.6); }
+  :root[data-theme='dark'] :is(.tabbar, .topbar) { background: linear-gradient(rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.11)), rgba(18, 23, 33, 0.6); }
+}
