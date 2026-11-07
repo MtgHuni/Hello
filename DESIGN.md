@@ -1,318 +1,273 @@
 ---
 name: MTG Station
-description: Registre, the station's account book kept impeccably. Cool register paper, white leaves ruled by one hairline, blue-black ink, the MTG blue for the main action and the money that comes in, one red for what is owed, every total closing on a double rule. A night mode keeps the same roles.
+description: Version 2.0 « Verre ». A soft world of colour, blurred, behind everything; panels, bars, sheets and buttons in clear liquid glass that lets it through, light caught on the rim; the station's value on MTG-blue glass; Manrope; arrivals rise out of a blur. Night by default (2026-11-07), light optional with the same roles.
 colors:
-  register-paper: "#f3f5f7"
-  leaf-white: "#ffffff"
-  leaf-shade: "#f8f9fb"
-  leaf-well: "#eef1f5"
-  blue-black-ink: "#111827"
-  ink-secondary: "#4b5565"
-  ink-faint: "#6b7480"
-  hairline: "#e3e7ec"
-  rule: "#d5dbe2"
-  field-edge: "#b9c1cb"
-  fill: "#cfd5dd"
-  fill-quiet: "#f1f4f7"
-  track: "#e6eaef"
+  page: "#eef1f6"
+  glass-leaf: "#ffffff8c"
+  glass-shade: "#ffffff59"
+  glass-strong: "#f6f8fcc7"
+  field: "#ffffffb3"
+  ink: "#0b0d12"
+  ink-secondary: "#4a5160"
+  ink-faint: "#646b79"
+  hairline: "#0f192d14"
+  rule: "#0f192d1f"
+  field-edge: "#0f192d29"
   mtg-blue: "#0b6fc4"
   mtg-blue-ink: "#0a5fa8"
-  mtg-blue-hover: "#0a63af"
-  mtg-blue-press: "#08548f"
-  mtg-blue-soft: "#e8f1fb"
-  gasoil-green: "#12895a"
-  essence-amber: "#d9822b"
-  owed-red: "#c8322a"
+  blue-glass-top: "#126cc8e6"
+  blue-glass-bottom: "#084080f0"
+  gasoil-green: "#0f8f5c"
+  essence-amber: "#db7d1f"
+  owed-red: "#e0393e"
   owed-red-text: "#b42318"
+  gold: "#b8860b"
   good-text: "#0d7a4e"
-  serious-orange: "#c26a12"
-  warning-yellow: "#b98900"
-  night-paper: "#0f1318"
-  night-leaf: "#171c23"
-  night-ink: "#e8ecf1"
-  night-hairline: "#262e38"
-  night-blue: "#3d9be9"
+  blob-blue: "#4aa3ff"
+  blob-cyan: "#7ae0ff"
+  blob-amber: "#ffb36b"
+  night-page: "#070a10"
+  night-leaf: "#1e2430"
+  night-strong: "#161b25"
+  night-ink: "#eef2f8"
+  night-blob-blue: "#1d4f9a"
+  night-blob-teal: "#0e6a8a"
+  night-blob-amber: "#7a4a1c"
 typography:
   display:
-    fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
-    fontSize: "34px"
-    fontWeight: 700
-    lineHeight: 1.15
-    letterSpacing: "-0.025em"
-  headline:
-    fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+    fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+    fontSize: "36px"
+    fontWeight: 800
+    lineHeight: 1.1
+    letterSpacing: "-0.035em"
+  section:
+    fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
     fontSize: "22px"
-    fontWeight: 700
-    lineHeight: 1.25
-    letterSpacing: "-0.02em"
+    fontWeight: 800
+    lineHeight: 1.2
+    letterSpacing: "-0.025em"
   title:
-    fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
-    fontSize: "17px"
-    fontWeight: 650
+    fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+    fontSize: "18px"
+    fontWeight: 800
     lineHeight: 1.25
-    letterSpacing: "-0.018em"
+    letterSpacing: "-0.025em"
+  hero-figure:
+    fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+    fontSize: "44px"
+    fontWeight: 800
+    lineHeight: 1
+    letterSpacing: "-0.045em"
+    fontFeature: "'tnum'"
   figure:
-    fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
-    fontSize: "28px"
-    fontWeight: 650
-    lineHeight: 1.05
-    letterSpacing: "-0.03em"
+    fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+    fontSize: "30px"
+    fontWeight: 800
+    lineHeight: 1
+    letterSpacing: "-0.04em"
     fontFeature: "'tnum'"
   body:
-    fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+    fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
     fontSize: "16px"
-    fontWeight: 400
-    lineHeight: 1.47
-    letterSpacing: "-0.011em"
-  label:
-    fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
-    fontSize: "13px"
     fontWeight: 500
-    lineHeight: 1.3
-    letterSpacing: "-0.005em"
-  group-label:
-    fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+    lineHeight: 1.47
+    letterSpacing: "-0.012em"
+  label:
+    fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
     fontSize: "13px"
     fontWeight: 700
-    letterSpacing: "0.04em"
+    lineHeight: 1.3
+    letterSpacing: "-0.005em"
 rounded:
-  tab: "3px"
-  sm: "6px"
-  md: "8px"
-  lg: "10px"
-  xl: "12px"
+  sm: "8px"
+  md: "12px"
+  squircle: "18px"
+  lg: "20px"
+  xl: "24px"
 spacing:
-  row: "11px"
-  sm: "12px"
-  md: "16px"
-  lg: "24px"
+  sm: "10px"
+  md: "12px"
+  lg: "18px"
+  xl: "28px"
 components:
   button-primary:
-    backgroundColor: "{colors.mtg-blue}"
-    textColor: "{colors.leaf-white}"
+    backgroundColor: "{colors.blue-glass-top}"
+    textColor: "#ffffff"
     rounded: "{rounded.md}"
     padding: "10px 18px"
     height: "44px"
-  button-primary-hover:
-    backgroundColor: "{colors.mtg-blue-hover}"
-  button-primary-active:
-    backgroundColor: "{colors.mtg-blue-press}"
   button-secondary:
-    backgroundColor: "{colors.leaf-white}"
-    textColor: "{colors.blue-black-ink}"
+    backgroundColor: "{colors.glass-shade}"
+    textColor: "{colors.ink}"
     rounded: "{rounded.md}"
     padding: "10px 18px"
     height: "44px"
-  button-secondary-hover:
-    backgroundColor: "{colors.fill-quiet}"
   button-return:
-    backgroundColor: "{colors.leaf-white}"
+    backgroundColor: "{colors.glass-shade}"
     textColor: "{colors.mtg-blue-ink}"
     rounded: "{rounded.md}"
     height: "44px"
   button-danger:
-    backgroundColor: "{colors.leaf-white}"
+    backgroundColor: "{colors.glass-shade}"
     textColor: "{colors.owed-red-text}"
     rounded: "{rounded.md}"
     height: "44px"
+  quick-action:
+    backgroundColor: "{colors.glass-shade}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.squircle}"
+    size: "56px"
   card:
-    backgroundColor: "{colors.leaf-white}"
+    backgroundColor: "{colors.glass-leaf}"
     rounded: "{rounded.lg}"
     padding: "24px"
+  tile:
+    backgroundColor: "{colors.glass-leaf}"
+    rounded: "{rounded.lg}"
+    padding: "15px 16px 16px"
+  hero:
+    backgroundColor: "{colors.blue-glass-top}"
+    textColor: "#ffffff"
+    rounded: "{rounded.xl}"
+    padding: "22px 22px 24px"
+  sheet:
+    backgroundColor: "{colors.glass-strong}"
+    rounded: "{rounded.xl}"
   input:
-    backgroundColor: "{colors.leaf-white}"
-    textColor: "{colors.blue-black-ink}"
+    backgroundColor: "{colors.field}"
+    textColor: "{colors.ink}"
     rounded: "{rounded.md}"
     padding: "10px 16px"
     height: "44px"
-  segment-option:
-    backgroundColor: "{colors.leaf-white}"
-    textColor: "{colors.blue-black-ink}"
-    rounded: "{rounded.md}"
-    height: "56px"
-  segment-option-selected:
-    backgroundColor: "{colors.mtg-blue-soft}"
-    textColor: "{colors.mtg-blue-ink}"
-  badge:
-    backgroundColor: "{colors.leaf-well}"
-    textColor: "{colors.blue-black-ink}"
-    rounded: "{rounded.sm}"
-    padding: "3px 10px"
-  nav-item-active:
-    backgroundColor: "{colors.mtg-blue-soft}"
-    textColor: "{colors.mtg-blue-ink}"
-    rounded: "{rounded.md}"
-  fuel-tab:
-    backgroundColor: "{colors.gasoil-green}"
-    rounded: "{rounded.tab}"
-    size: "10px"
 ---
 
 # Design System: MTG Station
 
 ## Overview
 
-**Creative North Star: "The Station's Credit Register"**
+**Creative North Star: "Verre", version 2.0 (2026-11-07, the user's choice)**
 
-The app is the station's account book kept impeccably. Every screen reads like a clean column of figures that adds up: labels on the left in ink, figures on the right, tabular and aligned, rows ruled by one hairline, and the total closing the column on a double rule. The world replaces « Totem de nuit » entirely: no black ground by default, no coloured fields, no condensed display face, no lit coloured headers.
+The app is a pane of clear glass laid over a soft world of colour. Behind every screen three wide fields of colour (blue, cyan, a little amber) sit blurred and drift slowly; panels, the rail, the bars, sheets and buttons are clear liquid glass that lets them through, the light caught on their top edge. The reference the user gave is Apple Wallet / Santé and iOS liquid glass: sober, premium, few buttons, nothing coloured that does not mean something.
 
-Density is a ledger's, calm and even: white leaves (panels) laid on a cool register paper, flat, separated by hairlines rather than shadows. Colour is information, never decoration. The MTG blue marks the one main action of a region, links, the current place, and money coming in; one red marks what is owed and gaps; the two fuels are small tabs of ink beside their names. A night mode (the sun key beside the account) keeps every role under a lamp. Light is the default, chosen for outdoor phones in full sun.
-
-The surfaces still behave like native iOS: sheets, a right drawer for forms on wide screens, bottom sheets on phones, short fade-up entrances, and every motion respects reduced-motion.
+The user rejected « Registre » as « juste changé les couleurs », then five mock-ups, and chose « un peu E » with Manrope, a blurred background, beautiful animations and buttons « comme le liquid glass, comme un verre », « plus transparent ». Only the MTG logo (monogram and its blue) is pinned.
 
 **Key Characteristics:**
-- Cool paper ground, white leaves, one hairline; never cream, never black by default.
-- One family, Inter, figures tabular, right-aligned, one figure scale for every glanced number.
-- The addition column with its double rule is the signature.
-- Blue for the main action and money in, red only for what is owed and gaps, fuel as 10px ink tabs.
-- Flat at rest; shadows only on overlays (sheets, dialogs, toasts).
-- One shape: the rounded rectangle; no circle, no pill.
+- A blurred world of colour behind everything (`.ambient`); the page colour sits on `html` only so it shows through.
+- Thin clear glass everywhere (2026-11-07: « les verres ont l'air gros, je veux que ça soit fin »): a white-to-clear gradient, `blur(14px) saturate(1.6)`, one 0.5px light edge all round, a faint top light, a short soft shadow.
+- One family, Manrope, heavy (700–800) for titles and figures, figures tabular.
+- The station's value on MTG-blue glass (`.hero`), the one blue surface of the manager's home.
+- Glass squircles (56px, 18px corners) for the quick actions, the glyph inside and the label beneath.
+- Arrivals rise out of a blur, figures count up, rings fill; all of it gives way to reduced motion.
+- Night by default (the user's choice, 2026-11-07); light optional, through the sun key, remembered on the device.
 
 ## Colors
 
-A cool, nearly monochrome ink-on-paper palette with one blue voice, one red, and two small fuel inks.
-
 ### Primary
-- **MTG Blue** (mtg-blue): the main action slab of a region (Confirmer, Enregistrer, État du poste), the active nav item's icon, the current stop of the shift line, focus rings and the field focus edge, the selected segment. Hover and press step darker (mtg-blue-hover, mtg-blue-press). Its soft tint (mtg-blue-soft) is the active nav item's ground, the quick-action icon square and the selected segment's ground.
-- **MTG Blue Ink** (mtg-blue-ink): links, the Retour button's text, the active nav label, text set on the soft tint.
+- **MTG Blue** (mtg-blue; links and text on glass mtg-blue-ink): the active nav label, links, the Retour button's text, focus. As glass (`--blue-btn`, blue-glass-top → blue-glass-bottom, about 0.9 alpha so white text holds in the sun) it is the main button and the attendant's main quick action; as lighter glass (`--blue-glass`) it is the hero.
 
 ### Secondary
-- **Gasoil Green** (gasoil-green) and **Essence Amber** (essence-amber): the fuels, only as small tabs (10px squares, 3px corners) before a fuel's name, a tank's name or a segment option, and as the fill of a tank's level bar and the chart series. Always through `productColor(id)` / the fuel tokens.
+- **Gasoil Green** and **Essence Amber**: the fuels, through `productColor(id)` / `--gasoil`, `--essence`: the swatch beside a fuel or tank name, a tank's ring and level bar, the colour of a segment option, chart series.
 
 ### Tertiary
-- **Owed Red** (owed-red; text in owed-red-text): what is owed, negative balances and gaps, destructive buttons' text and edge, critical status. Nothing else is red.
+- **Owed Red** (owed-red on tiles; text owed-red-text): what is owed, a loss, gaps, destructive buttons' text. **Gold** (gold) marks combos. Tiles take their colour by meaning (`.c-blue`, `.c-green`, `.c-amber`, `.c-red`, `.c-gold`).
 
 ### Neutral
-- **Register Paper** (register-paper): the page ground, and the paper behind the rail on phones.
-- **Leaf White** (leaf-white): panels, the side rail, fields, secondary buttons, sheets. Leaf Shade (leaf-shade) is the table head; Leaf Well (leaf-well) is the badge ground.
-- **Blue-Black Ink** (blue-black-ink): all primary text, figures, the double rule. Ink Secondary (ink-secondary) for nav labels and table heads; Ink Faint (ink-faint) for notes under a label, units and group labels.
-- **Hairline** (hairline): the one rule between rows, around panels, under card headers and beside the rail. Rule (rule) is the heavier separator; Field Edge (field-edge) outlines inputs, secondary buttons and segment options; Fill Quiet (fill-quiet) is the hover ground of quiet controls and rows; Track (track) is the empty part of a level bar.
-- **Night set** (night-paper, night-leaf, night-ink, night-hairline, night-blue): the same roles in the night theme; the remaining night values live in `:root[data-theme='dark']`.
-- Status: good-text (green) for « Niveau correct »-type states, serious-orange and warning-yellow for alert squares and badge dots.
+- **Page** (page): the colour on `html`, under the blurred world.
+- **Glass** (glass-leaf / glass-shade, as `--glass` and `--glass-btn` gradients): panels, tiles, rail, bars, secondary buttons, quick actions. **Glass Strong** (glass-strong): sheets, dialogs, menus, toasts and the drawer, denser (`blur(30px)`), so forms read over anything.
+- **Ink** (ink, ink-secondary, ink-faint): text, figures, units, notes.
+- **Hairline / Rule / Field Edge**: translucent ink, so they sit on any glass.
+- **The world** (blob-blue, blob-cyan, blob-amber at 0.8 opacity; the night set darker at 0.7): the three fields behind the glass, `blur(70px)`.
 
 ### Named Rules
-**The One Red Rule.** Red means owed or a gap. A negative cash balance is red; a neutral « 0,00 $ » is ink. Never use red for emphasis or decoration.
+**The Meaning Rule.** Colour is meaning: blue the main action and the value, fuel colours the fuels, red what is owed or lost, gold combos. A neutral figure is ink.
 
-**The Blue Slab Rule.** One blue slab per region. Every other button is a white leaf with an ink edge.
-
-**The Fuel Tab Rule.** A fuel is a 10px ink tab beside its name, never a coloured field, panel or header.
+**The One Blue Rule.** One blue glass button per region; every other button is clear glass with ink text.
 
 ## Typography
 
-**Display Font:** Inter (self-hosted variable, with the system sans fallback)
-**Body Font:** Inter
-**Label Font:** Inter
+**Font:** Manrope (self-hosted `public/fonts/manrope-latin.woff2`, 400–800), with the system sans fallback. Inter and Barlow Condensed stay in `public/fonts/` unloaded.
 
-**Character:** One family carries everything, like a well-kept book in one hand. Hierarchy comes from weight (400 to 700, with 650 for figures and titles) and tight negative tracking, not from a second face.
+**Character:** round, open and modern, set heavy and tight (body tracking -0.012em, titles down to -0.035em) like Apple's large titles.
 
 ### Hierarchy
-- **Display** (700, 34px, 1.15; 26px below 834px): the page title (« Bonjour, Gérant », Clients), the sign-in title.
-- **Headline** (700, 22px, 1.25): sheet and dialog titles.
-- **Title** (650, 17px, 1.25): card header titles; the topbar title on phones; h2 elsewhere 19px.
-- **Figure** (650, 28px, 1.05, -0.03em, tabular): every glanced figure: prices, KPI values, tank percentages, facts, and the net value total. One scale, one baseline for every figure band. Row figures are 17px 650; the big result of a closing is 48px (40px on phones).
-- **Body** (400, 16px, 1.47): rows, labels, fields (fields 17px to stop iOS zoom).
-- **Label** (500, 13px): notes under a row label, units, badge text (600), table heads (12px).
-- **Group label** (700, 13px, 0.04em, uppercase, ink-faint): a group of lines inside a column or form (« Ce qu’elle possède », « Ce qu’elle doit »). It heads lines; it never sits above a page or card title.
-
-### Named Rules
-**The Tabular Rule.** Every figure is tabular and right-aligned, so columns add up by eye.
-
-**The One Scale Rule.** Figures glanced at together share one size (28px). No hero number outgrows its siblings, except the closing's single result.
+- **Display** (800, 36px): the page title.
+- **Section** (800, 22px): a section title (« Aujourd’hui »), sheet titles.
+- **Title** (800, 18px): card header titles.
+- **Hero figure** (800, 44px, 40px on phones, tabular): the station's value.
+- **Figure** (800, 30px, tabular): a tile's value, with its unit small (15px 700, faint); prices, KPI values and tank percentages share the 800 weight and -0.04em.
+- **Body** (16px): rows and fields (fields 17px to stop iOS zoom).
+- **Label** (700, 13px): the label under a quick action, a tile's side note, the hero's label and sub line (600, white at 0.82).
 
 ## Layout
 
-Wide screens (1024px and up): a white side rail (248px) ruled off from the paper by one hairline, holding the monogram and name, the navigation, and the account with the sun key at its foot; the page sits on the paper at up to 1180px. Below 1024px: a top bar (56px), the paper all across, and a bottom tab bar (62px, four tabs + Plus). Forms open as a right drawer from 834px and as bottom sheets below.
+Wide screens (1024px and up): the rail floats as a glass panel (12px from the edges, full height) with the monogram, the navigation and the account; the page beside it at up to 1180px. Below 1024px: the top bar and the tab bar float as glass bars (10px from the sides, 18px and 22px corners).
 
-A page opens with its title and date (or a data line), the page actions on the right (a blue slab, then white leaves), and a hairline under the header. Panels sit in grids with 16px gaps (12px on phones); card padding is 24px, with the header ruled off across the full width (18px 24px 14px).
+The manager's home (`dashboard.js`): a page header (« Bonjour », the date), then `.dash`, two columns (up to 380px, then the rest; one column below 1024px): on the left the hero and the four glass shortcuts (État du poste, Livraison, Caisse, Clients); on the right « Aujourd’hui », tiles two by two (one column below 560px): ventes 7 jours with bars, crédits clients, each tank with its ring, caisse, fournisseurs, combos, fiches à compléter. Then « Demander à l'appli » and Alertes.
 
-The dashboard's register: the « Valeur de la station » addition column (about 1.25 parts) beside a side column (1 part) holding today's prices, the current shift and the alerts; one column below 834px. Register rows are 11px tall-padded, label left, figure right.
-
-Grouped buttons have equal width and are centred on mobile.
+Gaps are 12px between tiles and boards, 28px between the columns and the sections. Grouped buttons have equal width and are centred on mobile.
 
 ## Elevation & Depth
 
-Flat. Panels carry no shadow at rest: they are white leaves with a 1px hairline edge on the paper, and depth comes from that tonal step (paper to leaf). Panels inside a board or KPI grid drop their own edge so the board reads as one sheet. Shadows appear only on things that float above the page.
+Depth is thin glass, not shadow: every panel carries the rim (`--glass-rim`: a 0.5px light edge all round plus a 0.5px top light; night at 0.14 / 0.22) and a short drop (`--glass-drop`, `0 2px 10px rgba(20, 40, 80, 0.06)`, night `0 2px 12px rgba(0, 0, 0, 0.28)`). Sheets, dialogs and toasts lift a little more (`0 12px 36px rgba(10, 20, 40, 0.2)`); the hero `0 8px 24px rgba(10, 40, 90, 0.2)`; the main button `0 2px 8px rgba(11, 111, 196, 0.18)`. Never a thick rim, a light-catch blob or a deep shadow: the glass must look thin.
 
-### Shadow Vocabulary
-- **Overlay lift** (`box-shadow: 0 0 0 1px var(--hairline), 0 12px 32px rgba(17, 24, 39, 0.14)`): sheets, alert dialogs, toasts. Night: `0 14px 36px rgba(0, 0, 0, 0.5)`.
-- **Field focus** (`box-shadow: 0 0 0 3px color-mix(in srgb, var(--mtg-blue) 18%, transparent)`): an input with focus, together with a blue edge.
-
-### Named Rules
-**The Flat Leaf Rule.** Nothing on the page casts a shadow; only overlays do.
+Where `backdrop-filter` is missing the glass turns solid (white at 0.92, night `rgba(23, 28, 38, 0.95)`); with `prefers-reduced-transparency` it takes the denser `--glass-strong`.
 
 ## Shapes
 
-One shape everywhere: the rounded rectangle. Controls (buttons, fields, segments, nav items) take 8px corners; panels and boards 10px; the largest containers 12px; badges and small squares 6px; fuel tabs and level bars 3px. No circle, no pill: status dots, avatars, stops of the shift line and alert icons are rounded squares too.
-
-The double rule (3px double, ink) is the system's one ornament: it closes every total (addition columns, table footers) and underlines the station name on the sign-in brand page. The line just above a total gives way to it.
+Soft, continuous corners: controls and fields 12px, cards and tiles 20px, the rail and the phone bars 18–22px, the hero and sheets 24px, quick-action squircles 18px, badges and small marks 8px; a tile's icon square 7px. Rings are circles (54px, 7px stroke, round caps).
 
 ## Components
 
 ### Buttons
-Quiet and certain: one blue slab, the rest white leaves.
-- **Shape:** gently rounded (8px), at least 44px tall (52px for large), 15px 600 text, an icon may lead.
-- **Primary:** MTG blue, white text; hover and press step darker.
-- **Secondary / Annuler / Fermer:** white leaf, ink text, field-edge outline; hover fill-quiet.
-- **Retour:** the same white leaf with blue ink text (and the ‹ link above a detail page).
-- **Ghost:** transparent, link-blue text.
-- **Danger / destructive:** white leaf, red text, a red-tinted edge; set apart from the others. A row's cancel square stays faint until the finger is on it, then turns red.
+- **Primary:** MTG-blue glass (`--blue-btn`), white 700 text, 12px corners, at least 44px, a thin light edge and a faint blue shadow; hover a little brighter, press a little deeper.
+- **Secondary / Annuler / Fermer:** clear glass (`--glass-btn`) with the rim, ink text.
+- **Retour:** clear glass, blue ink text. **Danger:** clear glass, red text; a row's cancel square stays faint until touched.
+- **Ghost:** no glass, link-blue text.
 
-### Cards / Containers
-- **Corner Style:** 10px.
-- **Background:** leaf white on register paper.
-- **Shadow Strategy:** none (see Elevation).
-- **Border:** 1px hairline; the header is ink text on no band, ruled off by a hairline.
-- **Internal Padding:** 24px.
+### Quick actions
+A 56px glass squircle (18px corners, `blur(10px) saturate(1.6)`, the thin rim) holding the 24px glyph (stroke 1.9), the label beneath in 13px 700. The attendant's main one is MTG-blue glass. Pressed, it shrinks to 0.94. Four in a row.
 
-### Addition column (signature)
-The register's grammar: lines of label + figure, ruled by hairlines, optional group labels, closing on a double rule with the total in bold (on the dashboard the total figure is 28px 650 and the label stays 16px 700). Used for the station value, the closing, the shift report and a customer balance. A line may carry a faint note under its label.
+### Hero (the station's value)
+A button of blue glass (24px corners): the monogram in white at the top right, the label, the value in 44px 800 (pink-white `#ffd2cf` when negative), a sub line. Touched, it opens the `valueDetail()` sheet with the addition column (`valueColumn()`), which still closes on a double rule.
 
-### Register rows
-One line of a side column: an optional fuel tab, the label (600) with a faint note, the figure right (17px 650). A row that links hovers with a fill-quiet ground across the row.
+### Tiles
+Glass, 20px corners: a head with a 22px coloured icon square, the title in the tile's colour and a faint side note; the value (30px 800) with its unit and a sub line; on the right bars (7px, the last one full) or a ring filled to the tank's level. A tile that links brightens on hover; `.wide` spans both columns.
 
-### Today's prices
-A white leaf per fuel (or register rows on the dashboard): the fuel tab and name in ink-secondary, the price as a figure (28px) with its unit small and faint, the subscriber price as a note.
-
-### Inputs / Fields
-- **Style:** white, 1px field-edge, 8px corners, 44px tall, 17px text.
-- **Focus:** blue edge plus a soft 3px blue halo.
-- **Segments:** option tiles (56px tall, field-edge outline); the selected one takes a blue edge, a blue tint and blue ink; a fuel option carries its tab.
-
-### Chips / Badges
-Rounded squares of the well tone (6px), 13px 600, with a 7px status dot (good, warning, serious, critical, blue for info). Alert icons are tinted squares of their status colour, never loud fills.
+### Cards, sheets, fields
+Cards are glass panels (20px). Sheets, dialogs, menus and toasts are glass strong (24px for sheets), their footer transparent over a hairline. Fields are white at 0.7 with a translucent edge and 12px corners.
 
 ### Navigation
-The rail: 15px labels in ink-secondary with line icons; hover fill-quiet; the active item a blue-soft ground, blue-ink 600 label and blue icon. Phones: top bar title 17px 650, bottom tabs with the active tab in blue.
+The rail's active item is brighter glass with the rim and a blue-ink label; hover a faint white wash. Phones: floating glass top bar and tab bar.
 
-### Tank gauge
-The tank's name with its fuel tab, the percentage as a figure, an 8px level bar in the fuel's colour on the track, the alert threshold as a dark tick on the track, litres and a status badge below.
+### Sign-in
+The brand panel is glass over the world, the MTG monogram large; the form beside it (stacked on phones).
 
-### Shift line
-Stops as rounded squares along a rule; done stops and the rule in blue, the current stop a blue ring that glows twice, labels 13px in ink.
+## Motion
 
-### Sign-in brand page
-A white leaf beside the form: the MTG monogram large, the station's name under a double rule. On phones it stacks above the form, ruled off by a hairline.
+- **Rise:** a screen's hero, tiles, cards and price panels arrive from 16px below, slightly small and blurred (`blur(6px)`), 0.8s on `--ease` (`cubic-bezier(0.22, 1, 0.36, 1)`), tiles one after the other (0.05s apart); the quick actions 0.1s after.
+- **Count-up:** `.hero-value`, `.tile-value` and the other figures in `motion.js` count up to their value.
+- **Fill:** bars grow from the bottom (0.9s), rings fill (1.4s, after 0.3s).
+- **Drift:** the world's fields drift (18–26s, alternate), only where `hover: hover`.
+- Everything respects `prefers-reduced-motion`.
 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** close every total on a 3px double ink rule, label left, figure right, bold.
-- **Do** set every figure in Inter, tabular, right-aligned; glanced figures share the 28px figure scale.
-- **Do** keep one blue slab per region; every other button is a white leaf with an ink edge.
-- **Do** show a fuel as its 10px ink tab beside its name, through `productColor(id)` / the fuel tokens.
-- **Do** keep panels flat: white leaf, 1px hairline, 10px corners; shadows only on sheets, dialogs and toasts.
-- **Do** keep both themes in step: a new detail follows its siblings in the light and the night theme.
+- **Do** put new panels on the glass tokens (`--glass`, `--glass-blur`, `--glass-rim`, `--glass-drop`), sheets on `--glass-strong`, and keep the solid fallback working.
+- **Do** keep one blue glass button per region; the rest clear glass with ink text.
+- **Do** give colour by meaning only (fuel, owed, combos, the value).
+- **Do** set titles and figures in Manrope 800, figures tabular.
+- **Do** keep both themes in step: a new detail follows its siblings in light and night.
 - **Do** give grouped buttons equal width and centre them on mobile.
 - **Do** write all UI text in French.
 - **Do** use icons only from the existing set; a new icon is a PNG found on pngegg.com, never drawn.
-- **Do** respect reduced-motion for every entrance, count-up and glow.
+- **Do** respect reduced motion and reduced transparency.
 
 ### Don't:
 - **Don't** add explanatory text outside Réglages: no form intro, field hint, descriptive subtitle or explanation sentence in a confirmation; only data, statuses, empty states and error messages.
-- **Don't** use red for anything but what is owed, gaps, destructive actions and critical status.
-- **Don't** bring back the totem: no black default ground, no coloured fuel fields, no lit coloured card headers, no condensed display face.
-- **Don't** use circles or pills; every shape is a rounded rectangle.
-- **Don't** use a cream or warm ground; the paper is cool.
-- **Don't** put a small uppercase label above a page or card title; the uppercase group label only heads a group of lines.
-- **Don't** label a figure twice.
-- **Don't** add shadows to panels, rows or buttons at rest.
+- **Don't** put a solid page colour on `body` or a full-screen opaque layer: it hides the world behind the glass.
+- **Don't** colour buttons beyond the one blue: the user found coloured glass « trop coloré ».
+- **Don't** make glass less transparent than it is now (« plus transparent ») or thicker (« fin »): no thick rim, no light-catch blob, no deep shadow.
+- **Don't** bring back « Registre » (paper, white leaves, flat panels) or the « Totem de nuit » (black ground, coloured fuel fields, condensed face).
+- **Don't** build SVG with `h('svg')`: it lands in the HTML namespace; use `innerHTML` (as the rings do).
+- **Don't** use Apple's logo, name or product imagery.

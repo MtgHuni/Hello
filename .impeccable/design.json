@@ -1,348 +1,111 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-07T09:59:03.926Z",
+  "generatedAt": "2026-11-07T10:39:53.864Z",
   "title": "Design System: MTG Station",
   "extensions": {
     "colorMeta": {
-      "register-paper": {
+      "page": {
         "role": "neutral",
-        "displayName": "Register Paper",
+        "displayName": "Page",
         "tonalRamp": [
-          "oklch(15% 0.005 250)",
-          "oklch(25% 0.005 250)",
-          "oklch(35% 0.005 250)",
-          "oklch(48% 0.005 250)",
-          "oklch(60% 0.005 250)",
-          "oklch(72% 0.005 250)",
-          "oklch(85% 0.005 250)",
-          "oklch(95% 0.005 250)"
+          "oklch(15% 0.01 255)",
+          "oklch(25% 0.01 255)",
+          "oklch(35% 0.01 255)",
+          "oklch(48% 0.01 255)",
+          "oklch(60% 0.01 255)",
+          "oklch(72% 0.01 255)",
+          "oklch(85% 0.01 255)",
+          "oklch(95% 0.01 255)"
         ]
       },
-      "leaf-white": {
+      "glass-leaf": {
         "role": "neutral",
-        "displayName": "Leaf White",
-        "tonalRamp": [
-          "oklch(15% 0 0)",
-          "oklch(25% 0 0)",
-          "oklch(35% 0 0)",
-          "oklch(48% 0 0)",
-          "oklch(60% 0 0)",
-          "oklch(72% 0 0)",
-          "oklch(85% 0 0)",
-          "oklch(95% 0 0)"
-        ]
+        "displayName": "Glass",
+        "note": "Rendered as --glass: linear-gradient(160deg, rgba(255,255,255,.42), rgba(255,255,255,.16)) with blur(18px) saturate(1.8)."
       },
-      "leaf-shade": {
+      "glass-strong": {
         "role": "neutral",
-        "displayName": "Leaf Shade",
-        "tonalRamp": [
-          "oklch(15% 0.004 250)",
-          "oklch(25% 0.004 250)",
-          "oklch(35% 0.004 250)",
-          "oklch(48% 0.004 250)",
-          "oklch(60% 0.004 250)",
-          "oklch(72% 0.004 250)",
-          "oklch(85% 0.004 250)",
-          "oklch(95% 0.004 250)"
-        ]
+        "displayName": "Glass Strong",
+        "note": "Sheets, dialogs, menus, toasts: rgba(246,248,252,.78), blur(30px). Night rgba(22,27,37,.82)."
       },
-      "leaf-well": {
+      "ink": {
         "role": "neutral",
-        "displayName": "Leaf Well",
+        "displayName": "Ink",
         "tonalRamp": [
-          "oklch(15% 0.008 250)",
-          "oklch(25% 0.008 250)",
-          "oklch(35% 0.008 250)",
-          "oklch(48% 0.008 250)",
-          "oklch(60% 0.008 250)",
-          "oklch(72% 0.008 250)",
-          "oklch(85% 0.008 250)",
-          "oklch(95% 0.008 250)"
-        ]
-      },
-      "blue-black-ink": {
-        "role": "neutral",
-        "displayName": "Blue-Black Ink",
-        "tonalRamp": [
-          "oklch(15% 0.03 265)",
-          "oklch(25% 0.03 265)",
-          "oklch(35% 0.03 265)",
-          "oklch(48% 0.03 265)",
-          "oklch(60% 0.03 265)",
-          "oklch(72% 0.03 265)",
-          "oklch(85% 0.03 265)",
-          "oklch(95% 0.03 265)"
-        ]
-      },
-      "ink-secondary": {
-        "role": "neutral",
-        "displayName": "Ink Secondary",
-        "tonalRamp": [
-          "oklch(15% 0.025 260)",
-          "oklch(25% 0.025 260)",
-          "oklch(35% 0.025 260)",
-          "oklch(48% 0.025 260)",
-          "oklch(60% 0.025 260)",
-          "oklch(72% 0.025 260)",
-          "oklch(85% 0.025 260)",
-          "oklch(95% 0.025 260)"
-        ]
-      },
-      "ink-faint": {
-        "role": "neutral",
-        "displayName": "Ink Faint",
-        "tonalRamp": [
-          "oklch(15% 0.015 250)",
-          "oklch(25% 0.015 250)",
-          "oklch(35% 0.015 250)",
-          "oklch(48% 0.015 250)",
-          "oklch(60% 0.015 250)",
-          "oklch(72% 0.015 250)",
-          "oklch(85% 0.015 250)",
-          "oklch(95% 0.015 250)"
-        ]
-      },
-      "hairline": {
-        "role": "neutral",
-        "displayName": "Hairline",
-        "tonalRamp": [
-          "oklch(15% 0.008 250)",
-          "oklch(25% 0.008 250)",
-          "oklch(35% 0.008 250)",
-          "oklch(48% 0.008 250)",
-          "oklch(60% 0.008 250)",
-          "oklch(72% 0.008 250)",
-          "oklch(85% 0.008 250)",
-          "oklch(95% 0.008 250)"
-        ]
-      },
-      "rule": {
-        "role": "neutral",
-        "displayName": "Rule",
-        "tonalRamp": [
-          "oklch(15% 0.012 250)",
-          "oklch(25% 0.012 250)",
-          "oklch(35% 0.012 250)",
-          "oklch(48% 0.012 250)",
-          "oklch(60% 0.012 250)",
-          "oklch(72% 0.012 250)",
-          "oklch(85% 0.012 250)",
-          "oklch(95% 0.012 250)"
-        ]
-      },
-      "field-edge": {
-        "role": "neutral",
-        "displayName": "Field Edge",
-        "tonalRamp": [
-          "oklch(15% 0.015 250)",
-          "oklch(25% 0.015 250)",
-          "oklch(35% 0.015 250)",
-          "oklch(48% 0.015 250)",
-          "oklch(60% 0.015 250)",
-          "oklch(72% 0.015 250)",
-          "oklch(85% 0.015 250)",
-          "oklch(95% 0.015 250)"
-        ]
-      },
-      "fill": {
-        "role": "neutral",
-        "displayName": "Fill",
-        "tonalRamp": [
-          "oklch(15% 0.014 250)",
-          "oklch(25% 0.014 250)",
-          "oklch(35% 0.014 250)",
-          "oklch(48% 0.014 250)",
-          "oklch(60% 0.014 250)",
-          "oklch(72% 0.014 250)",
-          "oklch(85% 0.014 250)",
-          "oklch(95% 0.014 250)"
-        ]
-      },
-      "fill-quiet": {
-        "role": "neutral",
-        "displayName": "Fill Quiet",
-        "tonalRamp": [
-          "oklch(15% 0.005 250)",
-          "oklch(25% 0.005 250)",
-          "oklch(35% 0.005 250)",
-          "oklch(48% 0.005 250)",
-          "oklch(60% 0.005 250)",
-          "oklch(72% 0.005 250)",
-          "oklch(85% 0.005 250)",
-          "oklch(95% 0.005 250)"
-        ]
-      },
-      "track": {
-        "role": "neutral",
-        "displayName": "Track",
-        "tonalRamp": [
-          "oklch(15% 0.008 250)",
-          "oklch(25% 0.008 250)",
-          "oklch(35% 0.008 250)",
-          "oklch(48% 0.008 250)",
-          "oklch(60% 0.008 250)",
-          "oklch(72% 0.008 250)",
-          "oklch(85% 0.008 250)",
-          "oklch(95% 0.008 250)"
+          "oklch(15% 0.01 260)",
+          "oklch(25% 0.01 260)",
+          "oklch(35% 0.01 260)",
+          "oklch(48% 0.01 260)",
+          "oklch(60% 0.01 260)",
+          "oklch(72% 0.01 260)",
+          "oklch(85% 0.01 260)",
+          "oklch(95% 0.01 260)"
         ]
       },
       "mtg-blue": {
         "role": "primary",
         "displayName": "MTG Blue",
         "tonalRamp": [
-          "oklch(15% 0.14 250)",
-          "oklch(25% 0.14 250)",
-          "oklch(35% 0.14 250)",
-          "oklch(48% 0.14 250)",
-          "oklch(60% 0.14 250)",
-          "oklch(72% 0.14 250)",
-          "oklch(85% 0.14 250)",
-          "oklch(95% 0.14 250)"
+          "oklch(15% 0.15 250)",
+          "oklch(25% 0.15 250)",
+          "oklch(35% 0.15 250)",
+          "oklch(48% 0.15 250)",
+          "oklch(60% 0.15 250)",
+          "oklch(72% 0.15 250)",
+          "oklch(85% 0.15 250)",
+          "oklch(95% 0.15 250)"
         ]
       },
-      "mtg-blue-ink": {
+      "blue-glass-top": {
         "role": "primary",
-        "displayName": "MTG Blue Ink",
-        "tonalRamp": [
-          "oklch(15% 0.13 250)",
-          "oklch(25% 0.13 250)",
-          "oklch(35% 0.13 250)",
-          "oklch(48% 0.13 250)",
-          "oklch(60% 0.13 250)",
-          "oklch(72% 0.13 250)",
-          "oklch(85% 0.13 250)",
-          "oklch(95% 0.13 250)"
-        ]
-      },
-      "mtg-blue-hover": {
-        "role": "primary",
-        "displayName": "MTG Blue Hover",
-        "tonalRamp": [
-          "oklch(15% 0.13 250)",
-          "oklch(25% 0.13 250)",
-          "oklch(35% 0.13 250)",
-          "oklch(48% 0.13 250)",
-          "oklch(60% 0.13 250)",
-          "oklch(72% 0.13 250)",
-          "oklch(85% 0.13 250)",
-          "oklch(95% 0.13 250)"
-        ]
-      },
-      "mtg-blue-press": {
-        "role": "primary",
-        "displayName": "MTG Blue Press",
-        "tonalRamp": [
-          "oklch(15% 0.12 250)",
-          "oklch(25% 0.12 250)",
-          "oklch(35% 0.12 250)",
-          "oklch(48% 0.12 250)",
-          "oklch(60% 0.12 250)",
-          "oklch(72% 0.12 250)",
-          "oklch(85% 0.12 250)",
-          "oklch(95% 0.12 250)"
-        ]
-      },
-      "mtg-blue-soft": {
-        "role": "primary",
-        "displayName": "MTG Blue Soft",
-        "tonalRamp": [
-          "oklch(15% 0.03 250)",
-          "oklch(25% 0.03 250)",
-          "oklch(35% 0.03 250)",
-          "oklch(48% 0.03 250)",
-          "oklch(60% 0.03 250)",
-          "oklch(72% 0.03 250)",
-          "oklch(85% 0.03 250)",
-          "oklch(95% 0.03 250)"
-        ]
+        "displayName": "Blue Glass",
+        "note": "--blue-btn: linear-gradient(155deg, rgba(18,108,200,.9), rgba(8,64,128,.94)); hero --blue-glass lighter (.62 → .72)."
       },
       "gasoil-green": {
         "role": "secondary",
         "displayName": "Gasoil Green",
         "tonalRamp": [
-          "oklch(15% 0.12 160)",
-          "oklch(25% 0.12 160)",
-          "oklch(35% 0.12 160)",
-          "oklch(48% 0.12 160)",
-          "oklch(60% 0.12 160)",
-          "oklch(72% 0.12 160)",
-          "oklch(85% 0.12 160)",
-          "oklch(95% 0.12 160)"
+          "oklch(15% 0.13 160)",
+          "oklch(25% 0.13 160)",
+          "oklch(35% 0.13 160)",
+          "oklch(48% 0.13 160)",
+          "oklch(60% 0.13 160)",
+          "oklch(72% 0.13 160)",
+          "oklch(85% 0.13 160)",
+          "oklch(95% 0.13 160)"
         ]
       },
       "essence-amber": {
         "role": "secondary",
         "displayName": "Essence Amber",
         "tonalRamp": [
-          "oklch(15% 0.14 60)",
-          "oklch(25% 0.14 60)",
-          "oklch(35% 0.14 60)",
-          "oklch(48% 0.14 60)",
-          "oklch(60% 0.14 60)",
-          "oklch(72% 0.14 60)",
-          "oklch(85% 0.14 60)",
-          "oklch(95% 0.14 60)"
+          "oklch(15% 0.15 60)",
+          "oklch(25% 0.15 60)",
+          "oklch(35% 0.15 60)",
+          "oklch(48% 0.15 60)",
+          "oklch(60% 0.15 60)",
+          "oklch(72% 0.15 60)",
+          "oklch(85% 0.15 60)",
+          "oklch(95% 0.15 60)"
         ]
       },
       "owed-red": {
         "role": "tertiary",
         "displayName": "Owed Red",
         "tonalRamp": [
-          "oklch(15% 0.18 28)",
-          "oklch(25% 0.18 28)",
-          "oklch(35% 0.18 28)",
-          "oklch(48% 0.18 28)",
-          "oklch(60% 0.18 28)",
-          "oklch(72% 0.18 28)",
-          "oklch(85% 0.18 28)",
-          "oklch(95% 0.18 28)"
+          "oklch(15% 0.19 25)",
+          "oklch(25% 0.19 25)",
+          "oklch(35% 0.19 25)",
+          "oklch(48% 0.19 25)",
+          "oklch(60% 0.19 25)",
+          "oklch(72% 0.19 25)",
+          "oklch(85% 0.19 25)",
+          "oklch(95% 0.19 25)"
         ]
       },
-      "owed-red-text": {
+      "gold": {
         "role": "tertiary",
-        "displayName": "Owed Red Text",
-        "tonalRamp": [
-          "oklch(15% 0.18 28)",
-          "oklch(25% 0.18 28)",
-          "oklch(35% 0.18 28)",
-          "oklch(48% 0.18 28)",
-          "oklch(60% 0.18 28)",
-          "oklch(72% 0.18 28)",
-          "oklch(85% 0.18 28)",
-          "oklch(95% 0.18 28)"
-        ]
-      },
-      "good-text": {
-        "role": "status",
-        "displayName": "Good Green",
-        "tonalRamp": [
-          "oklch(15% 0.11 160)",
-          "oklch(25% 0.11 160)",
-          "oklch(35% 0.11 160)",
-          "oklch(48% 0.11 160)",
-          "oklch(60% 0.11 160)",
-          "oklch(72% 0.11 160)",
-          "oklch(85% 0.11 160)",
-          "oklch(95% 0.11 160)"
-        ]
-      },
-      "serious-orange": {
-        "role": "status",
-        "displayName": "Serious Orange",
-        "tonalRamp": [
-          "oklch(15% 0.14 60)",
-          "oklch(25% 0.14 60)",
-          "oklch(35% 0.14 60)",
-          "oklch(48% 0.14 60)",
-          "oklch(60% 0.14 60)",
-          "oklch(72% 0.14 60)",
-          "oklch(85% 0.14 60)",
-          "oklch(95% 0.14 60)"
-        ]
-      },
-      "warning-yellow": {
-        "role": "status",
-        "displayName": "Warning Yellow",
+        "displayName": "Combos Gold",
         "tonalRamp": [
           "oklch(15% 0.13 85)",
           "oklch(25% 0.13 85)",
@@ -354,140 +117,94 @@
           "oklch(95% 0.13 85)"
         ]
       },
-      "night-paper": {
+      "blob-blue": {
         "role": "neutral",
-        "displayName": "Night Paper",
-        "tonalRamp": [
-          "oklch(15% 0.015 250)",
-          "oklch(25% 0.015 250)",
-          "oklch(35% 0.015 250)",
-          "oklch(48% 0.015 250)",
-          "oklch(60% 0.015 250)",
-          "oklch(72% 0.015 250)",
-          "oklch(85% 0.015 250)",
-          "oklch(95% 0.015 250)"
-        ]
-      },
-      "night-leaf": {
-        "role": "neutral",
-        "displayName": "Night Leaf",
-        "tonalRamp": [
-          "oklch(15% 0.018 250)",
-          "oklch(25% 0.018 250)",
-          "oklch(35% 0.018 250)",
-          "oklch(48% 0.018 250)",
-          "oklch(60% 0.018 250)",
-          "oklch(72% 0.018 250)",
-          "oklch(85% 0.018 250)",
-          "oklch(95% 0.018 250)"
-        ]
-      },
-      "night-ink": {
-        "role": "neutral",
-        "displayName": "Night Ink",
-        "tonalRamp": [
-          "oklch(15% 0.01 250)",
-          "oklch(25% 0.01 250)",
-          "oklch(35% 0.01 250)",
-          "oklch(48% 0.01 250)",
-          "oklch(60% 0.01 250)",
-          "oklch(72% 0.01 250)",
-          "oklch(85% 0.01 250)",
-          "oklch(95% 0.01 250)"
-        ]
-      },
-      "night-hairline": {
-        "role": "neutral",
-        "displayName": "Night Hairline",
-        "tonalRamp": [
-          "oklch(15% 0.018 250)",
-          "oklch(25% 0.018 250)",
-          "oklch(35% 0.018 250)",
-          "oklch(48% 0.018 250)",
-          "oklch(60% 0.018 250)",
-          "oklch(72% 0.018 250)",
-          "oklch(85% 0.018 250)",
-          "oklch(95% 0.018 250)"
-        ]
-      },
-      "night-blue": {
-        "role": "primary",
-        "displayName": "Night Blue",
-        "tonalRamp": [
-          "oklch(15% 0.14 250)",
-          "oklch(25% 0.14 250)",
-          "oklch(35% 0.14 250)",
-          "oklch(48% 0.14 250)",
-          "oklch(60% 0.14 250)",
-          "oklch(72% 0.14 250)",
-          "oklch(85% 0.14 250)",
-          "oklch(95% 0.14 250)"
-        ]
+        "displayName": "World: blue field",
+        "note": ".ambient, blur(70px), opacity .8 (night #1d4f9a, .7)."
       }
     },
     "typographyMeta": {
       "display": {
         "displayName": "Display",
-        "purpose": "Page titles and the sign-in title (26px below 834px)."
+        "purpose": "Page titles."
       },
-      "headline": {
-        "displayName": "Headline",
-        "purpose": "Sheet and dialog titles."
+      "section": {
+        "displayName": "Section",
+        "purpose": "« Aujourd’hui », sheet titles."
       },
       "title": {
         "displayName": "Title",
-        "purpose": "Card header titles, the phone top bar title."
+        "purpose": "Card header titles."
+      },
+      "hero-figure": {
+        "displayName": "Hero figure",
+        "purpose": "The station value on blue glass (40px on phones)."
       },
       "figure": {
         "displayName": "Figure",
-        "purpose": "Every glanced figure: prices, KPIs, tank percentages, the net value total. Tabular, right-aligned."
+        "purpose": "Tile values, prices, KPIs, tank percentages."
       },
       "body": {
         "displayName": "Body",
-        "purpose": "Rows, labels; fields at 17px."
+        "purpose": "Rows and fields (fields 17px)."
       },
       "label": {
         "displayName": "Label",
-        "purpose": "Notes under a row label, units, badges, table heads."
-      },
-      "group-label": {
-        "displayName": "Group label",
-        "purpose": "Uppercase head of a group of lines inside a column or form; never above a title."
+        "purpose": "Quick-action labels, tile side notes."
       }
     },
     "shadows": [
       {
-        "name": "overlay-lift",
-        "value": "0 0 0 1px var(--hairline), 0 12px 32px rgba(17, 24, 39, 0.14)",
-        "purpose": "Sheets, alert dialogs, toasts only. Night: 0 14px 36px rgba(0, 0, 0, 0.5)."
+        "name": "glass-rim",
+        "value": "inset 0 1.5px 1px rgba(255,255,255,.95), inset 0 -1px 1px rgba(255,255,255,.4)",
+        "purpose": "Every glass surface: light caught on the top edge. Night .22 / .06."
       },
       {
-        "name": "field-focus",
-        "value": "0 0 0 3px color-mix(in srgb, var(--mtg-blue) 18%, transparent)",
-        "purpose": "Focused input, with a blue edge."
+        "name": "glass-drop",
+        "value": "0 12px 30px rgba(20,40,80,.08)",
+        "purpose": "Panels and tiles. Night 0 14px 34px rgba(0,0,0,.45)."
+      },
+      {
+        "name": "overlay-lift",
+        "value": "0 24px 60px rgba(10,20,40,.22)",
+        "purpose": "Sheets, dialogs, toasts, menus."
+      },
+      {
+        "name": "hero-lift",
+        "value": "0 24px 50px rgba(10,40,90,.24)",
+        "purpose": "The hero."
+      },
+      {
+        "name": "blue-glow",
+        "value": "0 8px 20px rgba(11,111,196,.22)",
+        "purpose": "The main button."
       }
     ],
     "motion": [
       {
         "name": "ease",
         "value": "cubic-bezier(0.22, 1, 0.36, 1)",
-        "purpose": "Entrances (fade-up of panels and the register), sheets, the level bar growing."
+        "purpose": "Rise (0.8s, translateY 16px, scale .985, blur 6px), bars (0.9s), rings (1.4s), sheets."
       },
       {
-        "name": "ease-out",
-        "value": "cubic-bezier(0.25, 0.1, 0.25, 1)",
-        "purpose": "Field border and focus transitions."
+        "name": "stagger",
+        "value": "0.05s",
+        "purpose": "Tiles rise one after the other; quick actions 0.1s after."
       },
       {
-        "name": "ease-menu",
-        "value": "cubic-bezier(0.4, 0, 0.6, 1)",
-        "purpose": "Menus and the nav drawer."
+        "name": "drift",
+        "value": "18s–26s ease-in-out alternate",
+        "purpose": "The world behind the glass, only where hover: hover."
       }
     ],
     "breakpoints": [
       {
         "name": "phone-narrow",
         "value": "420px"
+      },
+      {
+        "name": "tiles-one-column",
+        "value": "560px"
       },
       {
         "name": "drawer",
@@ -503,8 +220,8 @@
       }
     ],
     "themes": {
-      "light": "default (:root)",
-      "night": ":root[data-theme='dark'], toggled by the sun key, stored as localStorage theme-registre"
+      "night": "default: data-theme='dark' set in index.html",
+      "light": "chosen with the sun key, stored as localStorage theme-registre = 'light'"
     }
   },
   "components": [
@@ -512,131 +229,96 @@
       "name": "Primary Button",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "The one blue slab of a region.",
+      "description": "The one MTG-blue glass button of a region.",
       "html": "<button class=\"ds-btn-primary\">Enregistrer</button>",
-      "css": ".ds-btn-primary { min-height: 44px; padding: 10px 18px; border: 1px solid transparent; border-radius: 8px; background: var(--mtg-blue, #0b6fc4); color: #fff; font: 600 15px/1.2 Inter, system-ui, sans-serif; letter-spacing: -0.012em; cursor: pointer; transition: background 0.2s; } .ds-btn-primary:hover { background: var(--accent-hover, #0a63af); } .ds-btn-primary:active { background: var(--accent-press, #08548f); } .ds-btn-primary:focus-visible { outline: 2px solid var(--focus, #0b6fc4); outline-offset: 2px; }"
+      "css": ".ds-btn-primary{min-height:44px;padding:10px 18px;border:none;border-radius:12px;background:linear-gradient(155deg,rgba(18,108,200,.9),rgba(8,64,128,.94));color:#fff;font:700 15px/1.2 Manrope, system-ui, sans-serif;backdrop-filter:blur(10px) saturate(1.6);box-shadow:inset 0 1.5px 1px rgba(255,255,255,.55),inset 0 -1px 1px rgba(255,255,255,.15),0 8px 20px rgba(11,111,196,.22);cursor:pointer}"
     },
     {
       "name": "Secondary Button",
       "kind": "button",
       "refersTo": "button-secondary",
-      "description": "Every other action, Annuler and Fermer: a white leaf with an ink edge.",
-      "html": "<button class=\"ds-btn-secondary\">Nouvelle livraison</button>",
-      "css": ".ds-btn-secondary { min-height: 44px; padding: 10px 18px; border: 1px solid var(--field-border, #b9c1cb); border-radius: 8px; background: var(--surface, #fff); color: var(--text, #111827); font: 600 15px/1.2 Inter, system-ui, sans-serif; cursor: pointer; transition: background 0.2s; } .ds-btn-secondary:hover { background: var(--fill-4, #f1f4f7); } .ds-btn-secondary:active { background: var(--fill-3, #e9edf2); } .ds-btn-secondary:focus-visible { outline: 2px solid var(--focus, #0b6fc4); outline-offset: 2px; }"
+      "description": "Clear glass, ink text.",
+      "html": "<button class=\"ds-btn-secondary\">Annuler</button>",
+      "css": ".ds-btn-secondary{min-height:44px;padding:10px 18px;border:none;border-radius:12px;background:linear-gradient(155deg,rgba(255,255,255,.34),rgba(255,255,255,.06) 45%,rgba(255,255,255,.14));color:#0b0d12;font:700 15px/1.2 Manrope, system-ui, sans-serif;backdrop-filter:blur(10px);box-shadow:inset 0 1.5px 1px rgba(255,255,255,.95),inset 0 -1px 1px rgba(255,255,255,.4),0 6px 16px rgba(20,40,80,.08);cursor:pointer}"
     },
     {
-      "name": "Danger Button",
+      "name": "Quick Action",
       "kind": "button",
-      "refersTo": "button-danger",
-      "description": "Destructive actions, set apart: white leaf, red text and edge.",
-      "html": "<button class=\"ds-btn-danger\">Supprimer</button>",
-      "css": ".ds-btn-danger { min-height: 44px; padding: 10px 18px; border: 1px solid color-mix(in oklab, #c8322a 45%, #fff); border-radius: 8px; background: #fff; color: #b42318; font: 600 15px/1.2 Inter, system-ui, sans-serif; cursor: pointer; } .ds-btn-danger:hover { background: color-mix(in oklab, #c8322a 8%, #fff); } .ds-btn-danger:focus-visible { outline: 2px solid #0b6fc4; outline-offset: 2px; }"
+      "refersTo": "quick-action",
+      "description": "Glass squircle with the glyph, the label beneath.",
+      "html": "<a class=\"ds-act\"><span class=\"ds-sq\">＋</span>Crédit</a>",
+      "css": ".ds-act{display:inline-flex;flex-direction:column;align-items:center;gap:8px;font:700 13px Manrope, system-ui, sans-serif;color:inherit}.ds-sq{display:grid;place-items:center;width:56px;height:56px;border-radius:18px;background:linear-gradient(155deg,rgba(255,255,255,.34),rgba(255,255,255,.06) 45%,rgba(255,255,255,.14));backdrop-filter:blur(6px) saturate(1.8) brightness(1.06);box-shadow:inset 0 1.5px 1px rgba(255,255,255,.95),inset 0 -1px 1px rgba(255,255,255,.4),0 8px 20px rgba(20,40,80,.1);font-size:26px}"
+    },
+    {
+      "name": "Hero",
+      "kind": "card",
+      "refersTo": "hero",
+      "description": "The station value on blue glass.",
+      "html": "<div class=\"ds-hero\"><div class=\"l\">Valeur de la station</div><div class=\"v\">12 480,00 $</div></div>",
+      "css": ".ds-hero{padding:22px 22px 24px;border-radius:24px;color:#fff;font-family:Manrope, system-ui, sans-serif;background:linear-gradient(155deg,rgba(20,110,200,.62),rgba(8,60,120,.72));backdrop-filter:blur(24px) saturate(1.6);box-shadow:inset 0 1.5px 1px rgba(255,255,255,.55),0 24px 50px rgba(10,40,90,.24)}.ds-hero .l{font:600 13px Manrope, system-ui, sans-serif;opacity:.82}.ds-hero .v{margin-top:8px;font:800 44px/1 Manrope, system-ui, sans-serif;letter-spacing:-.045em;font-variant-numeric:tabular-nums}"
+    },
+    {
+      "name": "Tile",
+      "kind": "card",
+      "refersTo": "tile",
+      "description": "A glanced figure of today, coloured by meaning.",
+      "html": "<div class=\"ds-tile\"><div class=\"h\">Gasoil</div><div class=\"v\">6 000<small>L</small></div></div>",
+      "css": ".ds-tile{padding:15px 16px 16px;border-radius:20px;font-family:Manrope, system-ui, sans-serif;background:linear-gradient(160deg,rgba(255,255,255,.42),rgba(255,255,255,.16));backdrop-filter:blur(18px) saturate(1.8);box-shadow:inset 0 1.5px 1px rgba(255,255,255,.95),0 12px 30px rgba(20,40,80,.08)}.ds-tile .h{font-weight:700;color:#0f8f5c}.ds-tile .v{margin-top:12px;font:800 30px/1 Manrope, system-ui, sans-serif;letter-spacing:-.04em;font-variant-numeric:tabular-nums}.ds-tile small{margin-left:3px;font-size:15px;opacity:.6}"
     },
     {
       "name": "Text Field",
       "kind": "input",
       "refersTo": "input",
-      "description": "White field, field-edge outline, blue edge and halo on focus.",
-      "html": "<input class=\"ds-input\" placeholder=\"Montant ($)\">",
-      "css": ".ds-input { width: 100%; min-height: 44px; padding: 10px 16px; border: 1px solid var(--field-border, #b9c1cb); border-radius: 8px; background: var(--surface, #fff); color: var(--text, #111827); font: 400 17px/1.3 Inter, system-ui, sans-serif; transition: border-color 0.2s, box-shadow 0.2s; } .ds-input:focus { outline: none; border-color: var(--mtg-blue, #0b6fc4); box-shadow: 0 0 0 3px color-mix(in srgb, #0b6fc4 18%, transparent); }"
-    },
-    {
-      "name": "Rail Navigation",
-      "kind": "nav",
-      "refersTo": "nav-item-active",
-      "description": "The white rail: ink-secondary labels, the active item on blue-soft.",
-      "html": "<nav class=\"ds-nav\"><a class=\"active\" href=\"#\">Tableau de bord</a><a href=\"#\">Postes</a><a href=\"#\">Clients</a></nav>",
-      "css": ".ds-nav { display: flex; flex-direction: column; gap: 2px; width: 220px; padding: 8px; background: #fff; border-right: 1px solid #e3e7ec; } .ds-nav a { padding: 10px 12px; border-radius: 8px; color: #4b5565; font: 500 15px/1.2 Inter, system-ui, sans-serif; text-decoration: none; } .ds-nav a:hover { background: #f1f4f7; color: #111827; } .ds-nav a.active { background: #e8f1fb; color: #0a5fa8; font-weight: 600; } .ds-nav a:focus-visible { outline: 2px solid #0b6fc4; outline-offset: 1px; }"
-    },
-    {
-      "name": "Status Badge",
-      "kind": "chip",
-      "refersTo": "badge",
-      "description": "Rounded square of the well tone with a status dot.",
-      "html": "<span class=\"ds-badge\"><i></i>Niveau correct</span>",
-      "css": ".ds-badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 6px; background: #eef1f5; color: #111827; font: 600 13px/1.4 Inter, system-ui, sans-serif; } .ds-badge i { width: 7px; height: 7px; border-radius: 2px; background: #12895a; }"
-    },
-    {
-      "name": "Addition Column",
-      "kind": "card",
-      "refersTo": "card",
-      "description": "The signature: ruled lines of label and figure, a group label, the total on a double rule.",
-      "html": "<section class=\"ds-col\"><h2>Valeur de la station</h2><h3>Ce qu’elle possède</h3><div class=\"ds-line\"><span>Mobile money</span><span>0,00 $</span></div><div class=\"ds-line\"><span>Crédits clients</span><span>265,00 $</span></div><h3>Ce qu’elle doit</h3><div class=\"ds-line\"><span>Fournisseurs</span><span>−13 920,00 $</span></div><div class=\"ds-line ds-total\"><span>Valeur nette</span><span class=\"neg\">−7,99 $</span></div></section>",
-      "css": ".ds-col { width: 420px; padding: 0 24px 24px; background: #fff; border: 1px solid #e3e7ec; border-radius: 10px; font-family: Inter, system-ui, sans-serif; color: #111827; } .ds-col h2 { margin: 0 -24px 0; padding: 18px 24px 14px; border-bottom: 1px solid #e3e7ec; font-size: 17px; font-weight: 650; letter-spacing: -0.018em; } .ds-col h3 { margin: 18px 0 2px; font-size: 13px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #6b7480; } .ds-line { display: flex; justify-content: space-between; padding: 9px 0; font-size: 16px; font-variant-numeric: tabular-nums; border-bottom: 1px solid #e3e7ec; } .ds-line:has(+ .ds-total) { border-bottom: none; } .ds-total { margin-top: 6px; padding-top: 12px; border-top: 3px double #111827; border-bottom: none; font-weight: 700; align-items: baseline; } .ds-total span:last-child { font-size: 28px; font-weight: 650; letter-spacing: -0.03em; } .neg { color: #b42318; }"
-    },
-    {
-      "name": "Register Row with Fuel Tab",
-      "kind": "custom",
-      "refersTo": "fuel-tab",
-      "description": "A price line: the fuel as a 10px ink tab, the figure right.",
-      "html": "<div class=\"ds-reg\"><span class=\"ds-lab\"><i></i><span>Gasoil<small>Abonnés 1,400 $/L</small></span></span><b>1,350 $/L</b></div>",
-      "css": ".ds-reg { display: flex; align-items: center; justify-content: space-between; gap: 14px; width: 360px; padding: 11px 0; border-bottom: 1px solid #e3e7ec; font-family: Inter, system-ui, sans-serif; color: #111827; } .ds-lab { display: flex; align-items: center; gap: 10px; font-weight: 600; } .ds-lab > span { display: flex; flex-direction: column; } .ds-lab small { color: #6b7480; font-size: 13px; font-weight: 500; } .ds-lab i { width: 10px; height: 10px; border-radius: 3px; background: #12895a; } .ds-reg b { font-size: 17px; font-weight: 650; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }"
+      "description": "Translucent field, 14px corners.",
+      "html": "<input class=\"ds-input\" placeholder=\"Montant\">",
+      "css": ".ds-input{height:44px;padding:10px 16px;border:1px solid rgba(15,25,45,.16);border-radius:12px;background:rgba(255,255,255,.7);font:500 17px Manrope, system-ui, sans-serif}"
     }
   ],
   "narrative": {
-    "northStar": "The Station's Credit Register",
-    "overview": "The app is the station's account book kept impeccably. Every screen reads like a clean column of figures that adds up: labels on the left in ink, figures on the right, tabular and aligned, rows ruled by one hairline, and the total closing the column on a double rule. The world replaces « Totem de nuit » entirely: no black ground by default, no coloured fields, no condensed display face, no lit coloured headers.\n\nDensity is a ledger's, calm and even: white leaves (panels) laid on a cool register paper, flat, separated by hairlines rather than shadows. Colour is information, never decoration. The MTG blue marks the one main action of a region, links, the current place, and money coming in; one red marks what is owed and gaps; the two fuels are small tabs of ink beside their names. A night mode (the sun key beside the account) keeps every role under a lamp. Light is the default, chosen for outdoor phones in full sun.\n\nThe surfaces still behave like native iOS: sheets, a right drawer for forms on wide screens, bottom sheets on phones, short fade-up entrances, and every motion respects reduced-motion.",
+    "northStar": "Verre, version 2.0",
+    "overview": "Clear liquid glass over a soft blurred world of colour, like Apple Wallet / Santé: sober, premium, few buttons, colour only where it means something. Night by default.",
     "keyCharacteristics": [
-      "Cool paper ground, white leaves, one hairline; never cream, never black by default.",
-      "One family, Inter, figures tabular, right-aligned, one figure scale for every glanced number.",
-      "The addition column with its double rule is the signature.",
-      "Blue for the main action and money in, red only for what is owed and gaps, fuel as 10px ink tabs.",
-      "Flat at rest; shadows only on overlays (sheets, dialogs, toasts).",
-      "One shape: the rounded rectangle; no circle, no pill."
+      "A blurred world of colour behind everything",
+      "Clear glass panels, bars, sheets and buttons with a bright rim",
+      "Manrope, titles and figures 800, tabular",
+      "The station value on MTG-blue glass",
+      "Glass squircles for quick actions",
+      "Arrivals rise out of a blur; figures count up; rings fill"
     ],
     "rules": [
       {
-        "name": "The One Red Rule",
-        "body": "Red means owed or a gap. A negative cash balance is red; a neutral « 0,00 $ » is ink. Never use red for emphasis or decoration.",
+        "name": "The Meaning Rule",
+        "body": "Colour is meaning: blue the main action and the value, fuel colours the fuels, red what is owed or lost, gold combos.",
         "section": "colors"
       },
       {
-        "name": "The Blue Slab Rule",
-        "body": "One blue slab per region. Every other button is a white leaf with an ink edge.",
-        "section": "colors"
+        "name": "The One Blue Rule",
+        "body": "One blue glass button per region; every other button is clear glass with ink text.",
+        "section": "components"
       },
       {
-        "name": "The Fuel Tab Rule",
-        "body": "A fuel is a 10px ink tab beside its name, never a coloured field, panel or header.",
-        "section": "colors"
-      },
-      {
-        "name": "The Tabular Rule",
-        "body": "Every figure is tabular and right-aligned, so columns add up by eye.",
-        "section": "typography"
-      },
-      {
-        "name": "The One Scale Rule",
-        "body": "Figures glanced at together share one size (28px). No hero number outgrows its siblings, except the closing's single result.",
-        "section": "typography"
-      },
-      {
-        "name": "The Flat Leaf Rule",
-        "body": "Nothing on the page casts a shadow; only overlays do.",
+        "name": "The Clear Glass Rule",
+        "body": "Glass stays as transparent as it is (« plus transparent »); never an opaque page layer over the world.",
         "section": "elevation"
       }
     ],
     "dos": [
-      "**Do** close every total on a 3px double ink rule, label left, figure right, bold.",
-      "**Do** set every figure in Inter, tabular, right-aligned; glanced figures share the 28px figure scale.",
-      "**Do** keep one blue slab per region; every other button is a white leaf with an ink edge.",
-      "**Do** show a fuel as its 10px ink tab beside its name, through `productColor(id)` / the fuel tokens.",
-      "**Do** keep panels flat: white leaf, 1px hairline, 10px corners; shadows only on sheets, dialogs and toasts.",
-      "**Do** keep both themes in step: a new detail follows its siblings in the light and the night theme.",
-      "**Do** give grouped buttons equal width and centre them on mobile.",
-      "**Do** write all UI text in French.",
-      "**Do** use icons only from the existing set; a new icon is a PNG found on pngegg.com, never drawn.",
-      "**Do** respect reduced-motion for every entrance, count-up and glow."
+      "Use the glass tokens and keep the solid fallback",
+      "One blue glass button per region",
+      "Colour by meaning only",
+      "Keep night and light in step",
+      "Equal-width grouped buttons, centred on mobile",
+      "French UI text",
+      "Icons from pngegg.com, never drawn",
+      "Respect reduced motion and transparency"
     ],
     "donts": [
-      "**Don't** add explanatory text outside Réglages: no form intro, field hint, descriptive subtitle or explanation sentence in a confirmation; only data, statuses, empty states and error messages.",
-      "**Don't** use red for anything but what is owed, gaps, destructive actions and critical status.",
-      "**Don't** bring back the totem: no black default ground, no coloured fuel fields, no lit coloured card headers, no condensed display face.",
-      "**Don't** use circles or pills; every shape is a rounded rectangle.",
-      "**Don't** use a cream or warm ground; the paper is cool.",
-      "**Don't** put a small uppercase label above a page or card title; the uppercase group label only heads a group of lines.",
-      "**Don't** label a figure twice.",
-      "**Don't** add shadows to panels, rows or buttons at rest."
+      "No explanatory text outside Réglages",
+      "No solid colour on body",
+      "No coloured buttons beyond the one blue",
+      "No return to Registre or Totem de nuit",
+      "No h(\"svg\"): use innerHTML",
+      "No Apple logo, name or imagery"
     ]
   }
 }
