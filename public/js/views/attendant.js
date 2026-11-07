@@ -6,6 +6,9 @@ import { shiftSummary } from './shifts.js';
 import { renderJoin, renderCheckpoint, reportCard } from './relay.js';
 import { withMeterPhoto, markRead } from '../photo.js';
 
+// The till's side of a mobile money transfer, by name.
+const MOVE_NAME = { retrait_momo: 'Retrait du mobile money', echange_momo: 'Échange mobile money contre espèces' };
+
 // One shift for the station, always open: the attendant takes it (or continues it after a relief),
 // opens the station in the morning, or, the very first time, opens the first shift.
 export async function renderAttendant(page, ctx) {
@@ -1009,7 +1012,7 @@ export function renderClosing(page, ctx, shift, { mode = 'attendant', onBack, on
       combos ? h('div', { class: 'summary-line' }, h('span', {}, 'Échangé contre des combos'), h('span', { class: 'num' }, `− ${fmt.money(combos)}`)) : null,
       payments ? h('div', { class: 'summary-line' }, h('span', {}, 'Règlements reçus'), h('span', { class: 'num' }, `+ ${fmt.money(payments)}`)) : null,
       expenses ? h('div', { class: 'summary-line' }, h('span', {}, 'Dépenses payées'), h('span', { class: 'num' }, `− ${fmt.money(expenses)}`)) : null,
-      moves.map((m) => h('div', { class: 'summary-line' }, h('span', {}, `${m.signed > 0 ? 'Entrée' : 'Sortie'} ${m.momo ? 'mobile money' : 'de la caisse'} · ${m.note || m.label}`), h('span', { class: 'num' }, `${m.signed > 0 ? '+' : '−'} ${fmt.money(Math.abs(m.signed))}`))),
+      moves.map((m) => h('div', { class: 'summary-line' }, h('span', {}, `${MOVE_NAME[m.kind] || `${m.signed > 0 ? 'Entrée' : 'Sortie'} ${m.momo ? 'mobile money' : 'de la caisse'}`} · ${m.note || m.label}`), h('span', { class: 'num' }, `${m.signed > 0 ? '+' : '−'} ${fmt.money(Math.abs(m.signed))}`))),
       h('div', { class: 'summary-line' }, h('span', {}, 'À remettre'), lines.expected),
       momo ? h('div', { class: 'summary-line' }, h('span', {}, 'Reçu en mobile money'), h('span', { class: 'num' }, `− ${fmt.money(momo)}`)) : null,
       showMoney

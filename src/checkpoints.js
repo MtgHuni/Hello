@@ -24,8 +24,9 @@ function shiftMovements(db, shiftId, from = '0000', to = '9999') {
     .prepare('SELECT * FROM cash_movements WHERE shift_id = ? AND created_at >= ? AND created_at <= ? ORDER BY id')
     .all(shiftId, from, to)
     .map((m) => {
-      // A mobile money entry or exit (not a withdrawal into the cash) moves the shift's mobile money.
-      const momo = m.account === 'momo' && m.kind !== 'retrait_momo';
+      // A mobile money entry or exit moves the shift's mobile money; a withdrawal into the cash or an
+      // exchange (mobile money received, cash given) moves its cash.
+      const momo = m.account === 'momo' && m.kind !== 'retrait_momo' && m.kind !== 'echange_momo';
       return { ...m, momo, label: `${KINDS[m.kind]?.label || m.kind}${momo ? ' (mobile money)' : ''}${m.note ? ` : ${m.note}` : ''}`, signed: round(shiftSign(m.kind, m.account) * m.amount) };
     });
 }

@@ -22,6 +22,7 @@ const KINDS = {
     ['autre_entree', 'Entrée'],
     ['autre_sortie', 'Sortie'],
     ['retrait_momo', 'Retrait'],
+    ['echange_momo', 'Échange'],
   ],
 };
 

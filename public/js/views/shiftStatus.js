@@ -5,6 +5,9 @@ import { icon } from '../icons.js';
 import { reportCard } from './relay.js';
 import { renderClosing } from './attendant.js';
 
+// The till's side of a mobile money transfer, by name.
+const MOVE_NAME = { retrait_momo: 'Retrait du mobile money', echange_momo: 'Échange mobile money contre espèces' };
+
 // The manager's view of the shift in progress, always from its opening indexes: what was sold up to
 // the last index reading, credits, payments, expenses, the money at each relief, and, if the manager
 // reads the meters now, the sales and the money expected at this very moment.
@@ -93,7 +96,7 @@ export async function renderShiftStatus(page, ctx) {
         h('div', { class: 'summary-line' }, h('span', {}, 'Crédits du poste'), h('span', { class: 'num' }, `− ${fmt.money(sum(credits, 'amount'))}`)),
         h('div', { class: 'summary-line' }, h('span', {}, 'Règlements du poste'), h('span', { class: 'num' }, `+ ${fmt.money(sum(shift.payments, 'amount'))}`)),
         h('div', { class: 'summary-line' }, h('span', {}, 'Dépenses du poste'), h('span', { class: 'num' }, `− ${fmt.money(sum(shift.expenses, 'amount'))}`)),
-        (shift.movements || []).map((m) => h('div', { class: 'summary-line' }, h('span', {}, `${m.signed > 0 ? 'Entrée' : 'Sortie'} ${m.momo ? 'mobile money' : 'de la caisse'} · ${m.note || m.label}`), h('span', { class: 'num' }, `${m.signed > 0 ? '+' : '−'} ${fmt.money(Math.abs(m.signed))}`))),
+        (shift.movements || []).map((m) => h('div', { class: 'summary-line' }, h('span', {}, `${MOVE_NAME[m.kind] || `${m.signed > 0 ? 'Entrée' : 'Sortie'} ${m.momo ? 'mobile money' : 'de la caisse'}`} · ${m.note || m.label}`), h('span', { class: 'num' }, `${m.signed > 0 ? '+' : '−'} ${fmt.money(Math.abs(m.signed))}`))),
         h('div', { class: 'summary-line' }, h('span', {}, 'Mobile money du poste'), h('span', { class: 'num' }, fmt.money(shift.momo_total))),
       ),
       open && !shift.station_closed_at ? card(cardHeader('Relever les index maintenant', null), meters) : null,
