@@ -1,278 +1,214 @@
 ---
 name: MTG Station
-description: Version 2.0 « Verre ». A soft world of colour, blurred, behind everything; panels, bars, sheets and buttons in clear liquid glass that lets it through, light caught on the rim; the station's value on MTG-blue glass; Manrope; arrivals rise out of a blur. Night by default (2026-11-07), light optional with the same roles.
+description: Version 3.0 « Plan ». An architect's drawing of the station, in the look of the owner's NANO Build site and the blue of the MTG logo. Jost, right angles everywhere, frames of 2px, the logo's double frame with construction lines, titles announced by a drawn line, small spaced capitals, figures on a ruled grid. Night by default, light optional.
 colors:
-  page: "#eef1f6"
-  glass-leaf: "#ffffff8c"
-  glass-shade: "#ffffff59"
-  glass-strong: "#f6f8fcc7"
-  field: "#ffffffb3"
-  ink: "#0b0d12"
-  ink-secondary: "#4a5160"
-  ink-faint: "#646b79"
-  hairline: "#0f192d14"
-  rule: "#0f192d1f"
-  field-edge: "#0f192d29"
+  night-ground: "#070b10"
+  night-ink: "#f2f5f8"
+  night-ink-secondary: "#ccd4dd"
+  night-line: "#f2f5f861"
+  night-grid: "#f2f5f82b"
+  night-blue: "#1e9bf0"
+  night-on-blue: "#04101c"
+  night-owed: "#ff7b6e"
+  sheet: "#e6e9ed"
+  paper: "#ffffff"
+  ink: "#0d1117"
+  ink-secondary: "#2b333d"
+  line: "#0d11175c"
+  grid: "#0d111729"
   mtg-blue: "#0b6fc4"
   mtg-blue-ink: "#0a5fa8"
-  blue-glass-top: "#126cc8e6"
-  blue-glass-bottom: "#084080f0"
-  gasoil-green: "#0f8f5c"
-  essence-amber: "#db7d1f"
-  owed-red: "#e0393e"
-  owed-red-text: "#b42318"
-  gold: "#b8860b"
-  good-text: "#0d7a4e"
-  blob-blue: "#4aa3ff"
-  blob-cyan: "#7ae0ff"
-  blob-amber: "#ffb36b"
-  night-page: "#070a10"
-  night-leaf: "#1e2430"
-  night-strong: "#161b25"
-  night-ink: "#eef2f8"
-  night-blob-blue: "#1d4f9a"
-  night-blob-teal: "#0e6a8a"
-  night-blob-amber: "#7a4a1c"
+  owed-red: "#b3261e"
+  gasoil-green: "#12895a"
+  essence-orange: "#cf6a1c"
+  tab-band: "#0a1622"
 typography:
   display:
-    fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+    fontFamily: "Jost, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
     fontSize: "36px"
-    fontWeight: 800
-    lineHeight: 1.1
-    letterSpacing: "-0.035em"
+    fontWeight: 600
+    lineHeight: 1.08
+    letterSpacing: "-0.01em"
   section:
-    fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
-    fontSize: "22px"
-    fontWeight: 800
+    fontFamily: "Jost, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+    fontSize: "21px"
+    fontWeight: 600
     lineHeight: 1.2
-    letterSpacing: "-0.025em"
-  title:
-    fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
-    fontSize: "18px"
-    fontWeight: 800
-    lineHeight: 1.25
-    letterSpacing: "-0.025em"
+    letterSpacing: "-0.005em"
   hero-figure:
-    fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
-    fontSize: "44px"
-    fontWeight: 800
+    fontFamily: "Jost, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+    fontSize: "54px"
+    fontWeight: 600
     lineHeight: 1
-    letterSpacing: "-0.045em"
+    letterSpacing: "-0.02em"
     fontFeature: "'tnum'"
   figure:
-    fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
-    fontSize: "30px"
-    fontWeight: 800
-    lineHeight: 1
-    letterSpacing: "-0.04em"
+    fontFamily: "Jost, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+    fontSize: "26px"
+    fontWeight: 600
+    lineHeight: 1.1
+    letterSpacing: "-0.01em"
     fontFeature: "'tnum'"
   body:
-    fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
-    fontSize: "16px"
-    fontWeight: 500
+    fontFamily: "Jost, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+    fontSize: "17px"
+    fontWeight: 400
     lineHeight: 1.47
-    letterSpacing: "-0.012em"
-  label:
-    fontFamily: "Manrope, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
-    fontSize: "13px"
-    fontWeight: 700
-    lineHeight: 1.3
-    letterSpacing: "-0.005em"
+  capitals:
+    fontFamily: "Jost, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+    fontSize: "11.5px"
+    fontWeight: 400
+    lineHeight: 1.4
+    letterSpacing: "0.14em"
 rounded:
-  sm: "8px"
-  md: "12px"
-  squircle: "18px"
-  lg: "20px"
-  xl: "24px"
+  none: "0px"
 spacing:
-  sm: "10px"
-  md: "12px"
-  lg: "18px"
-  xl: "28px"
+  cell: "13px"
+  md: "16px"
+  lg: "22px"
+  xl: "32px"
 components:
   button-primary:
-    backgroundColor: "{colors.blue-glass-top}"
-    textColor: "#ffffff"
-    rounded: "{rounded.md}"
-    padding: "10px 18px"
-    height: "44px"
+    backgroundColor: "{colors.night-blue}"
+    textColor: "{colors.night-on-blue}"
+    rounded: "{rounded.none}"
+    padding: "10px 22px"
+    height: "46px"
   button-secondary:
-    backgroundColor: "{colors.glass-shade}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.md}"
-    padding: "10px 18px"
-    height: "44px"
-  button-return:
-    backgroundColor: "{colors.glass-shade}"
-    textColor: "{colors.mtg-blue-ink}"
-    rounded: "{rounded.md}"
-    height: "44px"
-  button-danger:
-    backgroundColor: "{colors.glass-shade}"
-    textColor: "{colors.owed-red-text}"
-    rounded: "{rounded.md}"
-    height: "44px"
-  quick-action:
-    backgroundColor: "{colors.glass-shade}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.squircle}"
-    size: "56px"
-  card:
-    backgroundColor: "{colors.glass-leaf}"
-    rounded: "{rounded.lg}"
-    padding: "24px"
-  tile:
-    backgroundColor: "{colors.glass-leaf}"
-    rounded: "{rounded.lg}"
-    padding: "15px 16px 16px"
+    backgroundColor: "{colors.night-ground}"
+    textColor: "{colors.night-ink}"
+    rounded: "{rounded.none}"
+    padding: "10px 22px"
+    height: "46px"
   hero:
-    backgroundColor: "{colors.blue-glass-top}"
-    textColor: "#ffffff"
-    rounded: "{rounded.xl}"
-    padding: "22px 22px 24px"
-  sheet:
-    backgroundColor: "{colors.glass-strong}"
-    rounded: "{rounded.xl}"
+    backgroundColor: "{colors.night-ground}"
+    textColor: "{colors.night-ink}"
+    rounded: "{rounded.none}"
+    padding: "20px 20px 18px"
+  card:
+    backgroundColor: "{colors.night-ground}"
+    rounded: "{rounded.none}"
+    padding: "22px"
   input:
-    backgroundColor: "{colors.field}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.md}"
-    padding: "10px 16px"
-    height: "44px"
+    backgroundColor: "{colors.night-ground}"
+    textColor: "{colors.night-ink}"
+    rounded: "{rounded.none}"
+    height: "56px"
 ---
 
 # Design System: MTG Station
 
 ## Overview
 
-**Creative North Star: "Verre", version 2.0 (2026-11-07, the user's choice)**
+**Creative North Star: "Plan", version 3.0 (2026-11-09, the user's choice)**
 
-The app is a pane of clear glass laid over a soft world of colour. Behind every screen three wide fields of colour (blue, cyan, a little amber) sit blurred and drift slowly; panels, the rail, the bars, sheets and buttons are clear liquid glass that lets them through, the light caught on their top edge. The reference the user gave is Apple Wallet / Santé and iOS liquid glass: sober, premium, few buttons, nothing coloured that does not mean something.
-
-The user rejected « Registre » as « juste changé les couleurs », then five mock-ups, and chose « un peu E » with Manrope, a blurred background, beautiful animations and buttons « comme le liquid glass, comme un verre », « plus transparent ». Only the MTG logo (monogram and its blue) is pinned.
+The app is an architect's drawing of the station. The user asked for the look of their own site, NANO Build (`MtgHuni/nano-build-site`), « mais avec la couleur du logo de MTG, donc plus bleu », after rejecting the glass of version 2.0 (« le verre et le flou », « l'organisation », « les détails »), three black-and-gold mock-ups and a soft frosted one. Everything is drawn with lines: frames, rules, a grid. Nothing is soft: no glass, no blur, no gradient, no rounded corner, no shadow except under a sheet.
 
 **Key Characteristics:**
-- A blurred world of colour behind everything (`.ambient`); the page colour sits on `html` only so it shows through.
-- Thin clear glass everywhere (2026-11-07: « les verres ont l'air gros, je veux que ça soit fin »): a white-to-clear gradient, `blur(14px) saturate(1.6)`, one 0.5px light edge all round, a faint top light, a short soft shadow.
-- One family, Manrope, heavy (700–800) for titles and figures, figures tabular.
-- The station's value on MTG-blue glass (`.hero`), the one blue surface of the manager's home.
-- Glass squircles (56px, 18px corners) for the quick actions, the glyph inside and the label beneath.
-- Arrivals rise out of a blur, figures count up, rings fill; all of it gives way to reduced motion.
-- Night by default (the user's choice, 2026-11-07); light optional, through the sun key, remembered on the device.
+- Jost, one family: 600 for titles and figures, 400 for text, small spaced capitals for labels.
+- Right angles everywhere (`border-radius: 0 !important` on every element).
+- Frames of 2px; the logo's double frame (a 2px border and a 1px line 6px away) around what matters most: the station's value, today's prices, the attendant's « Crédit ».
+- Construction lines running past the corners of the double frame, like a drawing.
+- Section and card titles announced by a drawn line.
+- Figures on a ruled grid, two columns, never in tiles.
+- One colour, the MTG blue; red only for what is owed or lost; the fuels as 9px squares.
+- Night by default, light optional (the sun key).
 
 ## Colors
 
 ### Primary
-- **MTG Blue** (mtg-blue; links and text on glass mtg-blue-ink): the active nav label, links, the Retour button's text, focus. As glass (`--blue-btn`, blue-glass-top → blue-glass-bottom, about 0.9 alpha so white text holds in the sun) it is the main button and the attendant's main quick action; as lighter glass (`--blue-glass`) it is the hero.
+- **MTG Blue** (night-blue `#1e9bf0` at night with dark text on it, mtg-blue `#0b6fc4` in the light with white text): the main action, the double frame, the line before a title, the current place (rail and tab), focus, a level's last bar.
 
 ### Secondary
-- **Gasoil Green** and **Essence Amber**: the fuels, through `productColor(id)` / `--gasoil`, `--essence`: the swatch beside a fuel or tank name, a tank's ring and level bar, the colour of a segment option, chart series.
+- **Gasoil Green** and **Essence Orange**: only as 9px squares before a fuel's or a tank's name, and as the fill of a tank's level bar, through `productColor(id)` / `--gasoil`, `--essence`.
 
 ### Tertiary
-- **Owed Red** (owed-red on tiles; text owed-red-text): what is owed, a loss, gaps, destructive buttons' text. **Gold** (gold) marks combos. Tiles take their colour by meaning (`.c-blue`, `.c-green`, `.c-amber`, `.c-red`, `.c-gold`).
+- **Owed Red** (night-owed at night, owed-red in the light): what is owed, a loss, a gap, a destructive button's text and frame. Nothing else is red.
 
 ### Neutral
-- **Page** (page): the colour on `html`, under the blurred world.
-- **Glass** (glass-leaf / glass-shade, as `--glass` and `--glass-btn` gradients): panels, tiles, rail, bars, secondary buttons, quick actions. **Glass Strong** (glass-strong): sheets, dialogs, menus, toasts and the drawer, denser (`blur(30px)`), so forms read over anything.
-- **Ink** (ink, ink-secondary, ink-faint): text, figures, units, notes.
-- **Hairline / Rule / Field Edge**: translucent ink, so they sit on any glass.
-- **The world** (blob-blue, blob-cyan, blob-amber at 0.8 opacity; the night set darker at 0.7): the three fields behind the glass, `blur(70px)`.
+- **Night** (default): a blue-black ground (night-ground), light ink, lines in the ink at 0.38 (`--line`) and 0.17 (`--grid`).
+- **Light**: a blue-grey sheet (sheet), never white; white (paper) is kept for buttons and fields; ink text; lines in the ink at 0.36 and 0.16. The phone's tab band is blue-black (tab-band) with white labels.
+- No grey text for content: secondary text stays close to the ink (ink-secondary) and is told apart by size, weight or capitals.
 
 ### Named Rules
-**The Meaning Rule.** Colour is meaning: blue the main action and the value, fuel colours the fuels, red what is owed or lost, gold combos. A neutral figure is ink.
+**The One Blue Rule.** Blue is the only colour of the interface; one solid blue button per region.
 
-**The One Blue Rule.** One blue glass button per region; every other button is clear glass with ink text.
+**The Red Rule.** Red means owed, lost or destructive.
 
 ## Typography
 
-**Font:** Manrope (self-hosted `public/fonts/manrope-latin.woff2`, 400–800), with the system sans fallback. Inter and Barlow Condensed stay in `public/fonts/` unloaded.
-
-**Character:** round, open and modern, set heavy and tight (body tracking -0.012em, titles down to -0.035em) like Apple's large titles.
+**Font:** Jost (self-hosted variable `public/fonts/jost-latin.woff2`), with the system sans fallback. Manrope, Inter and Barlow Condensed stay in `public/fonts/` unloaded.
 
 ### Hierarchy
-- **Display** (800, 36px): the page title.
-- **Section** (800, 22px): a section title (« Aujourd’hui »), sheet titles.
-- **Title** (800, 18px): card header titles.
-- **Hero figure** (800, 44px, 40px on phones, tabular): the station's value.
-- **Figure** (800, 30px, tabular): a tile's value, with its unit small (15px 700, faint); prices, KPI values and tank percentages share the 800 weight and -0.04em.
-- **Body** (16px): rows and fields (fields 17px to stop iOS zoom).
-- **Label** (700, 13px): the label under a quick action, a tile's side note, the hero's label and sub line (600, white at 0.82).
+- **Display** (600, 36px; 30px on phones): the page title.
+- **Section** (600, 21px; 19px in a card header): preceded by a drawn 28px line in blue.
+- **Hero figure** (600, 54px; 46px on phones, tabular): the station's value.
+- **Figure** (600, 26px, tabular): a cell of the ruled grid; prices 34px.
+- **Body** (400, 17px).
+- **Capitals** (400, 11.5px to 12.5px, 0.14em to 0.16em, uppercase): labels above figures, table heads, the line above a page title (the page's subtitle), badges, tabs, the top bar's title.
 
 ## Layout
 
-Wide screens (1024px and up): the rail floats as a glass panel (12px from the edges, full height) with the monogram, the navigation and the account; the page beside it at up to 1180px. Below 1024px: the top bar and the tab bar float as glass bars (10px from the sides, 18px and 22px corners).
+Wide screens: the rail on the ground itself, ruled off by one line, the current page marked by a 3px blue bar on its left; the page at up to 1180px. Phones: a flat top bar (monogram, the page's name in capitals, the sun, the account) and a flat tab band at the bottom, low (`env(safe-area-inset-bottom) − 14px`), the current tab under a blue line.
 
-The manager's home (`dashboard.js`): a page header (« Bonjour », the date), then `.dash`, two columns (up to 380px, then the rest; one column below 1024px): on the left the hero and the four glass shortcuts (État du poste, Livraison, Caisse, Clients); on the right « Aujourd’hui », tiles two by two (one column below 560px): ventes 7 jours with bars, crédits clients, each tank with its ring, caisse, fournisseurs, combos, fiches à compléter. Then « Demander à l'appli » and Alertes.
+A page opens with its small capitals, its title and one line under. The manager's home: the double frame (value), the framed strip of four shortcuts, « Aujourd'hui » on the ruled grid, then Alertes; two columns from 1024px. The attendant's shift: the prices in the double frame, « Crédit » as one solid blue block in its double frame, the three other actions in one ruled strip, « Test de pompe », « Ce poste » on the ruled grid, the operations.
 
-Gaps are 12px between tiles and boards, 28px between the columns and the sections. Grouped buttons have equal width and are centred on mobile.
+Grouped buttons have equal width and are centred on mobile.
 
 ## Elevation & Depth
 
-Depth is thin glass, not shadow: every panel carries the rim (`--glass-rim`: a 0.5px light edge all round plus a 0.5px top light; night at 0.14 / 0.22) and a short drop (`--glass-drop`, `0 2px 10px rgba(20, 40, 80, 0.06)`, night `0 2px 12px rgba(0, 0, 0, 0.28)`). Sheets, dialogs and toasts lift a little more (`0 12px 36px rgba(10, 20, 40, 0.2)`); the hero `0 8px 24px rgba(10, 40, 90, 0.2)`; the main button `0 2px 8px rgba(11, 111, 196, 0.18)`. Never a thick rim, a light-catch blob or a deep shadow: the glass must look thin.
-
-Where `backdrop-filter` is missing the glass turns solid (white at 0.92, night `rgba(23, 28, 38, 0.95)`); with `prefers-reduced-transparency` it takes the denser `--glass-strong`.
-
-Frosted (2026-11-07, « le verre moins transparent, un peu blanc »): `--glass` white 0.62 → 0.4 (night 0.2 → 0.12), `--glass-btn` 0.55 → 0.3 (night 0.2 → 0.11), `blur(20px) saturate(1.5)`; the phone's top bar and tab bar are frosted (white 0.72; night a white veil over `rgba(18, 23, 33, 0.6)`, `blur(30px)`), and the tab bar sits low, `max(4px, env(safe-area-inset-bottom) − 18px)` from the bottom.
+Flat. Depth is lines. Only sheets, dialogs, menus and toasts cast a shadow (`--shadow-lift`), and a sheet carries a 2px blue line on top.
 
 ## Shapes
 
-Soft, continuous corners: controls and fields 12px, cards and tiles 20px, the rail and the phone bars 18–22px, the hero and sheets 24px, quick-action squircles 18px, badges and small marks 8px; a tile's icon square 7px. Rings are circles (54px, 7px stroke, round caps).
+The rectangle, and nothing else. Marks are squares (fuel, status dot). The only ornaments are the double frame, the construction lines, the drawn line before a title, and the double rule that closes a total.
 
 ## Components
 
 ### Buttons
-- **Primary:** MTG-blue glass (`--blue-btn`), white 700 text, 12px corners, at least 44px, a thin light edge and a faint blue shadow; hover a little brighter, press a little deeper.
-- **Secondary / Annuler / Fermer:** clear glass (`--glass-btn`) with the rim, ink text.
-- **Retour:** clear glass, blue ink text. **Danger:** clear glass, red text; a row's cancel square stays faint until touched.
-- **Ghost:** no glass, link-blue text.
+- **Primary:** solid MTG blue, a 2px blue border, 600, 0.03em, at least 46px (56px large).
+- **Secondary / Annuler / Retour:** the ground (white in the light) framed by 2px of ink.
+- **Danger:** framed in red, red text. **Ghost:** underlined text. **Small:** 1px frame, 36px.
+- **Hover:** a second 1px line moves 4px away from the button, like the double frame; the colours do not change.
 
-### Quick actions
-A 56px glass squircle (18px corners, `blur(10px) saturate(1.6)`, the thin rim) holding the 24px glyph (stroke 1.9), the label beneath in 13px 700. The attendant's main one is MTG-blue glass. Pressed, it shrinks to 0.94. Four in a row.
+### The double frame (signature)
+`border: 2px solid var(--frame); outline: 1px solid var(--frame); outline-offset: 6px`, with `::before` (two horizontal lines) and `::after` (two vertical lines) in `--line` running past the corners; `.shell-main` clips what leaves the screen. Used by `.hero` and `.totem`; the attendant's « Crédit » has the frame without the lines.
 
-### Hero (the station's value)
-A button of blue glass (24px corners): the monogram in white at the top right, the label, the value in 44px 800 (pink-white `#ffd2cf` when negative), a sub line. Touched, it opens the `valueDetail()` sheet with the addition column (`valueColumn()`), which closes on one fine line (the old double rule is gone, 2026-11-07).
+### The ruled grid
+`.tiles`: two columns, a line on top, each cell ruled under, even cells ruled on their left; a lone last cell takes the row. A cell (`tile()` in `ui.js`): the label in capitals (a fuel's square before it, a note on the right), the figure with its unit small, an optional note, bars (the last in blue) or a tank's level bar (7px, framed in ink).
 
-### Tiles
-Glass, 20px corners: a head with a 22px coloured icon square, the title in the tile's colour and a faint side note; the value (30px 800) with its unit and a sub line; on the right bars (7px, the last one full) or a ring filled to the tank's level. A tile that links brightens on hover; `.wide` spans both columns.
+### Strips
+The manager's shortcuts (`.acts`) and the attendant's three other actions: one frame of 2px, cells ruled between, the glyph above the label.
 
-### The attendant's shift
-The prices, the four glass squircles (Crédit in blue glass), Test de pompe, then the shift's figures as tiles two by two (25px figures on a phone), then « Opérations du poste »: rows without a bin, touched to ask for a cancellation; a badge only where the row differs from a plain credit. The shift line (elsewhere) has round glass stops on a 2px track, done in MTG blue.
+### Panels, sheets, fields
+A panel is a frame of one line; its header is ruled off, its title preceded by the drawn line. A sheet is the ground, framed, a blue line on top. Fields are framed in ink (white in the light), 56px with a floating label; focus is a blue frame. A segmented control is framed, the choice made filled in ink.
 
-### Cards, sheets, fields
-Cards are glass panels (20px). Sheets, dialogs, menus and toasts are glass strong (24px for sheets), their footer transparent over a hairline. Fields are white at 0.7 with a translucent edge and 12px corners.
-
-### Navigation
-The rail's active item is brighter glass with the rim and a blue-ink label; hover a faint white wash. Phones: floating glass top bar and tab bar.
-
-### Sign-in
-The brand panel is glass over the world, the MTG monogram large; the form beside it (stacked on phones).
+### Status
+Badges are framed labels in capitals with a square mark; alert icons are framed squares in their colour.
 
 ## Motion
 
-- **Rise:** a screen's hero, tiles, cards and price panels arrive from 16px below, slightly small and blurred (`blur(6px)`), 0.8s on `--ease` (`cubic-bezier(0.22, 1, 0.36, 1)`), tiles one after the other (0.05s apart); the quick actions 0.1s after.
-- **Count-up:** `.hero-value`, `.tile-value` and the other figures in `motion.js` count up to their value.
-- **Fill:** bars grow from the bottom (0.9s), rings fill (1.4s, after 0.3s).
-- **Drift:** the world's fields drift (18–26s, alternate), only where `hover: hover`.
-- Everything respects `prefers-reduced-motion`.
+- **Draw:** on entry the line before each title and the horizontal construction lines are drawn (`draw-x`, 0.9s to 1s, `cubic-bezier(0.7, 0, 0.3, 1)`).
+- **Arrive:** frames, strips, cells and panels rise 14px (`plan-in`, 0.7s, `cubic-bezier(0.16, 1, 0.3, 1)`), cells one after the other.
+- **Count and fill:** figures count up (`motion.js`), bars and level bars grow.
+- Everything gives way to `prefers-reduced-motion`.
 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** put new panels on the glass tokens (`--glass`, `--glass-blur`, `--glass-rim`, `--glass-drop`), sheets on `--glass-strong`, and keep the solid fallback working.
-- **Do** keep one blue glass button per region; the rest clear glass with ink text.
-- **Do** give colour by meaning only (fuel, owed, combos, the value).
-- **Do** set titles and figures in Manrope 800, figures tabular.
-- **Do** keep both themes in step: a new detail follows its siblings in light and night.
+- **Do** draw with lines: a frame, a rule, the grid; reuse `.tiles`, the strips and the double frame.
+- **Do** keep one solid blue button per region; the others framed in ink.
+- **Do** write labels in small spaced capitals and figures in Jost 600, tabular.
+- **Do** keep night and light in step: a new detail follows its siblings in both.
 - **Do** give grouped buttons equal width and centre them on mobile.
 - **Do** write all UI text in French.
 - **Do** use icons only from the existing set; a new icon is a PNG found on pngegg.com, never drawn.
-- **Do** respect reduced motion and reduced transparency.
+- **Do** respect reduced motion.
 
 ### Don't:
 - **Don't** add explanatory text outside Réglages: no form intro, field hint, descriptive subtitle or explanation sentence in a confirmation; only data, statuses, empty states and error messages.
-- **Don't** put a solid page colour on `body` or a full-screen opaque layer: it hides the world behind the glass.
-- **Don't** colour buttons beyond the one blue: the user found coloured glass « trop coloré ».
-- **Don't** make glass less transparent than it is now (« plus transparent ») or thicker (« fin »): no thick rim, no light-catch blob, no deep shadow.
-- **Don't** bring back « Registre » (paper, white leaves, flat panels) or the « Totem de nuit » (black ground, coloured fuel fields, condensed face).
-- **Don't** build SVG with `h('svg')`: it lands in the HTML namespace; use `innerHTML` (as the rings do).
+- **Don't** bring back glass, blur, gradients, rounded corners, coloured tiles or soft shadows: the user rejected them.
+- **Don't** add a second colour: no gold, no coloured buttons; blue only, red for what is owed.
+- **Don't** put the double frame on more than what matters most on a screen.
+- **Don't** use grey for content text.
 - **Don't** use Apple's logo, name or product imagery.

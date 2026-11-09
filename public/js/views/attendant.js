@@ -237,13 +237,14 @@ function renderOpenShift(page, ctx, shift, remarks = null) {
       // Fuel drawn for a test and poured back into the tank: not sold once the manager approves.
       button('Test de pompe', (e) => busy(e.currentTarget, () => addTest(ctx, shift, reload)), { variant: 'secondary block', iconName: 'pump' }),
       requestQueue(shift, reload, ctx.state.settings.cashTolerance),
+      h('div', { class: 'sec-title', style: 'margin-top:8px' }, h('h2', {}, 'Ce poste')),
       h(
         'div',
-        { class: 'tiles tiles-2' },
-        tile({ color: 'c-gold', ic: 'users', title: 'Crédit', value: bare(shift.credit_amount), unit: '$' }),
-        tile({ color: 'c-blue', ic: 'phone', title: 'Mobile money', value: bare(shift.momo_total), unit: '$' }),
-        tile({ color: 'c-green', ic: 'cash', title: 'Règlements', value: bare(shift.payments_amount), unit: '$' }),
-        tile({ color: 'c-red', ic: 'wallet', title: 'Dépenses', value: bare(shift.expenses_amount), unit: '$' }),
+        { class: 'tiles tiles-2', style: 'margin-top:-14px' },
+        tile({ title: 'Crédit', value: bare(shift.credit_amount), unit: '$' }),
+        tile({ title: 'Mobile money', value: bare(shift.momo_total), unit: '$' }),
+        tile({ title: 'Règlements', value: bare(shift.payments_amount), unit: '$' }),
+        tile({ title: 'Dépenses', value: bare(shift.expenses_amount), unit: '$' }),
       ),
       card(
         cardHeader('Opérations du poste', null),
