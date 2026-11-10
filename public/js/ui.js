@@ -311,14 +311,16 @@ export function kpi(label, value, sub, extra = {}) {
   return h('div', { class: 'card kpi' }, h('div', { class: 'label' }, label), h('div', { class: `value ${extra.small ? 'sm' : ''}` }, value), sub ? h('div', { class: 'sub' }, sub) : null);
 }
 
-// A glanced figure on glass, coloured by meaning (`c-blue`, `c-green`, `c-amber`, `c-red`, `c-gold`):
-// the manager's « Aujourd’hui » and the attendant's shift.
-export function tile({ color, ic, title, side, value, unit, sub, lost = false, chart, href, wide = false }) {
+// A glanced figure in a cell of the ruled grid (the manager's « Aujourd’hui », the attendant's shift):
+// the label in small capitals, the figure, an optional note. `swatch`: a fuel's colour as a small
+// square before the label; `level`: a tank's level bar (0 to 100) under the figure; `lost`: in red.
+export function tile({ title, side, value, unit, sub, lost = false, chart, href, swatch, level }) {
   return h(
     href ? 'a' : 'div',
-    { class: `tile ${color}${wide ? ' wide' : ''}`, href },
-    h('div', { class: 'tile-head' }, h('span', { class: 'tile-ic' }, icon(ic)), title, side ? h('small', {}, side) : null),
+    { class: 'tile', href },
+    h('div', { class: 'tile-head' }, swatch ? h('span', { class: 'sq', style: `background:${swatch}` }) : null, h('span', {}, title), side ? h('small', {}, side) : null),
     h('div', { class: 'tile-body' }, h('div', {}, h('span', { class: `tile-value${lost ? ' lost' : ''}` }, value, unit ? h('small', {}, unit) : null), sub ? h('p', { class: 'tile-sub' }, sub) : null), chart || null),
+    level == null ? null : h('div', { class: 'tile-level', 'aria-hidden': 'true' }, h('u', { style: `width:${Math.round(Math.max(0, Math.min(100, level)))}%;background:${swatch || 'currentColor'}` })),
   );
 }
 
@@ -806,7 +808,7 @@ export function applyTheme(theme) {
   const dark = theme !== 'light';
   if (dark) document.documentElement.dataset.theme = 'dark';
   else delete document.documentElement.dataset.theme;
-  document.querySelector('meta[name=theme-color]')?.setAttribute('content', dark ? '#070a10' : '#eef1f6');
+  document.querySelector('meta[name=theme-color]')?.setAttribute('content', dark ? '#070b10' : '#e6e9ed');
   for (const b of document.querySelectorAll('.theme-btn')) b.setAttribute('aria-pressed', String(!dark));
 }
 

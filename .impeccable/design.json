@@ -1,210 +1,89 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-07T10:39:53.864Z",
+  "generatedAt": "2026-11-09T20:10:17.559Z",
   "title": "Design System: MTG Station",
   "extensions": {
     "colorMeta": {
-      "page": {
+      "night-ground": {
         "role": "neutral",
-        "displayName": "Page",
-        "tonalRamp": [
-          "oklch(15% 0.01 255)",
-          "oklch(25% 0.01 255)",
-          "oklch(35% 0.01 255)",
-          "oklch(48% 0.01 255)",
-          "oklch(60% 0.01 255)",
-          "oklch(72% 0.01 255)",
-          "oklch(85% 0.01 255)",
-          "oklch(95% 0.01 255)"
-        ]
+        "displayName": "Night ground"
       },
-      "glass-leaf": {
-        "role": "neutral",
-        "displayName": "Glass",
-        "note": "Rendered as --glass: linear-gradient(160deg, rgba(255,255,255,.42), rgba(255,255,255,.16)) with blur(18px) saturate(1.8)."
-      },
-      "glass-strong": {
-        "role": "neutral",
-        "displayName": "Glass Strong",
-        "note": "Sheets, dialogs, menus, toasts: rgba(246,248,252,.78), blur(30px). Night rgba(22,27,37,.82)."
-      },
-      "ink": {
-        "role": "neutral",
-        "displayName": "Ink",
-        "tonalRamp": [
-          "oklch(15% 0.01 260)",
-          "oklch(25% 0.01 260)",
-          "oklch(35% 0.01 260)",
-          "oklch(48% 0.01 260)",
-          "oklch(60% 0.01 260)",
-          "oklch(72% 0.01 260)",
-          "oklch(85% 0.01 260)",
-          "oklch(95% 0.01 260)"
-        ]
+      "night-blue": {
+        "role": "primary",
+        "displayName": "MTG Blue (night)",
+        "note": "Dark text #04101c on it."
       },
       "mtg-blue": {
         "role": "primary",
-        "displayName": "MTG Blue",
-        "tonalRamp": [
-          "oklch(15% 0.15 250)",
-          "oklch(25% 0.15 250)",
-          "oklch(35% 0.15 250)",
-          "oklch(48% 0.15 250)",
-          "oklch(60% 0.15 250)",
-          "oklch(72% 0.15 250)",
-          "oklch(85% 0.15 250)",
-          "oklch(95% 0.15 250)"
-        ]
+        "displayName": "MTG Blue (light)",
+        "note": "White text on it."
       },
-      "blue-glass-top": {
-        "role": "primary",
-        "displayName": "Blue Glass",
-        "note": "--blue-btn: linear-gradient(155deg, rgba(18,108,200,.9), rgba(8,64,128,.94)); hero --blue-glass lighter (.62 → .72)."
-      },
-      "gasoil-green": {
-        "role": "secondary",
-        "displayName": "Gasoil Green",
-        "tonalRamp": [
-          "oklch(15% 0.13 160)",
-          "oklch(25% 0.13 160)",
-          "oklch(35% 0.13 160)",
-          "oklch(48% 0.13 160)",
-          "oklch(60% 0.13 160)",
-          "oklch(72% 0.13 160)",
-          "oklch(85% 0.13 160)",
-          "oklch(95% 0.13 160)"
-        ]
-      },
-      "essence-amber": {
-        "role": "secondary",
-        "displayName": "Essence Amber",
-        "tonalRamp": [
-          "oklch(15% 0.15 60)",
-          "oklch(25% 0.15 60)",
-          "oklch(35% 0.15 60)",
-          "oklch(48% 0.15 60)",
-          "oklch(60% 0.15 60)",
-          "oklch(72% 0.15 60)",
-          "oklch(85% 0.15 60)",
-          "oklch(95% 0.15 60)"
-        ]
+      "sheet": {
+        "role": "neutral",
+        "displayName": "Sheet (light ground)"
       },
       "owed-red": {
         "role": "tertiary",
-        "displayName": "Owed Red",
-        "tonalRamp": [
-          "oklch(15% 0.19 25)",
-          "oklch(25% 0.19 25)",
-          "oklch(35% 0.19 25)",
-          "oklch(48% 0.19 25)",
-          "oklch(60% 0.19 25)",
-          "oklch(72% 0.19 25)",
-          "oklch(85% 0.19 25)",
-          "oklch(95% 0.19 25)"
-        ]
+        "displayName": "Owed Red"
       },
-      "gold": {
-        "role": "tertiary",
-        "displayName": "Combos Gold",
-        "tonalRamp": [
-          "oklch(15% 0.13 85)",
-          "oklch(25% 0.13 85)",
-          "oklch(35% 0.13 85)",
-          "oklch(48% 0.13 85)",
-          "oklch(60% 0.13 85)",
-          "oklch(72% 0.13 85)",
-          "oklch(85% 0.13 85)",
-          "oklch(95% 0.13 85)"
-        ]
+      "gasoil-green": {
+        "role": "secondary",
+        "displayName": "Gasoil"
       },
-      "blob-blue": {
-        "role": "neutral",
-        "displayName": "World: blue field",
-        "note": ".ambient, blur(70px), opacity .8 (night #1d4f9a, .7)."
+      "essence-orange": {
+        "role": "secondary",
+        "displayName": "Essence"
       }
     },
     "typographyMeta": {
       "display": {
         "displayName": "Display",
-        "purpose": "Page titles."
+        "purpose": "Page titles (30px on phones)."
       },
       "section": {
         "displayName": "Section",
-        "purpose": "« Aujourd’hui », sheet titles."
-      },
-      "title": {
-        "displayName": "Title",
-        "purpose": "Card header titles."
+        "purpose": "Section and card titles, after a drawn line."
       },
       "hero-figure": {
         "displayName": "Hero figure",
-        "purpose": "The station value on blue glass (40px on phones)."
+        "purpose": "The station value (46px on phones)."
       },
       "figure": {
         "displayName": "Figure",
-        "purpose": "Tile values, prices, KPIs, tank percentages."
+        "purpose": "Cells of the ruled grid."
       },
       "body": {
         "displayName": "Body",
-        "purpose": "Rows and fields (fields 17px)."
+        "purpose": "Text and fields."
       },
-      "label": {
-        "displayName": "Label",
-        "purpose": "Quick-action labels, tile side notes."
+      "capitals": {
+        "displayName": "Capitals",
+        "purpose": "Labels, table heads, badges, tabs."
       }
     },
     "shadows": [
       {
-        "name": "glass-rim",
-        "value": "inset 0 1.5px 1px rgba(255,255,255,.95), inset 0 -1px 1px rgba(255,255,255,.4)",
-        "purpose": "Every glass surface: light caught on the top edge. Night .22 / .06."
-      },
-      {
-        "name": "glass-drop",
-        "value": "0 12px 30px rgba(20,40,80,.08)",
-        "purpose": "Panels and tiles. Night 0 14px 34px rgba(0,0,0,.45)."
-      },
-      {
-        "name": "overlay-lift",
-        "value": "0 24px 60px rgba(10,20,40,.22)",
-        "purpose": "Sheets, dialogs, toasts, menus."
-      },
-      {
-        "name": "hero-lift",
-        "value": "0 24px 50px rgba(10,40,90,.24)",
-        "purpose": "The hero."
-      },
-      {
-        "name": "blue-glow",
-        "value": "0 8px 20px rgba(11,111,196,.22)",
-        "purpose": "The main button."
+        "name": "shadow-lift",
+        "value": "0 18px 44px rgba(0,0,0,.6)",
+        "purpose": "Sheets, dialogs, menus, toasts only. Light: rgba(13,17,23,.24)."
       }
     ],
     "motion": [
       {
-        "name": "ease",
-        "value": "cubic-bezier(0.22, 1, 0.36, 1)",
-        "purpose": "Rise (0.8s, translateY 16px, scale .985, blur 6px), bars (0.9s), rings (1.4s), sheets."
+        "name": "draw-x",
+        "value": "0.9s cubic-bezier(0.7,0,0.3,1)",
+        "purpose": "The line before a title and the construction lines are drawn on entry."
       },
       {
-        "name": "stagger",
-        "value": "0.05s",
-        "purpose": "Tiles rise one after the other; quick actions 0.1s after."
-      },
-      {
-        "name": "drift",
-        "value": "18s–26s ease-in-out alternate",
-        "purpose": "The world behind the glass, only where hover: hover."
+        "name": "plan-in",
+        "value": "0.7s cubic-bezier(0.16,1,0.3,1)",
+        "purpose": "Frames, strips, cells and panels rise 14px."
       }
     ],
     "breakpoints": [
       {
         "name": "phone-narrow",
         "value": "420px"
-      },
-      {
-        "name": "tiles-one-column",
-        "value": "560px"
       },
       {
         "name": "drawer",
@@ -220,8 +99,8 @@
       }
     ],
     "themes": {
-      "night": "default: data-theme='dark' set in index.html",
-      "light": "chosen with the sun key, stored as localStorage theme-registre = 'light'"
+      "night": "default: data-theme=dark set in index.html",
+      "light": "the sun key, localStorage theme-registre = light"
     }
   },
   "components": [
@@ -229,95 +108,82 @@
       "name": "Primary Button",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "The one MTG-blue glass button of a region.",
-      "html": "<button class=\"ds-btn-primary\">Enregistrer</button>",
-      "css": ".ds-btn-primary{min-height:44px;padding:10px 18px;border:none;border-radius:12px;background:linear-gradient(155deg,rgba(18,108,200,.9),rgba(8,64,128,.94));color:#fff;font:700 15px/1.2 Manrope, system-ui, sans-serif;backdrop-filter:blur(10px) saturate(1.6);box-shadow:inset 0 1.5px 1px rgba(255,255,255,.55),inset 0 -1px 1px rgba(255,255,255,.15),0 8px 20px rgba(11,111,196,.22);cursor:pointer}"
+      "description": "The one solid blue button of a region; a second line moves away on hover.",
+      "html": "<button class=\"ds-p\">Enregistrer</button>",
+      "css": ".ds-p{min-height:46px;padding:10px 22px;border:2px solid #1e9bf0;background:#1e9bf0;color:#04101c;font:600 16px Jost, system-ui, sans-serif;letter-spacing:.03em;outline:1px solid transparent;outline-offset:0;transition:outline-offset .2s,outline-color .2s;cursor:pointer}.ds-p:hover{outline-color:#1e9bf0;outline-offset:4px}"
     },
     {
       "name": "Secondary Button",
       "kind": "button",
       "refersTo": "button-secondary",
-      "description": "Clear glass, ink text.",
-      "html": "<button class=\"ds-btn-secondary\">Annuler</button>",
-      "css": ".ds-btn-secondary{min-height:44px;padding:10px 18px;border:none;border-radius:12px;background:linear-gradient(155deg,rgba(255,255,255,.34),rgba(255,255,255,.06) 45%,rgba(255,255,255,.14));color:#0b0d12;font:700 15px/1.2 Manrope, system-ui, sans-serif;backdrop-filter:blur(10px);box-shadow:inset 0 1.5px 1px rgba(255,255,255,.95),inset 0 -1px 1px rgba(255,255,255,.4),0 6px 16px rgba(20,40,80,.08);cursor:pointer}"
+      "description": "Framed in ink.",
+      "html": "<button class=\"ds-s\">Annuler</button>",
+      "css": ".ds-s{min-height:46px;padding:10px 22px;border:2px solid #f2f5f8;background:#070b10;color:#f2f5f8;font:600 16px Jost, system-ui, sans-serif;letter-spacing:.03em;cursor:pointer}"
     },
     {
-      "name": "Quick Action",
-      "kind": "button",
-      "refersTo": "quick-action",
-      "description": "Glass squircle with the glyph, the label beneath.",
-      "html": "<a class=\"ds-act\"><span class=\"ds-sq\">＋</span>Crédit</a>",
-      "css": ".ds-act{display:inline-flex;flex-direction:column;align-items:center;gap:8px;font:700 13px Manrope, system-ui, sans-serif;color:inherit}.ds-sq{display:grid;place-items:center;width:56px;height:56px;border-radius:18px;background:linear-gradient(155deg,rgba(255,255,255,.34),rgba(255,255,255,.06) 45%,rgba(255,255,255,.14));backdrop-filter:blur(6px) saturate(1.8) brightness(1.06);box-shadow:inset 0 1.5px 1px rgba(255,255,255,.95),inset 0 -1px 1px rgba(255,255,255,.4),0 8px 20px rgba(20,40,80,.1);font-size:26px}"
-    },
-    {
-      "name": "Hero",
+      "name": "Double Frame",
       "kind": "card",
       "refersTo": "hero",
-      "description": "The station value on blue glass.",
-      "html": "<div class=\"ds-hero\"><div class=\"l\">Valeur de la station</div><div class=\"v\">12 480,00 $</div></div>",
-      "css": ".ds-hero{padding:22px 22px 24px;border-radius:24px;color:#fff;font-family:Manrope, system-ui, sans-serif;background:linear-gradient(155deg,rgba(20,110,200,.62),rgba(8,60,120,.72));backdrop-filter:blur(24px) saturate(1.6);box-shadow:inset 0 1.5px 1px rgba(255,255,255,.55),0 24px 50px rgba(10,40,90,.24)}.ds-hero .l{font:600 13px Manrope, system-ui, sans-serif;opacity:.82}.ds-hero .v{margin-top:8px;font:800 44px/1 Manrope, system-ui, sans-serif;letter-spacing:-.045em;font-variant-numeric:tabular-nums}"
+      "description": "The logo double frame with construction lines.",
+      "html": "<div class=\"ds-h\"><span>VALEUR DE LA STATION</span><b>12 480,00 $</b></div>",
+      "css": ".ds-h{position:relative;margin:9px 30px;padding:20px;border:2px solid #1e9bf0;outline:1px solid #1e9bf0;outline-offset:6px;background:#070b10;color:#f2f5f8;font-family:Jost, system-ui, sans-serif}.ds-h::before{content:\"\";position:absolute;inset:-9px -30px;border-top:1px solid rgba(242,245,248,.38);border-bottom:1px solid rgba(242,245,248,.38)}.ds-h span{font-size:12.5px;letter-spacing:.16em}.ds-h b{display:block;margin-top:10px;font:600 46px/1 Jost, system-ui, sans-serif}"
     },
     {
-      "name": "Tile",
+      "name": "Ruled Grid Cell",
       "kind": "card",
-      "refersTo": "tile",
-      "description": "A glanced figure of today, coloured by meaning.",
-      "html": "<div class=\"ds-tile\"><div class=\"h\">Gasoil</div><div class=\"v\">6 000<small>L</small></div></div>",
-      "css": ".ds-tile{padding:15px 16px 16px;border-radius:20px;font-family:Manrope, system-ui, sans-serif;background:linear-gradient(160deg,rgba(255,255,255,.42),rgba(255,255,255,.16));backdrop-filter:blur(18px) saturate(1.8);box-shadow:inset 0 1.5px 1px rgba(255,255,255,.95),0 12px 30px rgba(20,40,80,.08)}.ds-tile .h{font-weight:700;color:#0f8f5c}.ds-tile .v{margin-top:12px;font:800 30px/1 Manrope, system-ui, sans-serif;letter-spacing:-.04em;font-variant-numeric:tabular-nums}.ds-tile small{margin-left:3px;font-size:15px;opacity:.6}"
+      "refersTo": "card",
+      "description": "A figure under its label in capitals.",
+      "html": "<div class=\"ds-t\"><span>CRÉDITS CLIENTS</span><b>265,00 $</b></div>",
+      "css": ".ds-t{padding:13px 0 12px;border-top:1px solid rgba(242,245,248,.38);border-bottom:1px solid rgba(242,245,248,.38);color:#f2f5f8;font-family:Jost, system-ui, sans-serif}.ds-t span{font-size:11.5px;letter-spacing:.14em}.ds-t b{display:block;margin-top:5px;font:600 26px/1.1 Jost, system-ui, sans-serif}"
     },
     {
       "name": "Text Field",
       "kind": "input",
       "refersTo": "input",
-      "description": "Translucent field, 14px corners.",
-      "html": "<input class=\"ds-input\" placeholder=\"Montant\">",
-      "css": ".ds-input{height:44px;padding:10px 16px;border:1px solid rgba(15,25,45,.16);border-radius:12px;background:rgba(255,255,255,.7);font:500 17px Manrope, system-ui, sans-serif}"
+      "description": "Framed in ink, blue frame on focus.",
+      "html": "<input class=\"ds-i\" placeholder=\"Montant\">",
+      "css": ".ds-i{height:56px;padding:0 16px;border:1px solid #f2f5f8;background:#070b10;color:#f2f5f8;font:400 17px Jost, system-ui, sans-serif}.ds-i:focus{outline:none;border-color:#1e9bf0;box-shadow:0 0 0 1px #1e9bf0}"
     }
   ],
   "narrative": {
-    "northStar": "Verre, version 2.0",
-    "overview": "Clear liquid glass over a soft blurred world of colour, like Apple Wallet / Santé: sober, premium, few buttons, colour only where it means something. Night by default.",
+    "northStar": "Plan, version 3.0",
+    "overview": "An architect drawing of the station, in the look of the owner NANO Build site and the blue of the MTG logo: lines, frames and figures, nothing soft.",
     "keyCharacteristics": [
-      "A blurred world of colour behind everything",
-      "Clear glass panels, bars, sheets and buttons with a bright rim",
-      "Manrope, titles and figures 800, tabular",
-      "The station value on MTG-blue glass",
-      "Glass squircles for quick actions",
-      "Arrivals rise out of a blur; figures count up; rings fill"
+      "Jost, 600 for titles and figures",
+      "Right angles everywhere",
+      "Frames of 2px and the logo double frame",
+      "Construction lines past the corners",
+      "Titles announced by a drawn line",
+      "Figures on a ruled grid",
+      "One colour, the MTG blue"
     ],
     "rules": [
       {
-        "name": "The Meaning Rule",
-        "body": "Colour is meaning: blue the main action and the value, fuel colours the fuels, red what is owed or lost, gold combos.",
+        "name": "The One Blue Rule",
+        "body": "Blue is the only colour of the interface; one solid blue button per region.",
         "section": "colors"
       },
       {
-        "name": "The One Blue Rule",
-        "body": "One blue glass button per region; every other button is clear glass with ink text.",
-        "section": "components"
-      },
-      {
-        "name": "The Clear Glass Rule",
-        "body": "Glass stays as transparent as it is (« plus transparent »); never an opaque page layer over the world.",
-        "section": "elevation"
+        "name": "The Red Rule",
+        "body": "Red means owed, lost or destructive.",
+        "section": "colors"
       }
     ],
     "dos": [
-      "Use the glass tokens and keep the solid fallback",
-      "One blue glass button per region",
-      "Colour by meaning only",
+      "Draw with lines: a frame, a rule, the grid",
+      "One solid blue button per region",
+      "Labels in small spaced capitals",
       "Keep night and light in step",
-      "Equal-width grouped buttons, centred on mobile",
+      "Equal-width grouped buttons",
       "French UI text",
       "Icons from pngegg.com, never drawn",
-      "Respect reduced motion and transparency"
+      "Respect reduced motion"
     ],
     "donts": [
       "No explanatory text outside Réglages",
-      "No solid colour on body",
-      "No coloured buttons beyond the one blue",
-      "No return to Registre or Totem de nuit",
-      "No h(\"svg\"): use innerHTML",
+      "No glass, blur, gradient, rounded corner or soft shadow",
+      "No second colour",
+      "No grey content text",
       "No Apple logo, name or imagery"
     ]
   }

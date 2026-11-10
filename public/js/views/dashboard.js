@@ -1,7 +1,7 @@
 import { flags, edit } from '../ui.js';
 import { api } from '../api.js';
 import { h, fmt, cardHeader, pageHeader, button, buttonRow, setContent, formDialog, toast, field, busy, productColor, openDialog, tile } from '../ui.js';
-import { icon, brandMark } from '../icons.js';
+import { icon } from '../icons.js';
 
 const ALERT_ICON = { critical: 'alert', serious: 'alert', warning: 'info' };
 
@@ -14,12 +14,6 @@ export async function renderDashboard(page, { state, navigate }) {
   const bars = (values) => {
     const max = Math.max(1, ...values);
     return h('div', { class: 'tile-bars', 'aria-hidden': 'true' }, values.map((v, i) => h('i', { style: `height:${Math.round((v / max) * 100)}%;animation-delay:${i * 40}ms` })));
-  };
-  // The tank's level as a ring that fills on arrival (SVG needs its own namespace: built from markup).
-  const ring = (pct) => {
-    const box = h('span', { class: 'tile-ring-box', 'aria-hidden': 'true' });
-    box.innerHTML = `<svg class="tile-ring" viewBox="0 0 54 54" style="--p:${Math.round(Math.max(0, Math.min(100, pct)))}"><circle class="ring-track" cx="27" cy="27" r="22"/><circle class="ring-fill" cx="27" cy="27" r="22"/></svg>`;
-    return box;
   };
   const price = (productId) => products.find((p) => p.id === productId)?.price;
   const bare = (n) => fmt.money(n).replace(/\s?\$$/, '');
@@ -38,7 +32,6 @@ export async function renderDashboard(page, { state, navigate }) {
         h(
           'button',
           { class: 'hero', type: 'button', onClick: () => valueDetail(d.value, flags.combos) },
-          brandMark(),
           h('span', { class: 'hero-label' }, 'Valeur de la station'),
           h('span', { class: `hero-value${d.value.net < 0 ? ' lost' : ''}` }, fmt.money(d.value.net)),
           s ? h('p', { class: 'hero-sub' }, `Poste n°${s.id} · ${s.station_closed_at ? 'station fermée' : s.on_duty || 'personne en service'}`) : null,
@@ -59,21 +52,16 @@ export async function renderDashboard(page, { state, navigate }) {
         h(
           'div',
           { class: 'tiles' },
-          tile({ color: 'c-blue', ic: 'chart', title: 'Ventes', side: '7 jours', value: bare(total7), unit: '$', chart: bars(d.last7.map((x) => x.amount)), href: '#/rapports' }),
-          tile({ color: 'c-gold', ic: 'users', title: 'Crédits clients', value: bare(d.receivables), unit: '$', sub: d.receivablesOld ? `${fmt.money(d.receivablesOld)} à plus de 30 jours` : null, href: '#/clients/creances' }),
+          tile({ title: 'Ventes', side: '7 jours', value: bare(total7), unit: '$', chart: bars(d.last7.map((x) => x.amount)), href: '#/rapports' }),
+          tile({ title: 'Crédits clients', value: bare(d.receivables), unit: '$', sub: d.receivablesOld ? `${fmt.money(d.receivablesOld)} à plus de 30 jours` : null, href: '#/clients/creances' }),
           d.tanks.map((t) => {
             const pct = (t.book_stock / t.capacity) * 100;
-            return h(
-              'a',
-              { class: 'tile', href: '#/cuves', style: `--c:${productColor(t.product_id)}` },
-              h('div', { class: 'tile-head' }, h('span', { class: 'tile-ic' }, icon('tank')), t.product_name, price(t.product_id) != null ? h('small', {}, fmt.price(price(t.product_id))) : null),
-              h('div', { class: 'tile-body' }, h('div', {}, h('span', { class: 'tile-value' }, fmt.number(Math.round(t.book_stock)), h('small', {}, 'L')), h('p', { class: 'tile-sub' }, `${t.name} à ${Math.round(pct)} %`)), ring(pct)),
-            );
+            return tile({ title: t.product_name, swatch: productColor(t.product_id), side: `${Math.round(pct)} %`, value: fmt.number(Math.round(t.book_stock)), unit: 'L', sub: price(t.product_id) != null ? fmt.price(price(t.product_id)) : null, level: pct, href: '#/cuves' });
           }),
-          tile({ color: 'c-blue', ic: 'cash', title: 'Caisse', value: bare(d.cash.cash.balance), unit: '$', lost: d.cash.cash.balance < 0, sub: `Mobile money ${fmt.money(d.cash.momo.balance)}`, href: '#/caisse' }),
-          d.supplierDebt ? tile({ color: 'c-red', ic: 'truck', title: 'Fournisseurs', value: bare(d.supplierDebt), unit: '$', lost: true, href: '#/cuves' }) : null,
-          flags.combos ? tile({ color: 'c-gold', ic: 'card', title: 'Combos des clients', value: fmt.number(d.combos.total), sub: `Valeur ${fmt.money(d.combos.value)}`, href: '#/clients' }) : null,
-          d.toReview ? tile({ color: 'c-red', ic: 'user', title: 'Fiches à compléter', value: String(d.toReview), href: '#/clients' }) : null,
+          tile({ title: 'Caisse', value: bare(d.cash.cash.balance), unit: '$', lost: d.cash.cash.balance < 0, sub: `Mobile money ${fmt.money(d.cash.momo.balance)}`, href: '#/caisse' }),
+          d.supplierDebt ? tile({ title: 'Fournisseurs', value: bare(d.supplierDebt), unit: '$', lost: true, href: '#/cuves' }) : null,
+          flags.combos ? tile({ title: 'Combos des clients', value: fmt.number(d.combos.total), sub: `Valeur ${fmt.money(d.combos.value)}`, href: '#/clients' }) : null,
+          d.toReview ? tile({ title: 'Fiches à compléter', value: String(d.toReview), href: '#/clients' }) : null,
         ),
       ),
     ),
