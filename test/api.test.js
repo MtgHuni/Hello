@@ -2642,6 +2642,9 @@ test('client « Interne » : ce qu’il prend est compté, jamais dû', async ()
   const acc = (await gerant('GET', `/api/customers/${customer.id}`)).data;
   assert.deepStrictEqual([acc.balance, acc.consumed], [0, 50]);
   assert.ok(acc.movements.every((m) => m.balance === 0));
+  // The statement opens on the app's first day by default: the first shift's.
+  const firstShift = db.prepare("SELECT date(MIN(opened_at), 'localtime') AS d FROM shifts").get().d;
+  assert.strictEqual(acc.since, firstShift);
   assert.ok(!(await gerant('GET', '/api/customers/receivables')).data.rows.some((r) => r.id === customer.id));
   assert.deepStrictEqual((await gerant('GET', '/api/customers/receivables')).data.totals, receivablesBefore);
   assert.deepStrictEqual((await gerant('GET', `/api/customers/${customer.id}/unpaid`)).data.credits, []);

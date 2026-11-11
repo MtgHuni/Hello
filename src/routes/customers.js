@@ -140,6 +140,16 @@ function customerRoutes(db, { mailer } = {}) {
         pending: db.prepare("SELECT COALESCE(SUM(points_due), 0) AS v FROM sales WHERE customer_id = ? AND kind = 'credit' AND points = 0").get(customer.id).v,
       },
       period: { from, to },
+      // The first day of the app (its first shift, or this customer's first operation): the statement opens there.
+      since: db
+        .prepare(
+          `SELECT MIN(d) AS d FROM (
+             SELECT date(MIN(opened_at), 'localtime') AS d FROM shifts
+             UNION ALL SELECT date(MIN(created_at), 'localtime') FROM sales WHERE customer_id = ?
+             UNION ALL SELECT date(MIN(created_at), 'localtime') FROM payments WHERE customer_id = ?
+             UNION ALL SELECT date(MIN(created_at), 'localtime') FROM old_debts WHERE customer_id = ?)`,
+        )
+        .get(id, id, id).d,
       opening: round(opening),
       closing: round(running),
       totals: {
