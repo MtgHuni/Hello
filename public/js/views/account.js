@@ -2,7 +2,7 @@ import { flags } from '../ui.js';
 import { api } from '../api.js';
 import { priceTotem, h, fmt, pageHeader, button, formDialog, confirmDialog, toast, spinner, setContent, noticeDialog, whatsappNumber } from '../ui.js';
 import { icon } from '../icons.js';
-import { statement, defaultPeriod } from './customers.js';
+import { statement, defaultPeriod, periodQuery } from './customers.js';
 
 // Client space: start a fill-up from the phone while waiting in line,
 // then follow its confirmation by the attendant; account statement below.
@@ -39,7 +39,8 @@ export async function renderAccount(page, ctx) {
   let wasPending = false; // to tell the customer when a request expires
 
   const loadStatement = async () => {
-    acc = await api.get(`/me/account?from=${period.from}&to=${period.to}`);
+    acc = await api.get(`/me/account?${periodQuery(period)}`);
+    if (!period.from) period.from = acc.since || period.to;
     setContent(combosHost, flags.combos ? combosCard(acc) : null);
     setContent(statementHost, 
       statement(

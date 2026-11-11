@@ -274,7 +274,8 @@ export async function renderCustomerDetail(page, ctx) {
   if (ctx.id === 'creances') return renderReceivables(page, ctx);
   const period = defaultPeriod();
   const load = async () => {
-    const acc = await api.get(`/customers/${ctx.id}?from=${period.from}&to=${period.to}`);
+    const acc = await api.get(`/customers/${ctx.id}?${periodQuery(period)}`);
+    if (!period.from) period.from = acc.since || period.to;
     const c = acc.customer;
     const reload = () => load();
     setContent(page, 
@@ -364,10 +365,12 @@ async function pricesDialog(acc, reload) {
   }
 }
 
+// By default the statement covers everything since the app began (`from` set from `acc.since` once loaded).
 export function defaultPeriod() {
-  const now = new Date();
-  return { from: isoDate(new Date(now.getFullYear(), now.getMonth(), 1)), to: todayISO() };
+  return { from: null, to: todayISO() };
 }
+// The account's address: without a start, the server counts from the beginning.
+export const periodQuery = (period) => `${period.from ? `from=${period.from}&` : ''}to=${period.to}`;
 
 // Account statement shared with the client space: KPIs, period picker, movements.
 // `first`: a card on top of the column (the subscriber's prices on their record).
