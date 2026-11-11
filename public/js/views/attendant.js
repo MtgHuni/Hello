@@ -184,7 +184,7 @@ function renderOpenShift(page, ctx, shift, remarks = null) {
       at: m.created_at,
       title: 'Payé en mobile money',
       detail: `${m.product_name} · ${fmt.liters(m.liters)}`,
-      tag: badge('Mobile money', 'info'),
+      tag: null,
       amount: fmt.money(m.amount),
       remove: { url: `/shifts/${shift.id}/momo/${m.id}`, label: 'Annuler ce paiement mobile money', pending: !!m.cancel_requested_at },
     })),

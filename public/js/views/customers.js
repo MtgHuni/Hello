@@ -20,6 +20,7 @@ export async function renderCustomers(page, ctx) {
   for (const c of customers) seen.set(nameKey(c.name), (seen.get(nameKey(c.name)) || 0) + 1);
   const namesake = (c) => seen.get(nameKey(c.name)) > 1;
 
+  const typeCell = (c) => (namesake(c) ? badge('Même nom', 'warning') : !c.active ? badge('Désactivé') : c.needs_review ? badge('À compléter', 'warning') : TYPE_LABEL[typeOf(c)]);
   const draw = () => {
     const q = search.trim().toLowerCase();
     const rows = customers.filter(
@@ -30,14 +31,12 @@ export async function renderCustomers(page, ctx) {
     setContent(listHost, 
       table(
         [
-          { label: 'Client', render: (c) => h('div', {}, h('div', { style: 'font-weight:600' }, c.name), h('div', { class: 'muted small' }, [c.phone, c.plate].filter(Boolean).join(' · ') || '—')) },
-          {
-            label: 'Type',
-            render: (c) => (namesake(c) ? badge('Même nom', 'warning') : !c.active ? badge('Désactivé') : c.needs_review ? badge('À compléter', 'warning') : TYPE_LABEL[typeOf(c)]),
-          },
+          // On a phone the type goes under the name, so the balance stays in view.
+          { label: 'Client', render: (c) => h('div', {}, h('div', { style: 'font-weight:600' }, c.name), [c.phone, c.plate].some(Boolean) ? h('div', { class: 'muted small' }, [c.phone, c.plate].filter(Boolean).join(' · ')) : null, h('div', { class: 'only-phone', style: 'margin-top:6px' }, typeCell(c))) },
+          { label: 'Type', phone: false, render: typeCell },
           { label: 'Solde dû', align: 'right', render: (c) => (c.balance < 0 ? `Avance ${fmt.money(-c.balance)}` : c.balance ? fmt.money(c.balance) : '—') },
           ...(flags.combos ? [{ label: 'Combos', align: 'right', render: (c) => fmt.number(c.loyalty_points) }] : []),
-          { label: 'Dernier achat', render: (c) => fmt.date(c.last_purchase_at) },
+          { label: 'Dernier achat', phone: false, render: (c) => fmt.date(c.last_purchase_at) },
         ],
         rows,
         { onRowClick: (c) => ctx.navigate(`clients/${c.id}`), empty: customers.length ? 'Aucun client ne correspond.' : 'Aucun client pour le moment.' },

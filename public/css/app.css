@@ -1314,10 +1314,12 @@ html[data-nav='fade']::view-transition-new(page) { animation: fade-up 0.5s var(-
 
   /* Sheets rise from the bottom and can be swiped down */
   dialog.sheet-dialog { margin: 0; width: 100vw; max-width: 100vw; height: 100%; height: 100dvh; max-height: 100%; display: flex; align-items: flex-end; justify-content: center; }
+  /* The keyboard open or just closed: the dialog keeps to the visible area (ui.js, openDialog). */
+  dialog.sheet-dialog[style*='--vv-h'], dialog.action-dialog[style*='--vv-h'] { top: var(--vv-top); bottom: auto; height: var(--vv-h); }
   .sheet {
     width: 100vw;
     max-height: calc(100vh - 40px);
-    max-height: calc(100dvh - 24px);
+    max-height: calc(var(--vv-h, 100dvh) - 24px);
     margin: auto 0 0;
     border-radius: var(--radius-xl) var(--radius-xl) 0 0;
     animation: sheet-in 0.45s var(--ease);
@@ -2069,3 +2071,18 @@ table th { background: none; border-bottom: 1px solid var(--line); }
   .page-slot.entering .tiles > :nth-child(4) { animation-delay: 0.15s; }
   .page-slot.entering .tiles > :nth-child(n + 5) { animation-delay: 0.2s; }
 }
+
+/* ---------- Phones: filters and periods fit the screen ---------- */
+@media (max-width: 833px) {
+  /* A segmented control takes the width and wraps its choices onto a second line, never cut. */
+  .segmented { display: flex; flex-wrap: wrap; width: 100%; overflow: visible; }
+  .segmented button { flex: 1 0 auto; padding: 6px 10px; }
+  /* A period: the choices on their line, then « Du » and « Au » side by side, equal. */
+  .row > .spacer { display: none; }
+  .row > .field { flex: 1 1 0; min-width: 136px; }
+  /* Paired buttons: tighter letters, so « Nouvelle dépense » keeps one line. */
+  .btn-row:not(.inline):not(.one) > .btn { letter-spacing: 0.005em; }
+}
+/* A table column left out on a phone (`phone: false` in table()), its content shown elsewhere. */
+.only-phone { display: none; }
+@media (max-width: 833px) { .no-phone { display: none; } .only-phone { display: block; } }

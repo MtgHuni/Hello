@@ -333,7 +333,7 @@ export function table(columns, rows, { onRowClick, canClick = () => true, empty 
     h(
       'table',
       {},
-      h('thead', {}, h('tr', {}, columns.map((c) => h('th', { class: c.align === 'right' ? 'right' : '' }, c.label)))),
+      h('thead', {}, h('tr', {}, columns.map((c) => h('th', { class: [c.align === 'right' ? 'right' : '', c.phone === false ? 'no-phone' : ''].join(' ') }, c.label)))),
       h(
         'tbody',
         {},
@@ -347,11 +347,11 @@ export function table(columns, rows, { onRowClick, canClick = () => true, empty 
               onClick: click ? () => click(row) : null,
               onKeydown: click ? (e) => e.key === 'Enter' && click(row) : null,
             },
-            columns.map((c) => h('td', { class: [c.align === 'right' ? 'right' : '', c.wrap ? 'wrap' : ''].join(' ') }, c.render ? c.render(row) : row[c.key])),
+            columns.map((c) => h('td', { class: [c.align === 'right' ? 'right' : '', c.wrap ? 'wrap' : '', c.phone === false ? 'no-phone' : ''].join(' ') }, c.render ? c.render(row) : row[c.key])),
           );
         }),
       ),
-      footer ? h('tfoot', {}, h('tr', {}, columns.map((c) => h('td', { class: c.align === 'right' ? 'right' : '' }, footer[c.key] ?? '')))) : null,
+      footer ? h('tfoot', {}, h('tr', {}, columns.map((c) => h('td', { class: [c.align === 'right' ? 'right' : '', c.phone === false ? 'no-phone' : ''].join(' ') }, footer[c.key] ?? '')))) : null,
     ),
   );
 }
@@ -364,8 +364,10 @@ export function segmented(options, current, onChange) {
   const place = (btn, animate) => {
     if (!btn || !btn.offsetWidth) return false;
     if (!animate) thumb.style.transition = 'none';
+    // The choices may wrap on a phone: the thumb follows the line too.
     thumb.style.width = `${btn.offsetWidth}px`;
-    thumb.style.transform = `translateX(${btn.offsetLeft}px)`;
+    thumb.style.height = `${btn.offsetHeight}px`;
+    thumb.style.transform = `translate(${btn.offsetLeft}px, ${btn.offsetTop - 3}px)`;
     if (!animate) requestAnimationFrame(() => (thumb.style.transition = ''));
     return true;
   };
@@ -457,6 +459,26 @@ export function openDialog(build, { kind = 'sheet' } = {}) {
   dialog.addEventListener('touchmove', (e) => {
     if (e.touches.length === 1 && !scrollsInside(e.target, dialog)) e.preventDefault();
   }, { passive: false });
+  // iPhone: the keyboard pans the screen; the dialog follows the visible area, so a sheet
+  // stays just above the keyboard, and the page comes back in place once the keyboard is gone.
+  const vv = window.visualViewport;
+  const pageY = window.scrollY;
+  const fit = () => {
+    if (!vv) return;
+    dialog.style.setProperty('--vv-top', `${Math.max(0, vv.offsetTop)}px`);
+    dialog.style.setProperty('--vv-h', `${vv.height}px`);
+  };
+  const settle = () => setTimeout(() => {
+    if (!dialog.isConnected || document.activeElement?.matches?.('input, textarea, select')) return;
+    if (window.scrollY !== pageY) window.scrollTo(window.scrollX, pageY);
+    fit();
+  }, 120);
+  if (vv) {
+    fit();
+    vv.addEventListener('resize', fit);
+    vv.addEventListener('scroll', fit);
+    dialog.addEventListener('focusout', settle);
+  }
   const close = () => {
     if (closing) return;
     closing = true;
@@ -468,6 +490,11 @@ export function openDialog(build, { kind = 'sheet' } = {}) {
       dialog.close();
       dialog.remove();
       lockPage(false);
+      if (vv) {
+        vv.removeEventListener('resize', fit);
+        vv.removeEventListener('scroll', fit);
+        if (window.scrollY !== pageY) window.scrollTo(window.scrollX, pageY);
+      }
     };
     if (!panel || matchMedia('(prefers-reduced-motion: reduce)').matches) return done();
     panel.addEventListener('animationend', done, { once: true });
