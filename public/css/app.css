@@ -1925,7 +1925,9 @@ h3 { font-size: 17px; font-weight: 600; letter-spacing: 0; }
 a.tile:hover { text-decoration: none; background: var(--fill-4); }
 .tile-head { display: flex; align-items: center; gap: 8px; }
 .tile-head small { margin-left: auto; font-size: inherit; white-space: nowrap; }
-.tile-body { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-top: 5px; }
+.tile-body { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 8px 12px; margin-top: 5px; }
+/* A big figure leaves no room for the bars: they go under it, never over the next cell. */
+.tile-body > div:first-child { min-width: 0; }
 .tile-value { display: block; font-size: 26px; font-weight: 600; line-height: 1.1; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tile-value small { margin-left: 4px; font-size: 15px; font-weight: 400; letter-spacing: 0; }
 .tile-value.lost { color: var(--bad-text); }
