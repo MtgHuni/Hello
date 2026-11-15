@@ -41,6 +41,12 @@ module.exports = function stockRoutes(db) {
 
   // During the open shift, a delivery or a dip reads the index of the nozzles fed by the tank:
   // the fuel sold so far comes off the stock (src/liveStock.js). Without an index, the last one taken counts.
+  // The station closed for the night (evening closing, no morning opening yet): a delivery or a dip
+  // waits for the opening, so its index follows the morning's (2026-11-15, the user's choice).
+  const stationClosed = () => !!db.prepare("SELECT 1 FROM shifts WHERE status = 'open' AND station_closed_at IS NOT NULL").get();
+  const requireOpen = (what) => {
+    if (stationClosed()) fail(409, `La station est fermée : faites d’abord l’ouverture, puis ${what}.`, 'station_closed');
+  };
   function stockNow(tank, given) {
     const list = Array.isArray(given) ? given : [];
     const meters = openMeters(db);
@@ -87,6 +93,9 @@ module.exports = function stockRoutes(db) {
     res.json(openMeters(db).map((m) => ({ nozzleId: m.nozzleId, tankId: m.tankId, label: m.label, latest: m.latest })));
   });
 
+  // Read before a delivery or a dip form opens.
+  router.get('/stock/status', manager, (req, res) => res.json({ stationClosed: stationClosed() }));
+
   router.get('/deliveries', manager, (req, res) => {
     res.json(
       db
@@ -105,6 +114,7 @@ module.exports = function stockRoutes(db) {
   // the gap with the litres ordered is the supplier shortfall.
   router.post('/deliveries', manager, (req, res) => {
     const b = req.body || {};
+    requireOpen('la livraison');
     const tank = getTank(num(b.tankId, 'La cuve', { integer: true, min: 1 }));
     const ordered = num(b.litersOrdered, 'Les litres commandés', { min: 0.01, max: 1e7 });
     const received = num(b.litersReceived ?? ordered, 'Les litres reçus', { min: 0.01, max: 1e7 });
@@ -231,6 +241,7 @@ module.exports = function stockRoutes(db) {
   // the variance is recorded and the book stock is reset. During the open shift, the fuel sold so far
   // stays in the book stock until the closing takes it off.
   router.post('/dips', manager, (req, res) => {
+    requireOpen('le jaugeage');
     const tank = getTank(num(req.body?.tankId, 'La cuve', { integer: true, min: 1 }));
     const measured = num(req.body?.measured, 'Le volume mesuré', { max: tank.capacity * 1.05 });
     const note = str(req.body?.note, 'La note', { required: false, max: 300 });
