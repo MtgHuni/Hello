@@ -766,6 +766,14 @@ test('relève, fermeture du soir et ouverture du matin : le poste continue', asy
   assert.ok(evening.data.shift.station_closed_at);
   assert.strictEqual(evening.data.shift.status, 'open', 'la fermeture ne clôture pas le poste');
   assert.strictEqual((await bea('POST', `/api/shifts/${shift.id}/join`)).data.code, 'station_closed');
+  // A dip while the station is closed: the meters did not move, no index is asked, a typed one is not kept,
+  // so it cannot block the morning opening.
+  assert.deepStrictEqual((await gerant('GET', '/api/stock/meters')).data, []);
+  const closedTank = (await gerant('GET', '/api/tanks')).data.find((t) => t.product_id === diesel.product_id);
+  const nightDip = await gerant('POST', '/api/dips', { tankId: closedTank.id, measured: closedTank.book_stock, meters: [{ nozzleId: diesel.nozzle_id, meter: diesel.start_meter + 999 }] });
+  assert.strictEqual(nightDip.status, 201, JSON.stringify(nightDip.data));
+  assert.strictEqual(nightDip.data.variance, 0);
+  assert.strictEqual(db.prepare("SELECT COUNT(*) AS n FROM stock_readings WHERE source = 'dip' AND source_id = ?").get(nightDip.data.id).n, 0);
   await nextSecond();
 
   // Paul opens in the morning: same indexes, same money; the shift continues.

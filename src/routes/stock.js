@@ -41,8 +41,11 @@ module.exports = function stockRoutes(db) {
 
   // During the open shift, a delivery or a dip reads the index of the nozzles fed by the tank:
   // the fuel sold so far comes off the stock (src/liveStock.js). Without an index, the last one taken counts.
+  // The station closed for the night (evening closing, no morning opening yet): the meters do not move.
+  const stationClosed = () => !!db.prepare("SELECT 1 FROM shifts WHERE status = 'open' AND station_closed_at IS NOT NULL").get();
   function stockNow(tank, given) {
-    const list = Array.isArray(given) ? given : [];
+    // Closed: no index is asked nor kept, the last one read at the closing counts.
+    const list = Array.isArray(given) && !stationClosed() ? given : [];
     const meters = openMeters(db);
     const fresh = new Map();
     for (const m of meters.filter((x) => x.tankId === tank.id)) {
@@ -84,6 +87,7 @@ module.exports = function stockRoutes(db) {
 
   // The indexes to ask at a delivery or a dip: the open shift's nozzles, each with its last index.
   router.get('/stock/meters', manager, (req, res) => {
+    if (stationClosed()) return res.json([]);
     res.json(openMeters(db).map((m) => ({ nozzleId: m.nozzleId, tankId: m.tankId, label: m.label, latest: m.latest })));
   });
 
