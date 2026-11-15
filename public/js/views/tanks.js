@@ -6,6 +6,13 @@ import { h, fmt, pageHeader, cardHeader, table, segmented, tankGauge, button, fo
 
 let tab = 'deliveries';
 
+// A delivery or a dip asks the meters: with the station closed for the night, the opening comes first.
+const whenOpen = (what, open) => async () => {
+  const { stationClosed } = await api.get('/stock/status');
+  if (stationClosed) return toast(`La station est fermée : faites d’abord l’ouverture, puis ${what}.`, 'error');
+  return open();
+};
+
 export async function renderTanks(page, ctx) {
   const [tanks, products, deliveries, dips, sup, meters] = await Promise.all([api.get('/tanks'), api.get('/products'), api.get('/deliveries'), api.get('/dips'), api.get('/suppliers'), api.get('/stock/meters')]);
   const tol = ctx.state.settings.stockTolerance;
@@ -17,8 +24,8 @@ export async function renderTanks(page, ctx) {
     pageHeader(
       'Cuves',
       null,
-      edit(button('Jaugeage', () => dipDialog(active, meters, reload), { variant: 'secondary', iconName: 'ruler' })),
-      edit(button('Livraison', () => deliveryDialog(active, sup.names, meters, reload), { iconName: 'truck' })),
+      edit(button('Jaugeage', whenOpen('le jaugeage', () => dipDialog(active, meters, reload)), { variant: 'secondary', iconName: 'ruler' })),
+      edit(button('Livraison', whenOpen('la livraison', () => deliveryDialog(active, sup.names, meters, reload)), { iconName: 'truck' })),
     ),
     h(
       'div',
