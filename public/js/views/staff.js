@@ -163,6 +163,22 @@ function monthCard(s, m, current, reload) {
       : !current && m.due < 0.005 && m.net > 0.005
         ? line('Reporté au mois suivant', fmt.money(m.net), { total: true })
         : line('Net à payer', fmt.money(current ? m.net : m.due), { total: true }),
+    activityList(m.activity),
+  );
+}
+
+// What the agent did that month: the credits they granted and the expenses they entered, each row to its shift.
+function activityList(a) {
+  if (!a || (!a.credits.length && !a.expenses.length)) return null;
+  const row = (label, amount, shiftId) =>
+    h(shiftId ? 'a' : 'div', { class: 'summary-line', href: shiftId ? `#/postes/${shiftId}` : null }, h('span', {}, label), h('span', { class: 'num' }, fmt.money(amount)));
+  const group = (title, rows, total, render) =>
+    rows.length ? h('details', { class: 'report-ops' }, h('summary', {}, `${title} (${rows.length}) · ${fmt.money(total)}`), rows.map(render)) : null;
+  return h(
+    'div',
+    { class: 'report-list' },
+    group('Crédits accordés', a.credits, a.creditTotal, (c) => row(`${fmt.dateTime(c.created_at)} · ${c.customer_name} · ${c.product_name} ${fmt.liters(c.liters)}${c.kind === 'credit' ? '' : ' · payé'}`, c.amount, c.shift_id)),
+    group('Dépenses saisies', a.expenses, a.expenseTotal, (e) => row(`${fmt.date(e.expense_date)} · ${e.category} : ${e.description}`, e.amount, e.shift_id)),
   );
 }
 
