@@ -2088,3 +2088,6 @@ table th { background: none; border-bottom: 1px solid var(--line); }
 /* A table column left out on a phone (`phone: false` in table()), its content shown elsewhere. */
 .only-phone { display: none; }
 @media (max-width: 833px) { .no-phone { display: none; } .only-phone { display: block; } }
+
+/* A row that opens its shift reads like its neighbours. */
+a.summary-line { color: var(--text); text-decoration: none; }

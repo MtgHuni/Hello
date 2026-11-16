@@ -104,4 +104,31 @@ function payroll(db, month) {
   };
 }
 
-module.exports = { FUNCTIONS, monthLabel, ofMonth, addMonths, currentMonth, salaryOf, sheetOf, sheetsOf, payroll, sourceOf };
+// What the agent did in a month: the credits they granted (theirs by `sales.staff_id`, else by the
+// login that entered them, a credit paid at the pump since included) and the expenses they entered
+// (their own pay left out). Shown on their record, month by month.
+function activityOf(db, staff, month) {
+  const credits = db
+    .prepare(
+      `SELECT s.id, s.created_at, s.amount, s.liters, s.kind, s.shift_id, c.name AS customer_name, p.name AS product_name
+       FROM sales s JOIN customers c ON c.id = s.customer_id JOIN products p ON p.id = s.product_id
+       WHERE (s.kind = 'credit' OR s.settled_ref IS NOT NULL)
+         AND (s.staff_id = ? OR (s.staff_id IS NULL AND ? IS NOT NULL AND s.user_id = ?))
+         AND strftime('%Y-%m', s.created_at, 'localtime') = ?
+       ORDER BY s.created_at, s.id`,
+    )
+    .all(staff.id, staff.user_id, staff.user_id, month);
+  const expenses = staff.user_id
+    ? db
+        .prepare(
+          `SELECT id, created_at, expense_date, amount, category, description, beneficiary, shift_id FROM expenses
+           WHERE user_id = ? AND staff_id IS NULL AND strftime('%Y-%m', created_at, 'localtime') = ?
+           ORDER BY created_at, id`,
+        )
+        .all(staff.user_id, month)
+    : [];
+  const sum = (rows) => round(rows.reduce((t, r) => t + r.amount, 0));
+  return { credits, creditTotal: sum(credits), expenses, expenseTotal: sum(expenses) };
+}
+
+module.exports = { FUNCTIONS, monthLabel, ofMonth, addMonths, currentMonth, salaryOf, sheetOf, sheetsOf, payroll, sourceOf, activityOf };

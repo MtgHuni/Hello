@@ -1950,6 +1950,15 @@ test('agents : fiches par l’administrateur, lues par le gérant et l’actionn
   const paul = await gerant('POST', '/api/staff', { name: 'Paul', phone: '0990000001', function: 'Pompiste', hiredOn: `${M}-16`, salary: 155, userId: paulUser.id });
   assert.strictEqual(paul.status, 201, JSON.stringify(paul.data));
   assert.deepStrictEqual([paul.data.pay_from, paul.data.user_name, paul.data.salary], [M, 'Paul', 155]);
+  // His record shows, month by month, the credits he granted and the expenses he entered.
+  const activity = (await gerant('GET', `/api/staff/${paul.data.id}`)).data.months.find((m) => m.month === M).activity;
+  const inMonth = `strftime('%Y-%m', created_at, 'localtime') = '${M}'`;
+  const credits = db.prepare(`SELECT id, amount FROM sales WHERE user_id = ? AND (kind = 'credit' OR settled_ref IS NOT NULL) AND staff_id IS NULL AND ${inMonth} ORDER BY created_at, id`).all(paulUser.id);
+  assert.ok(credits.length > 0);
+  assert.deepStrictEqual(activity.credits.map((c) => c.id), credits.map((c) => c.id));
+  assert.strictEqual(activity.creditTotal, round2(credits.reduce((t, c) => t + c.amount, 0)));
+  const spent = db.prepare(`SELECT id FROM expenses WHERE user_id = ? AND staff_id IS NULL AND ${inMonth} ORDER BY created_at, id`).all(paulUser.id);
+  assert.deepStrictEqual(activity.expenses.map((e) => e.id), spent.map((e) => e.id));
   const jean = await gerant('POST', '/api/staff', { name: 'Jean', function: 'Gardien', hiredOn: '2025-01-01', salary: 100 });
   assert.strictEqual(jean.status, 201);
   ctx.jean = jean.data;

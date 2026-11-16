@@ -3,7 +3,7 @@ const { SALARY, getSettings } = require('../db');
 const { fail, num, str, oneOf, dateParam, money, round, transaction } = require('../util');
 const { requireRole, requireAdmin } = require('../auth');
 const { audit } = require('../audit');
-const { FUNCTIONS, monthLabel, ofMonth, currentMonth, salaryOf, sheetOf, sheetsOf, payroll, sourceOf } = require('../payroll');
+const { FUNCTIONS, monthLabel, ofMonth, currentMonth, salaryOf, sheetOf, sheetsOf, payroll, sourceOf, activityOf } = require('../payroll');
 const { payslipPdf } = require('../payslip');
 const { syncDeductions, keptFor } = require('../deductions');
 
@@ -55,7 +55,7 @@ module.exports = function staffRoutes(db, { mailer }) {
   router.get('/staff/:id', manager, (req, res) => {
     syncDeductions(db);
     const staff = staffRow(req.params.id);
-    const months = sheetsOf(db, staff, currentMonth(db)).reverse();
+    const months = sheetsOf(db, staff, currentMonth(db)).reverse().map((m) => ({ ...m, activity: activityOf(db, staff, m.month) }));
     res.json({
       staff,
       salaries: db.prepare('SELECT from_month, amount FROM staff_salaries WHERE staff_id = ? ORDER BY from_month DESC').all(staff.id),
