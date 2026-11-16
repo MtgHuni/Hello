@@ -1,5 +1,6 @@
 // An agent's payslip for a month (Agents → the agent → the month's « Partager »): the salary, what the
-// month before left, each advance and each payment, and what remains.
+// month before left, each advance and each payment, what remains, then the credits the agent granted
+// and the expenses they entered that month.
 const { Report, fmt, COLORS } = require('./pdfReport');
 const { monthLabel } = require('./payroll');
 const { deductionLabel } = require('./deductions');
@@ -7,7 +8,7 @@ const { deductionLabel } = require('./deductions');
 const SOURCE = { espèces: 'Espèces', 'mobile money': 'Mobile money' };
 const sourceLabel = (e) => (e.source === 'poste' ? `Argent du poste n°${e.shift_id}` : SOURCE[e.source] || e.source);
 
-function payslipPdf({ staff, sheet, stationName, now }) {
+function payslipPdf({ staff, sheet, activity, stationName, now }) {
   const month = monthLabel(sheet.month);
   const report = new Report({
     title: `Bulletin de paie ${month}`,
@@ -54,6 +55,22 @@ function payslipPdf({ staff, sheet, stationName, now }) {
   // A rest paid with the next month is not owed any more.
   else if (sheet.due < 0.005 && sheet.net > 0.005) report.line('Reporté au mois suivant', fmt.money(sheet.net), { bold: true });
   else report.line('Reste à payer', fmt.money(sheet.due), { bold: true, color: sheet.due > 0.005 ? COLORS.BAD : COLORS.INK });
+
+  // What the agent did that month, as on their record: the credits granted and the expenses entered.
+  if (activity) {
+    report.section('Crédits accordés');
+    report.table(
+      [{ label: 'Date', width: 1.2 }, { label: 'Client', width: 2 }, { label: 'Carburant', width: 1.4 }, { label: 'Poste', width: 0.7 }, { label: 'Montant', align: 'right', width: 1 }],
+      activity.credits.map((c) => [fmt.dateTime(c.created_at), `${c.customer_name}${c.kind === 'credit' ? '' : ' (payé)'}`, `${c.product_name} ${fmt.liters(c.liters)}`, c.shift_id ? `n°${c.shift_id}` : '—', fmt.money(c.amount)]),
+      { totals: activity.credits.length > 1 ? [['Total', `${activity.credits.length} crédits`, '', '', fmt.money(activity.creditTotal)]] : [], empty: 'Aucun crédit accordé ce mois.' },
+    );
+    report.section('Dépenses saisies');
+    report.table(
+      [{ label: 'Date', width: 1 }, { label: 'Catégorie', width: 1.4 }, { label: 'Description', width: 2.4 }, { label: 'Poste', width: 0.7 }, { label: 'Montant', align: 'right', width: 1 }],
+      activity.expenses.map((e) => [fmt.date(e.expense_date), e.category, e.description, e.shift_id ? `n°${e.shift_id}` : '—', fmt.money(e.amount)]),
+      { totals: activity.expenses.length > 1 ? [['Total', `${activity.expenses.length} dépenses`, '', '', fmt.money(activity.expenseTotal)]] : [], empty: 'Aucune dépense saisie ce mois.' },
+    );
+  }
   return report.finish();
 }
 

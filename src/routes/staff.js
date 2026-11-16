@@ -67,7 +67,7 @@ module.exports = function staffRoutes(db, { mailer }) {
     syncDeductions(db);
     const staff = staffRow(req.params.id);
     const month = notAfterNow(monthParam(req.query.month, 'Le mois') || currentMonth(db));
-    const pdf = payslipPdf({ staff, sheet: sheetOf(db, staff, month), stationName: getSettings(db).stationName });
+    const pdf = payslipPdf({ staff, sheet: sheetOf(db, staff, month), activity: activityOf(db, staff, month), stationName: getSettings(db).stationName });
     res.set('Content-Type', 'application/pdf');
     res.set('Content-Disposition', `attachment; filename="bulletin-${staff.id}-${month}.pdf"`);
     res.send(pdf);

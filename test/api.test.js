@@ -2081,6 +2081,11 @@ test('bulletin de paie : le mois d’un agent en PDF', async () => {
   const text = res.raw.toString('latin1');
   assert.ok(text.startsWith('%PDF'));
   assert.ok(text.includes('(Bulletin de paie)') && text.includes('(Avances)') && text.includes('(Paiements)'));
+  // With the credits the agent granted and the expenses entered that month.
+  assert.ok(text.includes('(Cr\\351dits accord\\351s)') && text.includes('(D\\351penses saisies)'));
+  const paulStaff = db.prepare("SELECT id FROM staff WHERE name = 'Paul'").get();
+  const paulPdf = (await gerant('GET', `/api/staff/${paulStaff.id}/payslip.pdf?month=${monthOf()}`)).raw.toString('latin1');
+  assert.ok(!paulPdf.includes('Aucun cr\\351dit accord\\351'), 'les crédits de Paul y sont');
   const awa = client();
   await awa('POST', '/api/auth/login', { login: 'awa', password: 'actionnaire2' });
   assert.strictEqual((await awa('GET', url)).status, 200, 'l’actionnaire le lit');
