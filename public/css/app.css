@@ -2091,3 +2091,9 @@ table th { background: none; border-bottom: 1px solid var(--line); }
 
 /* A row that opens its shift reads like its neighbours. */
 a.summary-line { color: var(--text); text-decoration: none; }
+
+/* ---------- The switch: a framed rectangle, a square that slides ---------- */
+input.switch { width: 52px; height: 30px; border: 2px solid var(--text); border-radius: 0; background: var(--paper); box-sizing: border-box; }
+input.switch::before { top: 4px; left: 4px; width: 18px; height: 18px; border-radius: 0; background: var(--text); box-shadow: none; }
+input.switch:checked { background: var(--accent); border-color: var(--accent); }
+input.switch:checked::before { transform: translateX(22px); background: var(--bg); }

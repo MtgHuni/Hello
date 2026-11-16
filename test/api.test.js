@@ -462,6 +462,13 @@ test('administrateur : seul à modifier les réglages et la caisse ; le gérant 
   assert.strictEqual((await chef('POST', '/api/cashbook/counts', { account: 'cash', counted: 10 })).status, 403);
   assert.strictEqual((await chef('PUT', `/api/products/${ctx.diesel.id}`, { price: 9 })).status, 403, 'les prix');
   assert.strictEqual((await chef('POST', '/api/users', { name: 'X', login: 'x', password: 'motdepasse9', role: 'manager' })).status, 403, 'l’équipe');
+  // The admin changes a member's login: a taken one is refused, the new one signs in.
+  const chefUser = (await gerant('GET', '/api/users')).data.find((u) => u.login === 'chef');
+  assert.strictEqual((await gerant('PUT', `/api/users/${chefUser.id}`, { login: 'PAUL' })).data.code, 'duplicate');
+  assert.strictEqual((await gerant('PUT', `/api/users/${chefUser.id}`, { login: 'chef2' })).data.login, 'chef2');
+  const chef2 = client();
+  assert.strictEqual((await chef2('POST', '/api/auth/login', { login: 'chef2', password: 'gerant123' })).status, 200);
+  assert.strictEqual((await gerant('PUT', `/api/users/${chefUser.id}`, { login: 'chef' })).status, 200);
   assert.strictEqual((await chef('GET', '/api/shifts')).status, 200, 'le reste du travail du gérant');
 });
 

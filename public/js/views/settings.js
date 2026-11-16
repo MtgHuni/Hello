@@ -1,6 +1,6 @@
 import { flags, edit, adminEdit, canAdmin } from '../ui.js';
 import { api } from '../api.js';
-import { h, fmt, pageHeader, card, cardHeader, table, badge, button, formDialog, openDialog, toast, productColor, setContent, buttonRow } from '../ui.js';
+import { h, fmt, pageHeader, card, cardHeader, table, badge, button, formDialog, openDialog, toast, productColor, setContent, buttonRow, noticeDialog } from '../ui.js';
 import { icon } from '../icons.js';
 
 export async function renderSettings(page, ctx) {
@@ -301,19 +301,40 @@ async function userDialog(u, ctx, reload) {
     title: u ? `Modifier ${u.name}` : 'Nouveau membre',
     fields: [
       { name: 'name', label: 'Nom', value: u?.name, required: true },
-      ...(u ? [] : [{ name: 'login', label: 'Identifiant', required: true }]),
+      { name: 'login', label: 'Identifiant', value: u?.login, required: true },
       { name: 'role', label: 'Rôle', type: 'select', value: u?.role || 'attendant', options: Object.entries(ROLES), hint: 'L’administrateur seul modifie les réglages et la caisse ; l’actionnaire consulte sans rien modifier.' },
       { name: 'email', label: 'Adresse e-mail', type: 'email', value: u?.email || '', full: true, hint: 'Facultative : un lien lui est envoyé pour la confirmer' },
       { name: 'password', label: u ? 'Nouveau mot de passe' : 'Mot de passe', type: 'text', required: !u, hint: u ? 'Laisser vide pour ne pas changer' : '8 caractères minimum' },
       ...(u ? [{ name: 'active', label: 'Compte actif', type: 'checkbox', value: !!u.active, full: true }] : []),
     ],
-    onSubmit: (d) => {
+    onSubmit: async (d) => {
       if (u && !d.password) delete d.password;
-      return u ? api.put(`/users/${u.id}`, d) : api.post('/users', d);
+      const saved = await (u ? api.put(`/users/${u.id}`, d) : api.post('/users', d));
+      return { saved, password: d.password };
     },
   });
-  if (ok) {
-    toast(u ? 'Membre modifié.' : 'Membre ajouté.');
-    reload();
-  }
+  if (!ok) return;
+  reload();
+  // A new member, a new login or a new password: the access goes to the person on WhatsApp.
+  const { saved, password } = ok;
+  if (!u || password || saved.login !== u.login) return shareTeamAccess(saved, password, ctx.state.settings.stationName);
+  toast('Membre modifié.');
+}
+
+function shareTeamAccess(user, password, stationName) {
+  const text = [
+    `Bonjour ${user.name}, voici votre accès à ${stationName || 'la station'} : ${location.origin}`,
+    `Identifiant : ${user.login}`,
+    password ? `Mot de passe : ${password}` : null,
+  ].filter(Boolean).join('\n');
+  const whatsapp = h(
+    'a',
+    { class: 'btn secondary', href: `https://wa.me/?text=${encodeURIComponent(text)}`, target: '_blank', rel: 'noopener' },
+    h('span', { class: 'logo-whatsapp', 'aria-hidden': 'true' }),
+    'WhatsApp',
+  );
+  return noticeDialog('Accès enregistré', [
+    h('p', {}, 'Identifiant : ', h('strong', {}, user.login), password ? [h('br'), 'Mot de passe : ', h('strong', {}, password)] : null),
+    h('div', { class: 'notice-share' }, buttonRow([whatsapp])),
+  ], { okLabel: 'Terminé', level: 'good', iconName: 'check' });
 }

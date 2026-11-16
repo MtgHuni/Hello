@@ -36,6 +36,8 @@ module.exports = function userRoutes(db, { mailer }) {
     const user = db.prepare(`${select} AND id = ?`).get(req.params.id);
     if (!user) fail(404, 'Utilisateur introuvable.');
     const name = str(req.body?.name, 'Le nom', { required: false, max: 100 }) ?? user.name;
+    const login = str(req.body?.login, "L'identifiant", { required: false, max: 100 }) ?? user.login;
+    if (login.toLowerCase() !== user.login.toLowerCase() && db.prepare('SELECT 1 FROM users WHERE login = ? AND id != ?').get(login, user.id)) fail(409, 'Cet identifiant est déjà utilisé.', 'duplicate');
     const role = req.body?.role ? oneOf(req.body.role, 'Le rôle', ROLES) : user.role;
     const active = bool(req.body?.active, !!user.active) ? 1 : 0;
     if (user.id === req.user.id && (!active || role !== user.role)) {
@@ -44,7 +46,7 @@ module.exports = function userRoutes(db, { mailer }) {
     const passwordHash = req.body?.password ? await hashPassword(checkPasswordStrength(req.body.password)) : null;
     const email = req.body?.email === undefined ? user.email : emailParam(req.body.email);
     const emailChanged = (email || null) !== (user.email || null);
-    db.prepare('UPDATE users SET name = ?, role = ?, active = ? WHERE id = ?').run(name, role, active, user.id);
+    db.prepare('UPDATE users SET name = ?, login = ?, role = ?, active = ? WHERE id = ?').run(name, login, role, active, user.id);
     if (passwordHash) db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, user.id);
     if (emailChanged) {
       db.prepare('UPDATE users SET email = ?, email_verified_at = NULL WHERE id = ?').run(email, user.id);
@@ -53,6 +55,7 @@ module.exports = function userRoutes(db, { mailer }) {
     if (passwordHash && user.id !== req.user.id) mailer.passwordChanged(user.id, req, { byAdmin: true });
     const changes = [
       name !== user.name ? `nom ${user.name} → ${name}` : null,
+      login !== user.login ? `identifiant ${user.login} → ${login}` : null,
       role !== user.role ? `${ROLE[user.role]} → ${ROLE[role]}` : null,
       active !== user.active ? (active ? 'réactivé' : 'désactivé') : null,
       passwordHash ? 'mot de passe réinitialisé' : null,
