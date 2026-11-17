@@ -2338,10 +2338,15 @@ test('tableau de bord : valeur de la station (argent, carburant payé au prix d�
   // Only the litres already paid count, at their purchase price; the supplier debt is no debt here.
   for (const t of v.tanks) {
     assert.strictEqual(round2(t.paid_liters + t.unpaid_liters), t.liters);
-    assert.ok(t.cost == null ? t.value === null : Math.abs(t.value - t.paid_liters * t.cost) < 0.011, `${t.name} : litres payés × prix d’achat`);
+    assert.ok(t.cost == null ? t.value === null : Math.abs(t.value - t.paid_liters * t.cost) < 0.011, `${t.name} : litres payés × prix d’achat ${JSON.stringify(t)}`);
   }
   assert.strictEqual(v.assets.fuel, round2(v.tanks.reduce((s, t) => s + (t.value || 0), 0)));
   assert.strictEqual(v.debts.suppliers, undefined);
+  // A tank's litres are those of its latest deliveries, at their own price, not the average since the start.
+  for (const t of v.tanks) {
+    const last = db.prepare('SELECT liters_received, unit_cost, payment FROM deliveries WHERE tank_id = ? ORDER BY id DESC LIMIT 1').get(t.id);
+    if (last?.unit_cost != null && last.payment !== 'credit' && last.liters_received >= t.liters && t.liters > 0) assert.strictEqual(t.cost, last.unit_cost, `${t.name} : prix de la dernière livraison`);
+  }
   if (dash.supplierDebt > 0) assert.ok(v.tanks.some((t) => t.unpaid_liters > 0), 'une dette fournisseur laisse des litres non payés');
   assert.strictEqual(v.net, round2(total(v.assets) - total(v.debts)));
   const value = async () => (await gerant('GET', '/api/dashboard')).data.value;
@@ -2382,8 +2387,13 @@ test('tableau de bord : valeur de la station (argent, carburant payé au prix d�
   after = await value();
   assert.strictEqual(after.assets.uncounted, round2(v.assets.uncounted + closed.expected_amount - closed.mobile_money));
   assert.strictEqual(after.assets.shift, 0, 'le nouveau poste commence à zéro');
-  const cost = v.tanks.find((t) => t.id === meters.find((m) => m.nozzleId === diesel.nozzle_id).tankId).cost ?? 0;
-  assert.ok(Math.abs(after.net - round2(v.net + 200 * diesel.unit_price - 200 * cost)) < 0.02, `${after.net} ≠ ${v.net} + 200 L`);
+  // The 200 L leave the tank's oldest litres: the fuel's value goes down by what they were worth.
+  const tankId = meters.find((m) => m.nozzleId === diesel.nozzle_id).tankId;
+  const [was, now] = [v.tanks.find((t) => t.id === tankId), after.tanks.find((t) => t.id === tankId)];
+  assert.strictEqual(round2(was.liters - now.liters), 200);
+  const fuelDrop = round2(v.assets.fuel - after.assets.fuel);
+  assert.ok(fuelDrop >= 0 && fuelDrop <= 200 * 2, `${fuelDrop} : 200 L au plus à leur prix d’achat`);
+  assert.ok(Math.abs(after.net - round2(v.net + 200 * diesel.unit_price - fuelDrop)) < 0.02, `${after.net} ≠ ${v.net} + 200 L`);
 });
 
 test('migration 33 : changement de prix pendant le poste', () => {

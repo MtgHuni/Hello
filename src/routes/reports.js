@@ -245,23 +245,46 @@ module.exports = function reportRoutes(db) {
     }
     // A closing without the money yet: the cash book only has its mobile money.
     const uncounted = db.prepare("SELECT COALESCE(SUM(expected_amount - COALESCE(mobile_money, 0)), 0) AS v FROM shifts WHERE status = 'closed' AND counted_at IS NULL").get().v;
-    // The litres not paid yet, per tank: what each credit delivery still owes (payments settle a
-    // supplier's oldest deliveries first), in proportion to its litres.
-    const unpaidLiters = new Map();
+    // The fuel in a tank is what its latest deliveries brought (the oldest litres go first), each at
+    // its own purchase price; a delivery on credit counts only for the share already paid (payments
+    // settle a supplier's oldest deliveries first). What is ours (2026-11-17, the user's choice): the
+    // money and these paid litres; the customers' credits and the supplier debt are not counted.
     const paidOf = deliveryPaid(db);
-    for (const d of db.prepare("SELECT id, tank_id, amount, liters_received FROM deliveries WHERE payment = 'credit' AND supplier IS NOT NULL AND amount > 0").all()) {
-      const owed = d.amount - (paidOf.get(d.id) || 0);
-      if (owed > 0.005) unpaidLiters.set(d.tank_id, (unpaidLiters.get(d.tank_id) || 0) + (d.liters_received * owed) / d.amount);
-    }
-    // What is ours (2026-11-17, the user's choice): the money and the fuel already paid, litre by litre.
-    // The customers' credits and the fuel still owed to the suppliers are not counted, and the supplier
-    // debt is no debt here.
     const fuel = tanks.map((t) => {
-      const cost = avgCost.get(t.product_id, today).cost;
       const liters = round(t.book_stock);
-      const unpaid = round(Math.min(Math.max(0, liters), unpaidLiters.get(t.id) || 0));
-      const paid = round(liters - unpaid);
-      return { id: t.id, name: t.name, product_id: t.product_id, product_name: t.product_name, liters, unpaid_liters: unpaid, paid_liters: paid, cost, value: cost == null ? null : round(paid * cost) };
+      const fallback = avgCost.get(t.product_id, today).cost;
+      // A stock below zero (sales counted before a delivery is entered): as it is, at the average price.
+      if (liters <= 0) return { id: t.id, name: t.name, product_id: t.product_id, product_name: t.product_name, liters, unpaid_liters: 0, paid_liters: liters, cost: fallback, value: fallback == null ? null : round(liters * fallback) };
+      let left = liters;
+      let paid = 0;
+      let value = 0;
+      let stockValue = 0; // all its litres, paid or not: the price shown when none is paid yet
+      let unknown = false;
+      for (const d of db.prepare('SELECT id, liters_received, unit_cost, amount, payment FROM deliveries WHERE tank_id = ? ORDER BY id DESC').all(t.id)) {
+        if (left <= 0.005) break;
+        const take = Math.min(left, d.liters_received);
+        const share = d.payment === 'credit' && d.amount > 0 ? Math.min(1, (paidOf.get(d.id) || 0) / d.amount) : 1;
+        const cost = d.unit_cost ?? fallback;
+        paid += take * share;
+        if (cost == null) unknown = true;
+        else {
+          value += take * share * cost;
+          stockValue += take * cost;
+        }
+        left -= take;
+      }
+      // Litres older than every delivery (the stock at the start): paid, at the average price.
+      if (left > 0.005) {
+        paid += left;
+        if (fallback == null) unknown = true;
+        else {
+          value += left * fallback;
+          stockValue += left * fallback;
+        }
+      }
+      paid = round(paid);
+      const cost = unknown ? null : paid > 0.005 ? value / paid : stockValue / liters;
+      return { id: t.id, name: t.name, product_id: t.product_id, product_name: t.product_name, liters, unpaid_liters: round(liters - paid), paid_liters: paid, cost, value: unknown ? null : round(value) };
     });
     const assets = {
       cash: cash.cash.balance,
