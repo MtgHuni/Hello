@@ -267,28 +267,11 @@ module.exports = function reportRoutes(db) {
     return { assets, debts, tanks: fuel, receivables: owed, net: round(sum(assets) - sum(debts)) };
   }
 
-  // The purchase price of what is in a tank: its latest deliveries (the oldest litres leave first), each
-  // at its own price (2026-11-17: not the average since the first delivery); litres older than every
-  // delivery at that average.
+  // The purchase price of a tank's fuel: the current one, its latest delivery's (2026-11-17, the user's
+  // choice), else the average of the deliveries priced.
   function tankCost(t, today) {
-    const fallback = avgCost.get(t.product_id, today).cost;
-    const liters = round(t.book_stock);
-    if (liters <= 0) return fallback;
-    let left = liters;
-    let value = 0;
-    for (const d of db.prepare('SELECT liters_received, unit_cost FROM deliveries WHERE tank_id = ? ORDER BY id DESC').all(t.id)) {
-      if (left <= 0.005) break;
-      const cost = d.unit_cost ?? fallback;
-      if (cost == null) return null;
-      const take = Math.min(left, d.liters_received);
-      value += take * cost;
-      left -= take;
-    }
-    if (left > 0.005) {
-      if (fallback == null) return null;
-      value += left * fallback;
-    }
-    return value / liters;
+    const last = db.prepare('SELECT unit_cost FROM deliveries WHERE tank_id = ? AND unit_cost IS NOT NULL ORDER BY id DESC LIMIT 1').get(t.id);
+    return last ? last.unit_cost : avgCost.get(t.product_id, today).cost;
   }
 
   router.get('/dashboard', manager, (req, res) => {
