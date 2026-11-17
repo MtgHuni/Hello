@@ -5,7 +5,6 @@ const { requireRole } = require('../auth');
 const { balanceSql, subscriberDues, creditAllocation } = require('../loyalty');
 const { ACCOUNTS, KINDS, balances, cashbook, supplierBalances } = require('../cashbook');
 const { attendantNamesSql, closingCutoff, currentPeriod, lastMeters } = require('../checkpoints');
-const { payroll, currentMonth } = require('../payroll');
 const { periodReportPdf } = require('../periodReport');
 const { withLiveStock } = require('../liveStock');
 const { pumpPriceSql } = require('../shiftPrices');
@@ -231,12 +230,13 @@ module.exports = function reportRoutes(db) {
     };
   }
 
-  // What the station is worth now: its money (both cash book balances, the money of the open shift and
-  // of the closed shifts not counted yet), the customers' credits and the fuel in the tanks at its purchase
-  // cost, less what it owes (suppliers, salaries still to pay, customers' advances, combos when they run).
+  // What is the station's own now: its money (both cash book balances, the money of the open shift and
+  // of the closed shifts not counted yet) and the litres in the tanks already paid, at their purchase
+  // cost, less what it owes (customers' advances, combos when they run); the salaries still to pay
+  // are left out too (2026-11-17, the user's choice).
   // The open shift brings into the cash book, at its closing, what it received and sold less the credits
   // and combos, plus the payments: its expenses have already left the cash book.
-  function stationValue({ settings, today, tanks, customers, combos, supplierDebt, cash, receivables: owed }) {
+  function stationValue({ settings, today, tanks, customers, combos, cash, receivables: owed }) {
     let shift = 0;
     for (const s of db.prepare("SELECT * FROM shifts WHERE status = 'open'").all()) {
       const readings = db.prepare('SELECT r.*, p.name AS product_name FROM shift_readings r JOIN products p ON p.id = r.product_id WHERE r.shift_id = ?').all(s.id);
@@ -245,26 +245,42 @@ module.exports = function reportRoutes(db) {
     }
     // A closing without the money yet: the cash book only has its mobile money.
     const uncounted = db.prepare("SELECT COALESCE(SUM(expected_amount - COALESCE(mobile_money, 0)), 0) AS v FROM shifts WHERE status = 'closed' AND counted_at IS NULL").get().v;
+    // The litres not paid yet, per tank: each supplier's debt sits on its latest credit deliveries
+    // (payments settle the oldest first), in proportion to each delivery's litres.
+    const unpaidLiters = new Map();
+    for (const sup of supplierBalances(db).filter((x) => x.balance > 0.005)) {
+      let left = sup.balance;
+      const list = db.prepare("SELECT tank_id, amount, liters_received FROM deliveries WHERE payment = 'credit' AND lower(trim(supplier)) = ? ORDER BY id DESC").all(sup.name.trim().toLowerCase());
+      for (const d of list) {
+        if (left <= 0.005) break;
+        const take = Math.min(left, d.amount);
+        if (d.amount > 0) unpaidLiters.set(d.tank_id, (unpaidLiters.get(d.tank_id) || 0) + (d.liters_received * take) / d.amount);
+        left -= take;
+      }
+    }
+    // What is ours (2026-11-17, the user's choice): the money and the fuel already paid, litre by litre.
+    // The customers' credits and the fuel still owed to the suppliers are not counted, and the supplier
+    // debt is no debt here.
     const fuel = tanks.map((t) => {
       const cost = avgCost.get(t.product_id, today).cost;
-      return { id: t.id, name: t.name, product_id: t.product_id, product_name: t.product_name, liters: round(t.book_stock), cost, value: cost == null ? null : round(t.book_stock * cost) };
+      const liters = round(t.book_stock);
+      const unpaid = round(Math.min(Math.max(0, liters), unpaidLiters.get(t.id) || 0));
+      const paid = round(liters - unpaid);
+      return { id: t.id, name: t.name, product_id: t.product_id, product_name: t.product_name, liters, unpaid_liters: unpaid, paid_liters: paid, cost, value: cost == null ? null : round(paid * cost) };
     });
     const assets = {
       cash: cash.cash.balance,
       momo: cash.momo.balance,
       shift: round(shift),
       uncounted: round(uncounted),
-      receivables: owed,
       fuel: round(fuel.reduce((t, f) => t + (f.value || 0), 0)),
     };
     const debts = {
-      suppliers: supplierDebt,
-      salaries: payroll(db, currentMonth(db)).totals.net,
       advances: round(customers.reduce((t, c) => t + Math.max(0, -c.balance), 0)),
       combos: settings.combosEnabled ? round(combos.total * settings.comboValue) : 0,
     };
     const sum = (o) => Object.values(o).reduce((t, x) => t + x, 0);
-    return { assets, debts, tanks: fuel, net: round(sum(assets) - sum(debts)) };
+    return { assets, debts, tanks: fuel, receivables: owed, net: round(sum(assets) - sum(debts)) };
   }
 
   router.get('/dashboard', manager, (req, res) => {
@@ -296,7 +312,7 @@ module.exports = function reportRoutes(db) {
       supplierDebt,
       receivables: owed.total,
       receivablesOld: owed.old,
-      value: stationValue({ settings, today, tanks, customers, combos, supplierDebt, cash, receivables: owed.total }),
+      value: stationValue({ settings, today, tanks, customers, combos, cash, receivables: owed.total }),
       toReview,
       combos: { total: combos.total, value: round(combos.total * settings.comboValue), redeemable: combos.redeemable },
       alerts: shown.visible,

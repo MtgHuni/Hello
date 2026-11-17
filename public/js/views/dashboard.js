@@ -131,8 +131,8 @@ function askCard(data) {
 
 
 
-// What the station is worth now, as one addition: its money, credits and fuel at purchase cost,
-// less what it owes, closed on a double rule.
+// What is the station's own now, as one addition: its money and the fuel already paid (the customers'
+// credits left out), less what it owes, closed on a double rule.
 function valueColumn(v, combos) {
   // Red means owed or a gap: what the station owes, money below zero, a missing purchase price.
   const line = (label, value, { total = false, lost = false, sub = null } = {}) =>
@@ -146,19 +146,21 @@ function valueColumn(v, combos) {
     { class: 'card value-col' },
     cardHeader('Valeur de la station'),
     h('h3', { class: 'form-section' }, 'Ce qu’elle possède'),
-    own('Espèces (caisse)', a.cash),
+    // The customers' advances are theirs: taken off the cash, the addition shown under it (2026-11-17, the user's choice).
+    d.advances > 0.005
+      ? line('Espèces (caisse)', fmt.money(a.cash - d.advances), { lost: a.cash - d.advances < 0, sub: `${fmt.money(a.cash)} − ${fmt.money(d.advances)} d’avances des clients` })
+      : own('Espèces (caisse)', a.cash),
     own('Mobile money', a.momo),
     own('Argent du poste en cours', a.shift),
     Math.abs(a.uncounted) >= 0.005 ? own('Argent à compter', a.uncounted) : null,
-    own('Crédits clients', a.receivables),
+    // Only the litres already paid; the rest of the stock is the supplier's until it is paid.
     v.tanks.map((t) =>
-      line(t.name, t.value == null ? 'prix d’achat manquant' : fmt.money(t.value), { lost: t.value == null, sub: `${fmt.liters(t.liters)}${t.cost == null ? '' : ` × ${fmt.price(t.cost)}`}` }),
+      line(t.name, t.value == null ? 'prix d’achat manquant' : fmt.money(t.value), {
+        lost: t.value == null,
+        sub: `${t.unpaid_liters > 0.005 ? `${fmt.liters(t.paid_liters)} payés sur ${fmt.liters(t.liters)}` : fmt.liters(t.liters)}${t.cost == null ? '' : ` × ${fmt.price(t.cost)}`}`,
+      }),
     ),
-    h('h3', { class: 'form-section' }, 'Ce qu’elle doit'),
-    owe('Fournisseurs', d.suppliers),
-    owe('Salaires à payer', d.salaries),
-    owe('Avances des clients', d.advances),
-    combos ? owe('Combos des clients', d.combos) : null,
+    combos ? [h('h3', { class: 'form-section' }, 'Ce qu’elle doit'), owe('Combos des clients', d.combos)] : null,
     line('Valeur nette', fmt.money(v.net), { total: true, lost: v.net < 0 }),
   );
 }

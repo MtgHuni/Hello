@@ -462,6 +462,13 @@ test('administrateur : seul à modifier les réglages et la caisse ; le gérant 
   assert.strictEqual((await chef('POST', '/api/cashbook/counts', { account: 'cash', counted: 10 })).status, 403);
   assert.strictEqual((await chef('PUT', `/api/products/${ctx.diesel.id}`, { price: 9 })).status, 403, 'les prix');
   assert.strictEqual((await chef('POST', '/api/users', { name: 'X', login: 'x', password: 'motdepasse9', role: 'manager' })).status, 403, 'l’équipe');
+  // The admin changes a member's login: a taken one is refused, the new one signs in.
+  const chefUser = (await gerant('GET', '/api/users')).data.find((u) => u.login === 'chef');
+  assert.strictEqual((await gerant('PUT', `/api/users/${chefUser.id}`, { login: 'PAUL' })).data.code, 'duplicate');
+  assert.strictEqual((await gerant('PUT', `/api/users/${chefUser.id}`, { login: 'chef2' })).data.login, 'chef2');
+  const chef2 = client();
+  assert.strictEqual((await chef2('POST', '/api/auth/login', { login: 'chef2', password: 'gerant123' })).status, 200);
+  assert.strictEqual((await gerant('PUT', `/api/users/${chefUser.id}`, { login: 'chef' })).status, 200);
   assert.strictEqual((await chef('GET', '/api/shifts')).status, 200, 'le reste du travail du gérant');
 });
 
@@ -2293,33 +2300,39 @@ test('les mails : le logo MTG sans la bande verte et rouge', () => {
   assert.ok(!/#23c46b|#f0313a/i.test(html), 'ni vert gasoil ni rouge essence');
 });
 
-test('tableau de bord : valeur de la station (argent, crédits, carburant au prix d’achat, moins ce qu’elle doit)', async () => {
+test('tableau de bord : valeur de la station (argent, carburant payé au prix d’achat, moins ce qu’elle doit)', async () => {
   // The deduction tests aged credits of the open shift; a real shift's sales are never older than its opening.
   db.prepare("UPDATE sales SET created_at = (SELECT opened_at FROM shifts WHERE id = sales.shift_id) WHERE shift_id IN (SELECT id FROM shifts WHERE status = 'open') AND created_at < (SELECT opened_at FROM shifts WHERE id = sales.shift_id)").run();
   const total = (o) => round2(Object.values(o).reduce((t, x) => t + (x || 0), 0));
-  const salaries = (await gerant('GET', '/api/staff')).data.totals.net;
   const dash = (await gerant('GET', '/api/dashboard')).data;
   assert.strictEqual(dash.todayTotal, undefined, 'plus de ventes du jour');
   let v = dash.value;
   assert.strictEqual(v.assets.cash, dash.cash.cash.balance);
   assert.strictEqual(v.assets.momo, dash.cash.momo.balance);
-  assert.strictEqual(v.assets.receivables, dash.receivables);
-  assert.strictEqual(v.debts.suppliers, dash.supplierDebt);
-  assert.strictEqual(v.debts.salaries, salaries);
+  assert.strictEqual(v.assets.receivables, undefined, 'les crédits clients ne comptent pas');
+  assert.strictEqual(v.receivables, dash.receivables);
+  assert.strictEqual(v.debts.salaries, undefined, 'les salaires à payer ne comptent pas');
   assert.ok(v.tanks.length);
-  for (const t of v.tanks) assert.ok(t.cost == null ? t.value === null : Math.abs(t.value - t.liters * t.cost) < 0.011, `${t.name} : litres × prix d’achat`);
+  // Only the litres already paid count, at their purchase price; the supplier debt is no debt here.
+  for (const t of v.tanks) {
+    assert.strictEqual(round2(t.paid_liters + t.unpaid_liters), t.liters);
+    assert.ok(t.cost == null ? t.value === null : Math.abs(t.value - t.paid_liters * t.cost) < 0.011, `${t.name} : litres payés × prix d’achat`);
+  }
   assert.strictEqual(v.assets.fuel, round2(v.tanks.reduce((s, t) => s + (t.value || 0), 0)));
+  assert.strictEqual(v.debts.suppliers, undefined);
+  if (dash.supplierDebt > 0) assert.ok(v.tanks.some((t) => t.unpaid_liters > 0), 'une dette fournisseur laisse des litres non payés');
   assert.strictEqual(v.net, round2(total(v.assets) - total(v.debts)));
   const value = async () => (await gerant('GET', '/api/dashboard')).data.value;
 
-  // A credit: the shift's money goes down, the credits up; the value stays.
+  // A credit: the shift's money goes down; the customers' credits are not ours yet, the value goes down.
   const shift = (await gerant('GET', '/api/shifts/current')).data;
   const c = (await gerant('POST', '/api/customers/quick', { name: 'Client Valeur' })).data;
   assert.strictEqual((await gerant('POST', `/api/shifts/${shift.id}/sales`, { customerId: c.id, productId: ctx.diesel.id, payment: 'credit', amount: 10 })).status, 201);
   let after = await value();
   assert.strictEqual(after.assets.shift, round2(v.assets.shift - 10));
-  assert.strictEqual(after.assets.receivables, round2(v.assets.receivables + 10));
-  assert.strictEqual(after.net, v.net);
+  assert.strictEqual(after.assets.receivables, undefined);
+  assert.strictEqual(after.receivables, round2(v.receivables + 10));
+  assert.strictEqual(after.net, round2(v.net - 10));
   // An expense: the value goes down by it.
   [v, after] = [after, null];
   assert.strictEqual((await gerant('POST', `/api/shifts/${shift.id}/expenses`, { category: 'Fournitures', amount: 3, description: 'Chiffons' })).status, 201);
