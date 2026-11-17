@@ -3,10 +3,11 @@ const { getSettings, SUPPLIER_PAYMENT } = require('../db');
 const { round, dateParam, fail, csvCell, money, transaction } = require('../util');
 const { requireRole } = require('../auth');
 const { balanceSql, subscriberDues, creditAllocation } = require('../loyalty');
-const { ACCOUNTS, KINDS, balances, cashbook, supplierBalances, deliveryPaid } = require('../cashbook');
+const { ACCOUNTS, KINDS, balances, cashbook, supplierBalances } = require('../cashbook');
 const { attendantNamesSql, closingCutoff, currentPeriod, lastMeters } = require('../checkpoints');
 const { periodReportPdf } = require('../periodReport');
 const { withLiveStock } = require('../liveStock');
+const { payroll, currentMonth } = require('../payroll');
 const { pumpPriceSql } = require('../shiftPrices');
 const { ALERT_TYPES, userAlerts } = require('../alerts');
 const { mailUsage } = require('../mail');
@@ -230,13 +231,13 @@ module.exports = function reportRoutes(db) {
     };
   }
 
-  // What is the station's own now: its money (both cash book balances, the money of the open shift and
-  // of the closed shifts not counted yet) and the litres in the tanks already paid, at their purchase
-  // cost, less what it owes (customers' advances, combos when they run); the salaries still to pay
-  // are left out too (2026-11-17, the user's choice).
-  // The open shift brings into the cash book, at its closing, what it received and sold less the credits
-  // and combos, plus the payments: its expenses have already left the cash book.
-  function stationValue({ settings, today, tanks, customers, combos, cash, receivables: owed }) {
+  // What the station is worth now: its money (both cash book balances, the money of the open shift and
+  // of the closed shifts not counted yet) and the fuel in the tanks at its purchase cost, less what it
+  // owes (suppliers, salaries still to pay, customers' advances, combos when they run). The customers'
+  // credits are left out (2026-11-17, the user's choice). The open shift brings into the cash book, at
+  // its closing, what it received and sold less the credits and combos, plus the payments: its expenses
+  // have already left the cash book.
+  function stationValue({ settings, today, tanks, customers, combos, supplierDebt, cash, receivables: owed }) {
     let shift = 0;
     for (const s of db.prepare("SELECT * FROM shifts WHERE status = 'open'").all()) {
       const readings = db.prepare('SELECT r.*, p.name AS product_name FROM shift_readings r JOIN products p ON p.id = r.product_id WHERE r.shift_id = ?').all(s.id);
@@ -245,46 +246,9 @@ module.exports = function reportRoutes(db) {
     }
     // A closing without the money yet: the cash book only has its mobile money.
     const uncounted = db.prepare("SELECT COALESCE(SUM(expected_amount - COALESCE(mobile_money, 0)), 0) AS v FROM shifts WHERE status = 'closed' AND counted_at IS NULL").get().v;
-    // The fuel in a tank is what its latest deliveries brought (the oldest litres go first), each at
-    // its own purchase price; a delivery on credit counts only for the share already paid (payments
-    // settle a supplier's oldest deliveries first). What is ours (2026-11-17, the user's choice): the
-    // money and these paid litres; the customers' credits and the supplier debt are not counted.
-    const paidOf = deliveryPaid(db);
     const fuel = tanks.map((t) => {
-      const liters = round(t.book_stock);
-      const fallback = avgCost.get(t.product_id, today).cost;
-      // A stock below zero (sales counted before a delivery is entered): as it is, at the average price.
-      if (liters <= 0) return { id: t.id, name: t.name, product_id: t.product_id, product_name: t.product_name, liters, unpaid_liters: 0, paid_liters: liters, cost: fallback, value: fallback == null ? null : round(liters * fallback) };
-      let left = liters;
-      let paid = 0;
-      let value = 0;
-      let stockValue = 0; // all its litres, paid or not: the price shown when none is paid yet
-      let unknown = false;
-      for (const d of db.prepare('SELECT id, liters_received, unit_cost, amount, payment FROM deliveries WHERE tank_id = ? ORDER BY id DESC').all(t.id)) {
-        if (left <= 0.005) break;
-        const take = Math.min(left, d.liters_received);
-        const share = d.payment === 'credit' && d.amount > 0 ? Math.min(1, (paidOf.get(d.id) || 0) / d.amount) : 1;
-        const cost = d.unit_cost ?? fallback;
-        paid += take * share;
-        if (cost == null) unknown = true;
-        else {
-          value += take * share * cost;
-          stockValue += take * cost;
-        }
-        left -= take;
-      }
-      // Litres older than every delivery (the stock at the start): paid, at the average price.
-      if (left > 0.005) {
-        paid += left;
-        if (fallback == null) unknown = true;
-        else {
-          value += left * fallback;
-          stockValue += left * fallback;
-        }
-      }
-      paid = round(paid);
-      const cost = unknown ? null : paid > 0.005 ? value / paid : stockValue / liters;
-      return { id: t.id, name: t.name, product_id: t.product_id, product_name: t.product_name, liters, unpaid_liters: round(liters - paid), paid_liters: paid, cost, value: unknown ? null : round(value) };
+      const cost = tankCost(t, today);
+      return { id: t.id, name: t.name, product_id: t.product_id, product_name: t.product_name, liters: round(t.book_stock), cost, value: cost == null ? null : round(t.book_stock * cost) };
     });
     const assets = {
       cash: cash.cash.balance,
@@ -294,11 +258,37 @@ module.exports = function reportRoutes(db) {
       fuel: round(fuel.reduce((t, f) => t + (f.value || 0), 0)),
     };
     const debts = {
+      suppliers: supplierDebt,
+      salaries: payroll(db, currentMonth(db)).totals.net,
       advances: round(customers.reduce((t, c) => t + Math.max(0, -c.balance), 0)),
       combos: settings.combosEnabled ? round(combos.total * settings.comboValue) : 0,
     };
     const sum = (o) => Object.values(o).reduce((t, x) => t + x, 0);
     return { assets, debts, tanks: fuel, receivables: owed, net: round(sum(assets) - sum(debts)) };
+  }
+
+  // The purchase price of what is in a tank: its latest deliveries (the oldest litres leave first), each
+  // at its own price (2026-11-17: not the average since the first delivery); litres older than every
+  // delivery at that average.
+  function tankCost(t, today) {
+    const fallback = avgCost.get(t.product_id, today).cost;
+    const liters = round(t.book_stock);
+    if (liters <= 0) return fallback;
+    let left = liters;
+    let value = 0;
+    for (const d of db.prepare('SELECT liters_received, unit_cost FROM deliveries WHERE tank_id = ? ORDER BY id DESC').all(t.id)) {
+      if (left <= 0.005) break;
+      const cost = d.unit_cost ?? fallback;
+      if (cost == null) return null;
+      const take = Math.min(left, d.liters_received);
+      value += take * cost;
+      left -= take;
+    }
+    if (left > 0.005) {
+      if (fallback == null) return null;
+      value += left * fallback;
+    }
+    return value / liters;
   }
 
   router.get('/dashboard', manager, (req, res) => {
@@ -330,7 +320,7 @@ module.exports = function reportRoutes(db) {
       supplierDebt,
       receivables: owed.total,
       receivablesOld: owed.old,
-      value: stationValue({ settings, today, tanks, customers, combos, cash, receivables: owed.total }),
+      value: stationValue({ settings, today, tanks, customers, combos, supplierDebt, cash, receivables: owed.total }),
       toReview,
       combos: { total: combos.total, value: round(combos.total * settings.comboValue), redeemable: combos.redeemable },
       alerts: shown.visible,

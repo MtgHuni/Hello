@@ -2328,10 +2328,11 @@ test('les mails : le logo MTG sans la bande verte et rouge', () => {
   assert.ok(!/#23c46b|#f0313a/i.test(html), 'ni vert gasoil ni rouge essence');
 });
 
-test('tableau de bord : valeur de la station (argent, carburant payé au prix d’achat, moins ce qu’elle doit)', async () => {
+test('tableau de bord : valeur de la station (argent, carburant au prix d’achat, moins ce qu’elle doit, sans les crédits clients)', async () => {
   // The deduction tests aged credits of the open shift; a real shift's sales are never older than its opening.
   db.prepare("UPDATE sales SET created_at = (SELECT opened_at FROM shifts WHERE id = sales.shift_id) WHERE shift_id IN (SELECT id FROM shifts WHERE status = 'open') AND created_at < (SELECT opened_at FROM shifts WHERE id = sales.shift_id)").run();
   const total = (o) => round2(Object.values(o).reduce((t, x) => t + (x || 0), 0));
+  const salaries = (await gerant('GET', '/api/staff')).data.totals.net;
   const dash = (await gerant('GET', '/api/dashboard')).data;
   assert.strictEqual(dash.todayTotal, undefined, 'plus de ventes du jour');
   let v = dash.value;
@@ -2339,21 +2340,16 @@ test('tableau de bord : valeur de la station (argent, carburant payé au prix d�
   assert.strictEqual(v.assets.momo, dash.cash.momo.balance);
   assert.strictEqual(v.assets.receivables, undefined, 'les crédits clients ne comptent pas');
   assert.strictEqual(v.receivables, dash.receivables);
-  assert.strictEqual(v.debts.salaries, undefined, 'les salaires à payer ne comptent pas');
+  assert.strictEqual(v.debts.suppliers, dash.supplierDebt);
+  assert.strictEqual(v.debts.salaries, salaries);
   assert.ok(v.tanks.length);
-  // Only the litres already paid count, at their purchase price; the supplier debt is no debt here.
-  for (const t of v.tanks) {
-    assert.strictEqual(round2(t.paid_liters + t.unpaid_liters), t.liters);
-    assert.ok(t.cost == null ? t.value === null : Math.abs(t.value - t.paid_liters * t.cost) < 0.011, `${t.name} : litres payés × prix d’achat ${JSON.stringify(t)}`);
-  }
+  for (const t of v.tanks) assert.ok(t.cost == null ? t.value === null : Math.abs(t.value - t.liters * t.cost) < 0.011, `${t.name} : litres × prix d’achat`);
   assert.strictEqual(v.assets.fuel, round2(v.tanks.reduce((s, t) => s + (t.value || 0), 0)));
-  assert.strictEqual(v.debts.suppliers, undefined);
   // A tank's litres are those of its latest deliveries, at their own price, not the average since the start.
   for (const t of v.tanks) {
-    const last = db.prepare('SELECT liters_received, unit_cost, payment FROM deliveries WHERE tank_id = ? ORDER BY id DESC LIMIT 1').get(t.id);
-    if (last?.unit_cost != null && last.payment !== 'credit' && last.liters_received >= t.liters && t.liters > 0) assert.strictEqual(t.cost, last.unit_cost, `${t.name} : prix de la dernière livraison`);
+    const last = db.prepare('SELECT liters_received, unit_cost FROM deliveries WHERE tank_id = ? ORDER BY id DESC LIMIT 1').get(t.id);
+    if (last?.unit_cost != null && last.liters_received >= t.liters && t.liters > 0) assert.ok(Math.abs(t.cost - last.unit_cost) < 1e-9, `${t.name} : prix de la dernière livraison`);
   }
-  if (dash.supplierDebt > 0) assert.ok(v.tanks.some((t) => t.unpaid_liters > 0), 'une dette fournisseur laisse des litres non payés');
   assert.strictEqual(v.net, round2(total(v.assets) - total(v.debts)));
   const value = async () => (await gerant('GET', '/api/dashboard')).data.value;
 
