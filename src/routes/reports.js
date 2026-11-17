@@ -3,7 +3,7 @@ const { getSettings, SUPPLIER_PAYMENT } = require('../db');
 const { round, dateParam, fail, csvCell, money, transaction } = require('../util');
 const { requireRole } = require('../auth');
 const { balanceSql, subscriberDues, creditAllocation } = require('../loyalty');
-const { ACCOUNTS, KINDS, balances, cashbook, supplierBalances } = require('../cashbook');
+const { ACCOUNTS, KINDS, balances, cashbook, supplierBalances, deliveryPaid } = require('../cashbook');
 const { attendantNamesSql, closingCutoff, currentPeriod, lastMeters } = require('../checkpoints');
 const { periodReportPdf } = require('../periodReport');
 const { withLiveStock } = require('../liveStock');
@@ -245,28 +245,46 @@ module.exports = function reportRoutes(db) {
     }
     // A closing without the money yet: the cash book only has its mobile money.
     const uncounted = db.prepare("SELECT COALESCE(SUM(expected_amount - COALESCE(mobile_money, 0)), 0) AS v FROM shifts WHERE status = 'closed' AND counted_at IS NULL").get().v;
-    // The litres not paid yet, per tank: each supplier's debt sits on its latest credit deliveries
-    // (payments settle the oldest first), in proportion to each delivery's litres.
-    const unpaidLiters = new Map();
-    for (const sup of supplierBalances(db).filter((x) => x.balance > 0.005)) {
-      let left = sup.balance;
-      const list = db.prepare("SELECT tank_id, amount, liters_received FROM deliveries WHERE payment = 'credit' AND lower(trim(supplier)) = ? ORDER BY id DESC").all(sup.name.trim().toLowerCase());
-      for (const d of list) {
+    // The fuel in a tank is what its latest deliveries brought (the oldest litres go first), each at
+    // its own purchase price; a delivery on credit counts only for the share already paid (payments
+    // settle a supplier's oldest deliveries first). What is ours (2026-11-17, the user's choice): the
+    // money and these paid litres; the customers' credits and the supplier debt are not counted.
+    const paidOf = deliveryPaid(db);
+    const fuel = tanks.map((t) => {
+      const liters = round(t.book_stock);
+      const fallback = avgCost.get(t.product_id, today).cost;
+      // A stock below zero (sales counted before a delivery is entered): as it is, at the average price.
+      if (liters <= 0) return { id: t.id, name: t.name, product_id: t.product_id, product_name: t.product_name, liters, unpaid_liters: 0, paid_liters: liters, cost: fallback, value: fallback == null ? null : round(liters * fallback) };
+      let left = liters;
+      let paid = 0;
+      let value = 0;
+      let stockValue = 0; // all its litres, paid or not: the price shown when none is paid yet
+      let unknown = false;
+      for (const d of db.prepare('SELECT id, liters_received, unit_cost, amount, payment FROM deliveries WHERE tank_id = ? ORDER BY id DESC').all(t.id)) {
         if (left <= 0.005) break;
-        const take = Math.min(left, d.amount);
-        if (d.amount > 0) unpaidLiters.set(d.tank_id, (unpaidLiters.get(d.tank_id) || 0) + (d.liters_received * take) / d.amount);
+        const take = Math.min(left, d.liters_received);
+        const share = d.payment === 'credit' && d.amount > 0 ? Math.min(1, (paidOf.get(d.id) || 0) / d.amount) : 1;
+        const cost = d.unit_cost ?? fallback;
+        paid += take * share;
+        if (cost == null) unknown = true;
+        else {
+          value += take * share * cost;
+          stockValue += take * cost;
+        }
         left -= take;
       }
-    }
-    // What is ours (2026-11-17, the user's choice): the money and the fuel already paid, litre by litre.
-    // The customers' credits and the fuel still owed to the suppliers are not counted, and the supplier
-    // debt is no debt here.
-    const fuel = tanks.map((t) => {
-      const cost = avgCost.get(t.product_id, today).cost;
-      const liters = round(t.book_stock);
-      const unpaid = round(Math.min(Math.max(0, liters), unpaidLiters.get(t.id) || 0));
-      const paid = round(liters - unpaid);
-      return { id: t.id, name: t.name, product_id: t.product_id, product_name: t.product_name, liters, unpaid_liters: unpaid, paid_liters: paid, cost, value: cost == null ? null : round(paid * cost) };
+      // Litres older than every delivery (the stock at the start): paid, at the average price.
+      if (left > 0.005) {
+        paid += left;
+        if (fallback == null) unknown = true;
+        else {
+          value += left * fallback;
+          stockValue += left * fallback;
+        }
+      }
+      paid = round(paid);
+      const cost = unknown ? null : paid > 0.005 ? value / paid : stockValue / liters;
+      return { id: t.id, name: t.name, product_id: t.product_id, product_name: t.product_name, liters, unpaid_liters: round(liters - paid), paid_liters: paid, cost, value: unknown ? null : round(value) };
     });
     const assets = {
       cash: cash.cash.balance,
@@ -433,13 +451,15 @@ module.exports = function reportRoutes(db) {
       .get(from, to).total;
 
 
+    // A supplier's payment is no expense (2026-11-17, the user's choice: followed in Cuves): apart.
     const expensesByCategory = db
       .prepare(
         `SELECT category, ROUND(SUM(amount), 2) AS amount, COUNT(*) AS count
-         FROM expenses WHERE expense_date BETWEEN ? AND ? GROUP BY category ORDER BY amount DESC`,
+         FROM expenses WHERE expense_date BETWEEN ? AND ? AND category != ? GROUP BY category ORDER BY amount DESC`,
       )
-      .all(from, to);
+      .all(from, to, SUPPLIER_PAYMENT);
     const expenses = round(expensesByCategory.reduce((t, e) => t + e.amount, 0));
+    const supplierPaid = db.prepare('SELECT ROUND(COALESCE(SUM(amount), 0), 2) AS v FROM expenses WHERE expense_date BETWEEN ? AND ? AND category = ?').get(from, to, SUPPLIER_PAYMENT).v;
 
     // Estimated gross margin: litres sold × (selling price − weighted average purchase cost),
     // the cost coming from deliveries recorded with a purchase price up to the end of the period.
@@ -464,16 +484,25 @@ module.exports = function reportRoutes(db) {
       )
       .all(from, to);
 
+    // Every payment to a supplier over the period, however paid: shown apart from the expenses.
+    const supplierPayments = [
+      ...db.prepare("SELECT created_at, supplier, amount, CASE method WHEN 'mobile money' THEN 'Mobile money' ELSE 'Caisse' END AS paid_with FROM supplier_payments WHERE date(created_at, 'localtime') BETWEEN ? AND ?").all(from, to),
+      ...db
+        .prepare("SELECT created_at, beneficiary AS supplier, amount, CASE WHEN shift_id IS NOT NULL THEN 'Argent du poste n°' || shift_id WHEN method = 'mobile money' THEN 'Mobile money' ELSE 'Caisse' END AS paid_with FROM expenses WHERE expense_date BETWEEN ? AND ? AND category = ?")
+        .all(from, to, SUPPLIER_PAYMENT),
+    ].sort((a, b) => a.created_at.localeCompare(b.created_at));
+
     return {
       from,
       to,
       // A supplier paid by an expense (a delivery or its debt) is fuel already in the cost of sales.
-      totals: { ...money, payments, expenses, grossMargin, net: round(grossMargin - expenses + (expensesByCategory.find((e) => e.category === SUPPLIER_PAYMENT)?.amount || 0)), costKnown, costOfSales: round(costOfSales) },
+      totals: { ...money, payments, expenses, grossMargin, net: round(grossMargin - expenses), supplierPaid, costKnown, costOfSales: round(costOfSales) },
       byDay,
       byProduct,
       byAttendant,
       deliveries,
       expensesByCategory,
+      supplierPayments,
       shifts,
       stock: stockMovements(from, to),
     };
@@ -558,7 +587,7 @@ module.exports = function reportRoutes(db) {
   function profitCheck(r, from, to) {
     const t = r.totals;
     const tolerance = getSettings(db).cashTolerance;
-    const supplierPaid = r.expensesByCategory.find((e) => e.category === SUPPLIER_PAYMENT)?.amount || 0;
+    const supplierPaid = t.supplierPaid || 0;
     const sumOf = (list, key) => round(list.reduce((a, x) => a + (x[key] || 0), 0));
 
     const counted = r.shifts.filter((s) => s.variance != null);
@@ -630,13 +659,13 @@ module.exports = function reportRoutes(db) {
     const counts = { key: 'comptages', label: 'Caisse comptée contre le livre de caisse', amount: sumOf(countLines, 'amount'), count: countLines.length, lines: countLines };
 
     const gaps = [cash, tanks, deliveries, counts];
-    const expected = t.costKnown ? round(t.grossMargin - t.expenses + supplierPaid) : null;
+    const expected = t.costKnown ? round(t.grossMargin - t.expenses) : null;
     const gapTotal = gaps.some((g) => g.amount == null) ? null : round(gaps.reduce((a, g) => a + g.amount, 0));
     return {
       sales: t.amount,
       costOfSales: t.costKnown ? t.costOfSales : null,
       grossMargin: t.costKnown ? t.grossMargin : null,
-      expenses: round(t.expenses - supplierPaid),
+      expenses: t.expenses,
       supplierPaid: round(supplierPaid),
       expected,
       gaps,
@@ -663,15 +692,21 @@ module.exports = function reportRoutes(db) {
       .prepare(`SELECT pa.created_at AS at, c.name AS customer, pa.amount, pa.method, pa.shift_id AS shift FROM payments pa LEFT JOIN customers c ON c.id = pa.customer_id WHERE date(pa.created_at, 'localtime') BETWEEN ? AND ? ORDER BY pa.created_at, pa.id`)
       .all(from, to);
     const expenses = db
-      .prepare('SELECT expense_date AS day, category, description, beneficiary, amount, method, shift_id AS shift FROM expenses WHERE expense_date BETWEEN ? AND ? ORDER BY expense_date, id')
-      .all(from, to);
+      .prepare('SELECT expense_date AS day, category, description, beneficiary, amount, method, shift_id AS shift FROM expenses WHERE expense_date BETWEEN ? AND ? AND category != ? ORDER BY expense_date, id')
+      .all(from, to, SUPPLIER_PAYMENT);
     const deliveries = db
       .prepare(
         `SELECT d.created_at AS at, t.name AS tank, d.supplier, d.liters_ordered AS ordered, d.liters_received AS received, d.unit_cost, d.amount, d.payment
          FROM deliveries d JOIN tanks t ON t.id = d.tank_id WHERE date(d.created_at, 'localtime') BETWEEN ? AND ? ORDER BY d.created_at`,
       )
       .all(from, to);
-    const supplierPayments = db.prepare(`SELECT created_at AS at, supplier, amount, method FROM supplier_payments WHERE ${at} ORDER BY created_at, id`).all(from, to);
+    // A supplier's payments: from the till or the mobile money, and those made with a shift's money.
+    const supplierPayments = [
+      ...db.prepare(`SELECT created_at AS at, supplier, amount, method FROM supplier_payments WHERE ${at}`).all(from, to),
+      ...db
+        .prepare("SELECT created_at AS at, beneficiary AS supplier, amount, CASE WHEN shift_id IS NULL THEN method ELSE 'argent du poste n°' || shift_id END AS method FROM expenses WHERE expense_date BETWEEN ? AND ? AND category = ?")
+        .all(from, to, SUPPLIER_PAYMENT),
+    ].sort((a, b) => a.at.localeCompare(b.at));
     const manual = db
       .prepare(`SELECT kind, account, ROUND(SUM(amount), 2) AS amount, COUNT(*) AS count FROM cash_movements WHERE kind != 'opening' AND ${at} GROUP BY kind, account ORDER BY kind, account`)
       .all(from, to)

@@ -4,6 +4,7 @@ const { requireRole } = require('../auth');
 const { audit } = require('../audit');
 const { openMeters, soldByTank } = require('../liveStock');
 const { SUPPLIER_PAYMENT } = require('../db');
+const { deliveryPaid, withPaid } = require('../cashbook');
 
 const manager = requireRole('manager');
 
@@ -106,7 +107,8 @@ module.exports = function stockRoutes(db) {
            WHERE (? IS NULL OR d.tank_id = ?)
            ORDER BY d.id DESC LIMIT 200`,
         )
-        .all(req.query.tankId ?? null, req.query.tankId ?? null),
+        .all(req.query.tankId ?? null, req.query.tankId ?? null)
+        .map(withPaid(deliveryPaid(db))),
     );
   });
 

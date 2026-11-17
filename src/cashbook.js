@@ -288,7 +288,8 @@ function supplierDetail(db, name) {
         `SELECT d.id, d.created_at, t.name AS tank, d.liters_received, d.amount, d.payment
          FROM deliveries d JOIN tanks t ON t.id = d.tank_id WHERE lower(trim(d.supplier)) = ? ORDER BY d.id DESC`,
       )
-      .all(key),
+      .all(key)
+      .map(withPaid(deliveryPaid(db))),
     payments: [
       ...db.prepare(`SELECT id, created_at, amount, method FROM supplier_payments WHERE ${same}`).all(key),
       ...supplierExpenses(db)
@@ -298,4 +299,19 @@ function supplierDetail(db, name) {
   };
 }
 
-module.exports = { ACCOUNTS, ACCOUNT_OF_METHOD, KINDS, shiftSign, cashbook, balances, supplierBalances, supplierDetail, supplierExpenses, supplierOf, checkSupplierPayment };
+// What each delivery on credit has been paid: a supplier's payments settle its oldest credit deliveries
+// first (Cuves shows « Payée », « Reste … » or « À crédit »; the station's value counts the litres paid).
+const withPaid = (paid) => (d) => (d.payment === 'credit' ? { ...d, paid: paid.get(d.id) ?? 0 } : d);
+function deliveryPaid(db) {
+  const left = new Map(supplierBalances(db).map((s) => [s.name.trim().toLowerCase(), s.paid]));
+  const paid = new Map();
+  for (const d of db.prepare("SELECT id, supplier, amount FROM deliveries WHERE payment = 'credit' AND supplier IS NOT NULL ORDER BY id").all()) {
+    const key = d.supplier.trim().toLowerCase();
+    const take = Math.max(0, Math.min(left.get(key) || 0, d.amount));
+    paid.set(d.id, round(take));
+    left.set(key, (left.get(key) || 0) - take);
+  }
+  return paid;
+}
+
+module.exports = { ACCOUNTS, ACCOUNT_OF_METHOD, KINDS, shiftSign, cashbook, balances, supplierBalances, supplierDetail, supplierExpenses, supplierOf, checkSupplierPayment, deliveryPaid, withPaid };

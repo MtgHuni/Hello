@@ -37,10 +37,10 @@ module.exports = function expenseRoutes(db) {
     const rows = db
       .prepare(
         `${select}
-         WHERE (? IS NULL OR e.expense_date >= ?) AND (? IS NULL OR e.expense_date <= ?)
+         WHERE (? IS NULL OR e.expense_date >= ?) AND (? IS NULL OR e.expense_date <= ?) AND e.category != ?
          ORDER BY e.expense_date DESC, e.id DESC LIMIT 1000`,
       )
-      .all(from, from, to, to);
+      .all(from, from, to, to, SUPPLIER_PAYMENT); // a supplier's payments are followed in Cuves
 
     if (req.query.format === 'csv') {
       const cell = csvCell;

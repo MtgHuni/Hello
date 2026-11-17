@@ -129,6 +129,21 @@ function periodReportPdf(r, { stationName, cashTolerance = 0, combosEnabled, now
     { empty: 'Aucune dépense sur la période.', totals: r.expensesByCategory.length ? [['Total', '', money(t.expenses)]] : [] },
   );
 
+  // ---- A supplier's payments, apart from the expenses ----
+  if (r.supplierPayments) {
+    report.section('Paiements fournisseurs');
+    report.table(
+      [
+        { label: 'DATE', width: 110 },
+        { label: 'FOURNISSEUR', width: 160 },
+        { label: 'PAYÉ AVEC', width: 150 },
+        { label: 'MONTANT', align: 'right' },
+      ],
+      r.supplierPayments.map((p) => [fmt.dateTime(p.created_at), p.supplier, p.paid_with, money(p.amount)]),
+      { empty: 'Aucun paiement fournisseur sur la période.', totals: r.supplierPayments.length > 1 ? [['Total', '', '', money(r.supplierPayments.reduce((a, p) => a + p.amount, 0))]] : [] },
+    );
+  }
+
   // ---- Cash book: both accounts over the period, and every movement ----
   if (r.cashbook) {
     report.section('Caisse');
