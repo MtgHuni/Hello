@@ -2345,10 +2345,10 @@ test('tableau de bord : valeur de la station (argent, carburant au prix d’acha
   assert.ok(v.tanks.length);
   for (const t of v.tanks) assert.ok(t.cost == null ? t.value === null : Math.abs(t.value - t.liters * t.cost) < 0.011, `${t.name} : litres × prix d’achat`);
   assert.strictEqual(v.assets.fuel, round2(v.tanks.reduce((s, t) => s + (t.value || 0), 0)));
-  // A tank's litres are those of its latest deliveries, at their own price, not the average since the start.
+  // A tank's fuel at the current purchase price: its latest delivery's, not the average since the start.
   for (const t of v.tanks) {
-    const last = db.prepare('SELECT liters_received, unit_cost FROM deliveries WHERE tank_id = ? ORDER BY id DESC LIMIT 1').get(t.id);
-    if (last?.unit_cost != null && last.liters_received >= t.liters && t.liters > 0) assert.ok(Math.abs(t.cost - last.unit_cost) < 1e-9, `${t.name} : prix de la dernière livraison`);
+    const last = db.prepare('SELECT unit_cost FROM deliveries WHERE tank_id = ? AND unit_cost IS NOT NULL ORDER BY id DESC LIMIT 1').get(t.id);
+    if (last) assert.strictEqual(t.cost, last.unit_cost, `${t.name} : prix de la dernière livraison`);
   }
   assert.strictEqual(v.net, round2(total(v.assets) - total(v.debts)));
   const value = async () => (await gerant('GET', '/api/dashboard')).data.value;
