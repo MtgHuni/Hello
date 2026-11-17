@@ -249,22 +249,27 @@ module.exports = function reportRoutes(db) {
       const cost = avgCost.get(t.product_id, today).cost;
       return { id: t.id, name: t.name, product_id: t.product_id, product_name: t.product_name, liters: round(t.book_stock), cost, value: cost == null ? null : round(t.book_stock * cost) };
     });
+    // What is ours (2026-11-17, the user's choice): the money, and the fuel already paid. The customers'
+    // credits are left out, and so is the fuel still owed to the suppliers: it is taken off the stock's
+    // value instead of being a debt. Only a supplier debt larger than the stock (fuel already sold)
+    // stays a debt.
+    const bought = round(fuel.reduce((t, f) => t + (f.value || 0), 0));
+    const unpaid = round(Math.min(bought, supplierDebt));
     const assets = {
       cash: cash.cash.balance,
       momo: cash.momo.balance,
       shift: round(shift),
       uncounted: round(uncounted),
-      receivables: owed,
-      fuel: round(fuel.reduce((t, f) => t + (f.value || 0), 0)),
+      fuel: round(bought - unpaid),
     };
     const debts = {
-      suppliers: supplierDebt,
+      suppliers: round(supplierDebt - unpaid),
       salaries: payroll(db, currentMonth(db)).totals.net,
       advances: round(customers.reduce((t, c) => t + Math.max(0, -c.balance), 0)),
       combos: settings.combosEnabled ? round(combos.total * settings.comboValue) : 0,
     };
     const sum = (o) => Object.values(o).reduce((t, x) => t + x, 0);
-    return { assets, debts, tanks: fuel, net: round(sum(assets) - sum(debts)) };
+    return { assets, debts, tanks: fuel, fuelBought: bought, fuelUnpaid: unpaid, receivables: owed, net: round(sum(assets) - sum(debts)) };
   }
 
   router.get('/dashboard', manager, (req, res) => {

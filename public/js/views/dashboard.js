@@ -131,8 +131,8 @@ function askCard(data) {
 
 
 
-// What the station is worth now, as one addition: its money, credits and fuel at purchase cost,
-// less what it owes, closed on a double rule.
+// What is the station's own now, as one addition: its money and the fuel already paid (the customers'
+// credits left out), less what it owes, closed on a double rule.
 function valueColumn(v, combos) {
   // Red means owed or a gap: what the station owes, money below zero, a missing purchase price.
   const line = (label, value, { total = false, lost = false, sub = null } = {}) =>
@@ -150,12 +150,12 @@ function valueColumn(v, combos) {
     own('Mobile money', a.momo),
     own('Argent du poste en cours', a.shift),
     Math.abs(a.uncounted) >= 0.005 ? own('Argent à compter', a.uncounted) : null,
-    own('Crédits clients', a.receivables),
     v.tanks.map((t) =>
       line(t.name, t.value == null ? 'prix d’achat manquant' : fmt.money(t.value), { lost: t.value == null, sub: `${fmt.liters(t.liters)}${t.cost == null ? '' : ` × ${fmt.price(t.cost)}`}` }),
     ),
+    v.fuelUnpaid > 0.005 ? owe('Carburant pas encore payé', v.fuelUnpaid) : null,
     h('h3', { class: 'form-section' }, 'Ce qu’elle doit'),
-    owe('Fournisseurs', d.suppliers),
+    d.suppliers > 0.005 ? owe('Fournisseurs, au-delà du stock', d.suppliers) : null,
     owe('Salaires à payer', d.salaries),
     owe('Avances des clients', d.advances),
     combos ? owe('Combos des clients', d.combos) : null,
