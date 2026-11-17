@@ -1065,6 +1065,12 @@ test('livraison payée avec l’argent du poste : une dépense du poste ouvert',
   assert.strictEqual(await balance(), round2(owed - 57));
   const shiftExpense = (await gerant('GET', `/api/shifts/${shift.id}`)).data.expenses.find((x) => `depense-${x.id}` === viaShift.data.id);
   assert.deepStrictEqual([shiftExpense.category, shiftExpense.beneficiary, shiftExpense.amount], ['Paiement fournisseur', 'Engen RDC', 7]);
+  // Rapports shows it with the other payments to suppliers, apart from the expenses.
+  const report = (await gerant('GET', `/api/reports/sales?from=${today()}&to=${today()}`)).data;
+  assert.ok(report.supplierPayments.some((x) => x.supplier === 'Engen RDC' && x.amount === 7 && x.paid_with === `Argent du poste n°${shift.id}`));
+  assert.ok(!report.expensesByCategory.some((x) => x.category === 'Paiement fournisseur'));
+  const reportPdf = (await gerant('GET', `/api/reports/period.pdf?from=${today()}&to=${today()}`)).raw.toString('latin1');
+  assert.ok(reportPdf.includes('(Paiements fournisseurs)'));
 
   // Each credit delivery says what it was paid: the oldest first.
   const deliveries = (await gerant('GET', '/api/deliveries')).data.filter((x) => x.payment === 'credit' && x.supplier === 'Engen RDC').sort((a, b) => a.id - b.id);

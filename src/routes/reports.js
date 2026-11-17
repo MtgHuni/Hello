@@ -484,6 +484,14 @@ module.exports = function reportRoutes(db) {
       )
       .all(from, to);
 
+    // Every payment to a supplier over the period, however paid: shown apart from the expenses.
+    const supplierPayments = [
+      ...db.prepare("SELECT created_at, supplier, amount, CASE method WHEN 'mobile money' THEN 'Mobile money' ELSE 'Caisse' END AS paid_with FROM supplier_payments WHERE date(created_at, 'localtime') BETWEEN ? AND ?").all(from, to),
+      ...db
+        .prepare("SELECT created_at, beneficiary AS supplier, amount, CASE WHEN shift_id IS NOT NULL THEN 'Argent du poste n°' || shift_id WHEN method = 'mobile money' THEN 'Mobile money' ELSE 'Caisse' END AS paid_with FROM expenses WHERE expense_date BETWEEN ? AND ? AND category = ?")
+        .all(from, to, SUPPLIER_PAYMENT),
+    ].sort((a, b) => a.created_at.localeCompare(b.created_at));
+
     return {
       from,
       to,
@@ -494,6 +502,7 @@ module.exports = function reportRoutes(db) {
       byAttendant,
       deliveries,
       expensesByCategory,
+      supplierPayments,
       shifts,
       stock: stockMovements(from, to),
     };

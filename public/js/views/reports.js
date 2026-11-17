@@ -164,6 +164,20 @@ export async function renderReports(page, ctx) {
         { empty: 'Aucune dépense sur la période.', footer: r.expensesByCategory.length ? { category: 'Total', amount: fmt.money(t.expenses) } : null },
       ),
     ),
+    // A supplier's payments, apart from the expenses: from the till, the mobile money or a shift's money.
+    h(
+      'section',
+      { class: 'card flush section' },
+      h('div', { class: 'card-header' }, h('h2', {}, 'Paiements fournisseurs'), h('a', { class: 'btn ghost sm no-print', href: '#/cuves' }, 'Voir les fournisseurs')),
+      table(
+        [
+          { label: 'Fournisseur', key: 'supplier', render: (x) => h('div', {}, h('div', { style: 'font-weight:600' }, x.supplier), h('div', { class: 'muted small' }, `${fmt.dateTime(x.created_at)} · ${x.paid_with}`)) },
+          { label: 'Montant', align: 'right', key: 'amount', render: (x) => fmt.money(x.amount) },
+        ],
+        r.supplierPayments,
+        { empty: 'Aucun paiement fournisseur sur la période.', footer: r.supplierPayments.length > 1 ? { supplier: `${r.supplierPayments.length} paiements`, amount: fmt.money(r.supplierPayments.reduce((a, x) => a + x.amount, 0)) } : null },
+      ),
+    ),
     h(
       'section',
       { class: 'card flush section' },
