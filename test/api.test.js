@@ -2314,11 +2314,14 @@ test('tableau de bord : valeur de la station (argent, carburant payé au prix d�
   assert.strictEqual(v.receivables, dash.receivables);
   assert.strictEqual(v.debts.salaries, salaries);
   assert.ok(v.tanks.length);
-  for (const t of v.tanks) assert.ok(t.cost == null ? t.value === null : Math.abs(t.value - t.liters * t.cost) < 0.011, `${t.name} : litres × prix d’achat`);
-  // Only the fuel already paid: what is still owed to the suppliers comes off the stock's value.
-  assert.strictEqual(v.fuelBought, round2(v.tanks.reduce((s, t) => s + (t.value || 0), 0)));
-  assert.strictEqual(v.assets.fuel, round2(v.fuelBought - v.fuelUnpaid));
-  assert.strictEqual(round2(v.fuelUnpaid + v.debts.suppliers), round2(dash.supplierDebt));
+  // Only the litres already paid count, at their purchase price; the supplier debt is no debt here.
+  for (const t of v.tanks) {
+    assert.strictEqual(round2(t.paid_liters + t.unpaid_liters), t.liters);
+    assert.ok(t.cost == null ? t.value === null : Math.abs(t.value - t.paid_liters * t.cost) < 0.011, `${t.name} : litres payés × prix d’achat`);
+  }
+  assert.strictEqual(v.assets.fuel, round2(v.tanks.reduce((s, t) => s + (t.value || 0), 0)));
+  assert.strictEqual(v.debts.suppliers, undefined);
+  if (dash.supplierDebt > 0) assert.ok(v.tanks.some((t) => t.unpaid_liters > 0), 'une dette fournisseur laisse des litres non payés');
   assert.strictEqual(v.net, round2(total(v.assets) - total(v.debts)));
   const value = async () => (await gerant('GET', '/api/dashboard')).data.value;
 

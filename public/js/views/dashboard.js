@@ -150,12 +150,14 @@ function valueColumn(v, combos) {
     own('Mobile money', a.momo),
     own('Argent du poste en cours', a.shift),
     Math.abs(a.uncounted) >= 0.005 ? own('Argent à compter', a.uncounted) : null,
+    // Only the litres already paid; the rest of the stock is the supplier's until it is paid.
     v.tanks.map((t) =>
-      line(t.name, t.value == null ? 'prix d’achat manquant' : fmt.money(t.value), { lost: t.value == null, sub: `${fmt.liters(t.liters)}${t.cost == null ? '' : ` × ${fmt.price(t.cost)}`}` }),
+      line(t.name, t.value == null ? 'prix d’achat manquant' : fmt.money(t.value), {
+        lost: t.value == null,
+        sub: `${t.unpaid_liters > 0.005 ? `${fmt.liters(t.paid_liters)} payés sur ${fmt.liters(t.liters)}` : fmt.liters(t.liters)}${t.cost == null ? '' : ` × ${fmt.price(t.cost)}`}`,
+      }),
     ),
-    v.fuelUnpaid > 0.005 ? owe('Carburant pas encore payé', v.fuelUnpaid) : null,
     h('h3', { class: 'form-section' }, 'Ce qu’elle doit'),
-    d.suppliers > 0.005 ? owe('Fournisseurs, au-delà du stock', d.suppliers) : null,
     owe('Salaires à payer', d.salaries),
     owe('Avances des clients', d.advances),
     combos ? owe('Combos des clients', d.combos) : null,
