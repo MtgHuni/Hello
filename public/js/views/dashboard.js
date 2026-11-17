@@ -146,7 +146,10 @@ function valueColumn(v, combos) {
     { class: 'card value-col' },
     cardHeader('Valeur de la station'),
     h('h3', { class: 'form-section' }, 'Ce qu’elle possède'),
-    own('Espèces (caisse)', a.cash),
+    // The customers' advances are theirs: taken off the cash, the addition shown under it (2026-11-17, the user's choice).
+    d.advances > 0.005
+      ? line('Espèces (caisse)', fmt.money(a.cash - d.advances), { lost: a.cash - d.advances < 0, sub: `${fmt.money(a.cash)} − ${fmt.money(d.advances)} d’avances des clients` })
+      : own('Espèces (caisse)', a.cash),
     own('Mobile money', a.momo),
     own('Argent du poste en cours', a.shift),
     Math.abs(a.uncounted) >= 0.005 ? own('Argent à compter', a.uncounted) : null,
@@ -157,9 +160,7 @@ function valueColumn(v, combos) {
         sub: `${t.unpaid_liters > 0.005 ? `${fmt.liters(t.paid_liters)} payés sur ${fmt.liters(t.liters)}` : fmt.liters(t.liters)}${t.cost == null ? '' : ` × ${fmt.price(t.cost)}`}`,
       }),
     ),
-    h('h3', { class: 'form-section' }, 'Ce qu’elle doit'),
-    owe('Avances des clients', d.advances),
-    combos ? owe('Combos des clients', d.combos) : null,
+    combos ? [h('h3', { class: 'form-section' }, 'Ce qu’elle doit'), owe('Combos des clients', d.combos)] : null,
     line('Valeur nette', fmt.money(v.net), { total: true, lost: v.net < 0 }),
   );
 }
