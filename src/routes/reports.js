@@ -5,7 +5,6 @@ const { requireRole } = require('../auth');
 const { balanceSql, subscriberDues, creditAllocation } = require('../loyalty');
 const { ACCOUNTS, KINDS, balances, cashbook, supplierBalances } = require('../cashbook');
 const { attendantNamesSql, closingCutoff, currentPeriod, lastMeters } = require('../checkpoints');
-const { payroll, currentMonth } = require('../payroll');
 const { periodReportPdf } = require('../periodReport');
 const { withLiveStock } = require('../liveStock');
 const { pumpPriceSql } = require('../shiftPrices');
@@ -233,7 +232,8 @@ module.exports = function reportRoutes(db) {
 
   // What is the station's own now: its money (both cash book balances, the money of the open shift and
   // of the closed shifts not counted yet) and the litres in the tanks already paid, at their purchase
-  // cost, less what it owes (salaries still to pay, customers' advances, combos when they run).
+  // cost, less what it owes (customers' advances, combos when they run); the salaries still to pay
+  // are left out too (2026-11-17, the user's choice).
   // The open shift brings into the cash book, at its closing, what it received and sold less the credits
   // and combos, plus the payments: its expenses have already left the cash book.
   function stationValue({ settings, today, tanks, customers, combos, cash, receivables: owed }) {
@@ -276,7 +276,6 @@ module.exports = function reportRoutes(db) {
       fuel: round(fuel.reduce((t, f) => t + (f.value || 0), 0)),
     };
     const debts = {
-      salaries: payroll(db, currentMonth(db)).totals.net,
       advances: round(customers.reduce((t, c) => t + Math.max(0, -c.balance), 0)),
       combos: settings.combosEnabled ? round(combos.total * settings.comboValue) : 0,
     };

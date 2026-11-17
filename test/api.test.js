@@ -2304,7 +2304,6 @@ test('tableau de bord : valeur de la station (argent, carburant payé au prix d�
   // The deduction tests aged credits of the open shift; a real shift's sales are never older than its opening.
   db.prepare("UPDATE sales SET created_at = (SELECT opened_at FROM shifts WHERE id = sales.shift_id) WHERE shift_id IN (SELECT id FROM shifts WHERE status = 'open') AND created_at < (SELECT opened_at FROM shifts WHERE id = sales.shift_id)").run();
   const total = (o) => round2(Object.values(o).reduce((t, x) => t + (x || 0), 0));
-  const salaries = (await gerant('GET', '/api/staff')).data.totals.net;
   const dash = (await gerant('GET', '/api/dashboard')).data;
   assert.strictEqual(dash.todayTotal, undefined, 'plus de ventes du jour');
   let v = dash.value;
@@ -2312,7 +2311,7 @@ test('tableau de bord : valeur de la station (argent, carburant payé au prix d�
   assert.strictEqual(v.assets.momo, dash.cash.momo.balance);
   assert.strictEqual(v.assets.receivables, undefined, 'les crédits clients ne comptent pas');
   assert.strictEqual(v.receivables, dash.receivables);
-  assert.strictEqual(v.debts.salaries, salaries);
+  assert.strictEqual(v.debts.salaries, undefined, 'les salaires à payer ne comptent pas');
   assert.ok(v.tanks.length);
   // Only the litres already paid count, at their purchase price; the supplier debt is no debt here.
   for (const t of v.tanks) {

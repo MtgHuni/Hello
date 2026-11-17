@@ -158,7 +158,6 @@ function valueColumn(v, combos) {
       }),
     ),
     h('h3', { class: 'form-section' }, 'Ce qu’elle doit'),
-    owe('Salaires à payer', d.salaries),
     owe('Avances des clients', d.advances),
     combos ? owe('Combos des clients', d.combos) : null,
     line('Valeur nette', fmt.money(v.net), { total: true, lost: v.net < 0 }),
