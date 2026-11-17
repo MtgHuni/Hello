@@ -6,6 +6,14 @@ import { h, fmt, pageHeader, cardHeader, table, segmented, tankGauge, button, fo
 
 let tab = 'deliveries';
 
+// A delivery on credit: paid, what is left, or nothing paid yet (a supplier's payments settle its oldest deliveries first).
+const creditBadge = (d) => {
+  const paid = d.paid || 0;
+  if (paid >= d.amount - 0.005) return badge('Payée', 'good');
+  if (paid > 0.005) return badge(`Reste ${fmt.money(d.amount - paid)}`, 'warning');
+  return badge('À crédit', 'warning');
+};
+
 // A delivery or a dip asks the meters: with the station closed for the night, the opening comes first.
 const whenOpen = (what, open) => async () => {
   const { stationClosed } = await api.get('/stock/status');
@@ -90,7 +98,7 @@ export async function renderTanks(page, ctx) {
                 },
               },
               { label: 'Montant', align: 'right', render: (d) => (d.amount ? fmt.money(d.amount) : d.unit_cost ? fmt.money(d.unit_cost * d.liters_received) : '—') },
-              { label: 'Paiement', render: (d) => (d.payment === 'credit' ? badge('À crédit', 'warning') : d.payment === 'prepaid' ? 'Déjà payée' : d.payment === 'shift' ? 'Argent du poste' : d.payment === 'cash' ? 'Caisse' : '—') },
+              { label: 'Paiement', render: (d) => (d.payment === 'credit' ? creditBadge(d) : d.payment === 'prepaid' ? 'Déjà payée' : d.payment === 'shift' ? 'Argent du poste' : d.payment === 'cash' ? 'Caisse' : '—') },
             ],
             deliveries,
             { empty: 'Aucune livraison enregistrée.', onRowClick: flags.readonly ? undefined : (d) => deliveryEditDialog(d, active, sup.names, reload) },
@@ -334,7 +342,7 @@ async function supplierPaymentDialog(suppliers, s, reload) {
     fields: [
       { name: 'supplier', label: 'Fournisseur', type: 'select', options: suppliers.filter((x) => x.balance > 0).map((x) => [x.name, `${x.name} · reste ${fmt.money(x.balance)}`]), value: s?.name, required: true },
       { name: 'amount', label: 'Montant ($)', type: 'number', step: '0.01', min: '0.01', required: true, value: s ? s.balance.toFixed(2) : '' },
-      { name: 'method', label: 'Payé avec', type: 'segment', options: [['espèces', 'Espèces'], ['mobile money', 'Mobile money']] },
+      { name: 'method', label: 'Payé avec', type: 'segment', full: true, options: [['espèces', 'Caisse'], ['mobile money', 'Mobile money'], ['poste', 'Argent du poste']] },
       { name: 'reference', label: 'Référence', placeholder: 'Facultatif (reçu, n° de transaction…)' },
     ],
     submitLabel: 'Enregistrer le paiement',
@@ -386,7 +394,7 @@ async function supplierDetailDialog(s, reload) {
             [
               { label: 'Date', render: (x) => [fmt.date(x.created_at), h('div', { class: 'muted small' }, x.tank)] },
               { label: 'Reçu', align: 'right', render: (x) => fmt.liters(x.liters_received) },
-              { label: 'Paiement', render: (x) => (x.payment === 'credit' ? badge('À crédit', 'warning') : DELIVERY_PAYMENT[x.payment] || '—') },
+              { label: 'Paiement', render: (x) => (x.payment === 'credit' ? creditBadge(x) : DELIVERY_PAYMENT[x.payment] || '—') },
               { label: 'Montant', align: 'right', render: (x) => (x.amount == null ? '—' : fmt.money(x.amount)) },
             ],
             d.deliveries,

@@ -931,7 +931,8 @@ function getSettings(db) {
     shiftTransport: Number(s.shift_transport || 0),
     askMonthLimit: Number(s.ask_month_limit ?? 50),
     photoReading: s.photo_reading !== '0',
-    expenseCategories: EXPENSE_CATEGORIES.filter((c) => c !== SALARY),
+    // Salaries go through Agents, a supplier's payment through Cuves (2026-11-17, the user's choice).
+    expenseCategories: EXPENSE_CATEGORIES.filter((c) => c !== SALARY && c !== SUPPLIER_PAYMENT),
   };
 }
 

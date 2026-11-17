@@ -2,12 +2,13 @@ const express = require('express');
 const { fail, num, str, oneOf, round, dateParam, transaction, money } = require('../util');
 const { requireRole, requireAdmin } = require('../auth');
 const { audit } = require('../audit');
-const { getSettings } = require('../db');
+const { getSettings, SUPPLIER_PAYMENT } = require('../db');
 const { ACCOUNTS, KINDS, cashbook, balances, supplierBalances, supplierDetail, supplierExpenses, shiftSign, checkSupplierPayment } = require('../cashbook');
 const { cashbookPdf } = require('../cashbookReport');
 
 const manager = requireRole('manager');
-const SUPPLIER_METHODS = ['espèces', 'mobile money'];
+// « poste »: paid with the open shift's money, an expense « Paiement fournisseur » of that shift.
+const SUPPLIER_METHODS = ['espèces', 'mobile money', 'poste'];
 
 module.exports = function cashbookRoutes(db, { mailer } = {}) {
   const router = express.Router();
@@ -197,6 +198,22 @@ module.exports = function cashbookRoutes(db, { mailer } = {}) {
     // Same spelling as on the deliveries, so the debt and its payment meet.
     const known = db.prepare('SELECT name AS supplier FROM suppliers WHERE name = ? COLLATE NOCASE').get(supplier);
     checkSupplierPayment(db, { supplier: known?.supplier || supplier, amount, force: b.force === true });
+    const name = known?.supplier || supplier;
+    if (method === 'poste') {
+      const shift = db.prepare("SELECT id FROM shifts WHERE status = 'open' ORDER BY id DESC LIMIT 1").get();
+      if (!shift) fail(409, 'Aucun poste ouvert : payez avec la caisse ou le mobile money.', 'no_open_shift');
+      const expenseId = transaction(db, () => {
+        const r = db
+          .prepare(
+            `INSERT INTO expenses (expense_date, category, amount, description, beneficiary, method, reference, shift_id, user_id)
+             VALUES (date('now', 'localtime'), ?, ?, ?, ?, 'espèces', ?, ?, ?)`,
+          )
+          .run(SUPPLIER_PAYMENT, amount, `Paiement ${name}`, name, reference, shift.id, req.user.id);
+        audit(db, req, { category: 'caisse', action: 'supplier_payment', entity: 'expenses', id: Number(r.lastInsertRowid), summary: `Paiement au fournisseur ${name} : ${money(amount)} (argent du poste n°${shift.id})` });
+        return Number(r.lastInsertRowid);
+      });
+      return res.status(201).json({ id: `depense-${expenseId}`, suppliers: supplierBalances(db) });
+    }
     const id = transaction(db, () => {
       const r = db
         .prepare('INSERT INTO supplier_payments (supplier, amount, method, reference, user_id) VALUES (?, ?, ?, ?, ?)')

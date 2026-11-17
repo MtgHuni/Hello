@@ -1019,7 +1019,8 @@ test('livraison payée avec l’argent du poste : une dépense du poste ouvert',
   assert.strictEqual((await gerant('POST', '/api/deliveries', body)).status, 400, 'prix d’achat obligatoire');
   assert.strictEqual((await gerant('POST', '/api/deliveries', { ...body, unitCost: 1, supplier: '' })).status, 400, 'fournisseur obligatoire');
   const d = (await gerant('POST', '/api/deliveries', { ...body, unitCost: 1 })).data;
-  const expense = async () => (await gerant('GET', '/api/expenses')).data.expenses.find((e) => e.id === d.expense_id);
+  // A supplier's payment is not listed in Dépenses any more (followed in Cuves): read it from the shift.
+  const expense = async () => (await gerant('GET', `/api/shifts/${shift.id}`)).data.expenses.find((e) => e.id === d.expense_id);
   assert.ok(d.expense_id);
   let e = await expense();
   assert.deepStrictEqual([e.category, e.amount, e.shift_id, e.beneficiary, e.reference, e.method], ['Paiement fournisseur', 5, shift.id, 'Petro Kivu', 'BL-77', 'espèces']);
@@ -1031,7 +1032,7 @@ test('livraison payée avec l’argent du poste : une dépense du poste ouvert',
   assert.strictEqual(cash.expense_id, null);
   assert.strictEqual(await expense(), undefined);
   const again = (await gerant('PUT', `/api/deliveries/${d.id}`, { payment: 'shift' })).data;
-  e = (await gerant('GET', '/api/expenses')).data.expenses.find((x) => x.id === again.expense_id);
+  e = (await gerant('GET', `/api/shifts/${shift.id}`)).data.expenses.find((x) => x.id === again.expense_id);
   assert.deepStrictEqual([e.amount, e.shift_id], [6, shift.id]);
   // The expense cancelled from the shift: the delivery waits for its payment.
   assert.strictEqual((await gerant('DELETE', `/api/shifts/${shift.id}/expenses/${e.id}`)).status, 204);
@@ -1054,6 +1055,27 @@ test('livraison payée avec l’argent du poste : une dépense du poste ouvert',
   await gerant('POST', '/api/expenses', { ...pay, amount: 10, beneficiary: 'Engen RDC' });
   assert.strictEqual(await balance(), round2(owed - 50));
   assert.deepStrictEqual((await gerant('GET', '/api/auth/me')).data.settings.supplierNames.includes('Engen RDC'), true);
+
+  // Everything about a supplier's payment happens in Cuves: Dépenses neither offers nor lists it.
+  assert.ok(!(await gerant('GET', '/api/auth/me')).data.settings.expenseCategories.includes('Paiement fournisseur'));
+  assert.ok(!(await gerant('GET', '/api/expenses')).data.expenses.some((x) => x.category === 'Paiement fournisseur'));
+  // Paid from Cuves with the open shift's money: an expense of that shift, the debt goes down.
+  const viaShift = await gerant('POST', '/api/suppliers/payments', { supplier: 'engen rdc', amount: 7, method: 'poste' });
+  assert.strictEqual(viaShift.status, 201, JSON.stringify(viaShift.data));
+  assert.strictEqual(await balance(), round2(owed - 57));
+  const shiftExpense = (await gerant('GET', `/api/shifts/${shift.id}`)).data.expenses.find((x) => `depense-${x.id}` === viaShift.data.id);
+  assert.deepStrictEqual([shiftExpense.category, shiftExpense.beneficiary, shiftExpense.amount], ['Paiement fournisseur', 'Engen RDC', 7]);
+
+  // Each credit delivery says what it was paid: the oldest first.
+  const deliveries = (await gerant('GET', '/api/deliveries')).data.filter((x) => x.payment === 'credit' && x.supplier === 'Engen RDC').sort((a, b) => a.id - b.id);
+  const supplier = (await gerant('GET', '/api/suppliers')).data.suppliers.find((x) => x.name === 'Engen RDC');
+  let toSettle = supplier.paid;
+  for (const x of deliveries) {
+    const take = round2(Math.max(0, Math.min(toSettle, x.amount)));
+    assert.strictEqual(x.paid, take, `livraison n°${x.id}`);
+    toSettle = round2(toSettle - take);
+  }
+  assert.ok(deliveries.some((x) => x.paid > 0), 'au moins une livraison payée en tout ou en partie');
 });
 
 test('une entrée de la caisse dans l’argent du poste compte dans ce qu’il remet', async () => {

@@ -3,7 +3,7 @@ const { getSettings, SUPPLIER_PAYMENT } = require('../db');
 const { round, dateParam, fail, csvCell, money, transaction } = require('../util');
 const { requireRole } = require('../auth');
 const { balanceSql, subscriberDues, creditAllocation } = require('../loyalty');
-const { ACCOUNTS, KINDS, balances, cashbook, supplierBalances } = require('../cashbook');
+const { ACCOUNTS, KINDS, balances, cashbook, supplierBalances, deliveryPaid } = require('../cashbook');
 const { attendantNamesSql, closingCutoff, currentPeriod, lastMeters } = require('../checkpoints');
 const { periodReportPdf } = require('../periodReport');
 const { withLiveStock } = require('../liveStock');
@@ -245,18 +245,13 @@ module.exports = function reportRoutes(db) {
     }
     // A closing without the money yet: the cash book only has its mobile money.
     const uncounted = db.prepare("SELECT COALESCE(SUM(expected_amount - COALESCE(mobile_money, 0)), 0) AS v FROM shifts WHERE status = 'closed' AND counted_at IS NULL").get().v;
-    // The litres not paid yet, per tank: each supplier's debt sits on its latest credit deliveries
-    // (payments settle the oldest first), in proportion to each delivery's litres.
+    // The litres not paid yet, per tank: what each credit delivery still owes (payments settle a
+    // supplier's oldest deliveries first), in proportion to its litres.
     const unpaidLiters = new Map();
-    for (const sup of supplierBalances(db).filter((x) => x.balance > 0.005)) {
-      let left = sup.balance;
-      const list = db.prepare("SELECT tank_id, amount, liters_received FROM deliveries WHERE payment = 'credit' AND lower(trim(supplier)) = ? ORDER BY id DESC").all(sup.name.trim().toLowerCase());
-      for (const d of list) {
-        if (left <= 0.005) break;
-        const take = Math.min(left, d.amount);
-        if (d.amount > 0) unpaidLiters.set(d.tank_id, (unpaidLiters.get(d.tank_id) || 0) + (d.liters_received * take) / d.amount);
-        left -= take;
-      }
+    const paidOf = deliveryPaid(db);
+    for (const d of db.prepare("SELECT id, tank_id, amount, liters_received FROM deliveries WHERE payment = 'credit' AND supplier IS NOT NULL AND amount > 0").all()) {
+      const owed = d.amount - (paidOf.get(d.id) || 0);
+      if (owed > 0.005) unpaidLiters.set(d.tank_id, (unpaidLiters.get(d.tank_id) || 0) + (d.liters_received * owed) / d.amount);
     }
     // What is ours (2026-11-17, the user's choice): the money and the fuel already paid, litre by litre.
     // The customers' credits and the fuel still owed to the suppliers are not counted, and the supplier
