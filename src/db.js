@@ -638,10 +638,13 @@ const MIGRATIONS = [
   // A customer « Interne » (version 35, 2026-11-07): neither particulier nor abonné, takes fuel without
   // paying; what they take is only counted (out of the shift's money, never a debt).
   ['customers', 'internal', 'INTEGER NOT NULL DEFAULT 0'],
+  // The shift that received this one's change and francs (version 36, 2026-11-21): the next one, or the
+  // shift open when its money was counted late (the next one already closed).
+  ['shifts', 'change_to', 'INTEGER REFERENCES shifts(id)'],
 ];
 
 // Bumped with every schema change; recorded in PRAGMA user_version.
-const SCHEMA_VERSION = 35;
+const SCHEMA_VERSION = 36;
 
 function missingColumns(db) {
   return MIGRATIONS.filter(([table, column]) => {
@@ -864,6 +867,10 @@ function openDb(file) {
     // Credit sales only earn their combos once paid: recompute every balance.
     const { refreshCustomer } = require('./loyalty');
     for (const { id } of db.prepare('SELECT id FROM customers').all()) refreshCustomer(db, id);
+  }
+  if (version < 36) {
+    // Version 36: a closed shift's change and francs went to the next shift.
+    db.exec("UPDATE shifts SET change_to = (SELECT MIN(n.id) FROM shifts n WHERE n.id > shifts.id) WHERE status != 'open' AND change_to IS NULL");
   }
   if (version < 21) {
     // Version 21: every subscriber gets the station's payment day; the old « over the limit » flags

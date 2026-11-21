@@ -2738,3 +2738,53 @@ test('migration 35 : client interne', () => {
   old.close();
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('argent compté en retard : la monnaie et les francs vont au poste ouvert, pas au suivant déjà clôturé', async () => {
+  const { openMeters } = require('../src/liveStock');
+  const close = async (more = 0) => {
+    const shift = (await gerant('GET', '/api/shifts/current')).data;
+    const ends = Object.fromEntries(openMeters(db).map((m) => [m.nozzleId, m.latest + more]));
+    const res = await closeShift(shift, ends);
+    assert.strictEqual(res.status, 200, JSON.stringify(res.data));
+    return res.data;
+  };
+  const late = await close(200); // n°42: closed, money not counted yet
+  await nextSecond();
+  const next = await close(); // n°43: closed and counted, with change left for n°44
+  const countRes = await gerant('POST', `/api/shifts/${next.id}/count`, { cash: 10, changeLeft: 4 });
+  assert.strictEqual(countRes.status, 200, JSON.stringify(countRes.data));
+  const counted = countRes.data;
+  const open = (await gerant('GET', '/api/shifts/current')).data; // n°44
+  assert.deepStrictEqual([open.change_received, open.francs_received], [4, 0]);
+  // n°42 counted now: its change and francs stay with the attendants on duty, n°44's.
+  const lateCash = Math.max(0, round2(late.expected_amount - late.mobile_money - 30 - 20));
+  assert.strictEqual((await gerant('POST', `/api/shifts/${late.id}/count`, { cash: lateCash, changeLeft: 30, francs: 20 })).status, 200);
+  const after = (await gerant('GET', `/api/shifts/${open.id}`)).data;
+  assert.deepStrictEqual([after.change_received, after.francs_received], [34, 20]);
+  const nextAfter = (await gerant('GET', `/api/shifts/${next.id}`)).data;
+  assert.deepStrictEqual([nextAfter.expected_amount, nextAfter.variance], [counted.expected_amount, counted.variance], 'n°43 ne bouge pas');
+  // A correction of n°42's money keeps them where they went.
+  const fixed = await gerant('POST', `/api/shifts/${late.id}/correct`, { reason: 'Recompté', readings: late.readings.map((r) => ({ nozzleId: r.nozzle_id, endMeter: r.end_meter })), cash: round2(lateCash + 10), changeLeft: 20, francs: 20 });
+  assert.strictEqual(fixed.status, 200, JSON.stringify(fixed.data));
+  const again = (await gerant('GET', `/api/shifts/${open.id}`)).data;
+  assert.deepStrictEqual([again.change_received, again.francs_received], [24, 20]);
+});
+
+test('migration 36 : la monnaie d’un poste clôturé va au suivant', () => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const path = require('node:path');
+  const { openDb, SCHEMA_VERSION } = require('../src/db');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'station-change-'));
+  const file = path.join(dir, 'old.db');
+  let old = openDb(file);
+  old.exec(`INSERT INTO users (id, name, login, password_hash, role) VALUES (1, 'A', 'a', 'x', 'admin');
+    INSERT INTO shifts (id, attendant_id, status) VALUES (1, 1, 'closed'), (2, 1, 'closed'), (3, 1, 'open');
+    ALTER TABLE shifts DROP COLUMN change_to; PRAGMA user_version = 35`);
+  old.close();
+  old = openDb(file);
+  assert.deepStrictEqual(old.prepare('SELECT id, change_to FROM shifts ORDER BY id').all().map((r) => [r.id, r.change_to]), [[1, 2], [2, 3], [3, null]]);
+  assert.strictEqual(old.prepare('PRAGMA user_version').get().user_version, SCHEMA_VERSION);
+  old.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
