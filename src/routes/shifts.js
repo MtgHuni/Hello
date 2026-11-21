@@ -843,11 +843,31 @@ module.exports = function shiftRoutes(db) {
   });
 
   // The next shift receives the change left at this closing, and the francs kept, at its closing.
-  function passChange(shift) {
+  // A shift receives the change and francs of every shift whose `change_to` names it.
+  function received(id) {
+    db.prepare(
+      `UPDATE shifts SET change_received = (SELECT COALESCE(SUM(change_left), 0) FROM shifts WHERE change_to = ?),
+         francs_received = (SELECT COALESCE(SUM(francs), 0) FROM shifts WHERE change_to = ?) WHERE id = ?`,
+    ).run(id, id, id);
+  }
+  // Gives a shift's change and francs to another one; both are reconciled once closed.
+  function giveChange(shiftId, targetId) {
+    const before = db.prepare('SELECT change_to FROM shifts WHERE id = ?').get(shiftId)?.change_to;
+    db.prepare('UPDATE shifts SET change_to = ? WHERE id = ?').run(targetId, shiftId);
+    for (const id of new Set([before, targetId].filter(Boolean))) {
+      received(id);
+      if (db.prepare('SELECT status FROM shifts WHERE id = ?').get(id)?.status !== 'open') reconcile(id);
+    }
+  }
+  // After the money is counted (or corrected): the change and francs stay with the attendants on duty
+  // then. While the next shift is open they are its own; counted late, once the next shift is closed,
+  // they go to the shift open now (2026-11-21, the user's choice). A correction keeps where they went.
+  function passChange(shift, { keep = false } = {}) {
+    const current = db.prepare('SELECT change_to FROM shifts WHERE id = ?').get(shift.id)?.change_to;
     const next = db.prepare('SELECT * FROM shifts WHERE id > ? ORDER BY id LIMIT 1').get(shift.id);
-    if (!next) return;
-    db.prepare('UPDATE shifts SET (change_received, francs_received) = (SELECT change_left, francs FROM shifts WHERE id = ?) WHERE id = ?').run(shift.id, next.id);
-    if (next.status !== 'open') reconcile(next.id);
+    const open = db.prepare("SELECT id FROM shifts WHERE status = 'open' ORDER BY id DESC LIMIT 1").get();
+    const target = keep && current ? current : next?.status === 'open' ? next.id : open?.id ?? next?.id;
+    if (target) giveChange(shift.id, target);
   }
 
   // The daily closing (15:30) is the manager's: the shift is reconciled and the next one opens at
@@ -863,7 +883,7 @@ module.exports = function shiftRoutes(db) {
       const present = db.prepare('SELECT DISTINCT user_id FROM shift_attendants WHERE shift_id = ? AND left_at IS NULL ORDER BY id').all(shift.id);
       db.prepare("UPDATE shift_attendants SET left_at = datetime('now') WHERE shift_id = ? AND left_at IS NULL").run(shift.id);
       nextId = openShift(present[0]?.user_id ?? shift.attendant_id);
-      db.prepare('UPDATE shifts SET (change_received, francs_received) = (SELECT change_left, francs FROM shifts WHERE id = ?) WHERE id = ?').run(shift.id, nextId);
+      giveChange(shift.id, nextId);
       for (const p of present) join(nextId, p.user_id);
       if (shift.station_closed_at) db.prepare('UPDATE shifts SET station_closed_at = ? WHERE id = ?').run(shift.station_closed_at, nextId);
       const s = db.prepare('SELECT * FROM shifts WHERE id = ?').get(shift.id);
@@ -937,7 +957,7 @@ module.exports = function shiftRoutes(db) {
            WHERE id = ?`,
         ).run(m.cash, m.changeLeft, m.francs, notes, counted ? 1 : 0, shift.id);
         reconcile(shift.id);
-        passChange(shift);
+        passChange(shift, { keep: true });
       } else {
         for (const r of readings) {
           db.prepare('UPDATE nozzles SET meter = ? WHERE id = ?').run(r.start_meter, r.nozzle_id);
@@ -945,7 +965,7 @@ module.exports = function shiftRoutes(db) {
         }
         applyClosing(shift, req.body || {});
         if (next?.status === 'open') {
-          db.prepare('UPDATE shifts SET (change_received, francs_received) = (SELECT change_left, francs FROM shifts WHERE id = ?) WHERE id = ?').run(shift.id, next.id);
+          giveChange(shift.id, next.id);
           const firstTaken = db.prepare('SELECT c.id FROM shift_checkpoints c WHERE c.shift_id = ? ORDER BY c.id LIMIT 1').get(next.id);
           for (const r of db.prepare('SELECT nozzle_id, end_meter FROM shift_readings WHERE shift_id = ?').all(shift.id)) {
             const taken = firstTaken && db.prepare('SELECT meter FROM checkpoint_readings WHERE checkpoint_id = ? AND nozzle_id = ?').get(firstTaken.id, r.nozzle_id);
